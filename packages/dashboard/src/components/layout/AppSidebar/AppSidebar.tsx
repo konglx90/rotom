@@ -24,7 +24,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
-  const { logout } = useAuth()
+  const { logout, isPreview } = useAuth()
   const { zenMode, toggleZenMode } = useZenMode()
   const { groupId: urlGroupId } = useParams<{ groupId?: string }>()
   const {
@@ -232,7 +232,9 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             <div className={`${styles.section} ${styles.sectionGroup}`}>
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>群聊</h3>
-                <button onClick={openCreateGroupModal} className={styles.createBtn}>
+                <button onClick={openCreateGroupModal} className={styles.createBtn}
+                  disabled={isPreview}
+                  title={isPreview ? '预览模式下不可用' : undefined}>
                   + 新建群
                 </button>
               </div>

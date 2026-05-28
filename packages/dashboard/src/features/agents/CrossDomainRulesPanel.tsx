@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { rulesApi } from '../../api/domains'
 import type { CrossDomainRule, Domain } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { useReadOnly, READ_ONLY_TITLE } from '../../hooks/useReadOnly'
 import styles from './CrossDomainRulesPanel.module.css'
 
 interface CrossDomainRulesPanelProps {
@@ -9,6 +10,7 @@ interface CrossDomainRulesPanelProps {
 }
 
 export function CrossDomainRulesPanel({ domains }: CrossDomainRulesPanelProps) {
+  const readOnly = useReadOnly()
   const [rules, setRules] = useState<CrossDomainRule[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddRule, setShowAddRule] = useState(false)
@@ -87,7 +89,8 @@ export function CrossDomainRulesPanel({ domains }: CrossDomainRulesPanelProps) {
           variant="primary"
           size="md"
           onClick={() => setShowAddRule(true)}
-          disabled={domains.length < 2}
+          disabled={readOnly || domains.length < 2}
+          title={readOnly ? READ_ONLY_TITLE : undefined}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 3a1 1 0 011 1v3h3a1 1 0 110 2H9v3a1 1 0 11-2 0V9H4a1 1 0 110-2h3V4a1 1 0 011-1z" />
@@ -138,6 +141,8 @@ export function CrossDomainRulesPanel({ domains }: CrossDomainRulesPanelProps) {
                       outline
                       size="sm"
                       onClick={() => deleteRule(rule.from_domain, rule.to_domain)}
+                      disabled={readOnly}
+                      title={readOnly ? READ_ONLY_TITLE : undefined}
                     >
                       删除
                     </Button>
