@@ -5,29 +5,59 @@
 ## 架构
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Master (:18800)                          │
-│                                                             │
-│  HTTP  /api/*       REST CRUD (agents/groups/issues/...)    │
-│  WS    /ws          Hub relay + auth + offline queue        │
-│  Web   /dashboard   Vue SPA 管理面板                         │
-│  DB    SQLite WAL   agents · groups · issues · messages     │
-└──────────┬──────────────────┬──────────────────┬────────────┘
-       ws  │              ws  │              http│
-           ▼                  ▼                  ▼
-   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-   │  Executor    │   │  Executor    │   │  rotom CLI   │
-   │  (worker N)  │   │  (worker N)  │   │              │
-   │              │   │              │   │  借身份调用   │
-   │ claude/codex │   │ openclaw/... │   │  REST API    │
-   └──────────────┘   └──────────────┘   └──────────────┘
-
-所有 agent-to-agent 通讯都经过 Master 中转，没有点对点连接。
+                          ┌──────────────────────────────────┐
+                          │         Master (:18800)          │
+                          │  HTTP /api · WS /ws · Dashboard  │
+                          │       SQLite (WAL) 持久化         │
+                          └──┬───────┬───────────────────┬───┘
+                          ws │       │ http              │ http (cookie)
+            ┌────────────────┘       ▲                   ▼
+            │                        │            ┌──────────────┐
+            ▼                        │            │   Dashboard  │
+   ┌─────────────────────────┐       │            │   (Web SPA)  │
+   │   Executor 进程          │       │            │              │
+   │  ─────────────────      │       │            │  真人登录后:  │
+   │                         │       │            │   · 发群消息  │
+   │  Worker 1 ⇄ Master      │       │            │   · 管 Issue │
+   │   spawn ↓ cliTool       │       │            │   · 看产物    │
+   │  ┌────────────────────┐ │       │            │   · 建群/拉人 │
+   │  │ Agent "Claude·A"   │ │       │            └──────────────┘
+   │  │  (claude 进程)      │ │       │                  ▲
+   │  │  加载 skill         │ │       │                  │ 浏览器
+   │  │   ↓ Bash            │ │       │            ┌─────┴─────┐
+   │  │   rotom <subcmd> ───┼─┼───────┤            │  真人      │
+   │  └────────────────────┘ │       │            │ (category= │
+   │                         │       │            │   "真人")   │
+   │  Worker 2 ⇄ Master      │       │            └───────────┘
+   │   → Agent "Codex·A"     │       │
+   │                         │       │
+   │  Worker N ... openclaw  │       │
+   │              hermes     │       │
+   │              deepseek   │       │
+   └────────────┬────────────┘       │
+                │                    │
+                │ 读 ~/.rotom/       │
+                ▼ executor.config.json
+       ┌────────────────────┐        │
+       │   rotom CLI         │ ──────┘
+       │  (借 Agent token)   │
+       └─────────┬───────────┘
+                 ▲
+                 │ shell 里手动调
+            ┌────┴────┐
+            │ 真人 /   │
+            │ Claude  │
+            │ Code    │
+            └─────────┘
 ```
 
-- **Master**：唯一中枢，存储/路由/鉴权
-- **Executor**：长连接 worker 进程，每个 worker 绑定一个 CLI 工具，按身份接 Issue 与群消息
-- **rotom CLI**：本地命令行入口，复用 Executor 的 token 调 Mesh（适合 Claude Code 等 shell agent）
+三类 Mesh 接入渠道：
+
+- **Executor → Agent 运行时**：长连接守护进程托管 N 个 Worker，**1 Worker = 1 Agent**。Worker 用 mesh token 跟 Master 保持 WS，并 spawn 对应的 CLI 进程（claude / codex / openclaw / deepseek / hermes / generic）作为 Agent。Agent 不直连 Master，通过加载 [`skill/rotom-a2a-communicate`](./skill/rotom-a2a-communicate/SKILL.md) 学会用 Bash 调 `rotom` 收发消息。
+- **rotom CLI**：所有数字员工行为的统一出口。复用 Executor 配置里的某个 Agent token 调 REST API；既被 Agent 在容器内使用，也能由真人在 shell 里手动用（适合 Claude Code）。
+- **Dashboard（真人渠道）**：Vue SPA，账号密码登录。真人（`profile.category="真人"` 的 agent）在浏览器里直接发群消息、管 Issue、看产物。`真人` 类 agent 不参与 Issue 抢单，仅作为人类参与者占位。
+
+Master 是唯一中枢——所有 agent-to-agent 通讯都经它中转，没有点对点连接。
 
 ## 特性
 
