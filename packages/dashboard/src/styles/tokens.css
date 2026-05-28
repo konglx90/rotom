@@ -1,25 +1,60 @@
-/* Design System Tokens */
+/* Design System Tokens — Wise-inspired
+   ---------------------------------------------------------
+   主色：Wise Green #9fe870（CTA/accent）；Dark Green #163300（on-green 文本）
+   底色：暖白 #faf9f4；近黑（带绿调）#0e0f0c
+   字体：Inter（body weight 600 默认） + Inter 900 模拟 Wise Sans 展示字
+   形状：按钮 pill (9999px)，卡片 16/30/40 三档；阴影只用 ring shadow
+*/
 :root {
-  /* Colors */
-  --color-navy: #0F172A;
-  --color-slate: #64748B;
-  --color-sage: #059669;
-  --color-background: #F8FAFC;
-  --color-surface: #FFFFFF;
-  --color-success: #22C55E;
-  --color-warning: #EAB308;
-  --color-error: #EF4444;
-  --color-info: #0EA5E9;
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #64748B;
-  --text-2: #64748B;
+  /* ───── Brand ───────────────────────────────────────────── */
+  --color-wise-green: #9fe870;
+  --color-wise-green-hover: #cdffad;
+  --color-dark-green: #163300;
+  --color-mint: #e2f6d5;
+  --color-positive: #054d28;
 
-  /* Softer border colors */
-  --border-color: #E2E8F0;
-  --border-color-light: #F1F5F9;
-  --border-color-hover: #CBD5E1;
+  /* ───── Canvas & text ──────────────────────────────────── */
+  --color-ink: #0e0f0c;            /* primary text / near-black */
+  --color-warm-dark: #454745;      /* secondary text / borders */
+  --color-gray: #868685;           /* muted / tertiary */
+  --color-soft-surface: #e8ebe6;   /* subtle green-tinted surface */
+  --color-canvas: #faf9f4;         /* warm off-white background */
+  --color-canvas-elevated: #ffffff;
 
-  /* Spacing */
+  /* ───── Semantic ───────────────────────────────────────── */
+  --color-warning: #ffd11a;
+  --color-warning-soft: #fff7d1;
+  --color-error: #d03238;
+  --color-error-soft: rgba(208, 50, 56, 0.08);
+  --color-success: #054d28;
+  --color-success-soft: #e2f6d5;
+  --color-accent-cyan: rgba(56, 200, 255, 0.10);
+  --color-bright-orange: #ffc091;
+
+  /* ───── Legacy aliases (旧 CSS module 仍在用，做映射) ──── */
+  --color-navy: var(--color-ink);
+  --color-slate: var(--color-warm-dark);
+  --color-sage: var(--color-positive);
+  --color-background: var(--color-canvas);
+  --color-surface: var(--color-canvas-elevated);
+  --color-info: var(--color-positive);          /* 旧 info 蓝 → 深绿 accent */
+  --color-text-primary: var(--color-ink);
+  --color-text-secondary: var(--color-warm-dark);
+  --text-2: var(--color-warm-dark);
+
+  /* CTA aliases (用于按钮主操作) */
+  --color-cta: var(--color-wise-green);
+  --color-cta-hover: var(--color-wise-green-hover);
+  --color-cta-text: var(--color-dark-green);
+
+  /* ───── Borders ─────────────────────────────────────────
+     Wise 通过 ring shadow 营造深度，边框统一用近黑的低透明度 */
+  --border-color: rgba(14, 15, 12, 0.12);
+  --border-color-light: rgba(14, 15, 12, 0.08);
+  --border-color-hover: rgba(14, 15, 12, 0.32);
+  --border-accent: var(--color-wise-green);
+
+  /* ───── Spacing (8px 基准 + Wise 常用零碎尺寸) ─────────── */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
@@ -28,20 +63,33 @@
   --spacing-2xl: 48px;
   --spacing-3xl: 64px;
 
-  /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  /* ───── Border Radius (按 Wise 三档卡片 + pill) ────────── */
+  --radius-sm: 10px;     /* inputs / combobox */
+  --radius-md: 16px;     /* small cards, badges */
+  --radius-lg: 24px;     /* medium cards */
+  --radius-xl: 30px;     /* feature cards */
+  --radius-2xl: 40px;    /* large tables / sections */
+  --radius-pill: 9999px; /* buttons, chips, avatars */
   --radius-full: 9999px;
 
-  /* Shadows - more diffused for softer look */
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 2px 6px rgba(15, 23, 42, 0.06);
-  --shadow-lg: 0 4px 16px rgba(15, 23, 42, 0.08);
-  --shadow-xl: 0 8px 32px rgba(15, 23, 42, 0.12);
+  /* ───── Shadows: 全部 ring shadow，无传统投影 ─────────── */
+  --shadow-ring: rgba(14, 15, 12, 0.12) 0px 0px 0px 1px;
+  --shadow-ring-strong: rgba(14, 15, 12, 0.24) 0px 0px 0px 1px;
+  --shadow-inset: rgb(134, 134, 133) 0px 0px 0px 1px inset;
 
-  /* Font Sizes */
+  --shadow-sm: var(--shadow-ring);
+  --shadow-md: var(--shadow-ring);
+  --shadow-lg: var(--shadow-ring-strong);
+  --shadow-xl: 0 24px 64px rgba(14, 15, 12, 0.12), var(--shadow-ring);
+
+  /* ───── Typography ─────────────────────────────────────── */
+  --font-display: 'Wise Sans', 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', monospace;
+
+  --font-feature-calt: 'calt' on;
+
   --font-xs: 12px;
   --font-sm: 14px;
   --font-base: 16px;
@@ -49,7 +97,13 @@
   --font-xl: 20px;
   --font-2xl: 24px;
   --font-3xl: 32px;
+  --font-4xl: 40px;
+  --font-display-lg: 64px;
+  --font-display-xl: 96px;
+  --font-display-mega: 126px;
 
-  /* Font Families */
-  --font-mono: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  /* ───── Motion ─────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 0.12s;
+  --duration-base: 0.18s;
 }

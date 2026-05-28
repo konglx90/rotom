@@ -3,119 +3,158 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-family: inherit;
+  font-feature-settings: var(--font-feature-calt);
   font-weight: 600;
+  letter-spacing: -0.108px;
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  /* Wise 标志性的 scale 动画：交互时按钮"物理"放大/压缩 */
+  transition: transform var(--duration-fast) var(--ease-out),
+              background-color var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
+  transform-origin: center;
+}
+
+.button:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-dark-green);
+  outline-offset: 2px;
 }
 
 .button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+  transform: none;
 }
 
-/* ── Sizes ─────────────────────────────────────────────────────────── */
+/* ── Sizes (pill 形状下保持原始视觉高度) ─────────────── */
 .xs {
-  padding: 3px 10px;
+  padding: 4px 12px;
   font-size: 12px;
-  min-height: 22px;
+  min-height: 24px;
+  line-height: 1;
 }
 
 .sm {
-  padding: 4px 14px;
-  font-size: 12px;
-  min-height: 28px;
+  padding: 6px 16px;
+  font-size: 13px;
+  min-height: 30px;
+  line-height: 1;
 }
 
 .md {
-  padding: 8px 18px;
-  font-size: 13px;
-  min-height: 36px;
+  padding: 9px 22px;
+  font-size: 14px;
+  min-height: 38px;
+  line-height: 1;
 }
 
 .lg {
-  padding: 12px 28px;
-  font-size: 16px;
-  min-height: 48px;
+  padding: 14px 32px;
+  font-size: 18px;
+  min-height: 52px;
+  line-height: 1;
 }
 
-.iconOnly.xs { padding: 3px; min-width: 22px; }
-.iconOnly.sm { padding: 4px; min-width: 28px; }
-.iconOnly.md { padding: 8px; min-width: 36px; }
-.iconOnly.lg { padding: 12px; min-width: 48px; }
+.iconOnly.xs { padding: 4px; min-width: 24px; }
+.iconOnly.sm { padding: 6px; min-width: 30px; }
+.iconOnly.md { padding: 9px; min-width: 38px; }
+.iconOnly.lg { padding: 14px; min-width: 52px; }
 
-/* ── Variants: solid by default ────────────────────────────────────── */
+/* ── Primary: Wise Green pill, 深绿文字 ──────────────── */
 .primary {
-  background: var(--color-info, #3b82f6);
-  color: var(--color-surface);
-  border-color: var(--color-info, #3b82f6);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  border-color: var(--color-wise-green);
 }
-.primary:hover:not(:disabled) { opacity: 0.9; }
+.primary:hover:not(:disabled) {
+  background: var(--color-wise-green-hover);
+  border-color: var(--color-wise-green-hover);
+}
 
+/* ── Secondary: 深绿低透明度 subtle pill ─────────────── */
 .secondary {
-  background: var(--color-surface);
-  color: var(--color-navy);
-  border-color: var(--border-color);
+  background: rgba(22, 51, 0, 0.08);
+  color: var(--color-ink);
+  border-color: transparent;
 }
 .secondary:hover:not(:disabled) {
-  background: var(--border-color-light);
+  background: rgba(22, 51, 0, 0.14);
 }
 
+/* ── Ghost: 完全透明，hover 时露出 mint 底 ───────────── */
 .ghost {
   background: transparent;
-  color: var(--color-navy);
+  color: var(--color-ink);
   border-color: transparent;
 }
 .ghost:hover:not(:disabled) {
-  background: var(--border-color-light);
-  color: var(--color-navy);
+  background: rgba(159, 232, 112, 0.22);
+  color: var(--color-dark-green);
 }
 
+/* ── Success / Danger ─────────────────────────────────── */
 .success {
-  background: var(--color-success, #22c55e);
-  color: var(--color-surface);
-  border-color: var(--color-success, #22c55e);
+  background: var(--color-positive);
+  color: #ffffff;
+  border-color: var(--color-positive);
 }
-.success:hover:not(:disabled) { opacity: 0.9; }
+.success:hover:not(:disabled) {
+  background: #0a6c39;
+  border-color: #0a6c39;
+}
 
 .danger {
-  background: var(--color-error, #ef4444);
-  color: var(--color-surface);
-  border-color: var(--color-error, #ef4444);
+  background: var(--color-error);
+  color: #ffffff;
+  border-color: var(--color-error);
 }
-.danger:hover:not(:disabled) { opacity: 0.9; }
+.danger:hover:not(:disabled) {
+  background: #b6262c;
+  border-color: #b6262c;
+}
 
-/* ── Outline override: only for primary/success/danger ─────────────── */
+/* ── Outline 变体：透明底 + 描边 + 文字色 ────────────── */
 .primary.outline {
   background: transparent;
-  color: var(--color-info, #3b82f6);
+  color: var(--color-dark-green);
+  border-color: var(--color-dark-green);
 }
 .primary.outline:hover:not(:disabled) {
-  background: var(--color-info, #3b82f6);
-  color: var(--color-surface);
-  opacity: 1;
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  border-color: var(--color-wise-green);
 }
 
 .success.outline {
   background: transparent;
-  color: var(--color-success, #22c55e);
+  color: var(--color-positive);
+  border-color: var(--color-positive);
 }
 .success.outline:hover:not(:disabled) {
-  background: var(--color-success, #22c55e);
-  color: var(--color-surface);
-  opacity: 1;
+  background: var(--color-positive);
+  color: #ffffff;
 }
 
 .danger.outline {
   background: transparent;
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
+  border-color: var(--color-error);
 }
 .danger.outline:hover:not(:disabled) {
-  background: var(--color-error, #ef4444);
-  color: var(--color-surface);
-  opacity: 1;
+  background: var(--color-error);
+  color: #ffffff;
 }

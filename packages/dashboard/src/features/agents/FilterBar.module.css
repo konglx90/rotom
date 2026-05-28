@@ -15,134 +15,142 @@
 
 /* Status Filter Chips */
 .chip {
-  padding: 6px 12px;
-  border-radius: var(--radius-full);
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-color);
-  background: var(--color-surface);
-  color: var(--color-slate);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.108px;
   cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out);
 }
 
 .chip:hover {
-  border-color: var(--border-color-hover);
-  color: var(--color-info);
-  box-shadow: var(--shadow-md);
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  border-color: var(--color-wise-green);
 }
 
 .chip.active {
-  background: var(--color-info);
-  color: var(--color-surface);
-  border-color: var(--color-info);
-  box-shadow: var(--shadow-md);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  border-color: var(--color-wise-green);
 }
 
 /* Domain Select */
 .select {
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  background: var(--color-surface);
-  color: var(--color-navy);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: border-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
   min-width: 120px;
-  box-shadow: var(--shadow-sm);
 }
 
 .select:hover {
   border-color: var(--border-color-hover);
-  box-shadow: var(--shadow-md);
 }
 
 .select:focus {
   outline: none;
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.1);
+  border-color: var(--color-dark-green);
+  box-shadow: var(--shadow-inset);
 }
 
 /* Search Input */
 .search {
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  background: var(--color-surface);
-  color: var(--color-navy);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
   font-size: 13px;
-  width: 180px;
-  transition: all 0.15s ease;
-  box-shadow: var(--shadow-sm);
+  font-weight: 500;
+  width: 200px;
+  transition: border-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
 }
 
 .search:hover {
   border-color: var(--border-color-hover);
-  box-shadow: var(--shadow-md);
 }
 
 .search:focus {
   outline: none;
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.1);
+  border-color: var(--color-dark-green);
+  box-shadow: var(--shadow-inset);
 }
 
 .search::placeholder {
-  color: #9ca3af;
+  color: var(--color-gray);
+  font-weight: 400;
 }
 
 /* View Toggle Buttons */
 .viewBtn {
-  padding: 6px;
-  border-radius: var(--radius-sm);
+  padding: 7px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-color);
-  background: var(--color-surface);
-  color: var(--color-slate);
+  background: var(--color-canvas-elevated);
+  color: var(--color-warm-dark);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
-  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out);
 }
 
 .viewBtn:hover {
-  border-color: var(--border-color-hover);
-  color: var(--color-info);
-  box-shadow: var(--shadow-md);
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  border-color: var(--color-wise-green);
+  transform: scale(1.05);
 }
 
 .viewBtn.active {
-  background: var(--color-info);
-  color: var(--color-surface);
-  border-color: var(--color-info);
-  box-shadow: var(--shadow-md);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  border-color: var(--color-wise-green);
 }
 
-/* Add Agent Button */
+/* Add Agent Button — Wise primary pill */
 .addBtn {
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-info);
-  background: var(--color-info);
-  color: var(--color-surface);
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-wise-green);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.108px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.15s ease;
-  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-base) var(--ease-out);
 }
 
 .addBtn:hover {
-  background: #3367d6;
-  border-color: #3367d6;
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  background: var(--color-wise-green-hover);
+  border-color: var(--color-wise-green-hover);
+  transform: scale(1.05);
+}
+
+.addBtn:active {
+  transform: scale(0.95);
 }
 
 .addBtn svg {

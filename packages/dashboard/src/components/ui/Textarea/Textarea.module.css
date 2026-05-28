@@ -1,42 +1,52 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .label {
   font-size: 12px;
-  font-weight: 500;
-  color: var(--color-slate);
+  font-weight: 600;
+  letter-spacing: -0.084px;
+  color: var(--color-warm-dark);
+  font-feature-settings: var(--font-feature-calt);
 }
 
 .textarea {
   width: 100%;
-  padding: 8px 10px;
+  padding: 12px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   font-family: inherit;
-  font-size: 13px;
+  font-feature-settings: var(--font-feature-calt);
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.5;
-  color: var(--color-navy);
-  background: var(--color-surface);
+  color: var(--color-ink);
+  background: var(--color-canvas-elevated);
   resize: vertical;
   box-sizing: border-box;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
+}
+
+.textarea::placeholder {
+  color: var(--color-gray);
+  font-weight: 400;
 }
 
 .textarea:hover:not(:disabled) {
-  border-color: var(--border-color-hover, var(--color-info));
+  border-color: var(--border-color-hover);
 }
 
 .textarea:focus {
   outline: none;
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.12);
+  border-color: var(--color-dark-green);
+  box-shadow: var(--shadow-inset);
 }
 
 .textarea:disabled {
-  background: var(--color-background);
+  background: var(--color-canvas);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -46,27 +56,28 @@
 }
 
 .error:focus {
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 0 1px var(--color-error) inset;
 }
 
 .sm {
   font-size: 12px;
-  min-height: 60px;
-  padding: 6px 8px;
+  min-height: 64px;
+  padding: 8px 12px;
 }
 
 .md {
-  font-size: 13px;
-  min-height: 96px;
-  padding: 8px 10px;
+  font-size: 14px;
+  min-height: 104px;
+  padding: 12px 14px;
 }
 
 .helperText {
   font-size: 11px;
-  color: var(--color-slate);
+  color: var(--color-gray);
 }
 
 .errorText {
   font-size: 11px;
   color: var(--color-error);
+  font-weight: 600;
 }

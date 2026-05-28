@@ -1,78 +1,85 @@
 .badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 600;
+  font-feature-settings: var(--font-feature-calt);
   line-height: 1.4;
+  letter-spacing: -0.084px;
   white-space: nowrap;
 }
 
 /* ── Tone-specific overrides ─────────────────────────────────────── */
 .tone_priority {
-  padding: 2px 6px;
+  padding: 3px 8px;
 }
 
 .tone_category {
   font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 8px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
 }
 
 .tone_id {
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  padding: 2px 8px;
-  border-radius: 4px;
+  font-family: var(--font-mono);
+  padding: 3px 10px;
+  border-radius: 6px;
+  letter-spacing: 0;
 }
 
 .tone_tag {
   font-size: 11px;
-  padding: 2px 8px;
+  padding: 3px 10px;
   font-weight: 500;
 }
 
-/* ── Colors ──────────────────────────────────────────────────────── */
+/* ── Colors (Wise 调色：以绿系为主，辅以暖橘/暖黄/朱红) ──────────── */
 .color_blue {
-  background: rgba(14, 165, 233, 0.15);
-  color: #0ea5e9;
+  /* "info"位变成淡青绿色 */
+  background: rgba(56, 200, 255, 0.12);
+  color: #036b8a;
 }
 
 .color_amber {
-  background: rgba(234, 179, 8, 0.15);
-  color: #ca8a04;
+  background: rgba(255, 209, 26, 0.22);
+  color: #6f5400;
 }
 
 .color_green {
-  background: rgba(34, 197, 94, 0.15);
-  color: #16a34a;
+  background: var(--color-mint);
+  color: var(--color-dark-green);
 }
 
 .color_red {
-  background: rgba(239, 68, 68, 0.15);
-  color: #dc2626;
+  background: var(--color-error-soft);
+  color: var(--color-error);
 }
 
 .color_slate {
-  background: rgba(100, 116, 139, 0.15);
-  color: #64748b;
+  background: rgba(14, 15, 12, 0.06);
+  color: var(--color-warm-dark);
 }
 
 .color_orange {
-  background: rgba(249, 115, 22, 0.1);
-  color: #f97316;
+  background: rgba(255, 192, 145, 0.32);
+  color: #8a3d10;
 }
 
 .color_purple {
-  background: rgba(139, 92, 246, 0.12);
-  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.14);
+  color: #6d3edc;
 }
 
 .color_pink {
-  background: rgba(236, 72, 153, 0.12);
-  color: #ec4899;
+  background: rgba(236, 72, 153, 0.14);
+  color: #c23878;
 }
 
-/* tone-specific tweaks for category=system (dashed border, was in ChatArea) */
+/* category 的 system 调子(虚线描边) */
 .tone_category.color_slate {
-  border: 1px dashed rgba(100, 116, 139, 0.5);
+  border: 1px dashed rgba(14, 15, 12, 0.32);
 }

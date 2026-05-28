@@ -58,36 +58,15 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className={styles.shell}>
       {showIdentityBanner && (
-        <div
-          role="status"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '8px 16px',
-            background: '#fef3c7',
-            color: '#78350f',
-            borderBottom: '1px solid #fcd34d',
-            fontSize: 13,
-          }}
-        >
-          <span style={{ fontWeight: 600 }}>⚠️ 还没绑定身份</span>
-          <span style={{ flex: 1 }}>
+        <div role="status" className={styles.identityBanner}>
+          <span className={styles.identityBannerTitle}>⚠️ 还没绑定身份</span>
+          <span className={styles.identityBannerText}>
             你现在是匿名访问，需要先挑一个员工身份才能用。
           </span>
           <button
             type="button"
             onClick={openConfigModal}
-            style={{
-              background: '#f59e0b',
-              color: '#fff',
-              border: 'none',
-              padding: '4px 12px',
-              borderRadius: 4,
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
+            className={styles.identityBannerBtn}
           >
             选择身份
           </button>

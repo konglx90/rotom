@@ -109,18 +109,21 @@
 }
 
 .saveBtn {
-  padding: 10px 20px;
+  padding: 10px 22px;
   font-size: 14px;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   border: none;
-  background: var(--color-info);
-  color: var(--color-surface);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
   cursor: pointer;
+  transition: background var(--duration-base) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
 }
 
 .saveBtn:hover {
-  background: #1976d2;
+  background: var(--color-wise-green-hover);
+  transform: scale(1.05);
 }
 
 /* Header */
@@ -263,22 +266,22 @@
 
 .messageBubble {
   max-width: 70%;
-  padding: 10px 14px;
-  border-radius: 18px;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid transparent;
-  box-shadow: var(--shadow-sm);
 }
 
 .messageBubble.incoming {
-  background: var(--color-surface);
-  color: var(--color-navy);
-  border-color: var(--border-color-light);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
+  border-color: var(--border-color);
+  border-bottom-left-radius: 6px;
 }
 
 .messageBubble.outgoing {
-  background: var(--color-info);
-  color: var(--color-surface);
-  box-shadow: var(--shadow-md);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  border-bottom-right-radius: 6px;
 }
 
 .messageHeader {
@@ -385,23 +388,31 @@
 }
 
 .sendBtn {
-  padding: 12px 24px;
+  padding: 12px 28px;
   font-size: 14px;
   font-weight: 600;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   border: none;
-  background: var(--color-info);
-  color: var(--color-surface);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
   cursor: pointer;
+  transition: background var(--duration-base) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
 }
 
 .sendBtn:disabled {
-  background: var(--color-slate);
+  background: rgba(14, 15, 12, 0.08);
+  color: var(--color-gray);
   cursor: not-allowed;
 }
 
 .sendBtn:hover:not(:disabled) {
-  background: #1976d2;
+  background: var(--color-wise-green-hover);
+  transform: scale(1.05);
+}
+
+.sendBtn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 /* Footer Info */

@@ -1,11 +1,10 @@
 .tree {
-  width: 220px;
+  width: 240px;
   flex-shrink: 0;
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
+  background: var(--color-canvas-elevated);
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-color);
   padding: var(--spacing-md);
-  box-shadow: var(--shadow-sm);
   align-self: flex-start;
   position: sticky;
   top: var(--spacing-lg);
@@ -22,27 +21,31 @@
 }
 
 .title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-navy);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
 }
 
 .addBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border: none;
-  background: transparent;
-  color: var(--color-info);
-  border-radius: var(--radius-sm);
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background var(--duration-base) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
 }
 
 .addBtn:hover {
-  background: #e7f1ff;
+  background: var(--color-wise-green);
+  transform: scale(1.08);
 }
 
 .list {
@@ -59,26 +62,29 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border: none;
   background: transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  color: var(--color-navy);
+  color: var(--color-ink);
   font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.108px;
   text-align: left;
-  transition: background 0.15s ease;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out);
   position: relative;
 }
 
 .node:hover {
-  background: var(--color-background);
+  background: rgba(159, 232, 112, 0.22);
+  color: var(--color-dark-green);
 }
 
 .node.active {
-  background: #e7f1ff;
-  color: var(--color-info);
-  font-weight: 600;
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
 }
 
 .nodeMain {
@@ -112,17 +118,18 @@
 }
 
 .nodeCount {
-  font-size: 12px;
-  color: var(--color-slate);
-  background: var(--color-background);
-  padding: 1px 6px;
-  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-warm-dark);
+  background: rgba(14, 15, 12, 0.06);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
 
 .node.active .nodeCount {
-  background: var(--color-info);
-  color: white;
+  background: var(--color-dark-green);
+  color: var(--color-wise-green);
 }
 
 .nodeActions {

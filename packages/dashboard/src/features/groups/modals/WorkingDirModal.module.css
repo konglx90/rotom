@@ -6,17 +6,16 @@
 }
 
 .iconBadge {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%);
-  color: var(--color-info);
+  background: var(--color-mint);
+  color: var(--color-dark-green);
   flex-shrink: 0;
-  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.15);
 }
 
 .headerText {
@@ -69,9 +68,9 @@
 }
 
 .inputWrap:focus-within {
-  background: var(--color-surface);
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+  background: var(--color-canvas-elevated);
+  border-color: var(--color-dark-green);
+  box-shadow: var(--shadow-inset);
 }
 
 .inputPrefix {
@@ -191,46 +190,47 @@
 }
 
 .cancelBtn {
-  padding: 9px 18px;
+  padding: 9px 22px;
   font-size: 13.5px;
-  font-weight: 500;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  background: var(--color-surface);
-  color: var(--color-navy);
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  background: rgba(22, 51, 0, 0.08);
+  color: var(--color-ink);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background var(--duration-base) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
 }
 
 .cancelBtn:hover {
-  background: var(--color-background);
-  border-color: var(--border-color-hover);
+  background: rgba(22, 51, 0, 0.14);
+  transform: scale(1.05);
 }
 
 .saveBtn {
-  padding: 9px 20px;
+  padding: 9px 24px;
   font-size: 13.5px;
   font-weight: 600;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   border: none;
-  background: var(--color-info);
-  color: var(--color-surface);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
   cursor: pointer;
-  transition: background 0.15s, transform 0.05s;
-  box-shadow: 0 1px 2px rgba(14, 165, 233, 0.25);
+  transition: background var(--duration-base) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
 }
 
 .saveBtn:hover:not(:disabled) {
-  background: #0284C7;
+  background: var(--color-wise-green-hover);
+  transform: scale(1.05);
 }
 
 .saveBtn:active:not(:disabled) {
-  transform: translateY(0.5px);
+  transform: scale(0.95);
 }
 
 .saveBtn:disabled {
-  background: var(--border-color-hover);
-  color: var(--color-surface);
+  background: rgba(14, 15, 12, 0.08);
+  color: var(--color-gray);
   cursor: not-allowed;
-  box-shadow: none;
 }

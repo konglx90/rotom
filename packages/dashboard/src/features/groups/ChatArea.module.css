@@ -2,7 +2,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
+  background: var(--color-canvas-elevated);
   min-width: 0;
   position: relative;
 }
@@ -11,9 +11,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--border-color-light);
-  background: var(--color-background);
+  background: var(--color-canvas-elevated);
   overflow: visible;
   position: relative;
   z-index: 10;
@@ -36,8 +36,12 @@
   flex-shrink: 1;
   min-width: 0;
   margin: 0;
-  font-size: 16px;
-  color: var(--color-navy);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
 }
 
 .memberAvatars {
@@ -51,7 +55,7 @@
 .memberAvatar {
   flex-shrink: 0;
   border-radius: 50%;
-  border: 2px solid var(--color-surface);
+  border: 2px solid var(--color-canvas-elevated);
   overflow: visible;
   line-height: 0;
 }
@@ -61,7 +65,7 @@
 }
 
 .memberAvatar.online {
-  border-color: var(--color-success);
+  border-color: var(--color-wise-green);
   border-width: 3px;
 }
 
@@ -75,11 +79,12 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: 8px 16px;
-  background: var(--color-background);
+  padding: 8px 20px;
+  background: var(--color-canvas);
   border-bottom: 1px solid var(--border-color-light);
   font-size: 12px;
-  color: var(--color-slate);
+  font-weight: 500;
+  color: var(--color-warm-dark);
 }
 
 .statusDot {
@@ -88,10 +93,10 @@
   border-radius: 50%;
 }
 
-.statusDot.connected { background: var(--color-success); }
-.statusDot.connecting { background: var(--color-warning, #fbbc05); }
+.statusDot.connected { background: var(--color-wise-green); box-shadow: 0 0 0 2px var(--color-canvas-elevated); }
+.statusDot.connecting { background: var(--color-warning); }
 .statusDot.disconnected { background: var(--color-error); }
-.statusDot.conflict { background: var(--color-warning, #fbbc05); animation: pulse 1.5s infinite; }
+.statusDot.conflict { background: var(--color-warning); animation: pulse 1.5s infinite; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -102,8 +107,8 @@
 .messagesArea {
   flex: 1;
   overflow-y: auto;
-  padding: var(--spacing-md);
-  background: var(--color-background);
+  padding: var(--spacing-lg);
+  background: var(--color-canvas);
 }
 
 .emptyChat {
@@ -111,16 +116,17 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--color-slate);
+  color: var(--color-gray);
   font-size: 14px;
+  font-weight: 500;
 }
 
 .messageRow {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
 }
 
 .messageAvatar {
@@ -133,38 +139,40 @@
 
 .messageBubble {
   max-width: 70%;
-  padding: 10px 14px;
-  border-radius: 18px;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid transparent;
-  box-shadow: var(--shadow-sm);
 }
 
 .messageBubble.incoming {
-  background: var(--color-surface);
-  color: var(--color-navy);
-  border-color: var(--border-color-light);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
+  border-color: var(--border-color);
+  border-bottom-left-radius: 6px;
 }
 
 .messageBubble.outgoing {
-  background: var(--color-info);
-  color: var(--color-surface);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  border-bottom-right-radius: 6px;
 }
 
 .messageSender {
   font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 2px;
-  opacity: 0.85;
+  font-weight: 700;
+  margin-bottom: 4px;
+  letter-spacing: -0.084px;
+  opacity: 0.9;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-
 .systemRow .messageBubble,
 .systemBubble {
-  background: rgba(100, 116, 139, 0.06) !important;
-  border: 1px dashed rgba(100, 116, 139, 0.4) !important;
+  background: rgba(14, 15, 12, 0.04) !important;
+  border: 1px dashed rgba(14, 15, 12, 0.24) !important;
+  color: var(--color-warm-dark);
 }
 
 .messageStatus {
@@ -174,11 +182,11 @@
 }
 
 .messageStatus.status_pending {
-  color: #94a3b8;
+  color: var(--color-gray);
 }
 
 .messageStatus.status_delivered {
-  color: #22c55e;
+  color: var(--color-positive);
 }
 
 .messageStatus.status_queued {
@@ -186,32 +194,37 @@
 }
 
 .messageStatus.status_failed {
-  color: #ef4444;
+  color: var(--color-error);
   opacity: 1;
 }
 
 .messageContent {
   font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
   word-break: break-word;
 }
 
 .mention {
-  color: var(--color-info);
-  font-weight: 600;
+  color: var(--color-positive);
+  font-weight: 700;
   cursor: pointer;
 }
 
 .messageBubble.outgoing .mention {
-  color: #bbdefb;
+  color: var(--color-dark-green);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .messageTimestamp {
   font-size: 11px;
-  margin-top: 4px;
+  margin-top: 6px;
   opacity: 0.6;
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-weight: 500;
 }
 
 .messageCwd {
@@ -221,70 +234,73 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--color-slate);
+  color: var(--color-gray);
 }
 
-/* 外发气泡(cyan 背景)下,默认的灰色/低不透明文字对比度不足。
-   统一覆盖为白色 + 轻微 text-shadow,保证 WCAG 可读性。 */
+/* 外发气泡(lime green 背景)文字色用 dark green 直接读 */
 .messageBubble.outgoing .messageTimestamp {
-  color: rgba(255, 255, 255, 0.95);
-  opacity: 1;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+  color: var(--color-dark-green);
+  opacity: 0.75;
 }
 
 .messageBubble.outgoing .messageCwd {
-  color: rgba(255, 255, 255, 0.9);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
+  color: var(--color-dark-green);
+  opacity: 0.7;
 }
 
 .messageBubble.outgoing .messageStatus {
-  color: rgba(255, 255, 255, 0.95);
-  opacity: 1;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+  color: var(--color-dark-green);
+  opacity: 0.8;
 }
 
 .messageBubble.outgoing .messageStatus.status_pending {
-  color: rgba(255, 255, 255, 0.85);
+  opacity: 0.6;
 }
 
 .messageBubble.outgoing .messageStatus.status_delivered {
-  color: #d1fae5;
+  color: var(--color-positive);
+  opacity: 1;
 }
 
 .messageBubble.outgoing .messageStatus.status_queued {
-  color: #fef3c7;
+  color: #6f5400;
+  opacity: 1;
 }
 
 .messageBubble.outgoing .messageStatus.status_failed {
-  color: #fecaca;
-  font-weight: 600;
+  color: var(--color-error);
+  font-weight: 700;
+  opacity: 1;
 }
 
 .workingDirChip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
+  padding: 2px 10px;
   margin-left: 10px;
-  border-radius: var(--radius-full, 12px);
-  border: 1px solid var(--border-color-light);
-  background: var(--color-background);
-  color: var(--color-slate);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color);
+  background: var(--color-canvas);
+  color: var(--color-warm-dark);
+  font-family: var(--font-mono);
   font-size: 11px;
   cursor: pointer;
   max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out);
 }
 
 .workingDirChip:hover {
-  border-color: var(--color-info);
-  color: var(--color-info);
-  background: var(--color-surface);
+  border-color: var(--color-wise-green);
+  color: var(--color-dark-green);
+  background: var(--color-mint);
 }
 
 .loadingDots {
@@ -298,7 +314,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-slate);
+  background: var(--color-dark-green);
   animation: dotBounce 1.4s infinite ease-in-out both;
 }
 
@@ -313,97 +329,115 @@
 /* Input */
 .inputArea {
   display: flex;
-  padding: 12px 16px;
+  padding: 14px 20px;
   border-top: 1px solid var(--border-color-light);
   gap: var(--spacing-sm);
   position: relative;
   align-items: flex-end;
+  background: var(--color-canvas-elevated);
 }
 
 .messageInput {
   flex: 1;
-  padding: 10px 14px;
+  padding: 12px 16px;
   font-size: 14px;
+  font-weight: 500;
   line-height: 1.5;
-  border-radius: 18px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
-  background: var(--color-surface);
-  color: var(--color-navy);
+  background: var(--color-canvas);
+  color: var(--color-ink);
   resize: none;
   overflow-y: auto;
   max-height: 160px;
   font-family: inherit;
+  transition: border-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
 }
 
 .messageInput:focus {
   outline: none;
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.1);
+  border-color: var(--color-dark-green);
+  box-shadow: var(--shadow-inset);
 }
 
 .sendBtn {
-  padding: 10px 20px;
+  padding: 10px 24px;
   font-size: 14px;
   font-weight: 600;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   border: none;
-  background: var(--color-info);
-  color: var(--color-surface);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
   cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-base) var(--ease-out);
 }
 
 .sendBtn:disabled {
-  background: var(--color-slate);
+  background: rgba(14, 15, 12, 0.08);
+  color: var(--color-gray);
   cursor: not-allowed;
 }
 
 .sendBtn:hover:not(:disabled) {
-  background: #1976d2;
+  background: var(--color-wise-green-hover);
+  transform: scale(1.05);
+}
+
+.sendBtn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 /* Mention dropdown */
 .mentionDropdown {
   position: absolute;
-  bottom: 60px;
-  left: 16px;
-  background: var(--color-surface);
+  bottom: 70px;
+  left: 20px;
+  background: var(--color-canvas-elevated);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-lg);
-  max-height: 200px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  max-height: 220px;
   overflow-y: auto;
   z-index: 100;
-  min-width: 200px;
+  min-width: 220px;
+  padding: 6px;
 }
 
 .mentionItem {
-  padding: 8px 14px;
+  padding: 8px 12px;
   cursor: pointer;
   font-size: 13px;
-  color: var(--color-navy);
+  font-weight: 500;
+  color: var(--color-ink);
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  border-radius: var(--radius-sm);
 }
 
 .mentionItem:hover {
-  background: var(--color-background);
+  background: rgba(159, 232, 112, 0.22);
+  color: var(--color-dark-green);
 }
 
 .mentionItemActive {
-  background: var(--color-background);
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  font-weight: 600;
 }
 
 .mentionOnlineDot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-success);
+  background: var(--color-wise-green);
 }
 
 .mentionOfflineDot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-slate);
+  background: var(--color-gray);
 }

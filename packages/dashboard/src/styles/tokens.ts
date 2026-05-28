@@ -1,28 +1,39 @@
-// Design System Tokens based on DESIGN.md
+// Design System Tokens — Wise-inspired (TS 对应 tokens.css)
 export const colors = {
-  // Primary
-  navy: '#0F172A',
-  slate: '#64748B',
-  sage: '#059669',
+  // Brand
+  wiseGreen: '#9fe870',
+  wiseGreenHover: '#cdffad',
+  darkGreen: '#163300',
+  mint: '#e2f6d5',
+  positive: '#054d28',
 
-  // Backgrounds
-  background: '#F8FAFC',
-  surface: '#FFFFFF',
+  // Canvas / text
+  ink: '#0e0f0c',
+  warmDark: '#454745',
+  gray: '#868685',
+  softSurface: '#e8ebe6',
+  canvas: '#faf9f4',
+  surface: '#ffffff',
 
-  // Status
-  success: '#22C55E',
-  warning: '#EAB308',
-  error: '#EF4444',
-  info: '#0EA5E9',
+  // Semantic
+  warning: '#ffd11a',
+  error: '#d03238',
+  success: '#054d28',
+  brightOrange: '#ffc091',
 
-  // Legacy compatibility
-  accent: '#6c8cff',
-  'accent-dim': 'rgba(108, 140, 255, 0.1)',
-  green: '#059669',
-  'green-dim': 'rgba(5, 150, 105, 0.1)',
-  teal: '#0d9488',
-  red: '#ef4444',
-  'red-dim': 'rgba(239, 68, 68, 0.1)',
+  // Legacy aliases (兼容旧代码)
+  navy: '#0e0f0c',
+  slate: '#454745',
+  sage: '#054d28',
+  background: '#faf9f4',
+  info: '#054d28',
+  accent: '#9fe870',
+  'accent-dim': 'rgba(159, 232, 112, 0.18)',
+  green: '#054d28',
+  'green-dim': '#e2f6d5',
+  teal: '#054d28',
+  red: '#d03238',
+  'red-dim': 'rgba(208, 50, 56, 0.08)',
 } as const
 
 export const spacing = {
@@ -36,10 +47,13 @@ export const spacing = {
 } as const
 
 export const borderRadius = {
-  sm: '4px',
-  DEFAULT: '8px',
-  md: '12px',
-  lg: '16px',
+  sm: '10px',
+  DEFAULT: '16px',
+  md: '16px',
+  lg: '24px',
+  xl: '30px',
+  '2xl': '40px',
+  pill: '9999px',
   full: '9999px',
 } as const
 
@@ -52,11 +66,18 @@ export const fontSize = {
   '2xl': '24px',
   '3xl': '32px',
   '4xl': '40px',
+  display: '64px',
+  hero: '96px',
+  mega: '126px',
 } as const
 
 export const shadows = {
-  sm: '0 1px 3px rgba(15, 23, 42, 0.03)',
-  DEFAULT: '0 2px 6px rgba(15, 23, 42, 0.05)',
-  md: '0 4px 16px rgba(15, 23, 42, 0.07)',
-  lg: '0 8px 32px rgba(15, 23, 42, 0.1)',
+  ring: 'rgba(14, 15, 12, 0.12) 0 0 0 1px',
+  ringStrong: 'rgba(14, 15, 12, 0.24) 0 0 0 1px',
+  inset: 'rgb(134, 134, 133) 0 0 0 1px inset',
+  // legacy aliases
+  sm: 'rgba(14, 15, 12, 0.12) 0 0 0 1px',
+  DEFAULT: 'rgba(14, 15, 12, 0.12) 0 0 0 1px',
+  md: 'rgba(14, 15, 12, 0.12) 0 0 0 1px',
+  lg: 'rgba(14, 15, 12, 0.24) 0 0 0 1px',
 } as const

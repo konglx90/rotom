@@ -4,7 +4,7 @@
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background: var(--color-background);
+  background: var(--color-canvas);
   position: relative;
 }
 
@@ -16,54 +16,112 @@
   overflow: hidden;
 }
 
+/* ── 身份未绑定的全局横条提醒：Wise 化（mint 底 + 深绿文字） ── */
+.identityBanner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 24px;
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  border-bottom: 1px solid rgba(22, 51, 0, 0.16);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.108px;
+}
+
+.identityBannerTitle {
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.identityBannerText {
+  flex: 1;
+  font-weight: 500;
+}
+
+.identityBannerBtn {
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  border: none;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-base) var(--ease-out);
+}
+
+.identityBannerBtn:hover {
+  background: var(--color-wise-green-hover);
+  transform: scale(1.05);
+}
+
+.identityBannerBtn:active {
+  transform: scale(0.95);
+}
+
+/* ── Preview / share banner ─────────────────────────────── */
 .previewBanner {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 1rem;
-  background: linear-gradient(90deg, #7c3aed 0%, #6366f1 100%);
-  color: #fff;
-  font-size: 0.8125rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--color-ink);
+  color: var(--color-wise-green);
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(159, 232, 112, 0.3);
   flex-shrink: 0;
+  letter-spacing: -0.108px;
 }
 
 .previewBadge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  font-size: 11px;
+  text-transform: uppercase;
 }
 
 .previewText {
   flex: 1;
-  opacity: 0.95;
+  opacity: 0.85;
+  font-weight: 500;
 }
 
 .previewExit {
   appearance: none;
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  padding: 4px 10px;
-  border-radius: 6px;
+  background: transparent;
+  color: var(--color-wise-green);
+  border: 1px solid rgba(159, 232, 112, 0.5);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.2;
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-base) var(--ease-out);
 }
 
 .previewExit:hover {
-  background: rgba(255, 255, 255, 0.32);
+  background: rgba(159, 232, 112, 0.15);
+  transform: scale(1.05);
 }
 
 .previewCollapseBtn {
   appearance: none;
   background: transparent;
-  color: #fff;
+  color: var(--color-wise-green);
   border: none;
   font-size: 1.25rem;
   line-height: 1;
@@ -71,34 +129,35 @@
   cursor: pointer;
   opacity: 0.7;
   margin-left: 0.25rem;
+  transition: opacity var(--duration-base) var(--ease-out);
 }
 
 .previewCollapseBtn:hover {
   opacity: 1;
 }
 
-/* 收起后的小药丸:浮在视口左上角,点击重新展开横条。
-   position:absolute 让它脱离 flex 流,不挤压主区。 */
 .previewPill {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 10px;
+  left: 10px;
   z-index: 1000;
   appearance: none;
-  background: linear-gradient(90deg, #7c3aed 0%, #6366f1 100%);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  padding: 4px 10px;
-  border-radius: 999px;
+  background: var(--color-ink);
+  color: var(--color-wise-green);
+  border: 1px solid rgba(159, 232, 112, 0.4);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  box-shadow: var(--shadow-ring);
+  transition: transform var(--duration-fast) var(--ease-out);
 }
 
 .previewPill:hover {
-  filter: brightness(1.05);
+  transform: scale(1.05);
 }
 
 .main {
@@ -107,15 +166,13 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--spacing-xl);
-  background: var(--color-background);
+  background: var(--color-canvas);
 }
 
 .mainZen {
   padding: 0;
 }
 
-/* On chat routes, let the inner layout take the full main area so
-   the chat list + chat body + right panel can stretch edge-to-edge. */
 .mainFullBleed {
   padding: 0;
   overflow: hidden;

@@ -27,83 +27,87 @@
   display: block;
   margin-bottom: 8px;
   font-weight: 600;
-  color: var(--color-navy);
-  font-size: 13px;
-  letter-spacing: 0.3px;
+  color: var(--color-warm-dark);
+  font-size: 12px;
+  letter-spacing: -0.084px;
 }
 
 .formInput {
   width: 100%;
   padding: 12px 14px;
   font-size: 14px;
+  font-weight: 500;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-slate);
-  background: var(--color-surface);
-  color: var(--color-navy);
+  border: 1px solid var(--border-color);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
   box-sizing: border-box;
-  transition: all 0.2s ease;
+  transition: border-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
 }
 
 .formInput:focus {
   outline: none;
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.15);
-  transform: translateY(-1px);
+  border-color: var(--color-dark-green);
+  box-shadow: var(--shadow-inset);
 }
 
 .formTextarea {
   width: 100%;
   padding: 12px 14px;
   font-size: 14px;
+  font-weight: 500;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-slate);
-  background: var(--color-surface);
-  color: var(--color-navy);
+  border: 1px solid var(--border-color);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
   box-sizing: border-box;
   min-height: 120px;
   resize: vertical;
   font-family: inherit;
   line-height: 1.5;
-  transition: all 0.2s ease;
+  transition: border-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
 }
 
 .formTextarea:focus {
   outline: none;
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.15);
-  transform: translateY(-1px);
+  border-color: var(--color-dark-green);
+  box-shadow: var(--shadow-inset);
 }
 
 .formSelect {
   width: 100%;
   padding: 12px 14px;
   font-size: 14px;
+  font-weight: 500;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-slate);
-  background: var(--color-surface);
-  color: var(--color-navy);
+  border: 1px solid var(--border-color);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
   box-sizing: border-box;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 12px center;
   background-size: 16px;
 }
 
 .formSelect:focus {
   outline: none;
-  border-color: var(--color-info);
-  box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.15);
+  border-color: var(--color-dark-green);
+  box-shadow: var(--shadow-inset);
 }
 
 .agentCheckList {
   max-height: 240px;
   overflow-y: auto;
-  border: 1px solid var(--border-color-light);
-  border-radius: var(--radius-sm);
-  padding: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 6px;
 }
 
 .existingMemberList {
@@ -116,12 +120,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  border-radius: var(--radius-full, 16px);
-  background: var(--color-background);
-  border: 1px solid var(--border-color-light);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-mint);
+  border: 1px solid rgba(22, 51, 0, 0.16);
   font-size: 12px;
-  color: var(--color-navy);
+  font-weight: 600;
+  color: var(--color-dark-green);
 }
 
 .agentCheckItem {
@@ -129,35 +134,39 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 13px;
-  color: var(--color-navy);
+  font-weight: 500;
+  color: var(--color-ink);
 }
 
 .agentCheckItem:hover {
-  background: var(--color-background);
+  background: rgba(159, 232, 112, 0.18);
 }
 
 .agentCheckItem input[type="checkbox"] {
-  accent-color: var(--color-info);
+  accent-color: var(--color-dark-green);
 }
 
 .agentCheckStatus {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 10px;
+  font-size: 10px;
+  padding: 2px 8px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
   margin-left: auto;
 }
 
 .agentCheckStatus.online {
-  background: rgba(52, 168, 83, 0.1);
-  color: var(--color-success);
+  background: var(--color-mint);
+  color: var(--color-dark-green);
 }
 
 .agentCheckStatus.offline {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--color-slate);
+  background: rgba(14, 15, 12, 0.06);
+  color: var(--color-warm-dark);
 }
 
 .modalActions {
@@ -175,41 +184,46 @@
   flex-direction: column;
   width: 480px;
   flex-shrink: 0;
-  background: var(--color-surface);
+  background: var(--color-canvas-elevated);
   border-left: 1px solid var(--border-color-light);
 }
 
 .rightPanelTabs {
   display: flex;
   border-bottom: 1px solid var(--border-color-light);
+  padding: 0 12px;
+  gap: 4px;
 }
 
 .tabBtn {
   flex: 1;
-  padding: 10px 0;
+  padding: 12px 0;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.108px;
   border: none;
   background: transparent;
-  color: var(--color-slate);
+  color: var(--color-warm-dark);
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out);
 }
 
 .tabBtn:hover {
-  color: var(--color-navy);
-  background: var(--color-background);
+  color: var(--color-dark-green);
 }
 
 .activeTab {
   flex: 1;
-  padding: 10px 0;
+  padding: 12px 0;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.108px;
   border: none;
   background: transparent;
-  color: var(--color-info);
+  color: var(--color-ink);
   cursor: pointer;
-  border-bottom: 2px solid var(--color-info);
+  border-bottom: 2px solid var(--color-wise-green);
 }
+

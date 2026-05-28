@@ -1,25 +1,26 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(14, 15, 12, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
-  animation: fadeIn 0.2s ease;
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.18s var(--ease-out);
   padding: var(--spacing-lg);
 }
 
 .content {
-  background: var(--color-surface);
-  padding: 32px;
-  border-radius: var(--radius-lg);
+  background: var(--color-canvas-elevated);
+  padding: 36px;
+  /* Wise 卡片大圆角；modal 用最大档 */
+  border-radius: var(--radius-xl);
   max-width: 560px;
   width: 90%;
   box-shadow: var(--shadow-xl);
-  animation: slideUp 0.25s ease;
-  border: 1px solid var(--border-color-light);
+  animation: slideUp 0.25s var(--ease-out);
+  border: 1px solid var(--border-color);
   max-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
@@ -31,36 +32,46 @@
   justify-content: space-between;
   margin-bottom: var(--spacing-lg);
   flex-shrink: 0;
+  gap: var(--spacing-md);
 }
 
 .title {
   margin: 0;
-  color: var(--color-navy);
-  font-size: 20px;
-  font-weight: 700;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
 }
 
 .closeBtn {
-  background: transparent;
+  background: rgba(22, 51, 0, 0.06);
   border: none;
   font-size: 18px;
-  color: var(--color-slate);
+  color: var(--color-ink);
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
+  padding: 0;
+  border-radius: var(--radius-pill);
   line-height: 1;
-  transition: all 0.2s ease;
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-base) var(--ease-out);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
 }
 
 .closeBtn:hover {
-  background: var(--color-background);
-  color: var(--color-navy);
-  transform: rotate(90deg);
+  background: rgba(159, 232, 112, 0.32);
+  color: var(--color-dark-green);
+  transform: scale(1.05) rotate(90deg);
+}
+
+.closeBtn:active {
+  transform: scale(0.92) rotate(90deg);
 }
 
 .scrollContent {
@@ -80,7 +91,7 @@
 
 @keyframes slideUp {
   from {
-    transform: translateY(20px);
+    transform: translateY(16px);
     opacity: 0;
   }
   to {
