@@ -921,7 +921,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
     res.status(201).json({ ok: true });
   });
 
-  // ── Issues (稳交付组 task tracking) ─────────────────────────────────────
+  // ── Issues (task tracking) ─────────────────────────────────────────────
 
   // List issues for a group
   apiRouter.get("/groups/:groupId/issues", (req, res) => {
@@ -1248,7 +1248,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
     res.json({ ok: true });
   });
 
-  // Claim next issue (used by 稳交付 Agents)
+  // Claim next issue (used by executor agents)
   apiRouter.post("/issues/claim-next", (req, res) => {
 
     const { agentName } = req.body;

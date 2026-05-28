@@ -1,10 +1,10 @@
 /**
- * Mesh Executor — 稳交付组 Agent 服务（多 Worker 架构）
+ * Mesh Executor — Agent 服务（多 Worker 架构）
  *
  * 一个 executor 进程管理多个数字员工（worker），每个 worker 拥有：
  * - 独立身份（name/token/profile）
  * - 独立 WebSocket 连接
- * - 独立 CLI 后端（claude/codex/...）
+ * - 独立 CLI 后端（claude/codex/openclaw/...）
  * - 独立任务队列
  *
  * 配置向后兼容：单 worker 格式仍然可用。
@@ -75,10 +75,9 @@ function loadConfig(): ExecutorConfig {
       master: "ws://localhost:18800",
       workers: [
         {
-          name: "稳交付·Claude",
+          name: "Claude·Agent",
           token: "mesh_xxx",
           cliTool: "claude",
-          profile: { category: "稳交付组" },
         },
       ],
     }, null, 2),

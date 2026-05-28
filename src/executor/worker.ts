@@ -199,7 +199,7 @@ export class ExecutorWorker {
         name: this.config.name,
         token: this.config.token,
         version: 2,
-        profile: this.config.profile || { category: "稳交付组" },
+        profile: this.config.profile || {},
       }));
     });
 

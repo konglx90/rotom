@@ -77,8 +77,8 @@ export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps)
                 </td>
                 <td>
                   {agent.profile?.category
-                    ? (agent.profile.category === '稳交付组' ? '🐘 ' : agent.profile.category === '真人' ? '👤 ' : '🚀 ') + agent.profile.category
-                    : '-'}
+                    ? (agent.profile.category === '真人' ? '👤 ' : '🚀 ') + agent.profile.category
+                    : '🚀 Agent'}
                 </td>
                 <td className={styles.detailCell}>
                   <div className={styles.detailRow}>

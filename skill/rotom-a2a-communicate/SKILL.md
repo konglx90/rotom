@@ -30,20 +30,20 @@ description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）
 
 ```
 要做事？
-├─ 任务明确，一个人就能完成        → 稳交付 Issue   rotom issue create
-├─ 方案不明确，需要多人讨论达共识  → 协作 Issue     rotom collab create
-└─ 只是同步信息 / 简单提问         → 群消息         rotom group send
+├─ 任务明确，一个人就能完成        → 任务 Issue   rotom issue create
+├─ 方案不明确，需要多人讨论达共识  → 协作 Issue   rotom collab create
+└─ 只是同步信息 / 简单提问         → 群消息       rotom group send
 ```
 
 | 场景 | 类型 | 命令 | 例子 |
 |------|------|------|------|
-| 明确任务，独立完成 | 稳交付 | `rotom issue create` | 修复 bug、生成代码、调配置 |
+| 明确任务，独立完成 | 任务 | `rotom issue create` | 修复 bug、生成代码、调配置 |
 | 多人讨论方案 | 协作 | `rotom collab create` | 方案评审、技术选型、需求澄清 |
 | 进度同步/快速问答 | 群消息 | `rotom group send` | "本周已完成 X"、"会议改到 3 点" |
 
 **反模式**：
-- ❌ 不要把"分配明确任务"塞进协作 Issue（用稳交付 Issue）
-- ❌ 不要把"方案讨论"塞进稳交付 Issue（用协作 Issue）
+- ❌ 不要把"分配明确任务"塞进协作 Issue（用任务 Issue）
+- ❌ 不要把"方案讨论"塞进任务 Issue（用协作 Issue）
 - ❌ 不要让群消息变成 5+ 轮的长讨论（升级为协作 Issue）
 
 ## 当写盘需求来了但没 issue —— 兜底话术
@@ -53,7 +53,7 @@ description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）
 （你看到 [当前群活跃 issue] 是"无"）
 
 你应该回复（不要动手）：
-"收到。这需要写盘，我先建一个稳交付 issue 承载这个任务，
+"收到。这需要写盘，我先建一个任务 issue 承载这个任务，
 你确认下描述：'README 末尾追加贡献指南'，priority=normal？
 确认后我执行 rotom issue create，然后开干。"
 ```
@@ -127,10 +127,10 @@ Python Agent 集成示例：`examples/agent-rotom-integration.py`
 
 详细文档：`docs/agent-rotom-status-integration.md`
 
-### Issue（稳交付组任务）
+### Issue（任务）
 
 ```bash
-# 最常见：只建,等稳交付组 agent 抢单
+# 最常见：只建,等 agent 抢单
 rotom issue create <groupId> --title "优化首页性能" --description "首屏 > 3s..." --priority high
 
 # 创建 + 指派给指定 agent(不会自动起跑,agent 需要手动开始)
@@ -165,7 +165,7 @@ rotom issue delete <issueId>
 - 想点名某 agent 但先让对方看清楚再开始 → 只传 `--assignee`
 - 一键派发跑通 → `--assignee X --run`（可叠加 `--approval-policy rw_allow` 让 agent 无人值守）
 
-任务创建后由稳交付组 Agent 抢单执行（或被 `--assignee` 直接指派），完成后会自动在群里公告结果。
+任务创建后由 Agent 抢单执行（或被 `--assignee` 直接指派），完成后会自动在群里公告结果。
 
 ### 协作 Issue（多人多轮讨论）
 

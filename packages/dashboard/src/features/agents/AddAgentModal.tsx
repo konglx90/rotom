@@ -185,9 +185,7 @@ export function AddAgentModal({ isOpen, onClose, domains, onSuccess, defaultDoma
                   onChange={(e) => setCategory(e.target.value)}
                   disabled={loading}
                 >
-                  <option value="">选择类型</option>
-                  <option value="快反组">🚀 快反组 — 快速响应，轻量搞定</option>
-                  <option value="稳交付组">🐘 稳交付组 — 稳扎稳打，使命必达</option>
+                  <option value="">🚀 Agent（默认）</option>
                   <option value="真人">👤 真人 — 真实人类团队成员</option>
                 </select>
               </div>

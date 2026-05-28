@@ -215,7 +215,7 @@ export function GroupChatArea({
                     if (!cat) return null
                     return (
                       <Badge tone="category" value={cat}>
-                        {cat === '稳交付组' ? '🐘' : cat === '真人' ? '👤' : '🚀'} {cat}
+                        {cat === '真人' ? '👤' : '🚀'} {cat}
                       </Badge>
                     )
                   })()}

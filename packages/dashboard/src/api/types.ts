@@ -13,7 +13,7 @@ export interface AgentProfile {
   position?: string
   responsibilities?: string
   tech_stack?: string
-  /** Agent 组别: "快反组" | "稳交付组" */
+  /** Agent 类别: "真人" | 默认（普通 agent） */
   category?: string
 }
 
@@ -190,7 +190,7 @@ export interface CreateGroupDto {
   workingDir?: string
 }
 
-// Issue Types (稳交付组 task tracking)
+// Issue Types (task tracking)
 export interface Issue {
   id: string
   group_id: string

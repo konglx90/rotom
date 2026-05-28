@@ -49,13 +49,8 @@ const PRIORITY_COLORS: Record<string, string> = {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  '快交付组': 'amber',
-  '稳交付组': 'blue',
   '真人': 'green',
   'system': 'slate',
-  // 兼容英文 key
-  fast: 'amber',
-  stable: 'blue',
   human: 'green',
 }
 

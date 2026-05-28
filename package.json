@@ -3,7 +3,6 @@
   "version": "2.0.34",
   "type": "module",
   "description": "Digital Employee Mesh — Enterprise agent collaboration network",
-  "main": "dist/index.js",
   "bin": {
     "mesh-master": "./dist/master/server.js",
     "rotom": "./bin/rotom"
@@ -20,8 +19,7 @@
     "dashboard:build": "pnpm --filter @a2a-gateway/dashboard build",
     "dashboard:preview": "pnpm --filter @a2a-gateway/dashboard preview",
     "executor": "node --import tsx src/executor/index.ts",
-    "test": "node --import tsx --test tests/*.test.ts",
-    "pack:openclaw:agent": "npm version patch --no-git-tag-version && tsc && npm pack --pack-destination ."
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -29,28 +27,15 @@
     "ws": "^8.18.0"
   },
   "files": [
-    "dist/index.js",
-    "dist/index.js.map",
-    "dist/index.d.ts",
-    "dist/index.d.ts.map",
-    "dist/agent",
+    "bin",
+    "dist/master",
+    "dist/executor",
+    "dist/cli",
     "dist/shared",
-    "skill",
-    "openclaw.plugin.json"
+    "skill"
   ],
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0"
-  },
-  "openclaw": {
-    "extensions": [
-      "./dist/index.js"
-    ],
-    "channels": [
-      "a2a-gateway"
-    ],
-    "skills": [
-      "./skill/rotom-a2a-communicate"
-    ]
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",

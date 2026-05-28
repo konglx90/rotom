@@ -2,9 +2,6 @@
  * Digital Employee Mesh — Protocol definitions
  *
  * All WebSocket message types between Agent and Master.
- * 16 message types total: 7 client → master, 9 master → client.
- * + Issue system: 1 client → master, 3 master → client.
- * + Collaboration system: 1 client → master, 3 master → client.
  */
 
 // ---------------------------------------------------------------------------
@@ -22,7 +19,7 @@ export interface AgentProfile {
   position?: string;
   responsibilities?: string;
   tech_stack?: string;
-  /** Agent 组别: "快反组" | "稳交付组" | "真人" */
+  /** Agent 类别: "真人" | 默认（普通 agent） */
   category?: string;
 }
 
@@ -134,15 +131,10 @@ export type ClientMessage =
   | ClientA2AReplyMessage
   | ClientA2AReplyChunkMessage
   | ClientA2AReplyEndMessage
-  | ClientGroupHistoryRequestMessage
-  | ClientGroupMembersRequestMessage
   | ClientUpdateInfoMessage
   | ClientDisconnectMessage
   | ClientIssueUpdateMessage
-  | ClientIssueApprovalRequestMessage
-  | ClientCreateIssueMessage
-  | ClientCreateCollaborationMessage
-  | ClientConcludeCollaborationMessage;
+  | ClientIssueApprovalRequestMessage;
 
 export interface ClientAuthMessage {
   type: "auth";
@@ -189,19 +181,6 @@ export interface ClientA2AReplyEndMessage {
   payload: MessagePayload;
 }
 
-export interface ClientGroupHistoryRequestMessage {
-  type: "group_history_request";
-  requestId: string;
-  groupId: string;
-  limit?: number;
-}
-
-export interface ClientGroupMembersRequestMessage {
-  type: "group_members_request";
-  requestId: string;
-  groupId: string;
-}
-
 export interface ClientUpdateInfoMessage {
   type: "update_info";
   description?: string;
@@ -214,7 +193,7 @@ export interface ClientDisconnectMessage {
   type: "disconnect";
 }
 
-// --- Issue system (稳交付组 Agent → Master) ---
+// --- Issue system (Agent → Master) ---
 
 export interface ClientIssueUpdateMessage {
   type: "issue_update";
@@ -263,42 +242,8 @@ export interface ClientIssueApprovalRequestMessage {
   }>;
 }
 
-/** Agent 调用：在指定群创建 Issue，交由稳交付组处理 */
-export interface ClientCreateIssueMessage {
-  type: "create_issue";
-  requestId: string;
-  groupId: string;
-  title: string;
-  description?: string;
-  priority?: string;
-  workingDir?: string;
-}
-
-// --- Collaboration system (Agent → Master) ---
-
-/** Agent 调用：创建协作 Issue，邀请多个 agent 围绕目标自主协作。
- * 协作启动后只会通知 participants[0]，由其自主决策 @ 下一个成员或结束 issue。*/
-export interface ClientCreateCollaborationMessage {
-  type: "create_collaboration";
-  requestId: string;
-  groupId: string;
-  title: string;
-  collaborationGoal: string;
-  participants: string[];
-  maxRounds: number;
-  /** 可选：协作负责人（真人）。不填则该协作没有负责人 */
-  owner?: string;
-}
-
-/** Agent 调用：主动结束一个进行中的协作 Issue 并广播总结 */
-export interface ClientConcludeCollaborationMessage {
-  type: "conclude_collaboration";
-  issueId: string;
-  summary: string;
-}
-
 // ---------------------------------------------------------------------------
-// Master → Client messages (8 types)
+// Master → Client messages
 // ---------------------------------------------------------------------------
 
 export type ServerMessage =
@@ -313,16 +258,12 @@ export type ServerMessage =
   | ServerConfigUpdateMessage
   | ServerA2AStreamChunkMessage
   | ServerA2AStreamEndMessage
-  | ServerGroupHistoryResponseMessage
-  | ServerGroupMembersResponseMessage
   | ServerIssueCreatedMessage
   | ServerIssueAssignedMessage
   | ServerIssueUpdateAckMessage
   | ServerIssueApprovalResponseMessage
-  | ServerCreateIssueResponseMessage
   | ServerCollaborationStartedMessage
   | ServerCollaborationConcludedMessage
-  | ServerCreateCollaborationResponseMessage
   | ServerIssueCancelledMessage
   | ServerIssueChangedMessage
   | ServerIssueContinueMessage
@@ -402,20 +343,6 @@ export interface ServerA2AStreamEndMessage {
   conversation?: ConversationContext;
 }
 
-export interface ServerGroupHistoryResponseMessage {
-  type: "group_history_response";
-  requestId: string;
-  messages: { id: number; sender: string; content: string; mentions: string; created_at: string }[];
-  error?: string;
-}
-
-export interface ServerGroupMembersResponseMessage {
-  type: "group_members_response";
-  requestId: string;
-  members: { agent_name: string; joined_at: string; profile?: AgentProfile }[];
-  error?: string;
-}
-
 // --- Issue system (Master → Client) ---
 
 export interface ServerIssueCreatedMessage {
@@ -464,16 +391,6 @@ export interface ServerIssueApprovalResponseMessage {
   feedback?: string;
 }
 
-/** Master 回复 Agent 的 create_issue 调用结果 */
-export interface ServerCreateIssueResponseMessage {
-  type: "create_issue_response";
-  requestId: string;
-  issueId: string;
-  title: string;
-  status: string;
-  error?: string;
-}
-
 // --- Collaboration system (Master → Client) ---
 
 /** 通知 Agent 有新的协作开始 */
@@ -502,16 +419,6 @@ export interface ServerCollaborationConcludedMessage {
   totalRounds: number;
   /** 可选：协作负责人。不填则没有负责人 */
   owner?: string;
-}
-
-/** Master 回复 create_collaboration 的结果 */
-export interface ServerCreateCollaborationResponseMessage {
-  type: "create_collaboration_response";
-  requestId: string;
-  issueId: string;
-  title: string;
-  status: string;
-  error?: string;
 }
 
 /**
@@ -597,10 +504,6 @@ export function isClientMessage(x: unknown): x is ClientMessage {
       return typeof msg.requestId === "string" && typeof msg.delta === "string";
     case "a2a_reply_end":
       return typeof msg.requestId === "string" && !!msg.payload;
-    case "group_history_request":
-      return typeof msg.requestId === "string" && typeof msg.groupId === "string";
-    case "group_members_request":
-      return typeof msg.requestId === "string" && typeof msg.groupId === "string";
     case "update_info":
       return true;
     case "disconnect":
@@ -612,12 +515,6 @@ export function isClientMessage(x: unknown): x is ClientMessage {
         && typeof msg.approvalId === "string"
         && (msg.kind === "exec" || msg.kind === "file_change" || msg.kind === "plan" || msg.kind === "ask")
         && typeof msg.summary === "string";
-    case "create_issue":
-      return typeof msg.requestId === "string" && typeof msg.groupId === "string" && typeof msg.title === "string";
-    case "create_collaboration":
-      return typeof msg.requestId === "string" && typeof msg.groupId === "string" && typeof msg.title === "string" && typeof msg.collaborationGoal === "string" && Array.isArray(msg.participants) && typeof msg.maxRounds === "number" && (msg.owner === undefined || typeof msg.owner === "string");
-    case "conclude_collaboration":
-      return typeof msg.issueId === "string" && typeof msg.summary === "string";
     default:
       return false;
   }

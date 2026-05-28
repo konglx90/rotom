@@ -90,7 +90,7 @@ Client 通过 rotom CLI 与 Mesh 交互 (LLM 用 Bash 调用):
   rotom group members <groupId>               ──► 查询群成员列表
   rotom group history <groupId> [--limit N]   ──► 拉群消息历史
   rotom group send <groupId> <target> <msg>   ──► 群内 @某人
-  rotom issue create <groupId> --title T ...  ──► 在群中创建 Issue 给稳交付组
+  rotom issue create <groupId> --title T ...  ──► 在群中创建 Issue 给 Agent 抢单
   rotom issue list / show / events / cancel   ──► 查询 / 管理 issue
   rotom collab create / conclude              ──► 多 Agent 协作 issue
 
@@ -99,20 +99,17 @@ Client 通过 rotom CLI 与 Mesh 交互 (LLM 用 Bash 调用):
   统一通过 Bash 执行 rotom 命令完成。
 ```
 
-### Agent 组别
+### Agent 与真人
 
-Agent 分为两个类别，由 `AgentProfile.category` 标识 (`src/shared/protocol.ts:17`)：
-
-| 组别 | 特征 | 适用场景 |
-|------|------|----------|
-| **快反组** | 标准 OpenClaw Agent，通过 LLM 实时对话 | 快速问答、轻量交互 |
-| **稳交付组** | CLI executor 进程，独立 WS 连接 + CLI 后端 | 代码编写、文件操作、需要保证交付的任务 |
-
-稳交付组 Agent 不直接运行 OpenClaw，而是由 **Executor** 进程管理。一个 Executor 进程管理多个 Worker，每个 Worker 拥有：
+Agent 是统一的「员工」概念，由 `executor` 进程承载（`src/executor/`）。一个 Executor 进程管理多个 Worker，每个 Worker 拥有：
 - 独立身份（name / token / profile）
 - 独立 WebSocket 连接（连接 Master 的 `/ws`）
-- 独立 CLI 后端（自动检测 `claude` / `codex` / `aider` 等工具）
+- 独立 CLI 后端（自动检测 `claude` / `codex` / `openclaw` / `aider` 等工具）
 - 独立任务队列（最大并发数可配置）
+
+`AgentProfile.category` 字段（`src/shared/protocol.ts`）目前只有一个有特殊含义的取值：
+- `"真人"` — 真实人类团队成员，可作为协作 Issue 的 owner；不参与 Issue 抢单。
+- 其余（包括未设置）— 普通 Agent，会被自动派单 / 可被指派执行 Issue / 群内 @ 时通过 CLI 后端生成回复。
 
 启动方式：
 ```bash
@@ -145,42 +142,20 @@ flowchart TB
     HUB --> OQ
   end
 
-  subgraph AgentA["Agent A (src/agent) — 快反组"]
-    SMA["socket-manager"]
-    AMA["agent-mode<br/>群消息@过滤"]
-    DISA["inbound-dispatcher<br/>注入群 context"]
-    OUTA["outbound-handler"]
-    OCA["OpenClaw SDK<br/>channel.reply"]
-    AMA --> SMA
-    AMA --> DISA
-    AMA --> OUTA
-    DISA --> OCA
-  end
-
   subgraph CLI_["rotom CLI (src/cli/rotom.ts)"]
     ROT["rotom<br/>whoami / directory<br/>send / group send<br/>group members/history<br/>issue / collab"]
   end
 
-  subgraph AgentB["Agent B (src/agent) — 快反组"]
-    SMB["socket-manager"]
-    AMB["agent-mode"]
-    OCB["OpenClaw SDK"]
-    AMB --> SMB
-    AMB --> OCB
-  end
-
-  subgraph Executor["Executor (src/executor) — 稳交付组"]
-    EW["worker.ts<br/>ExecutorWorker<br/>WS 连接 / issue 认领 / CLI 执行"]
-    CLI["Claude Code / Codex / Aider<br/>CLI 后端"]
+  subgraph Executor["Executor (src/executor) — Agent"]
+    EW["worker.ts<br/>ExecutorWorker<br/>WS 连接 / issue 认领 / CLI 执行 / 群聊 @ 回复"]
+    CLI["Claude Code / Codex / OpenClaw / Aider<br/>CLI 后端"]
     ECFG["executor.config.json<br/>配置 worker 列表"]
     EW --> CLI
   end
 
   GAPI -- "HTTP" --> API
   ROT -- "HTTP /api/* (Bearer mesh_xxx)" --> API
-  SMA <-- "WS /ws<br/>shared/protocol.ts" --> HUB
-  SMB <-- "WS /ws" --> HUB
-  EW <-- "WS /ws" --> HUB
+  EW <-- "WS /ws<br/>shared/protocol.ts" --> HUB
 ```
 
 ## 2. 数据模型 (SQLite)
@@ -251,23 +226,25 @@ erDiagram
 |---|---|---|
 | client→master | `a2a_send` (含 `conversation`) | 发群消息：`conversation:{type:"group",groupId,groupName}` |
 | client→master | `a2a_reply` / `a2a_reply_chunk` / `a2a_reply_end` | 回复（master 自动从 pendingRequests 关联 conversation） |
-| client→master | `group_history_request` | Agent 主动拉群历史 |
-| client→master | `group_members_request` | Agent 查询群成员列表 |
 | master→client | `a2a_message` (含 `conversation`) | 推送群消息给目标成员 |
 | master→client | `a2a_stream_chunk` / `a2a_stream_end` | 流式回复 |
-| master→client | `group_history_response` | 历史响应 |
-| master→client | `group_members_response` | 群成员列表响应 |
+
+> 群历史 / 群成员现在统一通过 rotom CLI 走 HTTP 拉取，不再有 WS 请求/响应消息。
 
 Issue 系统新增的消息（`src/shared/protocol.ts`）：
 
 | 方向 | 类型 | 说明 |
 |---|---|---|
 | agent→master | `issue_update` | 上报 issue 进度：`{issueId, status, content, metadata}`。status: `in_progress` \| `completed` \| `failed` |
-| agent→master | `create_issue` | Agent 创建 Issue：`{requestId, groupId, title, description?, priority?, workingDir?}` |
-| master→agent | `issue_created` | 广播新 issue 通知：`{issueId, groupId, title, createdBy}`，所有 agent 可尝试认领 |
-| master→agent | `issue_assigned` | 指派 issue 给特定 agent：`{issueId, groupId, title, description, workingDir}` |
+| agent→master | `issue_approval_request` | Worker 端 CLI 请求一次写类工具审批 |
+| master→agent | `issue_created` | 广播新 issue 通知：`{issueId, groupId, title, createdBy}` |
+| master→agent | `issue_assigned` | 指派 issue 给特定 agent：`{issueId, groupId, title, description, workingDir, slashCommand?, approvalPolicy?}` |
 | master→agent | `issue_update_ack` | 确认 `issue_update` 已处理 |
-| master→agent | `create_issue_response` | 确认 `create_issue` 结果：`{requestId, issueId, title, status}` |
+| master→agent | `issue_approval_response` | 用户对 `issue_approval_request` 的裁决 |
+| master→agent | `issue_continue` / `issue_append` | 续聊：完成态后追加 prompt / 进行中追加 prompt |
+| master→agent | `issue_cancelled` | 通知中止当前 CLI 进程 |
+| master→agent | `issue_changed` | 给整个群广播 issue 状态变化，dashboard 据此停轮询 |
+| master→agent | `collaboration_started` / `collaboration_concluded` | 协作 Issue 开始 / 结束广播 |
 
 ## 4. 群消息时序
 
@@ -311,7 +288,7 @@ sequenceDiagram
 
 ## 5. Issue 时序
 
-**场景**：快反组 Agent 或 Dashboard 创建 issue → 稳交付 Agent 认领并执行 → Dashboard 实时查看进展。
+**场景**：Dashboard / rotom CLI 创建 issue → Agent 认领并执行 → Dashboard 实时查看进展。
 
 ```mermaid
 sequenceDiagram
@@ -320,20 +297,20 @@ sequenceDiagram
   participant M as Master API
   participant DB as SQLite
   participant H as Master ws-hub
-  participant FA as 快反组 Agent
+  participant ROT as rotom CLI
   participant EW as ExecutorWorker
-  participant CLI as CLI (claude/codex)
+  participant CLI as CLI (claude/codex/openclaw)
 
   alt Dashboard 创建
     D->>M: POST /groups/G/issues<br/>{title, description, priority, assignedTo?}
     M->>DB: createIssue(…)
     M->>H: notifyNewIssue(id, G, title)
-  else 快反组 Agent 通过 rotom CLI 创建
-    FA->>M: POST /api/groups/G/issues<br/>(rotom issue create, Bearer mesh_xxx)
+  else 通过 rotom CLI 创建（Bash / 数字员工）
+    ROT->>M: POST /api/groups/G/issues<br/>(rotom issue create, Bearer mesh_xxx)
     M->>DB: createIssue(…)  (createdBy 由 token 推导)
     M->>H: notifyNewIssue(id, G, title)
   else 群消息 [ISSUE] 标记
-    FA->>M: POST /groups/G/messages<br/>{sender, content:"[ISSUE] 标题\n描述"}
+    ROT->>M: POST /groups/G/messages<br/>{sender, content:"[ISSUE] 标题\n描述"}
     M->>DB: addGroupMessage + createIssue(…)
     M->>H: notifyNewIssue(id, G, title)
   end
@@ -365,10 +342,10 @@ sequenceDiagram
 **关键路径说明**：
 - Issue 可通过三种方式创建：
   1. **Dashboard 表单提交**（`POST /groups/:id/issues`），支持指定标题、描述、优先级、指派 Agent
-  2. **快反组 Agent 通过 rotom CLI 创建**（`rotom issue create <groupId> --title T ...`，底层走 `POST /api/groups/:id/issues` + Bearer mesh token），需指定群 ID 和标题。WS `create_issue` 通道仍保留，但当前 LLM 不再直接使用
+  2. **通过 rotom CLI 创建**（`rotom issue create <groupId> --title T ...`，底层走 `POST /api/groups/:id/issues` + Bearer mesh token），需指定群 ID 和标题。Bash 数字员工与 Dashboard 都走这条路径。
   3. **群消息 `[ISSUE]` 标记**：群消息内容匹配 `[ISSUE] 标题\n描述` 时自动创建（`api.ts:723`）
 - 创建后 Master 广播 `issue_created` 给所有连接中的 agent
-- 稳交付组 Agent（ExecutorWorker）收到后自动调用 `claim-next` 以优先级+时间顺序认领
+- Agent（ExecutorWorker）收到后自动调用 `claim-next` 以优先级+时间顺序认领
 - 执行时 CLI 输出通过 WebSocket 流式上报 `issue_update`，Master 持久化到 DB
 - Dashboard 每 5 秒轮询刷新群 issue 列表（`GroupChatView.tsx:211-217`）
 - 产物（artifacts）从 CLI 输出中通过正则匹配提取（`worker.ts:306-319`）
@@ -385,14 +362,14 @@ sequenceDiagram
 | PUT | `/issues/:id` | 更新 issue（指派 agent / 改优先级） |
 | POST | `/issues/:id/cancel` | 取消进行中的 issue |
 | DELETE | `/issues/:id` | 删除 issue |
-| POST | `/issues/claim-next` | 稳交付 Agent 原子认领下一个待办（按优先级 + 创建时间排序） |
+| POST | `/issues/claim-next` | Agent 原子认领下一个待办（按优先级 + 创建时间排序） |
 | GET | `/issues/:id/events` | 获取 issue 事件时间线 |
 
 此外，Agent 可通过 WebSocket 发送 `create_issue` 消息创建 Issue（见第 3 节协议层），效果与 REST API 等价。
 
 ## 6. Executor 架构 (`src/executor/`)
 
-Executor 是稳交付组 Agent 的服务进程，通过 CLI 执行代码任务。一个 Executor 进程可管理多个 Worker，每个 Worker 模拟一个独立 Agent。
+Executor 是 Agent 的服务进程，通过 CLI 执行代码任务。一个 Executor 进程可管理多个 Worker，每个 Worker 模拟一个独立 Agent。
 
 ### 启动流程
 
@@ -420,7 +397,6 @@ executor.config.json ──→ index.ts ──→ normalizeWorkers()
       "name": "西花-claude",
       "token": "mesh_xxx",
       "cliTool": "claude",
-      "profile": { "category": "稳交付组" },
       "workingDir": "/path/to/project",
       "maxConcurrent": 2
     }
@@ -440,7 +416,7 @@ executor.config.json ──→ index.ts ──→ normalizeWorkers()
 
 ### Worker 生命周期
 
-1. **连接**：启动后连接 Master 的 `/ws`，通过 `auth` 消息发送 `{name, token, profile: {category: "稳交付组"}}`
+1. **连接**：启动后连接 Master 的 `/ws`，通过 `auth` 消息发送 `{name, token, profile}`
 2. **认领**：认证成功后立即调用 `POST /api/issues/claim-next` 尝试认领待办 issue
 3. **执行**：收到 `issue_assigned` 后，用 CLI 后端的 `execute()` 执行 `title + description` 作为 prompt
 4. **上报**：CLI 输出通过 `issue_update`（in_progress/completed/failed）流式上报给 Master
@@ -468,9 +444,7 @@ codex "prompt text"    # 或 aider / 其他 CLI 工具
 
 ## 7. Agent CLI (`src/cli/rotom.ts`)
 
-LLM 不再注册 `mesh_*` 工具，所有 Mesh 操作统一通过 **rotom CLI** 执行（LLM 走 Bash 调用）。这样模型只需掌握一个统一的命令面，认证与格式化也集中在 CLI 层。
-
-> `MeshToolExecutor` 仍保留在 Agent 进程内，用于消费 Master 推来的 `route_result` / `create_issue_response` 等响应消息，并为 inbound-dispatcher 跟踪群回复归属；但不再向 LLM 暴露任何工具定义。
+所有 Mesh 操作统一通过 **rotom CLI** 执行（数字员工走 Bash 调用）。这样模型只需掌握一个统一的命令面，认证与格式化也集中在 CLI 层。
 
 ### 身份解析
 
@@ -513,7 +487,7 @@ LLM (Bash) → rotom issue create g-001 --title "..." --description "..."
       1. 通过 token 解析 createdBy
       2. 校验 agent 是群成员
       3. db.createIssue(...) 写入 issues 表
-      4. notifyNewIssue() 广播 issue_created 给稳交付 Workers
+      4. notifyNewIssue() 广播 issue_created 给 Workers
   → 返回 { id, title, status }
 ```
 

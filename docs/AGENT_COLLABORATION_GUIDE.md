@@ -66,7 +66,7 @@ Agent A → rotom group send → sendAsAgent() → 消息显示为 "Agent A" →
 需要创建 Issue 吗？
 │
 ├─ 是明确的具体任务？（有清晰的完成标准）
-│  └─> 使用「稳交付 Issue」
+│  └─> 使用「任务 Issue」
 │      └─> 命令：rotom issue create
 │      └─> 示例：修复 bug、实现功能、生成报告
 │
@@ -76,7 +76,7 @@ Agent A → rotom group send → sendAsAgent() → 消息显示为 "Agent A" →
        └─> 示例：方案评审、需求澄清、技术选型
 ```
 
-### 📌 类型 A：稳交付 Issue（普通 Issue）
+### 📌 类型 A：任务 Issue（普通 Issue）
 
 **适用场景**：
 - ✅ 具体的开发任务（"修复登录页面 bug"）
@@ -99,7 +99,7 @@ rotom issue create <groupId> \
 
 **工作流程**：
 ```
-创建 Issue → 稳交付组 Agent 抢单 → 执行任务 → 提交结果 → 自动公告完成
+创建 Issue → Agent 抢单 → 执行任务 → 提交结果 → 自动公告完成
 ```
 
 ### 🤝 类型 B：协作 Issue（多人讨论）
@@ -112,7 +112,7 @@ rotom issue create <groupId> \
 - ✅ 任何需要多人多轮讨论的事项
 
 **不适合**：
-- ❌ 明确的具体任务（用稳交付 Issue）
+- ❌ 明确的具体任务（用任务 Issue）
 - ❌ 单向通知（直接用群消息）
 
 **创建命令**：
@@ -144,13 +144,13 @@ rotom collab create <groupId> \
 # 步骤 1：查看群成员，找到合适的 Agent
 rotom group members <groupId>
 
-# 步骤 2：创建稳交付 Issue
+# 步骤 2：创建任务 Issue
 rotom issue create cda34ffc-c8e9-428b-b9da-2bec7c6039d1 \
   --title "添加 Redis 缓存层" \
   --description "为用户数据查询添加 Redis 缓存，提升查询性能" \
   --priority high
 
-# 步骤 3：等待稳交付组 Agent 抢单执行
+# 步骤 3：等待Agent 抢单执行
 # （Agent 会自动在群里公告进度和结果）
 
 # 步骤 4：查看 Issue 状态
@@ -158,7 +158,7 @@ rotom issue list cda34ffc-c8e9-428b-b9da-2bec7c6039d1
 ```
 
 **关键要点**：
-- 这是明确的技术任务，适合用稳交付 Issue
+- 这是明确的技术任务，适合用任务 Issue
 - 不需要多人讨论，一个人就能完成
 - 有清晰的完成标准（Redis 集成成功）
 
@@ -227,7 +227,7 @@ rotom issue create cda34ffc-c8e9-428b-b9da-2bec7c6039d1 \
   --description "将 max_connections 从 20 调整到 100" \
   --priority high
 
-# 等待稳交付组完成修复
+# 等待 Agent 完成修复
 
 # 验证修复结果
 rotom group send cda34ffc-c8e9-428b-b9da-2bec7c6039d1 小寿 \
@@ -236,7 +236,7 @@ rotom group send cda34ffc-c8e9-428b-b9da-2bec7c6039d1 小寿 \
 
 **关键要点**：
 - 复杂问题先讨论（协作 Issue），确定方案
-- 然后执行（稳交付 Issue），完成任务
+- 然后执行（任务 Issue），完成任务
 - 分离讨论和执行，逻辑更清晰
 
 ---
@@ -294,7 +294,7 @@ rotom group history <groupId> --limit 20 --pretty
 rotom group send <groupId> <target> "@target 帮我看一下 X"
 ```
 
-### Issue 管理（稳交付）
+### Issue 管理（任务）
 
 ```bash
 # 创建 Issue
@@ -334,7 +334,7 @@ rotom collab conclude <issueId> --summary "总结内容"
 
 ### ✅ 应该这样做
 
-1. **明确任务 → 稳交付 Issue**
+1. **明确任务 → 任务 Issue**
    - 有清晰的完成标准
    - 一个人可以独立完成
    - 结果是可交付的产出物
@@ -352,11 +352,11 @@ rotom collab conclude <issueId> --summary "总结内容"
 ### ❌ 避免这样做
 
 1. **不要滥用协作 Issue**
-   - 不要用协作 Issue 来分配明确任务（用稳交付 Issue）
+   - 不要用协作 Issue 来分配明确任务（用任务 Issue）
    - 不要设置过多的轮次（2-3 轮足够）
 
-2. **不要滥用稳交付 Issue**
-   - 不要用稳交付 Issue 来进行方案讨论（更适合协作 Issue）
+2. **不要滥用任务 Issue**
+   - 不要用任务 Issue 来进行方案讨论（更适合协作 Issue）
    - 不要创建过大粒度的任务（应该可在一个工作单元完成）
 
 3. **不要让群消息变成长讨论**
@@ -370,7 +370,7 @@ rotom collab conclude <issueId> --summary "总结内容"
 创建 Issue 前，问自己 3 个问题：
 
 1. **这个任务明确吗？**（有清晰的完成标准）
-   - ☐ 是 → 稳交付 Issue
+   - ☐ 是 → 任务 Issue
    - ☐ 否 → 继续问问题 2
 
 2. **需要多人讨论吗？**（方案不明确或涉及多个角色）
@@ -401,7 +401,7 @@ rotom collab conclude <issueId> --summary "总结内容"
    - 动作：回应讨论或提出新观点
    - 结束：@ 下一位或结束协作（如果是最后一人）
 
-3. **稳交付 Issue 分配通知**
+3. **任务 Issue 分配通知**
    - 你被分配了具体任务
    - 任务：执行任务
    - 动作：完成后提交结果

@@ -4,7 +4,7 @@
 
 | 场景 | 类型 | 命令 | 示例 |
 |------|------|------|------|
-| 明确任务，独立完成 | 稳交付 | `rotom issue create` | 修复 bug、生成代码 |
+| 明确任务，独立完成 | 任务 | `rotom issue create` | 修复 bug、生成代码 |
 | 多人讨论，达成共识 | 协作 | `rotom collab create` | 方案评审、需求澄清 |
 | 信息同步，快速问答 | 群消息 | `rotom group send` | 进度同步、简单提问 |
 
@@ -35,7 +35,7 @@ rotom group send <groupId> <target> "@target 进度正常吗？"
 
 ```
 需要创建 Issue 吗？
-├─ 任务明确？→ 稳交付 Issue
+├─ 任务明确？→ 任务 Issue
 ├─ 需讨论？→ 协作 Issue
 └─ 信息同步？→ 群消息，不创建 Issue
 ```

@@ -26,8 +26,8 @@ export function CreateIssueModal({ open, agents, onClose, onSubmit, defaultWorki
   const [assignedTo, setAssignedTo] = useState('')
   const [usePlanMode, setUsePlanMode] = useState(false)
 
-  // 稳交付组 agents: identified by profile.category
-  const deliveryAgents = agents.filter(a => a.profile?.category === '稳交付组')
+  // 候选指派对象：所有非真人 agent（真人不参与抢单执行）
+  const deliveryAgents = agents.filter(a => a.profile?.category !== '真人')
 
   const handleSubmit = () => {
     const trimmed = title.trim()
@@ -85,7 +85,7 @@ export function CreateIssueModal({ open, agents, onClose, onSubmit, defaultWorki
           placeholder="例如: /path/to/project (留空使用默认)" className={styles.formInput} />
       </div>
       <div className={styles.formField}>
-        <label className={styles.formLabel}>指派稳交付 Agent (可选):</label>
+        <label className={styles.formLabel}>指派 Agent (可选):</label>
         <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
           className={styles.formSelect}>
           <option value="">-- 暂不分配,稍后指派 --</option>

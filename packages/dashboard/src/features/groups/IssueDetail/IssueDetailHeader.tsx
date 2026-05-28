@@ -36,10 +36,10 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
   const isActiveState = issue.status === 'open' || issue.status === 'in_progress'
   const showAssign = issue.type !== 'collaboration'
 
-  // 候选指派对象 = 群成员 ∩ 稳交付组 agent。
+  // 候选指派对象 = 群成员 ∩ 非真人 agent（真人不参与抢单执行）。
   const memberSet = new Set(groupMembers)
   const assignCandidates = agents
-    .filter(a => memberSet.has(a.name) && a.profile?.category === '稳交付组')
+    .filter(a => memberSet.has(a.name) && a.profile?.category !== '真人')
     .map(a => a.name)
   // 当前指派人若不在候选列表(如已退群),仍保留以避免下拉显示为空。
   if (issue.assigned_to && !assignCandidates.includes(issue.assigned_to)) {
@@ -175,7 +175,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
                   )}
                   {assigning && <span className={styles.fieldHint}>更新中...</span>}
                   {!assigning && pendingAssignee === null && assignCandidates.length === 0 && (
-                    <span className={styles.fieldHint}>群内暂无稳交付组成员</span>
+                    <span className={styles.fieldHint}>群内暂无可指派的 Agent</span>
                   )}
                 </div>
               )}

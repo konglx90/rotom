@@ -802,7 +802,7 @@ export class MeshDb {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Issues (稳交付组 task tracking)
+  // Issues (task tracking)
   // ═══════════════════════════════════════════════════════════════════════════
 
   createIssue(issue: {
@@ -864,7 +864,7 @@ export class MeshDb {
     this.db.prepare(`UPDATE issues SET ${sets.join(", ")} WHERE id = ?`).run(...values);
   }
 
-  /** Atomically claim the next unassigned issue for a 稳交付 Agent. */
+  /** Atomically claim the next unassigned issue for an executor agent. */
   claimNextIssue(agentName: string): IssueRow | undefined {
     const issue = this.db.prepare(`
       SELECT * FROM issues
