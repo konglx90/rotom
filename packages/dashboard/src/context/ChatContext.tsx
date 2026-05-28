@@ -67,22 +67,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const [agents, setAgents] = useState<Agent[]>([])
   const [groups, setGroups] = useState<Group[]>([])
-  const [myAgentName, setMyAgentName] = useState<string>('')
-  const [myAgentToken, setMyAgentToken] = useState<string>('')
-  const [showConfigModal, setShowConfigModal] = useState<boolean>(true)
+  // Read saved identity synchronously so route guards don't see an empty
+  // value on first render and bounce the user to /agents on every refresh.
+  const [myAgentName, setMyAgentName] = useState<string>(
+    () => localStorage.getItem('chat_agent_name') ?? '',
+  )
+  const [myAgentToken, setMyAgentToken] = useState<string>(
+    () => localStorage.getItem('chat_agent_token') ?? '',
+  )
+  // Don't force the agent-config modal open on first load — the dashboard is
+  // browseable without an identity. Users open it on demand from the sidebar
+  // or when they try to send a DM.
+  const [showConfigModal, setShowConfigModal] = useState<boolean>(false)
   const [showCreateGroupModal, setShowCreateGroupModal] = useState<boolean>(false)
   const [directTarget, setDirectTargetState] = useState<string>('')
-
-  // Restore saved identity from localStorage on mount
-  useEffect(() => {
-    const savedName = localStorage.getItem('chat_agent_name')
-    const savedToken = localStorage.getItem('chat_agent_token')
-    if (savedName && savedToken) {
-      setMyAgentName(savedName)
-      setMyAgentToken(savedToken)
-      setShowConfigModal(false)
-    }
-  }, [])
 
   const loadAgents = useCallback(async () => {
     try {

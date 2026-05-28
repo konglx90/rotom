@@ -16,6 +16,7 @@ function ChatModalsHost() {
   const {
     showConfigModal,
     setMyAgentConfig,
+    closeConfigModal,
     showCreateGroupModal,
     closeCreateGroupModal,
     createGroup,
@@ -25,7 +26,7 @@ function ChatModalsHost() {
 
   return (
     <>
-      <ConfigModal open={showConfigModal} onConfigured={setMyAgentConfig} />
+      <ConfigModal open={showConfigModal} onConfigured={setMyAgentConfig} onClose={closeConfigModal} />
       <CreateGroupModal
         open={showCreateGroupModal}
         agents={agents}

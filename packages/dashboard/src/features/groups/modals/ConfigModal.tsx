@@ -6,9 +6,10 @@ import styles from '../GroupChatView.module.css'
 interface Props {
   open: boolean
   onConfigured: (name: string, token: string) => void
+  onClose: () => void
 }
 
-export function ConfigModal({ open, onConfigured }: Props) {
+export function ConfigModal({ open, onConfigured, onClose }: Props) {
   const [name, setName] = useState('')
   const [token, setToken] = useState('')
 
@@ -24,14 +25,6 @@ export function ConfigModal({ open, onConfigured }: Props) {
     localStorage.setItem('chat_agent_name', name.trim())
     localStorage.setItem('chat_agent_token', token.trim())
     onConfigured(name.trim(), token.trim())
-  }
-
-  const handleCancel = () => {
-    const savedName = localStorage.getItem('chat_agent_name')
-    const savedToken = localStorage.getItem('chat_agent_token')
-    if (savedName && savedToken) {
-      onConfigured(savedName, savedToken)
-    }
   }
 
   return (
@@ -50,7 +43,7 @@ export function ConfigModal({ open, onConfigured }: Props) {
           placeholder="例如: mesh_xxx" className={styles.formInput} />
       </div>
       <div className={styles.modalActions}>
-        <Button variant="secondary" size="md" onClick={handleCancel}>取消</Button>
+        <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
         <Button variant="primary" size="md" onClick={handleSave}>连接</Button>
       </div>
     </Modal>
