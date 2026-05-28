@@ -38,6 +38,14 @@ function ChatModalsHost() {
   )
 }
 
+// 路由守卫：未绑定身份时把消息/群聊页统一弹回 /dashboard/agents，
+// 避免依赖 WS / 群消息身份的组件在 myAgentName='' 状态下渲染出半坏的 UI。
+function RequireAgent({ children }: { children: React.ReactNode }) {
+  const { myAgentName } = useChatContext()
+  if (!myAgentName) return <Navigate to="/dashboard/agents" replace />
+  return <>{children}</>
+}
+
 function App() {
   return (
     <ZenModeProvider>
@@ -46,12 +54,12 @@ function App() {
           <AppShell>
             <Routes>
               <Route path="/dashboard/agents" element={<div className="container-full"><AgentsView /></div>} />
-              <Route path="/dashboard/messages" element={<div className="container-full"><MessagesView /></div>} />
-              <Route path="/dashboard/groups" element={<div className="container-full"><GroupChatView /></div>} />
-              <Route path="/dashboard/groups/:groupId" element={<div className="container-full"><GroupChatView /></div>} />
-              <Route path="/dashboard/groups/:groupId/issues/:issueId" element={<div className="container-full"><GroupChatView /></div>} />
-              <Route path="/dashboard/groups/:groupId/issues-single" element={<div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssuesListPage /></div>} />
-              <Route path="/dashboard/groups/:groupId/issues-single/:issueId" element={<div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssueDetailPage /></div>} />
+              <Route path="/dashboard/messages" element={<RequireAgent><div className="container-full"><MessagesView /></div></RequireAgent>} />
+              <Route path="/dashboard/groups" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
+              <Route path="/dashboard/groups/:groupId" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
+              <Route path="/dashboard/groups/:groupId/issues/:issueId" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
+              <Route path="/dashboard/groups/:groupId/issues-single" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssuesListPage /></div></RequireAgent>} />
+              <Route path="/dashboard/groups/:groupId/issues-single/:issueId" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssueDetailPage /></div></RequireAgent>} />
               <Route path="/dashboard" element={<Navigate to="/dashboard/agents" replace />} />
               <Route path="*" element={<Navigate to="/dashboard/agents" replace />} />
             </Routes>

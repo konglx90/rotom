@@ -261,7 +261,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             <button
               className={styles.userInfo}
               onClick={openConfigModal}
-              title="切换 Agent"
+              title="切换身份"
             >
               <Avatar name={myAgentName} size={24} />
               <span className={styles.userName}>{myAgentName}</span>
