@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useParams } from 'react-router-dom'
 import { Avatar } from '../../ui/Avatar'
-import { useAuth } from '../../../context/AuthContext'
 import { useChatContext } from '../../../context/ChatContext'
 import { useZenMode } from '../../../context/ZenModeContext'
 import { getAvatarColor } from '../../../utils/avatar'
@@ -24,7 +23,6 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
-  const { logout, isPreview } = useAuth()
   const { zenMode, toggleZenMode } = useZenMode()
   const { groupId: urlGroupId } = useParams<{ groupId?: string }>()
   const {
@@ -232,9 +230,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             <div className={`${styles.section} ${styles.sectionGroup}`}>
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>群聊</h3>
-                <button onClick={openCreateGroupModal} className={styles.createBtn}
-                  disabled={isPreview}
-                  title={isPreview ? '预览模式下不可用' : undefined}>
+                <button onClick={openCreateGroupModal} className={styles.createBtn}>
                   + 新建群
                 </button>
               </div>
@@ -269,11 +265,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             >
               <Avatar name={myAgentName} size={24} />
               <span className={styles.userName}>{myAgentName}</span>
-            </button>
-          )}
-          {!isZen && (
-            <button className={styles.footerBtn} onClick={logout} title="退出登录">
-              退出
             </button>
           )}
           <button

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Agent, AgentProfile } from '../../api/types';
+import { agentsApi } from '../../api/agents';
 import { Button } from '../../components/ui/Button';
-import { authFetch } from '../../utils/authFetch';
 import styles from './AddAgentModal.module.css';
 
 interface AgentProfileModalProps {
@@ -17,14 +17,31 @@ export function AgentProfileModal({ agent, isOpen, onClose, onSuccess }: AgentPr
   const [techStack, setTechStack] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // List endpoint omits the plaintext token, so fetch it on open.
+  const [token, setToken] = useState<string | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (agent) {
-      setPosition(agent.profile?.position || '');
-      setResponsibilities(agent.profile?.responsibilities || '');
-      setTechStack(agent.profile?.tech_stack || '');
-      setError('');
-    }
+    if (!agent) return;
+    setPosition(agent.profile?.position || '');
+    setResponsibilities(agent.profile?.responsibilities || '');
+    setTechStack(agent.profile?.tech_stack || '');
+    setError('');
+    setCopied(false);
+    setToken(null);
+    setTokenLoading(true);
+    let cancelled = false;
+    agentsApi.getById(agent.id).then((full) => {
+      if (cancelled) return;
+      setToken(full.token ?? null);
+    }).catch(() => {
+      if (cancelled) return;
+      setToken(null);
+    }).finally(() => {
+      if (!cancelled) setTokenLoading(false);
+    });
+    return () => { cancelled = true };
   }, [agent]);
 
   if (!isOpen || !agent) return null;
@@ -40,8 +57,9 @@ export function AgentProfileModal({ agent, isOpen, onClose, onSuccess }: AgentPr
     if (techStack.trim()) profile.tech_stack = techStack.trim();
 
     try {
-      const response = await authFetch(`/api/agents/${agent.id}`, {
+      const response = await fetch(`/api/agents/${agent.id}`, {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profile }),
       });
 
@@ -64,6 +82,21 @@ export function AgentProfileModal({ agent, isOpen, onClose, onSuccess }: AgentPr
     onClose();
   };
 
+  const handleCopyToken = async () => {
+    if (!token) return;
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore — older browsers / non-https. User can still select the value manually.
+    }
+  };
+
+  const tokenDisplay = tokenLoading
+    ? '加载中…'
+    : token ?? '未知（旧 agent 没有保存明文，请点「重置 token」生成新 token）';
+
   return (
     <div className={styles.overlay} onClick={handleClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -73,6 +106,54 @@ export function AgentProfileModal({ agent, isOpen, onClose, onSuccess }: AgentPr
         </div>
 
         <div className={styles.content}>
+          <div className={styles.field}>
+            <label>Mesh Token</label>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    value={tokenDisplay}
+                    readOnly
+                    onFocus={(e) => e.currentTarget.select()}
+                    style={{
+                      flex: 1,
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      background: '#f9fafb',
+                      color: token ? '#111827' : '#9ca3af',
+                      cursor: token ? 'text' : 'not-allowed',
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleCopyToken}
+                    disabled={!token}
+                    title={token ? '复制 token 到剪贴板' : '当前无可复制的明文 token'}
+                  >
+                    {copied ? '已复制' : '复制'}
+                  </Button>
+                </div>
+              </div>
+              <div style={{
+                width: 200,
+                fontSize: 12,
+                color: '#6b7280',
+                lineHeight: 1.5,
+                padding: '6px 10px',
+                borderLeft: '3px solid #e5e7eb',
+              }}>
+                <div style={{ fontWeight: 600, color: '#374151', marginBottom: 4 }}>关于 mesh_*</div>
+                目前仅作为唯一 ID 使用，后续可作为鉴权使用。
+              </div>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit}>
             <div className={styles.field}>
               <label>岗位</label>

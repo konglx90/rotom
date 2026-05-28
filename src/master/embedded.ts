@@ -18,7 +18,7 @@ import { AuthService } from "./auth.js";
 import { WSHub } from "./ws-hub.js";
 import { Router } from "./router.js";
 import { OfflineQueue } from "./offline-queue.js";
-import { createApi, sha256 } from "./api.js";
+import { createApi } from "./api.js";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -72,19 +72,6 @@ export async function startEmbeddedMaster(
   const resetCount = db.resetAllOnline();
   if (resetCount > 0) {
     logger.info(`[mesh-master] Reset ${resetCount} stale online agent(s) to offline`);
-  }
-
-  // Initialize dashboard credentials (env vars override DB on every startup)
-  const envUser = process.env.MESH_DASHBOARD_USER;
-  const envPass = process.env.MESH_DASHBOARD_PASS;
-  if (envUser || envPass) {
-    db.setConfig("dashboard_user", envUser || "admin");
-    db.setConfig("dashboard_pass_hash", sha256(envPass || "admin123"));
-    logger.info(`[mesh-master] Dashboard credentials set from environment variables (user=${envUser || "admin"})`);
-  } else if (!db.getConfig("dashboard_user")) {
-    db.setConfig("dashboard_user", "admin");
-    db.setConfig("dashboard_pass_hash", sha256("admin123"));
-    logger.info("[mesh-master] Default dashboard credentials created (admin/admin123)");
   }
 
   // Services — single AuthService shared between WSHub and API

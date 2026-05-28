@@ -42,6 +42,7 @@ export interface AgentRow {
   registered_at: string;
   updated_at: string;
   token_hash: string | null;
+  token: string | null;
   enabled: number;
   profile: string | null;
 }
@@ -258,16 +259,18 @@ export class MeshDb {
     description?: string;
     domain?: string;
     tokenHash: string;
+    token: string;
   }): void {
     this.db.prepare(`
-      INSERT INTO agents (id, name, description, domain, token_hash)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO agents (id, name, description, domain, token_hash, token)
+      VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       agent.id,
       agent.name,
       agent.description || null,
       agent.domain || null,
       agent.tokenHash,
+      agent.token,
     );
   }
 
@@ -326,10 +329,10 @@ export class MeshDb {
     return result.changes;
   }
 
-  updateAgentToken(id: string, tokenHash: string): void {
+  updateAgentToken(id: string, tokenHash: string, token: string): void {
     this.db.prepare(
-      "UPDATE agents SET token_hash = ?, updated_at = datetime('now') WHERE id = ?",
-    ).run(tokenHash, id);
+      "UPDATE agents SET token_hash = ?, token = ?, updated_at = datetime('now') WHERE id = ?",
+    ).run(tokenHash, token, id);
     // Record token refresh timestamp for JWT iat validation
     this.setConfig(`token_refreshed_at:${id}`, new Date().toISOString());
   }

@@ -1,16 +1,15 @@
 /**
  * Digital Employee Mesh — REST API
  *
- * All management endpoints require API key authentication (Bearer token).
- * Read-only /health and /dashboard are exempt.
+ * Dashboard endpoints are open (no login). Agent-token endpoints expect a
+ * `Bearer mesh_xxx` header and reject anonymous calls inline.
  */
 
 import { Router as ExpressRouter, type Request, type Response, type NextFunction } from "express";
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
-import jwt from "jsonwebtoken";
 import type { MeshDb, AgentRow } from "./db.js";
 import { AuthService, hashToken } from "./auth.js";
 import type { WSHub } from "./ws-hub.js";
@@ -18,22 +17,13 @@ import type { Router } from "./router.js";
 import type { AgentProfile } from "../shared/protocol.js";
 
 import { createLogger } from "../shared/logger.js";
-import { JWT_ALGORITHM } from "../shared/constants.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
 
 const log = createLogger("mesh-api");
 
-/** Dashboard JWT expiry */
-const DASHBOARD_JWT_EXPIRY = "7d";
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** SHA-256 hash helper for dashboard passwords. */
-export function sha256(str: string): string {
-  return createHash("sha256").update(str).digest("hex");
-}
 
 /** Root directory under which per-group working dirs (and artifacts) live. */
 const RESULTS_ROOT = path.join(os.homedir(), ".rotom", "results");
@@ -61,52 +51,12 @@ function getLocalIp(): string {
 }
 
 // ---------------------------------------------------------------------------
-// API key auth middleware
-// ---------------------------------------------------------------------------
-
-function apiKeyAuth(db: MeshDb) {
-  // Lazily initialise: read or generate an API key stored in config table
-  let cachedKey: string | null = null;
-
-  return (req: Request, res: Response, next: NextFunction): void => {
-    if (!cachedKey) {
-      cachedKey = db.getConfig("api_key") || null;
-      if (!cachedKey) {
-        // Auto-generate on first run — admin must read it from DB / logs
-        cachedKey = `mk_${randomUUID().replace(/-/g, "")}`;
-        db.setConfig("api_key", cachedKey);
-      }
-    }
-
-    const header = req.headers.authorization;
-    if (!header) {
-      res.status(401).json({ error: "Authorization header required (Bearer <api_key>)" });
-      return;
-    }
-
-    const token = header.startsWith("Bearer ") ? header.slice(7) : header;
-    if (token !== cachedKey) {
-      res.status(403).json({ error: "Invalid API key" });
-      return;
-    }
-
-    next();
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Create API router
 // ---------------------------------------------------------------------------
 
 export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, router?: Router, serverPort?: number): ExpressRouter {
   const apiRouter = ExpressRouter();
   const auth = sharedAuth ?? new AuthService(db);
-
-  // Read JWT secret (AuthService guarantees it exists in DB)
-  const jwtSecret = db.getConfig("jwt_secret");
-  if (!jwtSecret) {
-    throw new Error("jwt_secret not found in config — AuthService must be initialized first");
-  }
 
   // ── Request logging middleware ──────────────────────────────────────────
   apiRouter.use((req: Request, res: Response, next: NextFunction) => {
@@ -118,49 +68,12 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
     next();
   });
 
-  // ── Login endpoint (before auth middleware — no token required) ─────────
-  apiRouter.post("/login", (req: Request, res: Response) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
-      res.status(400).json({ error: "username and password required" });
-      return;
-    }
-    const storedUser = db.getConfig("dashboard_user");
-    const storedHash = db.getConfig("dashboard_pass_hash");
-    if (!storedUser || !storedHash) {
-      res.status(500).json({ error: "Dashboard credentials not configured" });
-      return;
-    }
-    if (username !== storedUser || sha256(password) !== storedHash) {
-      log.warn(`Dashboard login failed for user "${username}"`);
-      res.status(401).json({ error: "Invalid username or password" });
-      return;
-    }
-    const token = jwt.sign(
-      { sub: "dashboard", user: username },
-      jwtSecret,
-      { expiresIn: DASHBOARD_JWT_EXPIRY, algorithm: JWT_ALGORITHM },
-    );
-    log.info(`Dashboard login: ${username}`);
-    res.json({ token });
-  });
-
-  // ── Preview-mode login (no creds, read-only JWT) ────────────────────────
-  // 任何访问者都能拿到一个 sub=preview 的 JWT,凭它走 auth 中间件的只读分支:
-  // GET 放行,写方法 403。1d 过期,不刷新——预览会话不该长期持有。
-  apiRouter.post("/preview-login", (_req: Request, res: Response) => {
-    const token = jwt.sign(
-      { sub: "preview" },
-      jwtSecret,
-      { expiresIn: "1d", algorithm: JWT_ALGORITHM },
-    );
-    log.info("Preview session issued");
-    res.json({ token });
-  });
-
-  // ── Dashboard JWT auth middleware ───────────────────────────────────────
+  // ── Permissive auth middleware ──────────────────────────────────────────
+  // Dashboard endpoints are open. mesh_* bearer tokens are still resolved so
+  // routes that need an authenticated agent (whoami / send-as-me) can read
+  // `req.agentAuth`. Unknown / missing headers pass through — agent-only
+  // routes reject anonymous callers inline.
   apiRouter.use((req: Request, res: Response, next: NextFunction) => {
-    // Skip auth for OPTIONS requests (CORS preflight)
     if (req.method === "OPTIONS") {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -170,59 +83,16 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
     }
 
     const header = req.headers.authorization;
-    if (!header || !header.startsWith("Bearer ")) {
-      res.status(401).json({ error: "Authentication required" });
-      return;
-    }
-    const token = header.slice(7);
-    try {
-      const payload = jwt.verify(token, jwtSecret, { algorithms: [JWT_ALGORITHM] }) as Record<string, unknown>;
-      // Preview session: 只允许 GET。写方法直接 403,前端 UI 也会 disable 写控件,
-      // 这里是兜底——遗漏的写按钮即使被点中也会被拦下。
-      if (payload.sub === "preview") {
-        if (req.method === "GET") { next(); return; }
-        res.status(403).json({ error: "Preview mode is read-only" });
-        return;
-      }
-      if (payload.sub !== "dashboard") {
-        res.status(401).json({ error: "Invalid token" });
-        return;
-      }
-      next();
-    } catch {
-      // Not a JWT — try mesh token (for executor claim-next etc.)
+    if (header && header.startsWith("Bearer ")) {
+      const token = header.slice(7);
       if (token.startsWith("mesh_")) {
-        const inputHash = hashToken(token);
-        const agent = db.getAgentByTokenHash(inputHash);
+        const agent = db.getAgentByTokenHash(hashToken(token));
         if (agent) {
           (req as any).agentAuth = { name: agent.name, id: agent.id };
-          next();
-          return;
         }
       }
-      res.status(401).json({ error: "Invalid or expired token" });
     }
-  });
-
-  // ── Change password ────────────────────────────────────────────────────
-  apiRouter.post("/change-password", (req: Request, res: Response) => {
-    const { oldPassword, newPassword } = req.body;
-    if (!oldPassword || !newPassword) {
-      res.status(400).json({ error: "oldPassword and newPassword required" });
-      return;
-    }
-    const storedHash = db.getConfig("dashboard_pass_hash");
-    if (!storedHash || sha256(oldPassword) !== storedHash) {
-      res.status(401).json({ error: "Current password is incorrect" });
-      return;
-    }
-    if (newPassword.length < 6) {
-      res.status(400).json({ error: "New password must be at least 6 characters" });
-      return;
-    }
-    db.setConfig("dashboard_pass_hash", sha256(newPassword));
-    log.info("Dashboard password changed");
-    res.json({ ok: true });
+    next();
   });
 
   // ── Agent list ──────────────────────────────────────────────────────────
@@ -291,6 +161,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       description,
       domain,
       tokenHash: hashToken(token),
+      token,
     });
 
     log.info(`Agent registered: "${name}" (domain=${domain})`);
@@ -343,19 +214,9 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       connectedAt: agent.connected_at,
       registeredAt: agent.registered_at,
       profile: parseProfile(agent.profile),
-    });
-  });
-
-  // ── Get token (masked) ──────────────────────────────────────────────────
-  apiRouter.get("/agents/:id/token", (req, res) => {
-    const agent = db.getAgentById(req.params.id);
-    if (!agent) {
-      res.status(404).json({ error: "Agent not found" });
-      return;
-    }
-    res.json({
-      tokenMasked: "mesh_****" + (agent.token_hash || "").slice(-8),
-      createdAt: agent.registered_at,
+      // Plaintext mesh_* token. NULL for agents registered before migration 016
+      // (those need a refresh-token to get a fresh plaintext).
+      token: agent.token,
     });
   });
 
@@ -367,7 +228,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       return;
     }
     const newToken = auth.generateToken();
-    db.updateAgentToken(agent.id, hashToken(newToken));
+    db.updateAgentToken(agent.id, hashToken(newToken), newToken);
     log.warn(`Token refreshed for agent "${agent.name}" (id=${agent.id})`);
     res.json({ token: newToken });
   });

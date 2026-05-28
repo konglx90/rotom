@@ -48,9 +48,9 @@ describe("Master + Agent Integration", () => {
     await new Promise<void>((r) => httpServer.listen(TEST_PORT, "127.0.0.1", r));
 
     db.insertAgent({ id: randomUUID(), name: "AgentA", description: "A", domain: "test",
-      tokenHash: hashToken(AGENT_A_TOKEN) });
+      tokenHash: hashToken(AGENT_A_TOKEN), token: AGENT_A_TOKEN });
     db.insertAgent({ id: randomUUID(), name: "AgentB", description: "B", domain: "test",
-      tokenHash: hashToken(AGENT_B_TOKEN) });
+      tokenHash: hashToken(AGENT_B_TOKEN), token: AGENT_B_TOKEN });
   });
 
   after(() => {

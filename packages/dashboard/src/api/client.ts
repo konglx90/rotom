@@ -1,36 +1,16 @@
 /**
  * API Client for A2A Gateway Dashboard
- * Handles authentication and HTTP requests to the backend API
+ *
+ * Dashboard endpoints are open (no auth). Agent-token-authed endpoints
+ * (whoami / send-as-me) live on separate fetch paths that inject mesh_*
+ * headers explicitly.
  */
 
 export class ApiClient {
   private baseUrl: string
-  private token: string | null = null
 
   constructor(baseUrl: string = '/api') {
     this.baseUrl = baseUrl
-  }
-
-  setToken(token: string): void {
-    this.token = token
-    // Store in localStorage for persistence
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', token)
-    }
-  }
-
-  clearToken(): void {
-    this.token = null
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token')
-    }
-  }
-
-  getToken(): string | null {
-    if (!this.token && typeof window !== 'undefined') {
-      this.token = localStorage.getItem('auth_token')
-    }
-    return this.token
   }
 
   private async request<T>(
@@ -42,37 +22,12 @@ export class ApiClient {
       ...(options.headers as Record<string, string>),
     }
 
-    // Add authorization header if token exists
-    const token = this.getToken()
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
         headers,
       })
 
-      // Handle 401 Unauthorized - token expired or invalid
-      if (response.status === 401) {
-        this.clearToken()
-        throw new Error('Authentication failed. Please login again.')
-      }
-
-      // Handle 403 in preview mode: writes are rejected by the server even
-      // though the token is valid. UI should mark write controls disabled,
-      // but this is the safety net for any control we missed.
-      if (response.status === 403) {
-        let msg = '预览模式下无法执行写操作'
-        try {
-          const data = JSON.parse(await response.clone().text()) as { error?: string }
-          if (data?.error) msg = data.error
-        } catch { /* ignore */ }
-        throw new Error(msg)
-      }
-
-      // Safely parse JSON response
       let data: T | undefined
       const text = await response.text()
       if (text) {
@@ -83,7 +38,6 @@ export class ApiClient {
         }
       }
 
-      // Check for API errors
       if (!response.ok) {
         throw new Error(
           (data as Record<string, string>)?.error || `HTTP ${response.status}: ${response.statusText}`
@@ -132,5 +86,4 @@ export class ApiClient {
   }
 }
 
-// Create singleton instance
 export const api = new ApiClient()

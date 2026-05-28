@@ -1,6 +1,5 @@
 import type { Domain } from '../../api/types'
 import { Button } from '../../components/ui/Button'
-import { useReadOnly, READ_ONLY_TITLE } from '../../hooks/useReadOnly'
 import styles from './DepartmentTree.module.css'
 
 interface DepartmentTreeProps {
@@ -28,7 +27,6 @@ export function DepartmentTree({
   onEditDomain,
   onDeleteDomain,
 }: DepartmentTreeProps) {
-  const readOnly = useReadOnly()
   const sorted = [...domains].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
   const isAllActive = view === 'employees' && selectedDomain === 'all'
   const isRulesActive = view === 'rules'
@@ -43,8 +41,7 @@ export function DepartmentTree({
           size="xs"
           iconOnly
           onClick={onAddDomain}
-          disabled={readOnly}
-          title={readOnly ? READ_ONLY_TITLE : '添加部门'}
+          title="添加部门"
           aria-label="添加部门"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -94,8 +91,7 @@ export function DepartmentTree({
                         e.stopPropagation()
                         onEditDomain(domain)
                       }}
-                      disabled={readOnly}
-                      title={readOnly ? READ_ONLY_TITLE : '重命名'}
+                      title="重命名"
                       aria-label="重命名部门"
                     >
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
@@ -109,8 +105,7 @@ export function DepartmentTree({
                         e.stopPropagation()
                         onDeleteDomain(domain)
                       }}
-                      disabled={readOnly}
-                      title={readOnly ? READ_ONLY_TITLE : '删除部门'}
+                      title="删除部门"
                       aria-label="删除部门"
                     >
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">

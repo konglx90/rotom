@@ -16,7 +16,6 @@ import {
   generateDmGroupName,
   getDmTargetFromGroupName,
 } from '../features/groups/types'
-import { useAuth } from './AuthContext'
 
 export interface DmGroup extends Group {
   dmTarget: string
@@ -65,24 +64,17 @@ const ChatContext = createContext<ChatContextValue | null>(null)
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
-  const { isPreview } = useAuth()
 
   const [agents, setAgents] = useState<Agent[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [myAgentName, setMyAgentName] = useState<string>('')
   const [myAgentToken, setMyAgentToken] = useState<string>('')
-  // 预览模式不需要 Agent 身份,所以 ConfigModal 一直关着。
-  const [showConfigModal, setShowConfigModal] = useState<boolean>(!isPreview)
+  const [showConfigModal, setShowConfigModal] = useState<boolean>(true)
   const [showCreateGroupModal, setShowCreateGroupModal] = useState<boolean>(false)
   const [directTarget, setDirectTargetState] = useState<string>('')
 
   // Restore saved identity from localStorage on mount
   useEffect(() => {
-    if (isPreview) {
-      // 预览下不挂任何身份,即使本地有缓存也忽略,避免误触发 WS 鉴权。
-      setShowConfigModal(false)
-      return
-    }
     const savedName = localStorage.getItem('chat_agent_name')
     const savedToken = localStorage.getItem('chat_agent_token')
     if (savedName && savedToken) {
@@ -90,7 +82,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setMyAgentToken(savedToken)
       setShowConfigModal(false)
     }
-  }, [isPreview])
+  }, [])
 
   const loadAgents = useCallback(async () => {
     try {
@@ -133,9 +125,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const openConfigModal = useCallback(() => {
-    if (isPreview) return
     setShowConfigModal(true)
-  }, [isPreview])
+  }, [])
   const closeConfigModal = useCallback(() => setShowConfigModal(false), [])
   const openCreateGroupModal = useCallback(() => setShowCreateGroupModal(true), [])
   const closeCreateGroupModal = useCallback(() => setShowCreateGroupModal(false), [])
@@ -250,8 +241,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const handleDirectChat = useCallback(
     async (targetName: string) => {
       if (!myAgentName) {
-        // No identity yet — prompt to configure first. 预览下不弹,直接静默退出。
-        if (isPreview) return
         setShowConfigModal(true)
         return
       }
@@ -263,7 +252,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
       await handleNewDmConversation(targetName)
     },
-    [myAgentName, dmGroups, activateDmGroup, handleNewDmConversation, isPreview],
+    [myAgentName, dmGroups, activateDmGroup, handleNewDmConversation],
   )
 
   // Restore DM state once after groups/myAgentName become available

@@ -23,7 +23,7 @@ flowchart TB
     W  -- ws ----------> M
     A  -- Bash --------> R
     H2 -- shell -------> R
-    R  -- HTTP+Bearer -> M
+    R  -- HTTP+Bearer --> M
     H1 -- Browser ------> D
     D  ----------------> M
 ```

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Domain } from '../../api/types';
 import { Button } from '../../components/ui/Button';
-import { authFetch } from '../../utils/authFetch';
 import styles from './AddAgentModal.module.css';
 
 interface AddAgentModalProps {
@@ -53,8 +52,9 @@ export function AddAgentModal({ isOpen, onClose, domains, onSuccess, defaultDoma
 
     setLoading(true);
     try {
-      const response = await authFetch('/api/agents', {
+      const response = await fetch('/api/agents', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), domain })
       });
 

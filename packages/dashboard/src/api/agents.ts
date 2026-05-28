@@ -3,7 +3,6 @@ import type {
   Agent,
   CreateAgentDto,
   UpdateAgentDto,
-  AgentTokenResponse,
 } from './types'
 
 /**
@@ -50,13 +49,6 @@ export const agentsApi = {
    */
   async delete(id: string): Promise<{ ok: boolean }> {
     return api.delete<{ ok: boolean }>(`/agents/${id}`)
-  },
-
-  /**
-   * Get agent token (masked)
-   */
-  async getToken(id: string): Promise<AgentTokenResponse> {
-    return api.get<AgentTokenResponse>(`/agents/${id}/token`)
   },
 
   /**

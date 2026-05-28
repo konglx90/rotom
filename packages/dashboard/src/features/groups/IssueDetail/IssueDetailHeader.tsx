@@ -4,7 +4,6 @@ import type { Agent, Issue } from '../../../api/types'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Select } from '../../../components/ui/Select'
-import { useReadOnly, READ_ONLY_TITLE } from '../../../hooks/useReadOnly'
 import styles from './IssueDetailHeader.module.css'
 import type { IssueEditState } from './useIssueEdit'
 
@@ -28,7 +27,6 @@ const APPROVAL_POLICY_OPTIONS: Array<{ value: ApprovalPolicy; label: string }> =
 ]
 
 export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete }: IssueDetailHeaderProps) {
-  const readOnly = useReadOnly()
   const [pendingAssignee, setPendingAssignee] = useState<string | null>(null)
   const [assigning, setAssigning] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -149,8 +147,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
                     size="sm"
                     className={styles.inlineSelect}
                     value={pendingAssignee ?? (issue.assigned_to || '')}
-                    disabled={readOnly || assigning || isFinalState}
-                    title={readOnly ? READ_ONLY_TITLE : undefined}
+                    disabled={assigning || isFinalState}
                     onChange={e => {
                       const next = e.target.value
                       setPendingAssignee(next === (issue.assigned_to || '') ? null : next)
@@ -167,8 +164,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
                         variant="primary"
                         size="xs"
                         onClick={() => handleAssign(pendingAssignee)}
-                        disabled={readOnly || isFinalState}
-                        title={readOnly ? READ_ONLY_TITLE : undefined}
+                        disabled={isFinalState}
                       >
                         确认指派
                       </Button>
@@ -198,8 +194,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
                   size="sm"
                   className={styles.inlineSelect}
                   value={currentPolicy}
-                  disabled={readOnly || savingPolicy || isFinalState}
-                  title={readOnly ? READ_ONLY_TITLE : undefined}
+                  disabled={savingPolicy || isFinalState}
                   onChange={e => { void handlePolicyChange(e.target.value as ApprovalPolicy) }}
                   options={APPROVAL_POLICY_OPTIONS}
                 />
@@ -210,25 +205,18 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
             <div className={styles.actionsCluster}>
               {!edit.editing && (
                 <Button variant="secondary" size="xs" onClick={edit.startEdit}
-                  disabled={readOnly}
-                  title={readOnly ? READ_ONLY_TITLE : '编辑标题与描述'}>
+                  title="编辑标题与描述">
                   编辑
                 </Button>
               )}
               {isActiveState && (
                 <>
-                  <Button variant="success" size="xs" onClick={onComplete}
-                    disabled={readOnly}
-                    title={readOnly ? READ_ONLY_TITLE : undefined}>完成</Button>
-                  <Button variant="danger" outline size="xs" onClick={onCancel}
-                    disabled={readOnly}
-                    title={readOnly ? READ_ONLY_TITLE : undefined}>取消</Button>
+                  <Button variant="success" size="xs" onClick={onComplete}>完成</Button>
+                  <Button variant="danger" outline size="xs" onClick={onCancel}>取消</Button>
                 </>
               )}
               {isFinalState && (
-                <Button variant="secondary" size="xs" onClick={onDelete}
-                  disabled={readOnly}
-                  title={readOnly ? READ_ONLY_TITLE : undefined}>删除</Button>
+                <Button variant="secondary" size="xs" onClick={onDelete}>删除</Button>
               )}
             </div>
           </div>

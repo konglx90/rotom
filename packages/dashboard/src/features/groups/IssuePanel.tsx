@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { Agent, Issue } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { useReadOnly, READ_ONLY_TITLE } from '../../hooks/useReadOnly'
 import { IssueDetail } from './IssueDetail'
 import { CreateIssueModal } from './CreateIssueModal'
 import { CreateCollaborationModal } from './CreateCollaborationModal'
@@ -47,7 +46,6 @@ export function IssuePanel({
   onCreateIssue,
   onCreateCollaboration,
 }: IssuePanelProps) {
-  const readOnly = useReadOnly()
   const [showCreateIssueModal, setShowCreateIssueModal] = useState(false)
   const [showCreateCollaborationModal, setShowCreateCollaborationModal] = useState(false)
 
@@ -57,10 +55,8 @@ export function IssuePanel({
         <div className={styles.issuePanelHeader}>
           <h3 className={styles.issuePanelTitle}>Issues</h3>
           <div style={{ display: 'flex', gap: 4 }}>
-            <Button variant="ghost" size="sm" onClick={() => setShowCreateIssueModal(true)}
-              disabled={readOnly} title={readOnly ? READ_ONLY_TITLE : undefined}>+ 任务</Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowCreateCollaborationModal(true)}
-              disabled={readOnly} title={readOnly ? READ_ONLY_TITLE : undefined}>+ 协作</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowCreateIssueModal(true)}>+ 任务</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowCreateCollaborationModal(true)}>+ 协作</Button>
           </div>
         </div>
         {selectedIssueId ? (

@@ -4,7 +4,6 @@ import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
-import { useReadOnly, READ_ONLY_TITLE } from '../../hooks/useReadOnly'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { MemberListModal } from './modals/MemberListModal'
@@ -57,7 +56,6 @@ export function GroupChatArea({
   onReconnect,
   onUpdateWorkingDir,
 }: GroupChatAreaProps) {
-  const readOnly = useReadOnly()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -172,12 +170,9 @@ export function GroupChatArea({
           </div>
         </div>
         <div className={styles.chatHeaderActions}>
-          <Button variant="ghost" size="sm" onClick={onAddMembers}
-            disabled={readOnly} title={readOnly ? READ_ONLY_TITLE : undefined}>+ 拉人</Button>
-          <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig}
-            disabled={readOnly} title={readOnly ? READ_ONLY_TITLE : '设置'}>⚙️</Button>
-          <Button variant="danger" outline size="sm" onClick={onDeleteGroup}
-            disabled={readOnly} title={readOnly ? READ_ONLY_TITLE : undefined}>删除</Button>
+          <Button variant="ghost" size="sm" onClick={onAddMembers}>+ 拉人</Button>
+          <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig} title="设置">⚙️</Button>
+          <Button variant="danger" outline size="sm" onClick={onDeleteGroup}>删除</Button>
         </div>
       </div>
 
@@ -303,13 +298,11 @@ export function GroupChatArea({
               e.currentTarget.style.height = 'auto';
             }
           }}
-          placeholder={readOnly ? '预览模式下不可发送消息' : (connectionStatus === 'connected' ? '输入消息... (Shift+Enter 换行, @ 提及成员)' : '等待连接...')}
-          disabled={readOnly || connectionStatus !== 'connected'}
-          title={readOnly ? READ_ONLY_TITLE : undefined}
+          placeholder={connectionStatus === 'connected' ? '输入消息... (Shift+Enter 换行, @ 提及成员)' : '等待连接...'}
+          disabled={connectionStatus !== 'connected'}
           className={styles.messageInput} />
         <button onClick={handleSend}
-          disabled={readOnly || !message.trim() || connectionStatus !== 'connected'}
-          title={readOnly ? READ_ONLY_TITLE : undefined}
+          disabled={!message.trim() || connectionStatus !== 'connected'}
           className={styles.sendBtn}>发送</button>
 
         {showMentionDropdown && filteredMentionAgents.length > 0 && (

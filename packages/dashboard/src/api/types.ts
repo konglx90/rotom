@@ -4,10 +4,6 @@ export interface ApiResponse<T> {
   error?: string
 }
 
-export interface LoginResponse {
-  token: string
-}
-
 // Agent Profile
 export interface AgentProfile {
   position?: string
@@ -31,6 +27,9 @@ export interface Agent {
   connected_at?: number
   registered_at?: number
   profile?: AgentProfile
+  /** Plaintext mesh_* token. Returned by GET /agents/:id only — list endpoints omit it.
+   *  Null/undefined for agents registered before migration 016. */
+  token?: string | null
   message_stats?: {
     received: number
     sent: number
@@ -51,11 +50,6 @@ export interface UpdateAgentDto {
   domain?: string
   enabled?: boolean
   profile?: AgentProfile
-}
-
-export interface AgentTokenResponse {
-  token: string
-  masked_token: string
 }
 
 // Domain Types

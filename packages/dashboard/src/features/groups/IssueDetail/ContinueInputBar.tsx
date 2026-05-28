@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { issuesApi } from '../../../api/issues'
 import type { Issue } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
-import { useReadOnly, READ_ONLY_TITLE } from '../../../hooks/useReadOnly'
 import styles from './ContinueInputBar.module.css'
 
 // ContinueInputBar — 常驻在 IssueDetail 底部的输入栏。根据 issue.status +
@@ -26,7 +25,6 @@ interface ContinueInputBarProps {
 export function ContinueInputBar({
   issueId, continuedBy, status, assignedTo, initialPrompt, onSubmitted,
 }: ContinueInputBarProps) {
-  const readOnly = useReadOnly()
   const [prompt, setPrompt] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,7 +32,7 @@ export function ContinueInputBar({
   const isOpen = status === 'open'
   const isInProgress = status === 'in_progress'
   const hasAssignee = !!assignedTo
-  const disabled = readOnly || (isOpen && !hasAssignee)
+  const disabled = isOpen && !hasAssignee
   // open + 已指派 = 等待用户「开始任务」(worker 因 assigned_to 非空被 auto-claim
   // 阻断,只能由用户主动触发)。in_progress = 真正执行中,append 走队列。
   const isStartMode = isOpen && hasAssignee
@@ -76,7 +74,6 @@ export function ContinueInputBar({
   }
 
   const placeholder = (() => {
-    if (readOnly) return '预览模式下不可发送指令'
     if (disabled) return '请先在上方指派 Agent，再发送指令'
     if (isStartMode) return `确认或编辑给 ${assignedTo} 的 prompt，点下方「开始任务」`
     if (isInProgress) return '追加指令给 Agent（执行中也可发送，本轮结束后自动起新一轮）…'
@@ -107,7 +104,6 @@ export function ContinueInputBar({
         }}
         placeholder={placeholder}
         disabled={submitting || disabled}
-        title={readOnly ? READ_ONLY_TITLE : undefined}
         rows={isStartMode ? 4 : 2}
       />
       <div className={styles.continueInputActions}>
@@ -117,7 +113,6 @@ export function ContinueInputBar({
           size="sm"
           onClick={submit}
           disabled={submitting || disabled || !prompt.trim()}
-          title={readOnly ? READ_ONLY_TITLE : undefined}
         >
           {submitLabel}
         </Button>
