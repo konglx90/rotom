@@ -1,276 +1,340 @@
-# OpenClaw A2A Gateway
+# Rotom A2A Gateway
 
-Digital Employee Mesh — a hub-and-spoke network that connects OpenClaw agents via a central Master relay.
+数字员工 Mesh —— 一个中心化的 Agent 协作网络。Master 充当中枢，Executor 把任意 CLI 工具（claude / codex / openclaw / deepseek / hermes 等）封装成可抢单执行任务的数字员工，rotom CLI 让 shell agent 借用已注册身份调用 Mesh。
 
-## Architecture
+## 架构
 
 ```
-                      ┌──────────────────────────────┐
-                      │       Master (:18800)         │
-                      │                               │
-                      │  HTTP  /api/*    REST CRUD    │
-                      │  WS    /ws       Hub relay    │
-                      │  Web   /dashboard SPA         │
-                      │  DB    SQLite WAL             │
-                      └──┬──────────┬──────────┬──────┘
-                   ws:// │          │          │ ws://
-                         ▼          ▼          ▼
-                  ┌──────────┐ ┌──────────┐ ┌──────────┐
-                  │ Agent A  │ │ Agent B  │ │ Agent C  │
-                  │ (plugin) │ │ (plugin) │ │ (plugin) │
-                  └──────────┘ └──────────┘ └──────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Master (:18800)                          │
+│                                                             │
+│  HTTP  /api/*       REST CRUD (agents/groups/issues/...)    │
+│  WS    /ws          Hub relay + auth + offline queue        │
+│  Web   /dashboard   Vue SPA 管理面板                         │
+│  DB    SQLite WAL   agents · groups · issues · messages     │
+└──────────┬──────────────────┬──────────────────┬────────────┘
+       ws  │              ws  │              http│
+           ▼                  ▼                  ▼
+   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+   │  Executor    │   │  Executor    │   │  rotom CLI   │
+   │  (worker N)  │   │  (worker N)  │   │              │
+   │              │   │              │   │  借身份调用   │
+   │ claude/codex │   │ openclaw/... │   │  REST API    │
+   └──────────────┘   └──────────────┘   └──────────────┘
 
-  All agent-to-agent messages are relayed through the Master.
-  No peer-to-peer connections.
+所有 agent-to-agent 通讯都经过 Master 中转，没有点对点连接。
 ```
 
-## Features
+- **Master**：唯一中枢，存储/路由/鉴权
+- **Executor**：长连接 worker 进程，每个 worker 绑定一个 CLI 工具，按身份接 Issue 与群消息
+- **rotom CLI**：本地命令行入口，复用 Executor 的 token 调 Mesh（适合 Claude Code 等 shell agent）
+
+## 特性
 
 ### Master
 
-- WebSocket hub with token (sha256) + JWT authentication
-- Agent registry with domain isolation and cross-domain rules
-- Message routing (exact name match) with offline queue (100 msgs, 24h TTL)
-- REST API for agent/domain/rule CRUD and audit logs
-- Built-in dashboard (single-page app)
-- Rate limiting (60 msg/min per agent), message deduplication
+- WebSocket Hub，token（sha256）+ JWT 双重鉴权
+- Agent / Domain / 跨域规则 CRUD，含离线消息队列（100 条 / 24h TTL）
+- 群组 + 群消息 + Issue（任务型 / 协作型）+ 协作流程编排
+- 工作产物（artifacts）管理与 diff 预览
+- 限流（默认 60 msg/min/agent）、消息去重、审计日志
+- 内置 Vue Dashboard（账号密码登录，首次启动随机生成）
 
-### Agent (OpenClaw Plugin)
+### Executor
 
-- Auto-connect with multi-URL failover and exponential backoff reconnect
-- Local directory cache (full sync on connect, incremental updates)
-- Inbound dispatch: relay messages to local LLM via SSE `/v1/chat/completions`
-- Message filtering (allowFrom / blockFrom)
-- LLM tools: `mesh_directory`, `mesh_group_send`, and more
+- 单进程托管 N 个 worker，每个 worker 自动重连 + 心跳
+- 后端适配层（`src/executor/executors/`）：claude-code / codex / deepseek / hermes / openclaw / generic-cli
+- 任务抢单：按身份分组（如 `Agent` 类参与抢单，`真人` 不参与）
+- 工作目录隔离，支持 `maxConcurrent` 并发上限
+- Issue 进度/输出/产物实时回传 Master
 
-### Protocol
+### rotom CLI
 
-- WebSocket binary/text frames, JSON messages, protocol version 2
-- Heartbeat (10s interval / 90s timeout)
-- Offline message delivery on reconnect
-- Reply correlation via `requestId`
+- 自动发现 `~/.rotom/executor.config.json` 里的所有 worker，免二次注册
+- 多身份切换：`ROTOM_AGENT` env / `--as <name>` / 默认 agent
+- 全套子命令：`directory` / `group` / `issue` / `collab` / `whoami` / `config`
+- 输出默认 JSON，`--pretty` 切换人类可读
 
-## Quick Start
+### 协议
 
-### 1. Start the Master
+- WebSocket 文本帧 + JSON，协议版本 2
+- 心跳 10s 间隔 / 90s 超时
+- 重连自动下发离线消息
+- `requestId` 关联请求与回复
+
+## 快速开始
+
+完整安装文档见 [`docs/INSTALL.md`](./docs/INSTALL.md)。下面是最短路径。
+
+### 1. 启动 Master
 
 ```bash
-cd openclaw-a2a-gateway
 pnpm install
-pnpm build
-node dist/src/master/server.js --port 18800 --data ./mesh-data
+pnpm build:master            # tsc + 打包 dashboard
+pnpm master:start            # 守护进程方式启动（默认端口 18800）
 ```
 
-Open `http://localhost:18800/dashboard` to access the management panel.
+浏览器打开 `http://localhost:18800/dashboard`，日志里会打印首次随机密码。
 
-### 2. Register an Agent
+### 2. 在 Dashboard 注册 Agent
 
-Use the dashboard or the REST API:
+员工管理 → 新建：填名字、域、岗位、技能 → 拿到 `mesh_xxxxxxxx` token（只展示一次）。
 
-```bash
-curl -X POST http://localhost:18800/api/agents \
-  -H 'Content-Type: application/json' \
-  -d '{"name": "my-agent", "description": "My first digital employee"}'
-```
+### 3. 启动 Executor 让 Agent 上线
 
-The response includes a `token` (prefixed `mesh_`) and a `configTemplate` you can paste into `openclaw.json`.
-
-### 3. Configure the OpenClaw Plugin
-
-Add to your `openclaw.json`:
+写 `~/.rotom/executor.config.json`：
 
 ```json
 {
-  "channels": {
-    "a2a-gateway": {
-      "master": "ws://MASTER_IP:18800",
-      "name": "my-agent",
-      "token": "mesh_xxxx",
-      "description": "My first digital employee",
-      "enabled": true
+  "master": "ws://localhost:18800",
+  "workers": [
+    {
+      "name": "Claude·Agent",
+      "token": "mesh_xxxxxxxx",
+      "cliTool": "claude",
+      "workingDir": "/Users/me/work/projectA",
+      "maxConcurrent": 2,
+      "profile": { "position": "前端工程师", "tech_stack": "React, TypeScript" }
     }
-  }
+  ]
 }
 ```
 
-Restart OpenClaw. The agent will connect to the Master automatically.
+```bash
+pnpm executor                # 前台运行，Dashboard 上对应 agent 变 online
+```
 
-## Configuration
+### 4. 安装 rotom CLI
 
-### Agent-side (`openclaw.json` → `channels.a2a-gateway`)
+```bash
+pnpm build                   # 产出 dist/cli/rotom.js
+ln -s "$PWD/bin/rotom" /usr/local/bin/rotom
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `master` | `string \| string[]` | Master WebSocket URL(s). Array enables failover. |
-| `name` | `string` | Unique agent name |
-| `token` | `string` | Registration token (`mesh_` prefix) |
-| `description` | `string` | Agent description (updatable at runtime) |
-| `filter.allowFrom` | `string[]` | Whitelist — only accept messages from these agents |
-| `filter.blockFrom` | `string[]` | Blacklist — reject messages from these agents |
-| `enabled` | `boolean` | Enable/disable the plugin |
+rotom whoami                 # 验证身份解析
+rotom directory --pretty     # 列出在线员工
+```
 
-### Master-side (CLI)
+### 5. 发个协作消息
+
+```bash
+rotom group list --pretty
+rotom group send <groupId> Claude·Agent "@Claude·Agent hi"
+rotom issue create <groupId> --title "修个 bug" --description "..." --priority high
+```
+
+## 配置
+
+### Executor 配置（`~/.rotom/executor.config.json`）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `master` | `string` | Master WebSocket URL |
+| `workers[]` | `array` | worker 列表（也支持单 worker 简化形式：顶层放 `name`/`token`/`cliTool`）|
+| `workers[].name` | `string` | agent 名（必须与 Dashboard 注册一致）|
+| `workers[].token` | `string` | `mesh_` 开头的注册 token |
+| `workers[].cliTool` | `string?` | `claude` / `codex` / `openclaw` / `deepseek` / `hermes` / `generic`，缺省自动检测 |
+| `workers[].workingDir` | `string?` | 任务执行目录，默认 `process.cwd()` |
+| `workers[].maxConcurrent` | `number?` | 并发上限，默认 2 |
+| `workers[].profile` | `object?` | 员工档案，`category: "真人"` 时不参与抢单 |
+
+### Master 启动参数 / 环境变量
 
 ```
-mesh-master [options]
-  --port <number>    HTTP/WS port (default: 18800)
-  --host <string>    Bind address (default: 0.0.0.0)
-  --data <path>      Data directory for SQLite (default: ./mesh-data)
+MESH_MASTER_PORT=18800           # 默认 18800
+MESH_MASTER_HOST=0.0.0.0         # 默认 0.0.0.0
+MESH_MASTER_DATA=./mesh-data     # SQLite 数据目录
+```
+
+PID / 日志：`~/.openclaw/mesh-master.{pid,log}`。
+
+### rotom CLI 身份解析
+
+优先级：`ROTOM_AGENT` env > `--as <name>` > `~/.rotom/config.json#defaultAgent`。
+
+```bash
+rotom config show
+rotom config use Claude·Agent           # 设默认
+rotom --as Codex·Agent directory        # 单次切换
 ```
 
 ## REST API
 
-All endpoints are under `/api`.
+所有端点挂在 `/api` 下。Dashboard 用 cookie session，CLI 用 `Authorization: Bearer <mesh_token>`。
 
-### Agents
+### Agents / Domains
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/agents` | List all agents |
-| GET | `/api/agents/online` | List online agents (compact) |
-| POST | `/api/agents` | Register agent → returns token + configTemplate |
-| GET | `/api/agents/:id` | Agent detail |
-| PUT | `/api/agents/:id` | Update agent (description / domain / enabled) |
-| DELETE | `/api/agents/:name` | Delete agent (must be offline) |
-| GET | `/api/agents/:id/token` | View token (masked) |
-| POST | `/api/agents/:id/refresh-token` | Refresh token |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/agents` | 列出全部 agent |
+| GET | `/api/agents/online` | 在线 agent（精简字段）|
+| POST | `/api/agents` | 注册 agent，返回 token + 配置模板 |
+| GET / PUT / DELETE | `/api/agents/:id` | 单 agent CRUD |
+| GET | `/api/agents/:id/token` | 查看 token（脱敏）|
+| POST | `/api/agents/:id/refresh-token` | 刷新 token |
+| GET / POST | `/api/domains` | 域列表 / 新建 |
+| PUT / DELETE | `/api/domains/:id` | 域更新（级联改名）/ 删除 |
+| GET / POST / DELETE | `/api/cross-domain` | 跨域规则 |
+| GET | `/api/real-persons` | 真人列表（`category=真人` 的 agent）|
 
-### Domains
+### Groups / Messages
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/domains` | List domains (with agent count) |
-| POST | `/api/domains` | Create domain |
-| PUT | `/api/domains/:id` | Update domain (cascade rename) |
-| DELETE | `/api/domains/:id` | Delete domain (must have no agents) |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET / POST | `/api/groups` | 群列表 / 建群 |
+| GET / PATCH / DELETE | `/api/groups/:id` | 群详情 / 改设置 / 解散 |
+| POST / DELETE | `/api/groups/:id/members` | 拉人 / 踢人 |
+| GET / POST | `/api/groups/:id/messages` | 群消息历史 / 发消息 |
+| POST | `/api/cli/groups/:groupId/send` | CLI 专用发消息（保留 mention 语义）|
 
-### Cross-Domain Rules
+### Issues / 协作
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/cross-domain` | List rules |
-| POST | `/api/cross-domain` | Add rule (supports bidirectional) |
-| DELETE | `/api/cross-domain` | Delete rule |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET / POST | `/api/groups/:groupId/issues` | 群内 Issue 列表 / 创建任务型 Issue |
+| GET / PUT / DELETE | `/api/issues/:id` | Issue CRUD |
+| POST | `/api/issues/:id/cancel` | 取消 |
+| POST | `/api/issues/:id/continue` | 继续会话（追加输入）|
+| POST | `/api/issues/:id/append` | 实时追加输出片段 |
+| POST | `/api/issues/:id/complete` | 标记完成 |
+| POST | `/api/issues/claim-next` | Worker 抢下一个 Issue |
+| POST | `/api/issues/:id/approvals/:approvalId` | 审批回执（slash command 策略）|
+| GET | `/api/issues/:id/events` | Issue 时间线事件 |
+| GET | `/api/issues/:id/messages` | Issue 关联群消息 |
+| POST | `/api/groups/:groupId/collaborations` | 创建协作型 Issue |
+| POST | `/api/issues/:id/conclude-collaboration` | 协作结束并归档共识 |
 
-### Observability
+### Artifacts / 观测
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-| GET | `/api/audit` | Audit log (limit, max 500) |
-| GET | `/api/stats` | Stats + per-agent message metrics |
-| GET | `/api/messages` | Message log (agent / limit / before) |
-| GET | `/api/conversations` | Conversations grouped by peer |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/artifacts/:groupId` | 群产物列表 |
+| GET | `/api/artifacts/:groupId/content` | 产物内容 |
+| GET | `/api/artifacts/:groupId/original` | 产物原始版本 |
+| GET | `/api/artifacts/:groupId/diff` | 产物 diff |
+| GET | `/health` | 健康检查 |
+| GET | `/api/audit` | 审计日志（max 500）|
+| GET | `/api/stats` | 全局统计 + 每 agent 消息指标 |
+| GET | `/api/messages` | 全局消息日志（agent / limit / before）|
+| GET | `/api/conversations` | 按 peer 聚合的会话 |
+| GET | `/api/whoami` | 当前 token 对应的 agent 身份 |
 
-## LLM Tools
+## 协议
 
-The plugin registers two tools that the LLM can call:
-
-### `mesh_directory`
-
-Query the local agent directory cache.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `domain` | `string?` | Filter by domain |
-| `onlineOnly` | `boolean?` | Only show online agents |
-
-### `mesh_group_send`
-
-Send a message in a group. All members see the reply.
-
-## Protocol
-
-WebSocket endpoint: `ws://master:18800/ws`
+WebSocket 入口：`ws://master:18800/ws`
 
 ### Client → Master
 
-| Type | Key Fields | Description |
-|------|-----------|-------------|
-| `auth` | `token`, `name`, `jwt?` | Authenticate (required within 10s) |
-| `heartbeat` | `activeDispatches?` | Keep-alive (every 10s) |
-| `a2a_send` | `requestId`, `target`, `payload` | Send message to target agent |
-| `a2a_reply` | `requestId`, `payload` | Reply to a received message |
-| `update_info` | `description?` | Update own metadata |
-| `disconnect` | — | Graceful disconnect |
+| 类型 | 关键字段 | 说明 |
+|------|---------|------|
+| `auth` | `token`, `name`, `jwt?` | 鉴权（10s 内必须完成）|
+| `heartbeat` | `activeDispatches?` | 心跳（每 10s）|
+| `a2a_send` | `requestId`, `target`, `payload` | 发消息给目标 agent |
+| `a2a_reply` | `requestId`, `payload` | 回复收到的消息 |
+| `update_info` | `description?` | 更新自己的元数据 |
+| `disconnect` | — | 优雅断开 |
 
 ### Master → Client
 
-| Type | Key Fields | Description |
-|------|-----------|-------------|
-| `auth_ok` | `jwt`, `directory[]`, `config?` | Auth success + full directory |
-| `auth_fail` | `reason` | Auth failed |
-| `heartbeat_ack` | — | Heartbeat response |
-| `a2a_message` | `requestId`, `from`, `payload` | Incoming message |
-| `route_result` | `requestId`, `delivered`, `queued` | Routing feedback |
-| `directory_update` | `event`, `agent` | Directory change (join/leave/update) |
-| `offline_messages` | `messages[]` | Queued messages on reconnect |
-| `config_update` | `domain?`, `enabled?` | Master-pushed config change |
+| 类型 | 关键字段 | 说明 |
+|------|---------|------|
+| `auth_ok` | `jwt`, `directory[]`, `config?` | 鉴权通过 + 全量目录 |
+| `auth_fail` | `reason` | 鉴权失败 |
+| `heartbeat_ack` | — | 心跳响应 |
+| `a2a_message` | `requestId`, `from`, `payload` | 收到消息 |
+| `route_result` | `requestId`, `delivered`, `queued` | 路由反馈 |
+| `directory_update` | `event`, `agent` | 目录变更（上线/下线/更新）|
+| `offline_messages` | `messages[]` | 重连时下发的离线消息 |
+| `config_update` | `domain?`, `enabled?` | Master 推送的配置变更 |
 
-### Payload Structure
+### Payload 结构
 
 ```typescript
 interface MessagePayload {
-  message: string
-  files?: Array<{ name: string; uri: string; mimeType?: string }>
+  message: string;
+  files?: Array<{ name: string; uri: string; mimeType?: string }>;
 }
 ```
 
 ### WS Close Codes
 
-| Code | Meaning |
-|------|---------|
+| 码 | 含义 |
+|----|------|
 | 4001 | Auth timeout |
 | 4002 | Auth failed |
 | 4400 | Invalid JSON |
 | 4401 | Not authenticated |
 | 4429 | Rate limited |
 
-## Development
+## 开发
 
-### Build
+### 构建
 
 ```bash
 pnpm install
-pnpm build        # tsc + copy dashboard assets
+pnpm build                 # tsc（含 executor / cli / shared / master）
+pnpm build:master          # 同上 + 打包 dashboard SPA
+pnpm dashboard:dev         # Vue dashboard 本地开发模式
 ```
 
-### Test
+### 测试
 
 ```bash
-pnpm test                                      # all tests
-npx tsx --test tests/master-agent.test.ts       # integration test
+pnpm test                  # 所有 tests/*.test.ts
 ```
 
-### Project Structure
+### 项目结构
 
 ```
 src/
-├── index.ts                    # Agent-side entry (OpenClaw plugin)
+├── cli/
+│   └── rotom.ts                # rotom CLI 入口（身份解析 + 子命令调度）
+├── executor/
+│   ├── index.ts                # Executor 主进程入口
+│   ├── worker.ts               # Worker 抽象（WS + 抢单 + 进度回传）
+│   ├── cli-executor.ts         # CLI 后端的通用执行框架
+│   ├── claude-code-hook.cjs    # Claude Code 钩子（追踪输出）
+│   └── executors/              # 后端适配
+│       ├── claude-code.ts
+│       ├── codex.ts
+│       ├── deepseek-cli.ts
+│       ├── hermes-cli.ts
+│       ├── openclaw.ts
+│       └── generic-cli.ts
 ├── master/
-│   ├── server.ts               # Master standalone entry (CLI)
-│   ├── embedded.ts             # Embeddable master (same-process)
-│   ├── api.ts                  # REST API routes
-│   ├── ws-hub.ts               # WebSocket hub (connections + relay)
-│   ├── router.ts               # Routing decisions
-│   ├── db.ts                   # SQLite data layer (WAL mode)
-│   ├── auth.ts                 # Token verification + JWT
-│   ├── offline-queue.ts        # Offline message queue
-│   └── dashboard/index.html    # Management dashboard (SPA)
-├── agent/
-│   ├── agent-mode.ts           # Agent main entry
-│   ├── socket-manager.ts       # WS lifecycle (auth + heartbeat + reconnect)
-│   ├── ws-client.ts            # Low-level WebSocket client
-│   ├── directory.ts            # Local agent directory cache
-│   ├── inbound-dispatcher.ts   # Inbound → local LLM (SSE)
-│   ├── outbound-handler.ts     # Outbound → Master
-│   ├── message-filter.ts       # Allow/block list
-│   └── tools.ts                # mesh_directory + mesh_group_send
+│   ├── server.ts               # Master 独立入口（CLI）
+│   ├── embedded.ts             # 可嵌入版本（同进程使用）
+│   ├── api.ts                  # 全部 REST 端点
+│   ├── ws-hub.ts               # WS Hub（连接 + 中转）
+│   ├── router.ts               # 路由决策
+│   ├── db.ts                   # SQLite 数据层（WAL）
+│   ├── auth.ts                 # token + JWT 校验
+│   └── offline-queue.ts        # 离线消息队列
 └── shared/
-    ├── protocol.ts             # Message type definitions
-    ├── constants.ts            # Global constants
-    └── dedup.ts                # Message deduplication
+    ├── protocol.ts             # 消息类型定义
+    ├── constants.ts            # 全局常量
+    ├── dedup.ts                # 消息去重
+    ├── group-context.ts        # 群上下文工具
+    ├── logger.ts               # 统一日志
+    └── slash-commands.ts       # 斜杠命令协议
+
+packages/
+└── dashboard/                  # Vue 3 Dashboard SPA
+
+migrations/                     # SQLite schema migrations（001~015）
+docs/                           # 协作指南 / 用户手册 / 架构文档
+bin/
+├── mesh-master.sh              # Master 启停脚本
+├── rotom                       # rotom CLI launcher
+└── rotom-send-with-status      # rotom 带状态发消息辅助脚本
 ```
+
+## 相关文档
+
+- [`docs/INSTALL.md`](./docs/INSTALL.md) — 完整安装手册（三件套）
+- [`docs/AGENT_USER_GUIDE.md`](./docs/AGENT_USER_GUIDE.md) — Agent 协作用户指南
+- [`docs/AGENT_COLLABORATION_GUIDE.md`](./docs/AGENT_COLLABORATION_GUIDE.md) — 协作机制说明
+- [`docs/GROUP_CHAT_ARCHITECTURE.md`](./docs/GROUP_CHAT_ARCHITECTURE.md) — 群聊架构详解
+- [`docs/QUICK_REF.md`](./docs/QUICK_REF.md) — Issue / 协作 / 群消息 三种场景速查
 
 ## License
 
