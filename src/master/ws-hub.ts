@@ -637,7 +637,7 @@ export class WSHub {
             ? `✅ Issue 「${issue.title}」已由 ${conn.name} 完成`
             : `❌ Issue 「${issue.title}」执行失败（${conn.name}）`;
           const details = artifacts?.length
-            ? `${summary}\n产出文件：${(artifacts as string[]).join("、")}`
+            ? `${summary}\n\n产出文件：${(artifacts as string[]).join("、")}`
             : summary;
           // Master-proactive announcement → sender=system.
           this.postSystemToGroup(issue.group_id, details);
@@ -1155,7 +1155,7 @@ export class WSHub {
 
     // Build a simple summary from the collected turns
     const turnSummary = turnEvents.map((e) => `${e.agent_name}: ${e.content}`).join("\n");
-    const summary = `协作任务「${collab.title}」已完成，共 ${collab.max_rounds ?? 0} 轮。\n\n参与者的贡献：\n${turnSummary}`;
+    const summary = `协作任务「${collab.title}」已完成，共 ${collab.max_rounds ?? 0} 轮。\n\n参与者的贡献：\n\n${turnSummary}`;
 
     this.db.completeCollaboration(collab.id, summary);
 

@@ -1476,12 +1476,12 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
 
       // 群内可见的启动消息：以 @<firstParticipant> 开头，
       // 让普通 agent 走标准 a2a_message + mention 路径被唤起。
-      const ownerLine = owner ? `\n负责人：${owner}` : "";
+      const ownerLine = owner ? `\n\n负责人：${owner}` : "";
       const startupContent =
-        `@${firstParticipant} 🤝 [协作启动] 由你担任发起人，请开始协作任务「${title}」\n` +
-        `目标：${collaborationGoal}\n` +
-        `参与者：${participants.join("、")}\n` +
-        `最大轮数：${maxRounds || 3}` + ownerLine + `\n` +
+        `@${firstParticipant} 🤝 [协作启动] 由你担任发起人，请开始协作任务「${title}」\n\n` +
+        `目标：\n${collaborationGoal}\n\n` +
+        `参与者：\n${participants.join("、")}\n\n` +
+        `最大轮数：\n${maxRounds || 3}` + ownerLine + `\n\n` +
         `IssueId：${id}`;
       hub.postSystemToGroup(req.params.groupId, startupContent, [], [firstParticipant]);
       hub.notifyIssueChanged(id, req.params.groupId, "created");
@@ -1531,7 +1531,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
           });
         }
       }
-      hub.postSystemToGroup(issue.group_id, `🏁 [协作结束] 协作任务「${issue.title}」已由 dashboard 主动结束。\n${summary}`);
+      hub.postSystemToGroup(issue.group_id, `🏁 [协作结束] 协作任务「${issue.title}」已由 dashboard 主动结束。\n\n${summary}`);
       hub.notifyIssueChanged(req.params.id, issue.group_id, "updated");
     }
 

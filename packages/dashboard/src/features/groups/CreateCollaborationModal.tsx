@@ -3,11 +3,13 @@ import { api } from '../../api/client'
 import type { Agent } from '../../api/types'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
+import { MarkdownEditor } from '../../components/ui/MarkdownEditor'
 import styles from './GroupChatView.module.css'
 
 interface CreateCollaborationModalProps {
   open: boolean
   agents: Agent[]
+  groupMembers: string[]
   onClose: () => void
   onSubmit: (data: {
     title: string
@@ -20,7 +22,7 @@ interface CreateCollaborationModalProps {
   createdBy: string
 }
 
-export function CreateCollaborationModal({ open, agents, onClose, onSubmit, createdBy }: CreateCollaborationModalProps) {
+export function CreateCollaborationModal({ open, agents, groupMembers, onClose, onSubmit, createdBy }: CreateCollaborationModalProps) {
   const [title, setTitle] = useState('')
   const [collaborationGoal, setCollaborationGoal] = useState('')
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([])
@@ -44,7 +46,7 @@ export function CreateCollaborationModal({ open, agents, onClose, onSubmit, crea
     }
   }, [selectedParticipants, firstSpeaker])
 
-  const onlineAgents = agents.filter(a => a.status === 'online')
+  const onlineAgents = agents.filter(a => a.status === 'online' && groupMembers.includes(a.name))
 
   const toggleParticipant = (name: string) => {
     setSelectedParticipants(prev =>
@@ -83,9 +85,12 @@ export function CreateCollaborationModal({ open, agents, onClose, onSubmit, crea
           placeholder="协作任务标题" className={styles.formInput} />
       </div>
       <div className={styles.formField}>
-        <label className={styles.formLabel}>协作目标:</label>
-        <textarea value={collaborationGoal} onChange={e => setCollaborationGoal(e.target.value)}
-          placeholder="描述需要协作完成的目标、背景和期望产出" className={styles.formTextarea} />
+        <MarkdownEditor
+          value={collaborationGoal}
+          onChange={setCollaborationGoal}
+          label="协作目标"
+          placeholder="描述需要协作完成的目标、背景和期望产出"
+          rows={8} />
       </div>
       <div className={styles.formField}>
         <label className={styles.formLabel}>参与者 (至少2人):</label>

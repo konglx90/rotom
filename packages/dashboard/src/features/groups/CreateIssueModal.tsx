@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Agent } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { MarkdownEditor } from '../../components/ui/MarkdownEditor'
 import { Modal } from '../../components/ui/Modal'
 import styles from './GroupChatView.module.css'
 
@@ -65,9 +66,12 @@ export function CreateIssueModal({ open, agents, onClose, onSubmit, defaultWorki
         </label>
       </div>
       <div className={styles.formField}>
-        <label className={styles.formLabel}>详细描述:</label>
-        <textarea value={description} onChange={e => setDescription(e.target.value)}
-          placeholder="任务的详细说明、预期结果等" className={styles.formTextarea} />
+        <MarkdownEditor
+          value={description}
+          onChange={setDescription}
+          label="详细描述"
+          placeholder="任务的详细说明、预期结果等"
+          rows={8} />
       </div>
       <div className={styles.formField}>
         <label className={styles.formLabel}>优先级:</label>

@@ -6,6 +6,7 @@
 
 .md p {
   margin: 0 0 4px;
+  white-space: pre-wrap;
 }
 
 .md p:last-child {

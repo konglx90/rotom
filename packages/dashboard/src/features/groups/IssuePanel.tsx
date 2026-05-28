@@ -134,8 +134,12 @@ export function IssuePanel({
       <CreateCollaborationModal
         open={showCreateCollaborationModal}
         agents={agents}
+        groupMembers={groupMembers}
         onClose={() => setShowCreateCollaborationModal(false)}
-        onSubmit={onCreateCollaboration}
+        onSubmit={(data) => {
+          onCreateCollaboration(data)
+          setShowCreateCollaborationModal(false)
+        }}
         createdBy={myAgentName}
       />
     </>
