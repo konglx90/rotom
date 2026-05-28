@@ -13,6 +13,7 @@ import { AgentProfileModal } from './AgentProfileModal'
 import { DepartmentTree } from './DepartmentTree'
 import { DepartmentFormModal } from './DepartmentFormModal'
 import { CrossDomainRulesPanel } from './CrossDomainRulesPanel'
+import { BrandFooter } from './BrandFooter'
 import styles from './AgentsView.module.css'
 
 type RightView = 'employees' | 'rules'
@@ -159,6 +160,8 @@ export function AgentsView() {
         ) : (
           <CrossDomainRulesPanel domains={allDomains} />
         )}
+
+        <BrandFooter />
       </div>
 
       <AddAgentModal

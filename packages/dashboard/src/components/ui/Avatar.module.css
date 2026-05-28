@@ -2,7 +2,7 @@
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
-  background: var(--color-surface);
+  background: var(--color-canvas-elevated);
 }
 
 .fallback {
@@ -10,7 +10,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  color: var(--color-surface);
+  font-weight: 700;
+  letter-spacing: -0.108px;
+  font-feature-settings: var(--font-feature-calt);
+  color: var(--color-dark-green);
+  background: var(--color-wise-green);
   flex-shrink: 0;
 }
