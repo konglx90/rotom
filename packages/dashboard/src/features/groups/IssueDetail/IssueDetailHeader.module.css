@@ -1,0 +1,171 @@
+.issueDetailHeader {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color-light);
+  background: var(--color-background);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.headerPrimaryRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.headerPrimaryMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.headerTitle {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issueEditTitleInput {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-navy);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-sizing: border-box;
+}
+
+.issueEditTitleInput:focus {
+  outline: none;
+  border-color: var(--color-info);
+}
+
+.editPlanRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-slate);
+}
+
+.editPlanTag {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+/* 折叠区根容器：纵向两段（元信息簇 / 设置+操作簇） */
+.headerSecondary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 元信息簇：priority + id + 工作目录，全部只读 */
+.metaCluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* 设置 + 操作 同一行；窄屏 wrap 时操作簇换到下一行起点 */
+.controlsRow {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* 设置簇：指派 + 审批策略 */
+.settingsCluster {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* 操作簇：编辑 / 完成 / 取消 / 删除；推到右侧 */
+.actionsCluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 单个「label + 控件」组合 */
+.fieldGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  color: var(--color-slate);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 内嵌使用的 Select：覆盖 ui/Select 默认宽度，给固定下拉范围 */
+.inlineSelect {
+  min-width: 140px;
+  max-width: 200px;
+}
+
+/* 指派 pending 时的「确认 / 取消」内嵌按钮组，与外层 actions 簇区隔 */
+.inlinePending {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  margin-left: 2px;
+  border-left: 1px dashed var(--border-color-light);
+}
+
+.fieldHint {
+  font-size: 11px;
+  color: var(--color-slate);
+}
+
+/* 工作目录：放在元信息簇右侧，长路径可截断 */
+.issueWorkingDir {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-slate);
+  min-width: 0;
+  flex: 1;
+}
+
+.issueWorkingDirPath {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt, rgba(100, 116, 139, 0.08));
+  color: var(--color-navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}

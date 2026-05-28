@@ -1,0 +1,436 @@
+/**
+ * Hermes CLI Executor
+ *
+ * Spawns `hermes acp` and communicates via ACP (Agent Communication Protocol)
+ * JSON-RPC 2.0 over stdin/stdout. Follows the same lifecycle as the Go
+ * reference implementation in Multica:
+ *
+ *   1. initialize handshake
+ *   2. session/new
+ *   3. session/prompt (streams updates via session/update notifications)
+ *   4. auto-approve permission requests
+ */
+
+import { spawn, type ChildProcess } from "node:child_process";
+import { createInterface, type Interface as ReadlineInterface } from "node:readline";
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs";
+import type { CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
+
+// ── ACP JSON-RPC types ──────────────────────────────────────────────────
+
+interface JsonRpcRequest {
+  jsonrpc: "2.0";
+  id: number;
+  method: string;
+  params?: unknown;
+}
+
+interface JsonRpcResponse {
+  jsonrpc: "2.0";
+  id: number;
+  result?: unknown;
+  error?: { code: number; message: string };
+}
+
+interface JsonRpcNotification {
+  jsonrpc: "2.0";
+  method: string;
+  params?: unknown;
+}
+
+// ── Pending RPC tracking ────────────────────────────────────────────────
+
+interface PendingRpc {
+  resolve: (result: unknown) => void;
+  reject: (err: Error) => void;
+  method: string;
+}
+
+// ── Tool call buffer ────────────────────────────────────────────────────
+
+interface PendingToolCall {
+  toolName: string;
+  input?: Record<string, unknown>;
+  argsText: string;
+  emitted: boolean;
+}
+
+// ── Executor ────────────────────────────────────────────────────────────
+
+export class HermesCliExecutor implements CliExecutor {
+  async execute(
+    prompt: string,
+    workingDir: string,
+    onOutput: (chunk: string) => void,
+    options?: ExecuteOptions,
+  ): Promise<ExecuteResult> {
+    return new Promise((resolve) => {
+      const args = [ "acp"];
+      const resumeSessionId = options?.sessionId || "";
+
+      console.log(`[hermes-cli] Spawning hermes acp (cwd: ${workingDir})`);
+
+      // hermes lives in a venv (`~/hermes-agent/venv/bin`) and is not on the
+      // default PATH of a daemonised master. Prepend the candidate locations
+      // so `spawn("hermes")` finds it.
+      const extraPath = [
+        path.join(os.homedir(), "hermes-agent", "venv", "bin"),
+      ].filter((p) => fs.existsSync(p)).join(":");
+      const mergedPath = extraPath
+        ? `${extraPath}:${process.env.PATH ?? ""}`
+        : process.env.PATH;
+
+      const proc = spawn("hermes", args, {
+        cwd: workingDir,
+        env: {
+          ...process.env,
+          ...options?.env,
+          PATH: mergedPath,
+          HERMES_YOLO_MODE: "1",
+        },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      const onAbort = () => {
+        console.log(`[hermes-cli] Aborted, killing pid=${proc.pid}`);
+        try { proc.kill("SIGTERM"); } catch { /* noop */ }
+        setTimeout(() => { try { proc.kill("SIGKILL"); } catch { /* noop */ } }, 3_000);
+      };
+      if (options?.signal) {
+        if (options.signal.aborted) onAbort();
+        else options.signal.addEventListener("abort", onAbort, { once: true });
+      }
+
+      let fullOutput = "";
+      let nextId = 1;
+      const pending = new Map<number, PendingRpc>();
+      const pendingTools = new Map<string, PendingToolCall>();
+      let sessionId = "";
+      let settled = false;
+
+      // ── Helpers ──
+
+      function send(msg: JsonRpcRequest | Record<string, unknown>): void {
+        const data = JSON.stringify(msg) + "\n";
+        proc.stdin!.write(data);
+      }
+
+      function request(method: string, params?: unknown): Promise<unknown> {
+        const id = nextId++;
+        return new Promise((res, rej) => {
+          pending.set(id, { resolve: res, reject: rej, method });
+          send({ jsonrpc: "2.0", id, method, params });
+        });
+      }
+
+      function finish(exitCode: number): void {
+        if (settled) return;
+        settled = true;
+        console.log(`[hermes-cli] Exited code=${exitCode}, output=${fullOutput.length} chars, session=${sessionId}`);
+        resolve({ exitCode, fullOutput, sessionId: sessionId || undefined });
+      }
+
+      // ── Handle agent → client requests (auto-approve permissions) ──
+
+      function handleAgentRequest(raw: Record<string, unknown>): void {
+        const method = raw.method as string;
+        const rawId = raw.id;
+        if (rawId == null) return;
+
+        let resp: Record<string, unknown>;
+        if (method === "session/request_permission") {
+          resp = {
+            jsonrpc: "2.0",
+            id: rawId,
+            result: {
+              outcome: {
+                outcome: "selected",
+                optionId: "approve_for_session",
+              },
+            },
+          };
+        } else {
+          resp = {
+            jsonrpc: "2.0",
+            id: rawId,
+            error: { code: -32601, message: `method not found: ${method}` },
+          };
+        }
+        send(resp);
+      }
+
+      // ── Handle JSON-RPC responses ──
+
+      function handleResponse(raw: Record<string, unknown>): void {
+        const id = typeof raw.id === "number" ? raw.id : Number(raw.id);
+        const p = pending.get(id);
+        if (!p) return;
+        pending.delete(id);
+
+        if (raw.error) {
+          const err = raw.error as { code: number; message: string };
+          p.reject(new Error(`${p.method}: ${err.message} (code=${err.code})`));
+        } else {
+          p.resolve(raw.result);
+        }
+      }
+
+      // ── ACP notification handling ──
+
+      function normalizeUpdateType(raw: unknown): string {
+        if (typeof raw === "object" && raw !== null) {
+          const obj = raw as Record<string, unknown>;
+          const key =
+            (obj.sessionUpdate as string) ??
+            (obj.type as string);
+          if (key) return normalizeTypeKey(key);
+
+          // Externally tagged: { agentMessageChunk: { ... } }
+          const keys = Object.keys(obj);
+          if (keys.length === 1) return normalizeTypeKey(keys[0]);
+        }
+        return "";
+      }
+
+      function normalizeTypeKey(t: string): string {
+        const k = t.replace(/[-_]/g, "").toLowerCase().trim();
+        switch (k) {
+          case "agentmessagechunk": return "agent_message_chunk";
+          case "agentthoughtchunk": return "agent_thought_chunk";
+          case "toolcall": return "tool_call";
+          case "toolcallupdate": return "tool_call_update";
+          case "usageupdate": return "usage_update";
+          case "turnend":
+          case "endturn": return "turn_end";
+          default: return "";
+        }
+      }
+
+      function toolNameFromTitle(title: string, kind: string): string {
+        if (title === "execute code") return "execute_code";
+        const idx = title.indexOf(":");
+        if (idx > 0) {
+          const name = title.slice(0, idx).trim();
+          const map: Record<string, string> = {
+            terminal: "terminal",
+            read: "read_file",
+            write: "write_file",
+            search: "search_files",
+            "web search": "web_search",
+            extract: "web_extract",
+            delegate: "delegate_task",
+            "analyze image": "vision_analyze",
+          };
+          if (map[name]) return map[name];
+          if (name.startsWith("patch")) return "patch";
+          return name;
+        }
+        const kindMap: Record<string, string> = {
+          read: "read_file",
+          edit: "write_file",
+          execute: "terminal",
+          search: "search_files",
+          fetch: "web_search",
+          think: "thinking",
+        };
+        return kindMap[kind] ?? title ?? kind;
+      }
+
+      function handleNotification(raw: Record<string, unknown>): void {
+        const method = raw.method as string;
+        if (method !== "session/update" && method !== "session/notification") return;
+
+        const params = raw.params as Record<string, unknown> | undefined;
+        const update = params?.update as Record<string, unknown> | undefined;
+        if (!update) return;
+
+        const updateType = normalizeUpdateType(update);
+
+        switch (updateType) {
+          case "agent_message_chunk": {
+            const content = (update as Record<string, unknown>).content as Record<string, unknown> | undefined;
+            const text = content?.text as string | undefined;
+            if (text) {
+              fullOutput += text;
+              onOutput(text);
+            }
+            break;
+          }
+          case "agent_thought_chunk": {
+            const content = (update as Record<string, unknown>).content as Record<string, unknown> | undefined;
+            const text = content?.text as string | undefined;
+            if (text) {
+              onOutput(`[thinking] ${text} [/thinking]`);
+            }
+            break;
+          }
+          case "tool_call": {
+            const toolCallId = (update as Record<string, unknown>).toolCallId as string;
+            const title = (update as Record<string, unknown>).title as string;
+            const kind = (update as Record<string, unknown>).kind as string;
+            const rawInput = ((update as Record<string, unknown>).rawInput ??
+              (update as Record<string, unknown>).input ??
+              (update as Record<string, unknown>).parameters) as Record<string, unknown> | undefined;
+
+            const toolName = toolNameFromTitle(title ?? "", kind ?? "");
+            if (rawInput && Object.keys(rawInput).length > 0) {
+              pendingTools.set(toolCallId, { toolName, input: rawInput, argsText: "", emitted: true });
+              onOutput(`[tool] ${toolName}: ${JSON.stringify(rawInput)}\n`);
+            } else {
+              pendingTools.set(toolCallId, { toolName, argsText: "", emitted: false });
+            }
+            break;
+          }
+          case "tool_call_update": {
+            const toolCallId = (update as Record<string, unknown>).toolCallId as string;
+            const status = (update as Record<string, unknown>).status as string;
+            const title = ((update as Record<string, unknown>).title ?? (update as Record<string, unknown>).name) as string;
+            const kind = (update as Record<string, unknown>).kind as string;
+            const rawInput = ((update as Record<string, unknown>).rawInput ??
+              (update as Record<string, unknown>).input ??
+              (update as Record<string, unknown>).parameters) as Record<string, unknown> | undefined;
+            const output = ((update as Record<string, unknown>).rawOutput ??
+              (update as Record<string, unknown>).output) as string | undefined;
+
+            if (status !== "completed" && status !== "failed") {
+              // Mid-stream update — buffer
+              const pt = pendingTools.get(toolCallId);
+              if (pt && !pt.emitted) {
+                const content = (update as Record<string, unknown>).content as unknown[];
+                if (Array.isArray(content)) {
+                  for (const block of content) {
+                    const b = block as Record<string, unknown>;
+                    const inner = b.content as Record<string, unknown> | undefined;
+                    if (inner?.text) pt.argsText = inner.text as string;
+                  }
+                }
+              }
+              return;
+            }
+
+            // Completed — emit deferred tool use if needed
+            const pt = pendingTools.get(toolCallId);
+            pendingTools.delete(toolCallId);
+
+            if (!pt?.emitted) {
+              const toolName = pt?.toolName ?? toolNameFromTitle(title ?? "", kind ?? "");
+              const input = pt?.input ?? rawInput;
+              onOutput(`[tool] ${toolName}: ${JSON.stringify(input)}\n`);
+            }
+
+            if (output) {
+              onOutput(`[tool-result] ${output.slice(0, 500)}${output.length > 500 ? "..." : ""}\n`);
+            }
+            break;
+          }
+        }
+      }
+
+      // ── Route every line from stdout ──
+
+      function handleLine(line: string): void {
+        let raw: Record<string, unknown>;
+        try {
+          raw = JSON.parse(line);
+        } catch {
+          return;
+        }
+
+        // Agent → client request (has id + method, no result/error yet)
+        if (raw.id != null && raw.method && !("result" in raw) && !("error" in raw)) {
+          handleAgentRequest(raw);
+          return;
+        }
+
+        // JSON-RPC response (has id + result or error)
+        if (raw.id != null && ("result" in raw || "error" in raw)) {
+          handleResponse(raw);
+          return;
+        }
+
+        // Notification (no id, has method)
+        if (raw.method) {
+          handleNotification(raw);
+        }
+      }
+
+      // ── Wire up stdout reader ──
+
+      const rl = createInterface({ input: proc.stdout! });
+      rl.on("line", (line) => handleLine(line.trim()));
+
+      // ── stderr logging ──
+
+      proc.stderr!.on("data", (data: Buffer) => {
+        const text = data.toString().trim();
+        if (text) console.error(`[hermes-cli] stderr: ${text}`);
+      });
+
+      // ── ACP lifecycle ──
+
+      async function runLifecycle(): Promise<void> {
+        try {
+          // 1. Initialize
+          await request("initialize", {
+            protocolVersion: 1,
+            clientInfo: { name: "open-a2a-gateway", version: "0.1.0" },
+            clientCapabilities: {},
+          });
+
+          // 2. Create or resume session
+          if (resumeSessionId) {
+            const resumeResult = (await request("session/resume", {
+              cwd: workingDir || ".",
+              sessionId: resumeSessionId,
+            })) as Record<string, unknown>;
+
+            // Server may return a different sessionId if the original was lost
+            sessionId = (resumeResult?.sessionId as string) || resumeSessionId;
+            console.log(`[hermes-cli] session resumed: ${sessionId}${sessionId !== resumeSessionId ? ` (original: ${resumeSessionId})` : ""}`);
+          } else {
+            const sessionResult = (await request("session/new", {
+              cwd: workingDir || ".",
+              mcpServers: [],
+            })) as Record<string, unknown>;
+
+            sessionId = (sessionResult?.sessionId as string) ?? "";
+            if (!sessionId) {
+              console.error("[hermes-cli] session/new returned no session ID");
+            }
+            console.log(`[hermes-cli] session created: ${sessionId}`);
+          }
+
+          // 3. Send prompt
+          // Only chat/collab tasks should trigger the rotom-a2a-communicate
+          // skill — issue tasks execute the prompt directly to avoid being
+          // misled into treating the issue body as a "send a message" task.
+          const needsCommunicationWrapper = options?.kind === "chat" || options?.kind === "collab";
+          const wrappedPrompt = needsCommunicationWrapper
+            ? `/skills rotom-a2a-communicate ${prompt}`
+            : prompt;
+          await request("session/prompt", {
+            sessionId,
+            prompt: [{ type: "text", text: wrappedPrompt }],
+          });
+        } catch (err) {
+          console.error(`[hermes-cli] ACP lifecycle error: ${(err as Error).message}`);
+        } finally {
+          proc.stdin!.end();
+        }
+      }
+
+      proc.on("close", (code) => {
+        finish(code ?? 1);
+      });
+
+      proc.on("error", (err) => {
+        console.error(`[hermes-cli] Spawn error: ${err.message}`);
+        finish(1);
+      });
+
+      void runLifecycle();
+    });
+  }
+}

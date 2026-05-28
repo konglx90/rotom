@@ -1,0 +1,55 @@
+/* Design System Tokens */
+:root {
+  /* Colors */
+  --color-navy: #0F172A;
+  --color-slate: #64748B;
+  --color-sage: #059669;
+  --color-background: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-success: #22C55E;
+  --color-warning: #EAB308;
+  --color-error: #EF4444;
+  --color-info: #0EA5E9;
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #64748B;
+  --text-2: #64748B;
+
+  /* Softer border colors */
+  --border-color: #E2E8F0;
+  --border-color-light: #F1F5F9;
+  --border-color-hover: #CBD5E1;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows - more diffused for softer look */
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 2px 6px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 4px 16px rgba(15, 23, 42, 0.08);
+  --shadow-xl: 0 8px 32px rgba(15, 23, 42, 0.12);
+
+  /* Font Sizes */
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-base: 16px;
+  --font-lg: 18px;
+  --font-xl: 20px;
+  --font-2xl: 24px;
+  --font-3xl: 32px;
+
+  /* Font Families */
+  --font-mono: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# rotom CLI launcher.
+# Prefers the compiled JS; falls back to running the TS source through tsx
+# (so contributors don't need to rebuild on every change).
+set -e
+
+# Resolve the real path of this script, following symlinks (so global installs
+# via `ln -s ... /usr/local/bin/rotom` still locate the repo).
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  TARGET="$(readlink "$SOURCE")"
+  case "$TARGET" in
+    /*) SOURCE="$TARGET" ;;
+    *)  SOURCE="$(cd "$(dirname "$SOURCE")" && pwd)/$TARGET" ;;
+  esac
+done
+HERE="$(cd "$(dirname "$SOURCE")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+DIST="$ROOT/dist/cli/rotom.js"
+SRC="$ROOT/src/cli/rotom.ts"
+
+if [ -f "$DIST" ]; then
+  exec node "$DIST" "$@"
+elif [ -f "$SRC" ]; then
+  exec node --import tsx "$SRC" "$@"
+else
+  echo "rotom: cannot find dist/cli/rotom.js or src/cli/rotom.ts (looked in $ROOT)" >&2
+  exit 1
+fi

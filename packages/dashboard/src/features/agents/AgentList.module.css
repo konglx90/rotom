@@ -1,0 +1,272 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.loading,
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e5e7eb;
+  border-top-color: var(--color-info);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  color: var(--color-error);
+}
+
+.retryBtn {
+  margin-top: 1rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--color-info);
+  color: var(--color-surface);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retryBtn:hover {
+  background: #5a7be8;
+}
+
+/* Stats */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.statCard {
+  background: var(--color-background);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px solid #e5e7eb;
+}
+
+.statValue {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.statValue.online {
+  color: var(--color-success);
+}
+
+.statValue.offline {
+  color: var(--color-slate);
+}
+
+.statLabel {
+  font-size: 0.875rem;
+  color: var(--color-slate);
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+/* List */
+.list {
+  display: grid;
+  gap: 1rem;
+}
+
+.empty {
+  text-align: center;
+  padding: 3rem;
+  color: var(--color-slate);
+}
+
+.hint {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin-top: 0.5rem;
+}
+
+/* Card */
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.card.online {
+  border-left: 4px solid var(--color-success);
+}
+
+.card.offline {
+  border-left: 4px solid var(--color-slate);
+  opacity: 0.8;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.cardHeader {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--color-info) 0%, #764ba2 100%);
+  color: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.cardInfo {
+  flex: 1;
+}
+
+.name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  margin: 0 0 0.5rem 0;
+}
+
+.meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: #f3f4f6;
+  color: var(--color-slate);
+}
+
+.statusBadge {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.online .statusBadge {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status {
+  padding-top: 0.25rem;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-left: auto;
+}
+
+.dotOnline {
+  background: var(--color-success);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+.dotOffline {
+  background: var(--color-slate);
+  box-shadow: 0 0 0 4px rgba(107, 114, 128, 0.1);
+}
+
+.description {
+  margin: 1rem 0;
+  color: var(--color-slate);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.profileTags {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+}
+
+.techBadge {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.metrics {
+  display: flex;
+  gap: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metricValue {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.metricLabel {
+  font-size: 0.75rem;
+  color: var(--color-slate);
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics {
+    gap: 1rem;
+  }
+
+  .cardHeader {
+    flex-wrap: wrap;
+  }
+
+  .status {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .dot {
+    margin-left: 0;
+  }
+}

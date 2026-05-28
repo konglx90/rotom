@@ -1,0 +1,71 @@
+{
+  "name": "a2a-gateway",
+  "version": "2.0.34",
+  "type": "module",
+  "description": "Digital Employee Mesh — Enterprise agent collaboration network",
+  "main": "dist/index.js",
+  "bin": {
+    "mesh-master": "./dist/master/server.js",
+    "rotom": "./bin/rotom"
+  },
+  "scripts": {
+    "build": "tsc && cp src/executor/claude-code-hook.cjs dist/executor/claude-code-hook.cjs",
+    "build:master": "tsc && cp -r src/master/dashboard dist/master/ && cp src/executor/claude-code-hook.cjs dist/executor/claude-code-hook.cjs",
+    "master": "bash bin/mesh-master.sh start",
+    "master:start": "bash bin/mesh-master.sh start --daemon",
+    "master:stop": "bash bin/mesh-master.sh stop",
+    "master:restart": "bash bin/mesh-master.sh restart --daemon",
+    "master:status": "bash bin/mesh-master.sh status",
+    "dashboard:dev": "pnpm --filter @a2a-gateway/dashboard dev",
+    "dashboard:build": "pnpm --filter @a2a-gateway/dashboard build",
+    "dashboard:preview": "pnpm --filter @a2a-gateway/dashboard preview",
+    "executor": "node --import tsx src/executor/index.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "pack:openclaw:agent": "npm version patch --no-git-tag-version && tsc && npm pack --pack-destination ."
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "ws": "^8.18.0"
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.js.map",
+    "dist/index.d.ts",
+    "dist/index.d.ts.map",
+    "dist/agent",
+    "dist/shared",
+    "skill",
+    "openclaw.plugin.json"
+  ],
+  "optionalDependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "channels": [
+      "a2a-gateway"
+    ],
+    "skills": [
+      "./skill/rotom-a2a-communicate"
+    ]
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  },
+  "repository": "git@code.alipay.com:cattery/open-a2a-gateway.git"
+}

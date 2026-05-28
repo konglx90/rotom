@@ -1,0 +1,124 @@
+import { useState } from 'react'
+import type { Agent } from '../../api/types'
+import { Badge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
+import styles from './AgentTable.module.css'
+
+interface AgentTableProps {
+  agents: Agent[]
+  onDelete?: (agent: Agent) => void
+  onEditProfile?: (agent: Agent) => void
+}
+
+export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps) {
+  const [sortField, setSortField] = useState<keyof Agent>('name')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+
+  const sortedAgents = [...agents].sort((a, b) => {
+    const aVal = a[sortField] || ''
+    const bVal = b[sortField] || ''
+    const comparison = String(aVal).localeCompare(String(bVal))
+    return sortOrder === 'asc' ? comparison : -comparison
+  })
+
+  const handleSort = (field: keyof Agent) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortOrder('asc')
+    }
+  }
+
+  if (agents.length === 0) {
+    return (
+      <div className={styles.empty}>
+        <p>暂无员工数据</p>
+        <p className={styles.hint}>请调整筛选条件或注册新员工</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.tableWrapper}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th onClick={() => handleSort('name')}>
+                名称 {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </th>
+              <th onClick={() => handleSort('domain')}>
+                部门 {sortField === 'domain' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </th>
+              <th onClick={() => handleSort('status')}>
+                状态 {sortField === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </th>
+              <th>类型</th>
+              <th>详情</th>
+              <th>连接信息</th>
+              {(onDelete || onEditProfile) && <th>操作</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedAgents.map((agent) => (
+              <tr key={agent.id} className={agent.status === 'online' ? styles.online : styles.offline}>
+                <td className={styles.name}>
+                  <div className={styles.avatar}>{agent.name.charAt(0).toUpperCase()}</div>
+                  <span>{agent.name}</span>
+                </td>
+                <td>
+                  {agent.domain && <Badge tone="tag">{agent.domain}</Badge>}
+                </td>
+                <td>
+                  <span className={`${styles.status} ${styles[agent.status]}`}>
+                    {agent.status === 'online' ? '在线' : '离线'}
+                  </span>
+                </td>
+                <td>
+                  {agent.profile?.category
+                    ? (agent.profile.category === '稳交付组' ? '🐘 ' : agent.profile.category === '真人' ? '👤 ' : '🚀 ') + agent.profile.category
+                    : '-'}
+                </td>
+                <td className={styles.detailCell}>
+                  <div className={styles.detailRow}>
+                    {agent.profile?.position && <span className={styles.detailTag}>💼 {agent.profile.position}</span>}
+                    {agent.profile?.tech_stack && <span className={styles.detailTag}>🛠 {agent.profile.tech_stack}</span>}
+                    {!agent.profile?.position && !agent.profile?.tech_stack && agent.description && <span className={styles.detailDesc}>{agent.description}</span>}
+                  </div>
+                  {agent.description && (agent.profile?.position || agent.profile?.tech_stack) && (
+                    <div className={styles.detailDesc}>{agent.description}</div>
+                  )}
+                  {!agent.description && !agent.profile?.position && !agent.profile?.tech_stack && <span className={styles.detailDesc}>-</span>}
+                </td>
+                <td className={styles.endpoint}>
+                  {agent.endpoint ? (
+                    <span className={styles.truncate} title={agent.endpoint}>
+                      {agent.endpoint}
+                    </span>
+                  ) : '-'}
+                </td>
+                {(onDelete || onEditProfile) && (
+                  <td>
+                    <div className={styles.actions}>
+                    {onEditProfile && (
+                      <Button variant="secondary" size="sm" onClick={() => onEditProfile(agent)}>
+                        编辑
+                      </Button>
+                    )}
+                    {onDelete && (
+                      <Button variant="danger" outline size="sm" onClick={() => onDelete(agent)}>
+                        删除
+                      </Button>
+                    )}
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}

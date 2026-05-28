@@ -1,0 +1,41 @@
+.shell {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--spacing-xl);
+  background: var(--color-background);
+}
+
+.mainZen {
+  padding: 0;
+}
+
+/* On chat routes, let the inner layout take the full main area so
+   the chat list + chat body + right panel can stretch edge-to-edge. */
+.mainFullBleed {
+  padding: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .shell {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+  .main {
+    padding: var(--spacing-md);
+  }
+  .mainFullBleed {
+    padding: 0;
+  }
+}

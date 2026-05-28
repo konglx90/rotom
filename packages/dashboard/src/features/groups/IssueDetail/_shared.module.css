@@ -1,0 +1,47 @@
+/* Event row primitives reused by timeline + collaboration messages */
+.issueEventItem {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.issueEventTime {
+  color: var(--color-slate);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.issueEventContent {
+  color: var(--color-navy);
+  word-break: break-word;
+}
+
+.issueEventContent.output {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  margin-top: 4px;
+}
+
+.issueEventAgent {
+  color: var(--color-slate);
+  font-size: 11px;
+}
+
+/* Section frame reused by shell (artifacts/result) + collaboration messages */
+.artifactsSection {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-color-light);
+}
+
+.artifactsTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-navy);
+  margin-bottom: 6px;
+}

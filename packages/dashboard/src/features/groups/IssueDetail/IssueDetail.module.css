@@ -1,0 +1,56 @@
+.issueDetail {
+  flex: 1;
+  /* 兼顾两种父容器:flex column 时 flex:1 生效;plain block 父(IssueDetailPage)
+     时靠 height:100% 拿到高度。两者都加,谁能用谁用。 */
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.issueBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.issueEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--color-slate);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
+
+.issueDescription {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--color-navy);
+  border-bottom: 1px solid var(--border-color-light);
+}
+
+.artifactItem {
+  font-size: 12px;
+  color: var(--color-info);
+  padding: 2px 0;
+}
+
+.bottomDock {
+  flex: 0 0 auto;
+  background-color: var(--color-surface);
+}
+
+/* IssueDetailPage 单页路由专用:让 dock 贴在视口底,
+   body 由 JS 计算等高 paddingBottom 留出空间。
+   嵌入态(IssuePanel)不加这个 modifier,保持 flex 列内排版。 */
+.bottomDockFixed {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+}

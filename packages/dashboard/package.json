@@ -1,0 +1,29 @@
+{
+  "name": "@a2a-gateway/dashboard",
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Dashboard UI for A2A Gateway - React frontend for monitoring and management",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "monaco-editor": "^0.52.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "6",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.5"
+  },
+  "repository": "git@code.alipay.com:cattery/open-a2a-gateway.git"
+}

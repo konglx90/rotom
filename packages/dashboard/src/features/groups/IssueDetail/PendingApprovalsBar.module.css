@@ -1,0 +1,51 @@
+.pendingApprovalsBar {
+  padding: 8px 14px;
+  border-top: 1px solid rgba(234, 179, 8, 0.4);
+  background: rgba(234, 179, 8, 0.08);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.pendingApprovalsHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ca8a04;
+  margin-bottom: 6px;
+}
+
+.pendingApprovalItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.pendingApprovalKind {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(234, 179, 8, 0.18);
+  color: #ca8a04;
+}
+
+.pendingApprovalSummary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-navy);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+}
+
+.pendingApprovalError {
+  font-size: 11px;
+  color: var(--color-error);
+}

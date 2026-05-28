@@ -1,0 +1,57 @@
+#!/bin/bash
+# rotom-send-with-status - 发送消息并解释投递状态
+#
+# 用法：rotom-send-with-status <groupId> <target> <message>
+# 示例：rotom-send-with-status cda34ffc-c8e9-428b-b9da-2bec7c6039d1 小寿 "@小寿 帮我看看这个问题"
+
+GROUP_ID=$1
+TARGET=$2
+MESSAGE=$3
+
+if [ -z "$GROUP_ID" ] || [ -z "$TARGET" ] || [ -z "$MESSAGE" ]; then
+  echo "用法: rotom-send-with-status <groupId> <target> <message>" >&2
+  exit 1
+fi
+
+# 调用 rotom 并捕获输出
+RESULT=$(rotom group send "$GROUP_ID" "$TARGET" "$MESSAGE" 2>&1)
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+  echo "❌ 命令执行失败: $RESULT" >&2
+  exit $EXIT_CODE
+fi
+
+# 检查是否有 jq 命令
+if ! command -v jq >/dev/null 2>&1; then
+  # 没有 jq，直接返回原始 JSON
+  echo "$RESULT"
+  exit 0
+fi
+
+# 解析 JSON
+DELIVERED=$(echo "$RESULT" | jq -r '.delivered')
+QUEUED=$(echo "$RESULT" | jq -r '.queued')
+ERROR=$(echo "$RESULT" | jq -r '.error // empty')
+REQUEST_ID=$(echo "$RESULT" | jq -r '.requestId // empty')
+
+# 生成人类可读的输出
+echo "$RESULT"  # 原始 JSON（供程序处理）
+echo ""  # 空行分隔
+
+# 解释性输出（供人类阅读）
+echo "📤 → $TARGET: $MESSAGE"
+
+if [ "$DELIVERED" = "true" ]; then
+  echo "✅ 消息已实时送达（对方在线，会立即处理）"
+elif [ "$QUEUED" = "true" ]; then
+  echo "⏳ $TARGET 当前离线，消息已缓存，上线后会收到"
+else
+  if [ -n "$ERROR" ]; then
+    echo "❌ 消息投递失败：$ERROR"
+  else
+    echo "❓ 未知投递状态（请联系管理员检查）"
+  fi
+fi
+
+exit 0

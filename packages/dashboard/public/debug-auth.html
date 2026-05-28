@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Debug - A2A Gateway</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #444;
+            border-radius: 5px;
+        }
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        .info { color: #569cd6; }
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover { background: #1177bb; }
+        pre {
+            background: #2d2d2d;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Dashboard Authentication Debug</h1>
+
+    <div class="section">
+        <h2>1. Check LocalStorage</h2>
+        <button onclick="checkStorage()">Check Storage</button>
+        <pre id="storage-result">Click to check...</pre>
+    </div>
+
+    <div class="section">
+        <h2>2. Test Login</h2>
+        <button onclick="testLogin()">Test Login (admin/admin123)</button>
+        <pre id="login-result">Click to test...</pre>
+    </div>
+
+    <div class="section">
+        <h2>3. Test Authenticated Request</h2>
+        <button onclick="testAuthRequest()">Test /api/agents</button>
+        <pre id="auth-result">Click to test...</pre>
+    </div>
+
+    <div class="section">
+        <h2>4. Manual Token Test</h2>
+        <input type="text" id="manual-token" placeholder="Paste token here" style="width: 80%; padding: 5px;">
+        <button onclick="testManualToken()">Test Token</button>
+        <pre id="manual-result">Paste token and click test...</pre>
+    </div>
+
+    <script>
+        function checkStorage() {
+            const result = document.getElementById('storage-result');
+            const token = localStorage.getItem('auth_token');
+
+            if (token) {
+                // Decode JWT to see payload
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    result.innerHTML = `<span class="success">✓ Token found in localStorage</span>\n\n` +
+                        `Token: ${token.substring(0, 50)}...\n\n` +
+                        `Decoded payload:\n${JSON.stringify(payload, null, 2)}`;
+                } catch (e) {
+                    result.innerHTML = `<span class="error">✗ Invalid token format</span>\n\n` +
+                        `Token: ${token}`;
+                }
+            } else {
+                result.innerHTML = '<span class="error">✗ No token found in localStorage</span>';
+            }
+        }
+
+        async function testLogin() {
+            const result = document.getElementById('login-result');
+            result.innerHTML = '<span class="info">Testing login...</span>';
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: 'admin', password: 'admin123'})
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Store token
+                    localStorage.setItem('auth_token', data.token);
+
+                    const payload = JSON.parse(atob(data.token.split('.')[1]));
+                    result.innerHTML = `<span class="success">✓ Login successful!</span>\n\n` +
+                        `Token: ${data.token.substring(0, 50)}...\n\n` +
+                        `Decoded payload:\n${JSON.stringify(payload, null, 2)}\n\n` +
+                        `Token stored to localStorage`;
+                } else {
+                    result.innerHTML = `<span class="error">✗ Login failed</span>\n\n` +
+                        `Status: ${response.status}\n` +
+                        `Error: ${data.error || 'Unknown error'}`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="error">✗ Network error</span>\n\n${error.message}`;
+            }
+        }
+
+        async function testAuthRequest() {
+            const result = document.getElementById('auth-result');
+            const token = localStorage.getItem('auth_token');
+
+            if (!token) {
+                result.innerHTML = '<span class="error">✗ No token in localStorage. Please login first.</span>';
+                return;
+            }
+
+            result.innerHTML = `<span class="info">Testing /api/agents with token...</span>\n\n` +
+                `Authorization header: Bearer ${token.substring(0, 30)}...`;
+
+            try {
+                const response = await fetch('/api/agents', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const text = await response.text();
+
+                if (response.ok) {
+                    const data = JSON.parse(text);
+                    result.innerHTML = `<span class="success">✓ Authenticated request successful!</span>\n\n` +
+                        `Status: ${response.status}\n\n` +
+                        `Response:\n${JSON.stringify(data, null, 2).substring(0, 500)}...`;
+                } else {
+                    result.innerHTML = `<span class="error">✗ Authenticated request failed</span>\n\n` +
+                        `Status: ${response.status}\n` +
+                        `Response: ${text}`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="error">✗ Network error</span>\n\n${error.message}`;
+            }
+        }
+
+        async function testManualToken() {
+            const result = document.getElementById('manual-result');
+            const token = document.getElementById('manual-token').value.trim();
+
+            if (!token) {
+                result.innerHTML = '<span class="error">✗ Please enter a token</span>';
+                return;
+            }
+
+            result.innerHTML = `<span class="info">Testing token...</span>`;
+
+            try {
+                const response = await fetch('/api/agents', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const text = await response.text();
+
+                if (response.ok) {
+                    result.innerHTML = `<span class="success">✓ Token is valid!</span>\n\n` +
+                        `Status: ${response.status}`;
+                } else {
+                    result.innerHTML = `<span class="error">✗ Token is invalid or expired</span>\n\n` +
+                        `Status: ${response.status}\n` +
+                        `Response: ${text}`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="error">✗ Network error</span>\n\n${error.message}`;
+            }
+        }
+
+        // Auto-check storage on load
+        window.onload = () => checkStorage();
+    </script>
+</body>
+</html>

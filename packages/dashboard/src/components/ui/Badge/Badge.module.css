@@ -1,0 +1,78 @@
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* ── Tone-specific overrides ─────────────────────────────────────── */
+.tone_priority {
+  padding: 2px 6px;
+}
+
+.tone_category {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.tone_id {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.tone_tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  font-weight: 500;
+}
+
+/* ── Colors ──────────────────────────────────────────────────────── */
+.color_blue {
+  background: rgba(14, 165, 233, 0.15);
+  color: #0ea5e9;
+}
+
+.color_amber {
+  background: rgba(234, 179, 8, 0.15);
+  color: #ca8a04;
+}
+
+.color_green {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+.color_red {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+.color_slate {
+  background: rgba(100, 116, 139, 0.15);
+  color: #64748b;
+}
+
+.color_orange {
+  background: rgba(249, 115, 22, 0.1);
+  color: #f97316;
+}
+
+.color_purple {
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+}
+
+.color_pink {
+  background: rgba(236, 72, 153, 0.12);
+  color: #ec4899;
+}
+
+/* tone-specific tweaks for category=system (dashed border, was in ChatArea) */
+.tone_category.color_slate {
+  border: 1px dashed rgba(100, 116, 139, 0.5);
+}

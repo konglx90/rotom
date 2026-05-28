@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+*.bak
+.idea/
+data/
+SESSION-HANDOFF-*.md
+mesh-data/
+.node
+package-lock.json
+src/executor/executor.config.json
