@@ -719,6 +719,11 @@ export class MeshDb {
       .run(workingDir, id);
   }
 
+  updateGroupName(id: string, name: string): void {
+    this.db.prepare("UPDATE groups SET name = ? WHERE id = ?")
+      .run(name, id);
+  }
+
   /**
    * Backfill working_dir on legacy groups (NULL or empty). Caller supplies the
    * `compute` fn — kept out of db.ts so this module stays free of filesystem
@@ -991,8 +996,8 @@ export class MeshDb {
   }): void {
     this.db.prepare(`
       INSERT INTO issues (id, group_id, title, type, status, collaboration_goal,
-        max_rounds, current_round, participants, owner, created_by)
-      VALUES (?, ?, ?, 'collaboration', 'in_progress', ?, ?, 1, ?, ?, ?)
+        max_rounds, current_round, participants, owner, created_by, approval_policy)
+      VALUES (?, ?, ?, 'collaboration', 'in_progress', ?, ?, 1, ?, ?, ?, 'rw_allow')
     `).run(
       data.id, data.groupId, data.title, data.collaborationGoal,
       data.maxRounds, JSON.stringify(data.participants),

@@ -53,6 +53,47 @@
   margin-top: 0.5rem;
 }
 
+.previewSection {
+  margin-top: 1.25rem;
+}
+
+.divider {
+  position: relative;
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.divider span {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.75rem;
+  background: rgba(255, 255, 255, 0.95);
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.previewButton {
+  width: 100%;
+}
+
+.previewHint {
+  color: #6b7280;
+  font-size: 0.75rem;
+  text-align: center;
+  margin: 0.5rem 0 0;
+  line-height: 1.4;
+}
+
 .footer {
   text-align: center;
   padding-top: 1.5rem;

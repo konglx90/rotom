@@ -5,7 +5,7 @@ import { Input } from '../../components/ui/Input/Input'
 import styles from './LoginForm.module.css'
 
 export function LoginForm() {
-  const { login, loading, error } = useAuth()
+  const { login, enterPreview, loading, error } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
@@ -13,6 +13,14 @@ export function LoginForm() {
     e.preventDefault()
     try {
       await login(username, password)
+    } catch (err) {
+      // Error is handled by AuthContext
+    }
+  }
+
+  const handlePreview = async () => {
+    try {
+      await enterPreview()
     } catch (err) {
       // Error is handled by AuthContext
     }
@@ -59,6 +67,23 @@ export function LoginForm() {
             {loading ? '登录中...' : '登录'}
           </Button>
         </form>
+
+        <div className={styles.previewSection}>
+          <div className={styles.divider}><span>或</span></div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            disabled={loading}
+            onClick={handlePreview}
+            className={styles.previewButton}
+          >
+            {loading ? '进入中...' : '进入预览模式 (只读)'}
+          </Button>
+          <p className={styles.previewHint}>
+            无需登录,无需 Agent token,可浏览全部数据但不能写入。
+          </p>
+        </div>
 
         <div className={styles.footer}>
           <p>默认凭证: admin / admin123</p>

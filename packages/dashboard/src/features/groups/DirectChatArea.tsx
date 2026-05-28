@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { Avatar } from '../../components/ui/Avatar'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
+import { useReadOnly, READ_ONLY_TITLE } from '../../hooks/useReadOnly'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { ConnectionBar } from './ConnectionBar'
@@ -34,6 +35,7 @@ export function DirectChatArea({
   workingDir,
   onUpdateWorkingDir,
 }: DirectChatAreaProps) {
+  const readOnly = useReadOnly()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState<string>('')
@@ -93,8 +95,10 @@ export function DirectChatArea({
           )}
         </div>
         <div className={styles.chatHeaderActions}>
-          <Button variant="ghost" size="sm" onClick={onNewDmConversation}>新对话</Button>
-          <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig} title="设置">⚙️</Button>
+          <Button variant="ghost" size="sm" onClick={onNewDmConversation}
+            disabled={readOnly} title={readOnly ? READ_ONLY_TITLE : undefined}>新对话</Button>
+          <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig}
+            disabled={readOnly} title={readOnly ? READ_ONLY_TITLE : '设置'}>⚙️</Button>
         </div>
       </div>
 
@@ -157,11 +161,13 @@ export function DirectChatArea({
               e.currentTarget.style.height = 'auto';
             }
           }}
-          placeholder={connectionStatus === 'connected' ? `向 ${directTarget} 发送消息... (Shift+Enter 换行)` : '等待连接...'}
-          disabled={connectionStatus !== 'connected'}
+          placeholder={readOnly ? '预览模式下不可发送消息' : (connectionStatus === 'connected' ? `向 ${directTarget} 发送消息... (Shift+Enter 换行)` : '等待连接...')}
+          disabled={readOnly || connectionStatus !== 'connected'}
+          title={readOnly ? READ_ONLY_TITLE : undefined}
           className={styles.messageInput} />
         <button onClick={handleSend}
-          disabled={!message.trim() || connectionStatus !== 'connected'}
+          disabled={readOnly || !message.trim() || connectionStatus !== 'connected'}
+          title={readOnly ? READ_ONLY_TITLE : undefined}
           className={styles.sendBtn}>发送</button>
       </div>
     </>

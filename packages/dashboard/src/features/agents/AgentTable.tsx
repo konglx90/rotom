@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Agent } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { useReadOnly, READ_ONLY_TITLE } from '../../hooks/useReadOnly'
 import styles from './AgentTable.module.css'
 
 interface AgentTableProps {
@@ -11,6 +12,7 @@ interface AgentTableProps {
 }
 
 export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps) {
+  const readOnly = useReadOnly()
   const [sortField, setSortField] = useState<keyof Agent>('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
 
@@ -102,12 +104,14 @@ export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps)
                   <td>
                     <div className={styles.actions}>
                     {onEditProfile && (
-                      <Button variant="secondary" size="sm" onClick={() => onEditProfile(agent)}>
+                      <Button variant="secondary" size="sm" onClick={() => onEditProfile(agent)}
+                        disabled={readOnly} title={readOnly ? READ_ONLY_TITLE : undefined}>
                         编辑
                       </Button>
                     )}
                     {onDelete && (
-                      <Button variant="danger" outline size="sm" onClick={() => onDelete(agent)}>
+                      <Button variant="danger" outline size="sm" onClick={() => onDelete(agent)}
+                        disabled={readOnly} title={readOnly ? READ_ONLY_TITLE : undefined}>
                         删除
                       </Button>
                     )}

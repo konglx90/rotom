@@ -1,4 +1,5 @@
 import { Button } from '../../components/ui/Button'
+import { useReadOnly, READ_ONLY_TITLE } from '../../hooks/useReadOnly'
 import styles from './FilterBar.module.css'
 
 interface FilterBarProps {
@@ -20,6 +21,7 @@ export function FilterBar({
   onViewModeChange,
   onAddAgent,
 }: FilterBarProps) {
+  const readOnly = useReadOnly()
   return (
     <div className={styles.container}>
       {/* Status Filters */}
@@ -81,7 +83,8 @@ export function FilterBar({
             variant="primary"
             size="sm"
             onClick={onAddAgent}
-            title="添加员工"
+            disabled={readOnly}
+            title={readOnly ? READ_ONLY_TITLE : '添加员工'}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 0a8 8 0 100 16A8 8 0 000-16zM4 8a1 1 0 011-1h2V5a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 010-2zm4 0a1 1 0 011 1v2a1 1 0 01-1 1H8a1 1 0 010-2zm3 1a1 1 0 100-2 1 1 0 000 2z"/>

@@ -60,6 +60,18 @@ export class ApiClient {
         throw new Error('Authentication failed. Please login again.')
       }
 
+      // Handle 403 in preview mode: writes are rejected by the server even
+      // though the token is valid. UI should mark write controls disabled,
+      // but this is the safety net for any control we missed.
+      if (response.status === 403) {
+        let msg = '预览模式下无法执行写操作'
+        try {
+          const data = JSON.parse(await response.clone().text()) as { error?: string }
+          if (data?.error) msg = data.error
+        } catch { /* ignore */ }
+        throw new Error(msg)
+      }
+
       // Safely parse JSON response
       let data: T | undefined
       const text = await response.text()

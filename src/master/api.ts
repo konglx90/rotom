@@ -145,6 +145,19 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
     res.json({ token });
   });
 
+  // ── Preview-mode login (no creds, read-only JWT) ────────────────────────
+  // 任何访问者都能拿到一个 sub=preview 的 JWT,凭它走 auth 中间件的只读分支:
+  // GET 放行,写方法 403。1d 过期,不刷新——预览会话不该长期持有。
+  apiRouter.post("/preview-login", (_req: Request, res: Response) => {
+    const token = jwt.sign(
+      { sub: "preview" },
+      jwtSecret,
+      { expiresIn: "1d", algorithm: JWT_ALGORITHM },
+    );
+    log.info("Preview session issued");
+    res.json({ token });
+  });
+
   // ── Dashboard JWT auth middleware ───────────────────────────────────────
   apiRouter.use((req: Request, res: Response, next: NextFunction) => {
     // Skip auth for OPTIONS requests (CORS preflight)
@@ -164,6 +177,13 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
     const token = header.slice(7);
     try {
       const payload = jwt.verify(token, jwtSecret, { algorithms: [JWT_ALGORITHM] }) as Record<string, unknown>;
+      // Preview session: 只允许 GET。写方法直接 403,前端 UI 也会 disable 写控件,
+      // 这里是兜底——遗漏的写按钮即使被点中也会被拦下。
+      if (payload.sub === "preview") {
+        if (req.method === "GET") { next(); return; }
+        res.status(403).json({ error: "Preview mode is read-only" });
+        return;
+      }
       if (payload.sub !== "dashboard") {
         res.status(401).json({ error: "Invalid token" });
         return;
@@ -785,33 +805,39 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(404).json({ error: "Group not found" });
       return;
     }
-    const { workingDir } = req.body;
-    if (workingDir === undefined) {
+    const { name, workingDir } = req.body;
+    if (name !== undefined && name !== null) {
+      db.updateGroupName(req.params.id, String(name));
+      log.info(`Group ${req.params.id} name → ${name}`);
+    }
+    if (workingDir === undefined && name === undefined) {
       res.status(400).json({ error: "no updatable fields" });
       return;
     }
-    let next: string;
-    if (typeof workingDir === "string" && workingDir.trim()) {
-      const v = validateWorkingDir(workingDir);
-      if (!v.ok) {
-        res.status(400).json({ error: v.error });
-        return;
+    if (workingDir !== undefined) {
+      let next: string;
+      if (typeof workingDir === "string" && workingDir.trim()) {
+        const v = validateWorkingDir(workingDir);
+        if (!v.ok) {
+          res.status(400).json({ error: v.error });
+          return;
+        }
+        next = v.path;
+      } else {
+        // Empty / null → reset to the per-group default rather than clearing,
+        // so every group always has a concrete cwd.
+        next = defaultGroupWorkingDir(req.params.id);
+        try {
+          ensureDir(next);
+        } catch (err: any) {
+          res.status(500).json({ error: `创建默认工作目录失败: ${next} (${err?.code ?? err?.message ?? "unknown"})` });
+          return;
+        }
       }
-      next = v.path;
-    } else {
-      // Empty / null → reset to the per-group default rather than clearing,
-      // so every group always has a concrete cwd.
-      next = defaultGroupWorkingDir(req.params.id);
-      try {
-        ensureDir(next);
-      } catch (err: any) {
-        res.status(500).json({ error: `创建默认工作目录失败: ${next} (${err?.code ?? err?.message ?? "unknown"})` });
-        return;
-      }
+      db.updateGroupWorkingDir(req.params.id, next);
+      log.info(`Group ${req.params.id} working_dir → ${next}`);
     }
-    db.updateGroupWorkingDir(req.params.id, next);
-    log.info(`Group ${req.params.id} working_dir → ${next}`);
-    res.json({ ok: true, working_dir: next });
+    res.json({ ok: true });
   });
 
   apiRouter.get("/groups/:id", (req, res) => {

@@ -4,6 +4,7 @@ import { issuesApi } from '../../../api/issues'
 import type { IssueEvent } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
+import { useReadOnly, READ_ONLY_TITLE } from '../../../hooks/useReadOnly'
 import styles from './ApprovalCard.module.css'
 import { APPROVAL_STATUS_LABEL, detectLanguage, type DiffData } from './utils'
 
@@ -28,6 +29,7 @@ const OTHER_OPTION_LABEL = '其他'
 // resolved the card collapses to a status badge so the timeline keeps reading
 // chronologically.
 export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) {
+  const readOnly = useReadOnly()
   const [loading, setLoading] = useState<'accept' | 'deny' | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Two-stage deny: clicking Deny first opens a feedback textarea, then a
@@ -275,7 +277,8 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
           <Button
             variant="primary"
             size="sm"
-            disabled={!askReady || askSubmitting}
+            disabled={readOnly || !askReady || askSubmitting}
+            title={readOnly ? READ_ONLY_TITLE : undefined}
             onClick={submitAsk}
           >
             {askSubmitting ? '提交中…' : '提交答复'}
@@ -287,7 +290,8 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
           <Button
             variant="success"
             size="sm"
-            disabled={loading !== null}
+            disabled={readOnly || loading !== null}
+            title={readOnly ? READ_ONLY_TITLE : undefined}
             onClick={() => resolve('accept')}
           >
             {loading === 'accept' ? '处理中…' : 'Accept'}
@@ -296,7 +300,8 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
             variant="danger"
             outline
             size="sm"
-            disabled={loading !== null}
+            disabled={readOnly || loading !== null}
+            title={readOnly ? READ_ONLY_TITLE : undefined}
             onClick={() => setDenyStage('composing')}
           >
             Deny
@@ -317,7 +322,8 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
             variant="danger"
             outline
             size="sm"
-            disabled={loading !== null}
+            disabled={readOnly || loading !== null}
+            title={readOnly ? READ_ONLY_TITLE : undefined}
             onClick={() => resolve('deny', denyFeedback)}
           >
             {loading === 'deny' ? '处理中…' : '确认拒绝'}

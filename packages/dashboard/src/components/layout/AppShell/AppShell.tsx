@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useZenMode } from '../../../context/ZenModeContext'
+import { useAuth } from '../../../context/AuthContext'
 import { AppSidebar } from '../AppSidebar/AppSidebar'
 import styles from './AppShell.module.css'
 
@@ -13,6 +14,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const { zenMode } = useZenMode()
+  const { isPreview, logout } = useAuth()
   const location = useLocation()
   const isFullBleed = location.pathname.startsWith('/dashboard/groups')
   const hideSidebar = /^\/dashboard\/groups\/[^/]+\/issues-single(\/|$)/.test(
@@ -51,14 +53,25 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className={styles.shell}>
-      {!hideSidebar && <AppSidebar width={sidebarWidth} onWidthChange={handleWidthChange} />}
-      <main
-        className={`${styles.main} ${zenMode ? styles.mainZen : ''} ${
-          isFullBleed ? styles.mainFullBleed : ''
-        }`}
-      >
-        {children}
-      </main>
+      {isPreview && (
+        <div className={styles.previewBanner} role="status">
+          <span className={styles.previewBadge}>预览模式</span>
+          <span className={styles.previewText}>只读会话:可浏览所有数据,但写操作已禁用。</span>
+          <button type="button" className={styles.previewExit} onClick={logout}>
+            退出预览
+          </button>
+        </div>
+      )}
+      <div className={styles.shellInner}>
+        {!hideSidebar && <AppSidebar width={sidebarWidth} onWidthChange={handleWidthChange} />}
+        <main
+          className={`${styles.main} ${zenMode ? styles.mainZen : ''} ${
+            isFullBleed ? styles.mainFullBleed : ''
+          }`}
+        >
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

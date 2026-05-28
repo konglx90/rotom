@@ -13,6 +13,14 @@ export const authApi = {
   },
 
   /**
+   * Enter preview mode (no credentials). Returns a read-only JWT —
+   * the server's auth middleware accepts it for GET only and 403s on writes.
+   */
+  async previewLogin(): Promise<LoginResponse> {
+    return api.post<LoginResponse>('/preview-login')
+  },
+
+  /**
    * Change current user's password
    */
   async changePassword(oldPassword: string, newPassword: string): Promise<{ ok: boolean }> {
