@@ -112,7 +112,7 @@ export function TopologyView({ agents, statusFilter, domainFilter, onAgentClick 
     ctx.scale(dpr, dpr);
 
     // Build topology
-    buildTopology(canvasEl, W, H);
+    buildTopology(canvasEl, ctx, W, H);
 
     // Start animation
     const state = topoStateRef.current;
@@ -130,7 +130,7 @@ export function TopologyView({ agents, statusFilter, domainFilter, onAgentClick 
     };
   }, [filteredAgents, deptNames, isFullscreen]);
 
-  function buildTopology(canvasEl: HTMLCanvasElement, W: number, H: number) {
+  function buildTopology(canvasEl: HTMLCanvasElement, ctx: CanvasRenderingContext2D, W: number, H: number) {
     const state = topoStateRef.current;
     const deptCount = deptNames.length;
     const totalNodes = filteredAgents.length;
@@ -139,8 +139,24 @@ export function TopologyView({ agents, statusFilter, domainFilter, onAgentClick 
 
     // Adaptive node size
     const nodeR = totalNodes > 120 ? 5 : totalNodes > 60 ? 6 : totalNodes > 30 ? 7 : totalNodes > 12 ? 8 : 10;
-    const nodeSp = nodeR * 2.8;
+    const baseSp = nodeR * 2.8;
     const showNames = totalNodes <= 20;
+
+    // When names are shown, expand spacing so labels don't overlap each other or next-row nodes
+    let nodeSp = baseSp;
+    let rowSpacing: number | undefined;
+    if (showNames) {
+      ctx.save();
+      ctx.font = '500 10px Inter, system-ui';
+      let maxNameW = 0;
+      for (const a of filteredAgents) {
+        const w = ctx.measureText(a.name).width;
+        if (w > maxNameW) maxNameW = w;
+      }
+      ctx.restore();
+      nodeSp = Math.max(baseSp, maxNameW + 14);
+      rowSpacing = nodeR * 2 + 32; // node diameter + label height + breathing room
+    }
 
     // Master hub
     const masterR = 30;
@@ -163,8 +179,8 @@ export function TopologyView({ agents, statusFilter, domainFilter, onAgentClick 
       const angle = deptCount === 1 ? 0 : deptCount === 2 ? (i === 0 ? Math.PI : 0) : (-Math.PI / 2 + (i / deptCount) * Math.PI * 2);
 
       // Hex pack positions
-      const pos0 = hexPack(members.length, 0, 0, nodeSp);
-      const clR = clusterRadius(pos0, 0, 0, nodeR + 18);
+      const pos0 = hexPack(members.length, 0, 0, nodeSp, rowSpacing);
+      const clR = clusterRadius(pos0, 0, 0, nodeR + (showNames ? 26 : 18));
       const thisOrbitR = Math.max(clR + masterR + 65, 150);
       const clCx = vcx + Math.cos(angle) * thisOrbitR;
       const clCy = vcy + Math.sin(angle) * thisOrbitR;
@@ -470,7 +486,7 @@ export function TopologyView({ agents, statusFilter, domainFilter, onAgentClick 
       for (let i = 1; i < state.nodes.length; i++) {
         const nd = state.nodes[i];
         if (nd.isMaster) continue;
-        ctx.fillStyle = nd.status === 'online' ? '#d1fae5' : '#8492a6';
+        ctx.fillStyle = nd.status === 'online' ? '#15803d' : '#475569';
         ctx.fillText(nd.name, nd.x, nd.y + nd.r + 12);
       }
     }
@@ -591,12 +607,12 @@ export function TopologyView({ agents, statusFilter, domainFilter, onAgentClick 
     }
   }
 
-  function hexPack(count: number, cx: number, cy: number, sp: number) {
+  function hexPack(count: number, cx: number, cy: number, sp: number, rowSpacingArg?: number) {
     if (!count) return [];
     if (count === 1) return [{ x: cx, y: cy }];
     const cols = Math.ceil(Math.sqrt(count * 1.15));
     const rows = Math.ceil(count / cols);
-    const rowH = sp * 0.866;
+    const rowH = rowSpacingArg ?? sp * 0.866;
     const res: { x: number; y: number }[] = [];
     let idx = 0;
     for (let r = 0; r < rows && idx < count; r++) {
