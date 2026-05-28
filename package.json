@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc && cp src/executor/claude-code-hook.cjs dist/executor/claude-code-hook.cjs",
-    "build:master": "tsc && cp -r src/master/dashboard dist/master/ && cp src/executor/claude-code-hook.cjs dist/executor/claude-code-hook.cjs",
+    "build:master": "tsc && pnpm dashboard:build && rm -rf dist/master/dashboard && cp -r packages/dashboard/dist/src/master/dashboard dist/master/dashboard && cp src/executor/claude-code-hook.cjs dist/executor/claude-code-hook.cjs",
     "master": "bash bin/mesh-master.sh start",
     "master:start": "bash bin/mesh-master.sh start --daemon",
     "master:stop": "bash bin/mesh-master.sh stop",

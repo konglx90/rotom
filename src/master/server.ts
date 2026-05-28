@@ -108,15 +108,20 @@ async function main(): Promise<void> {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
 
-  // Dashboard (static files — try dist/src/master, then dist/master, then source)
-  let dashboardDir = path.resolve(__dirname, "../src/master/dashboard");
+  // Dashboard (static files)
+  // Prod (running from dist/master): build:master copies React dashboard
+  // build output to dist/master/dashboard.
+  // Dev (running src/master via tsx): fall back to packages/dashboard build
+  // output — run `pnpm dashboard:build` first.
+  let dashboardDir = path.resolve(__dirname, "dashboard");
   if (!fs.existsSync(dashboardDir)) {
-    dashboardDir = path.resolve(__dirname, "dashboard");
+    dashboardDir = path.resolve(__dirname, "../../packages/dashboard/dist/src/master/dashboard");
   }
   if (!fs.existsSync(dashboardDir)) {
-    dashboardDir = path.resolve(__dirname, "../../../src/master/dashboard");
+    log.warn(`Dashboard files not found. Run \`pnpm dashboard:build\` then retry. Looked in: ${dashboardDir}`);
+  } else {
+    log.info(`Dashboard files: ${dashboardDir}`);
   }
-  log.info(`Dashboard files: ${dashboardDir}`);
   app.use("/dashboard", express.static(dashboardDir));
   // SPA fallback — serve index.html for all /dashboard/* routes (client-side routing)
   app.get("/dashboard/*", (_req, res) => {

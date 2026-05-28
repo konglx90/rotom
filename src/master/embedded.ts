@@ -107,9 +107,13 @@ export async function startEmbeddedMaster(
   app.use("/api", createApi(db, auth, hub, router, config.port));
 
   // Dashboard static files
+  // Prod (running from dist/master): build:master copies React dashboard
+  // build output to dist/master/dashboard.
+  // Dev (running src/master via tsx): fall back to packages/dashboard build
+  // output — run `pnpm dashboard:build` first.
   let dashboardDir = path.resolve(__dirname, "dashboard");
   if (!fs.existsSync(dashboardDir)) {
-    dashboardDir = path.resolve(__dirname, "../../../src/master/dashboard");
+    dashboardDir = path.resolve(__dirname, "../../packages/dashboard/dist/src/master/dashboard");
   }
   if (fs.existsSync(dashboardDir)) {
     app.use("/dashboard", express.static(dashboardDir));

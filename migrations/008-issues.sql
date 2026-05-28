@@ -1,4 +1,4 @@
--- Issues: code tasks scoped to groups, executed by 稳交付组 Agents
+-- Issues: code tasks scoped to groups, executed by Agent Agents
 CREATE TABLE IF NOT EXISTS issues (
   id            TEXT PRIMARY KEY,
   group_id      TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS issues (
   status        TEXT NOT NULL DEFAULT 'open',        -- open|in_progress|completed|failed|cancelled
   priority      TEXT NOT NULL DEFAULT 'medium',      -- low|medium|high|critical
   created_by    TEXT NOT NULL,                        -- agent_name who created the issue
-  assigned_to   TEXT,                                 -- 稳交付组 agent_name
+  assigned_to   TEXT,                                 -- Agent agent_name
   working_dir   TEXT,                                 -- directory where the code agent operates
   result        TEXT,                                 -- final result/output text
   error_message TEXT,

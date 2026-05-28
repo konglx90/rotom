@@ -30,17 +30,18 @@ Digital Employee Mesh 群聊 (group chat) 子系统的架构总结。
 │                                                                         │
 │        │  每条 WS 连接 = 一个 Client，需 token 认证                      │
 │        │                                                                │
-│   ┌────┴──────────────┐  ┌──────────────────────┐                      │
-│   │                    │  │                      │   Client 有两种:      │
-│   │  OpenClaw Client   │  │  人工 Client          │                      │
-│   │  (数字员工/Agent)    │  │  (人，通过 WS 接入)   │   都需要向 Master     │
-│   │                    │  │                      │   申请 token          │
-│   │  ┌──────────────┐  │  │  ┌──────────────┐   │                      │
-│   │  │ OpenClaw SDK │  │  │  │  人工聊天界面  │   │                      │
-│   │  │ LLM runtime  │  │  │  │              │   │                      │
-│   │  └──────────────┘  │  │  └──────────────┘   │                      │
-│   │                    │  │                      │                      │
-│   └────────────────────┘  └──────────────────────┘                      │
+│   ┌──────────────────────┐  ┌──────────────────────┐                   │
+│   │                      │  │                      │   Client 有两种:   │
+│   │  Executor (Agent)    │  │  人工 Client          │                   │
+│   │  (数字员工服务进程)    │  │  (人, Dashboard/WS)  │  都需要向 Master    │
+│   │                      │  │                      │  申请 token         │
+│   │  ┌────────────────┐  │  │  ┌──────────────┐   │                   │
+│   │  │ ExecutorWorker  │  │  │  │  Dashboard / │   │                   │
+│   │  │ 管理多个 Worker  │  │  │  │ 人工聊天界面  │   │                   │
+│   │  │ CLI 后端驱动     │  │  │  │              │   │                   │
+│   │  └────────────────┘  │  │  └──────────────┘   │                   │
+│   │                      │  │                      │                   │
+│   └──────────────────────┘  └──────────────────────┘                   │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 
@@ -259,8 +260,8 @@ sequenceDiagram
   participant R as Router
   participant DB as SQLite
   participant SA as Agent A socket
-  participant SC as Agent cx socket
-  participant LC as Agent cx (LLM via OpenClaw)
+  participant EW as ExecutorWorker (Agent cx)
+  participant CLI as CLI backend (claude/codex)
 
   LA->>ROT: bash: rotom group send G cx "@cx ..."
   ROT->>H: POST /api/cli/groups/G/send<br/>Authorization: Bearer mesh_xxx
@@ -269,27 +270,23 @@ sequenceDiagram
   R->>R: pendingRequests[reqId] = {fromA, conversation:{group,G}}
   R-->>H: targetAgentId = cx
   H->>DB: addGroupMessage(G, sender=A, content, mentions=[cx])
-  H->>SC: a2a_message {conversation:{group,G}, routeType:exact}
+  H->>EW: a2a_message {conversation:{group,G}, routeType:exact}
   H-->>ROT: { requestId, delivered:true }
   ROT-->>LA: stdout JSON
 
-  Note over SC: agent-mode.ts:178<br/>群消息门槛: @我自己 才 dispatch
-  SC->>LC: inbound-dispatcher 注入<br/>"[群消息 context: groupId=G ...]"
-  Note over LC: sessionKey = group_G<br/>(分群会话隔离)
-  LC-->>SC: reply text (流式或一次性)
+  Note over EW: worker.ts:338<br/>群消息门槛: @mention 才回复
+  EW->>EW: injectGroupContext()<br/>注入群 metadata + 活跃 issue
+  Note over EW: sessionStore.get(cliTool, group_G)<br/>恢复 CLI 会话上下文
+  EW->>CLI: execute(prompt, workingDir, sessionId)
+  CLI-->>EW: streamed output (chunks)
+  EW-->>EW: sendChatChunk(requestId, delta)
 
-  SC->>H: a2a_reply / reply_end (reqId)
+  EW->>H: a2a_reply / reply_end (reqId)
   H->>R: resolveReplyTarget(reqId) → A
   H->>R: getConversation(reqId) → {group,G}
   H->>DB: addGroupMessage(G, sender=cx, content)
   H->>SA: a2a_message {routeType:reply, conversation:{group,G}}
   Note right of H: 仅发回 A 的 WS 长连接,<br/>不广播给群其他成员;<br/>A 的 LLM 后续可用 rotom group history 拉取
-```
-
-## 5. Issue 时序
-
-**场景**：Dashboard / rotom CLI 创建 issue → Agent 认领并执行 → Dashboard 实时查看进展。
-
 ```mermaid
 sequenceDiagram
   autonumber
@@ -456,7 +453,6 @@ codex "prompt text"    # 或 aider / 其他 CLI 工具
 
 Agent 的 master URL + mesh token 来自注册的配置文件：
 
-- `add-openclaw <name> <openclaw.json>`：从 `channels['a2a-gateway'].{master,token,name}` 读取
 - `add-executor <name> <executor.config.json>`：从 `workers[]` 中匹配 `name`
 
 ### 常用命令
@@ -501,7 +497,7 @@ LLM (Bash) → rotom issue create g-001 --title "..." --description "..."
 4. **群感知靠 prompt 注入**，不是协议字段：`inbound-dispatcher.ts:142` 显式告知 LLM groupId/groupName/自身名字。
 5. **会话隔离**：群消息 sessionKey = `group_<groupId>`，私聊用对方名字。
 6. **群消息可见性 ≠ 广播**：只有被 @ 的目标 agent 实时收到；其他成员通过 `rotom group history` 或 dashboard 拉取。
-7. **群回复仅路由给发起者**：被 @ 的 Agent 回复时，Master 只将回复路由给原始发送者，不广播给群内其他 Agent。原因：避免所有 Agent（尤其是 OpenClaw 类）被动处理无关消息、浪费 token。Dashboard 拉群消息历史时回复全量可见（DB 已持久化），因此人看群聊不丢信息，只是 Agent 端不实时推送。
+7. **群回复仅路由给发起者**：被 @ 的 Agent 回复时，Master 只将回复路由给原始发送者，不广播给群内其他 Agent。原因：避免所有 Agent（尤其是非必要不相关的）被动处理无关消息、浪费 token。Dashboard 拉群消息历史时回复全量可见（DB 已持久化），因此人看群聊不丢信息，只是 Agent 端不实时推送。
 8. **去重 + 限流**：`MessageDedup` (requestId) + 每 agent 滑窗限流。
 
 ## 9. 已知限制
@@ -515,15 +511,15 @@ LLM (Bash) → rotom issue create g-001 --title "..." --description "..."
 
 ### Agent 群思考过程展示
 
-在 Dashboard 中，以群为单位展示某个 OpenClaw Agent 的完整活动记录，包括：群内发言/回复、OpenClaw 内部的 chat 内容（LLM 的推理过程）、工具调用（tool call）及其结果。类比该 Agent 在此群的完整"思考过程"。
+在 Dashboard 中，以群为单位展示某个 Agent 的完整活动记录，包括：群内发言/回复、CLI 后端的 chat 内容（LLM 的推理过程）、工具调用（tool call）及其结果。类比该 Agent 在此群的完整"思考过程"。
 
 **场景**：运维人员在 Dashboard 里点击群 G → 选择 Agent "cx" → 查看 cx 在此群的完整活动时间线，包括它说了什么、想了什么、调了什么工具，了解它如何分析问题并做出决策。
 
 **数据来源**：
 - **群消息**（已有）：`group_messages` 按 `group_id + sender` 过滤
-- **OpenClaw 会话记录**：直接读取 OpenClaw 本地 session 文件 `{OPENCLAW_HOME}/agents/{agentId}/sessions/session_{sessionKey}.json`，群场景下 sessionKey 为 `group_{groupId}`，文件内包含完整的 chat 历史（system/user/assistant 交替）、tool_call 及 tool_result。无需 Agent 主动上报，也无需新增存储。
+- **Executor 会话记录**：Executor 的 `SessionStore`（`~/.rotom/sessions.json`）持久化每个 CLI 后端的群会话 sessionId，CLI 后端（如 Claude Code）的本地 session 文件内包含完整的 chat 历史。无需 Agent 主动上报，也无需新增存储。
 
 **实现要点**：
-- **REST API**：新增 `GET /api/agents/:name/groups/:groupId/session`，Master 读取对应 Agent 节点上的 session JSON 文件并返回
-- **跨节点问题**：Agent 与 Master 可能不在同一机器，需通过 WS 让 Agent 端读取本地 session 文件后回传，或在 Agent 侧暴露 HTTP 端点供 Master 拉取
+- **REST API**：新增 `GET /api/agents/:name/groups/:groupId/session`，通过 WS 让 ExecutorWorker 读取本地 session 文件后回传
+- **跨节点问题**：Agent（Executor）与 Master 可能不在同一机器，需通过 WS 让 Executor 端读取本地 session 文件后回传，或在 Executor 侧暴露 HTTP 端点供 Master 拉取
 - **Dashboard**：群聊视图中新增 "Agent 思考过程" 面板，以时间线形式展示 chat → tool_call → tool_result → 最终回复的全链路
