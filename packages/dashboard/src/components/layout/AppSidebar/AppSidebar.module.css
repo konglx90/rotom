@@ -317,6 +317,30 @@
   transform: scale(1.1);
 }
 
+.showMoreBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% - 16px);
+  margin: 4px 8px 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color-light);
+  background: transparent;
+  color: var(--color-warm-dark);
+  cursor: pointer;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out);
+}
+
+.showMoreBtn:hover {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+}
+
+
 .directSubtext {
   font-size: 11px;
   color: var(--color-gray);

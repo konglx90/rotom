@@ -41,6 +41,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   } = useChatContext()
 
   const [dragging, setDragging] = useState(false)
+  const [showAllDirect, setShowAllDirect] = useState(false)
   const startStateRef = useRef<{ x: number; w: number } | null>(null)
 
   const selectedGroupId = urlGroupId || ''
@@ -156,9 +157,9 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
               </div>
               {onlineAgents.length === 0 ? (
                 <div className={styles.hint}>暂无在线 Agent</div>
-              ) : (
+              ) : (<>
                 <ul className={styles.directList}>
-                  {onlineAgents.map((agent) => {
+                  {(showAllDirect ? onlineAgents : onlineAgents.slice(0, 3)).map((agent) => {
                     const conversations = getDmGroupsForTarget(agent.name)
                     const isExpanded = directTarget === agent.name
                     return (
@@ -223,7 +224,15 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                     )
                   })}
                 </ul>
-              )}
+                {onlineAgents.length > 3 && (
+                  <button
+                    className={styles.showMoreBtn}
+                    onClick={() => setShowAllDirect(!showAllDirect)}
+                  >
+                    {showAllDirect ? "收起" : "展开全部 (" + onlineAgents.length + ")"}
+                  </button>
+                )}
+              </>)}
             </div>
 
             <div className={styles.divider} />
