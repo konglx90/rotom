@@ -26,6 +26,7 @@
 
 .table {
   width: 100%;
+  min-width: 880px;
   border-collapse: collapse;
 }
 
@@ -62,6 +63,11 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--color-ink);
+  white-space: nowrap;
+}
+
+.table td.detailCell {
+  white-space: normal;
 }
 
 .table tbody tr {
