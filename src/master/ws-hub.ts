@@ -310,8 +310,18 @@ export class WSHub {
       }
 
       // ── Rate limit check ─────────────────────────────────────────────
+      // 流式 chunk（chat reply 的 a2a_reply_chunk / a2a_reply_end、issue
+      // 进度的 issue_update）是 session 内的中间产物，只会透传给原始 target，
+      // 不会扇出给其他 agent，不该按 a2a_send 那种"防 spam"逻辑限流。新版
+      // hermes 把思考流式拆得很细，一次回答可能产生上百个 chunk，套用 60/min
+      // 直接被掐断，前端表现就是"思考完就卡住"。
       const conn = this.connections.get(agentId);
-      if (conn && msg.type !== "heartbeat") {
+      const rateLimitExempt =
+        msg.type === "heartbeat" ||
+        msg.type === "a2a_reply_chunk" ||
+        msg.type === "a2a_reply_end" ||
+        msg.type === "issue_update";
+      if (conn && !rateLimitExempt) {
         const now = Date.now();
         conn.messageTimestamps = conn.messageTimestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
         if (conn.messageTimestamps.length >= RATE_LIMIT_MAX) {
@@ -473,7 +483,6 @@ export class WSHub {
 
       // ── Streaming reply chunk ──────────────────────────────────────────
       if (msg.type === "a2a_reply_chunk") {
-        this.logger.info(`[mesh] Received a2a_reply_chunk for requestId=${msg.requestId}`);
         const targetId = this.router.resolveReplyTarget(msg.requestId);
         const conversation = this.router.getConversation(msg.requestId);
         if (targetId) {
@@ -747,7 +756,12 @@ export class WSHub {
       const ok = this.sendToAgent(memberAgent.id, msg);
       delivered.push({ name: member.agent_name, sent: ok });
     }
-    this.logger.info(`[mesh] broadcastToGroup ${groupId}: ${delivered.length} members, results=${JSON.stringify(delivered)}`);
+    // 流式 chunk 广播会每 chunk 调一次，记日志只会刷屏，跳过；其他类型
+    // （a2a_send 等）的广播日志保留，方便排查投递问题。
+    const isStreamingChunk = msg.type === "a2a_stream_chunk";
+    if (!isStreamingChunk) {
+      this.logger.info(`[mesh] broadcastToGroup ${groupId}: ${delivered.length} members, results=${JSON.stringify(delivered)}`);
+    }
   }
 
   /**

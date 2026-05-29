@@ -109,6 +109,17 @@ export class HermesCliExecutor implements CliExecutor {
       const pendingTools = new Map<string, PendingToolCall>();
       let sessionId = "";
       let settled = false;
+      let inThinking = false;
+
+      // 新版 hermes 把思考内容拆成很多小 chunk 流式下发，必须把连续的
+      // thought chunk 合并到同一个 [thinking]...[/thinking] 块里，否则
+      // 前端解析器会把每个 chunk 渲染成独立的 "💭 思考" 折叠块。
+      function closeThinkingIfOpen(): void {
+        if (inThinking) {
+          onOutput(`[/thinking]`);
+          inThinking = false;
+        }
+      }
 
       // ── Helpers ──
 
@@ -128,11 +139,42 @@ export class HermesCliExecutor implements CliExecutor {
       function finish(exitCode: number): void {
         if (settled) return;
         settled = true;
+        closeThinkingIfOpen();
         console.log(`[hermes-cli] Exited code=${exitCode}, output=${fullOutput.length} chars, session=${sessionId}`);
         resolve({ exitCode, fullOutput, sessionId: sessionId || undefined });
       }
 
       // ── Handle agent → client requests (auto-approve permissions) ──
+
+      // ACP 各版本对 permission 选项的命名不一样（approve_for_session /
+      // allow_always / allow_once / approve_once …）。直接读 params.options，
+      // 按优先级匹配一个"允许"类的 option；找不到就退回到 options[0]，最坏
+      // 也比硬编码一个不存在的 ID 让 agent 卡住等审批要好。
+      function pickApproveOption(params: unknown): string {
+        const options = (params as Record<string, unknown> | undefined)?.options;
+        if (!Array.isArray(options) || options.length === 0) {
+          return "approve_for_session";
+        }
+        const ids = options
+          .map((o) => (o as Record<string, unknown>)?.optionId as string | undefined)
+          .filter((id): id is string => typeof id === "string");
+        const priority = [
+          /^approve_for_session$/i,
+          /^allow_always$/i,
+          /^always_allow$/i,
+          /^allow_for_session$/i,
+          /^approve$/i,
+          /^allow_once$/i,
+          /^approve_once$/i,
+          /allow/i,
+          /approve/i,
+        ];
+        for (const re of priority) {
+          const hit = ids.find((id) => re.test(id));
+          if (hit) return hit;
+        }
+        return ids[0] ?? "approve_for_session";
+      }
 
       function handleAgentRequest(raw: Record<string, unknown>): void {
         const method = raw.method as string;
@@ -141,17 +183,20 @@ export class HermesCliExecutor implements CliExecutor {
 
         let resp: Record<string, unknown>;
         if (method === "session/request_permission") {
+          const optionId = pickApproveOption(raw.params);
+          console.log(`[hermes-cli] auto-approve permission → ${optionId}`);
           resp = {
             jsonrpc: "2.0",
             id: rawId,
             result: {
               outcome: {
                 outcome: "selected",
-                optionId: "approve_for_session",
+                optionId,
               },
             },
           };
         } else {
+          console.warn(`[hermes-cli] unhandled agent→client method: ${method} (params=${JSON.stringify(raw.params).slice(0, 200)})`);
           resp = {
             jsonrpc: "2.0",
             id: rawId,
@@ -253,6 +298,7 @@ export class HermesCliExecutor implements CliExecutor {
             const content = (update as Record<string, unknown>).content as Record<string, unknown> | undefined;
             const text = content?.text as string | undefined;
             if (text) {
+              closeThinkingIfOpen();
               fullOutput += text;
               onOutput(text);
             }
@@ -262,11 +308,16 @@ export class HermesCliExecutor implements CliExecutor {
             const content = (update as Record<string, unknown>).content as Record<string, unknown> | undefined;
             const text = content?.text as string | undefined;
             if (text) {
-              onOutput(`[thinking] ${text} [/thinking]`);
+              if (!inThinking) {
+                onOutput(`[thinking]`);
+                inThinking = true;
+              }
+              onOutput(text);
             }
             break;
           }
           case "tool_call": {
+            closeThinkingIfOpen();
             const toolCallId = (update as Record<string, unknown>).toolCallId as string;
             const title = (update as Record<string, unknown>).title as string;
             const kind = (update as Record<string, unknown>).kind as string;
@@ -311,6 +362,7 @@ export class HermesCliExecutor implements CliExecutor {
             }
 
             // Completed — emit deferred tool use if needed
+            closeThinkingIfOpen();
             const pt = pendingTools.get(toolCallId);
             pendingTools.delete(toolCallId);
 
@@ -322,6 +374,24 @@ export class HermesCliExecutor implements CliExecutor {
 
             if (output) {
               onOutput(`[tool-result] ${output.slice(0, 500)}${output.length > 500 ? "..." : ""}\n`);
+            }
+            break;
+          }
+          default: {
+            // 新版 hermes 可能引入了我们还没适配的 update 类型；如果它包含
+            // 文本内容（content.text），直接当成 message chunk 透传，避免
+            // 用户看到"思考完就卡住"。同时打日志方便后续根因。
+            const obj = update as Record<string, unknown>;
+            const rawKey = (obj.sessionUpdate as string) ?? (obj.type as string) ?? Object.keys(obj)[0] ?? "(none)";
+            const content = obj.content as Record<string, unknown> | undefined;
+            const text = content?.text as string | undefined;
+            if (typeof text === "string" && text) {
+              closeThinkingIfOpen();
+              fullOutput += text;
+              onOutput(text);
+              console.warn(`[hermes-cli] unhandled update "${rawKey}" with text — passthrough (${text.length} chars)`);
+            } else {
+              console.warn(`[hermes-cli] unhandled update "${rawKey}" keys=${Object.keys(obj).join(",")}`);
             }
             break;
           }
