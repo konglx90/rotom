@@ -42,7 +42,24 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
 
   const [dragging, setDragging] = useState(false)
   const [showAllDirect, setShowAllDirect] = useState(false)
+  const [navCompact, setNavCompact] = useState(() => {
+    try {
+      return localStorage.getItem('rotom-nav-compact') === '1'
+    } catch {
+      return false
+    }
+  })
   const startStateRef = useRef<{ x: number; w: number } | null>(null)
+
+  const toggleNavCompact = () => {
+    setNavCompact((v) => {
+      const next = !v
+      try {
+        localStorage.setItem('rotom-nav-compact', next ? '1' : '0')
+      } catch {}
+      return next
+    })
+  }
 
   const selectedGroupId = urlGroupId || ''
   const isZen = zenMode
@@ -86,7 +103,9 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
           {!isZen && <span className={styles.logoText}>Rotom</span>}
         </div>
 
-        <nav className={styles.nav}>
+        <nav
+          className={`${styles.nav} ${!isZen && navCompact ? styles.navCompact : ''}`}
+        >
           {NAV_TABS.map((tab) => (
             <NavLink
               key={tab.id}
@@ -97,9 +116,19 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
               }
             >
               <span className={styles.navIcon}>{tab.icon}</span>
-              {!isZen && <span className={styles.navLabel}>{tab.label}</span>}
+              {!isZen && !navCompact && <span className={styles.navLabel}>{tab.label}</span>}
             </NavLink>
           ))}
+          {!isZen && (
+            <button
+              type="button"
+              className={styles.navToggleBtn}
+              onClick={toggleNavCompact}
+              title={navCompact ? '展开导航' : '收起导航为一行'}
+            >
+              {navCompact ? '⇲' : '⇱'}
+            </button>
+          )}
         </nav>
 
         {isZen ? (

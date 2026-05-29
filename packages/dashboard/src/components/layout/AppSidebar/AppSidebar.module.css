@@ -125,6 +125,61 @@
   flex: 1;
 }
 
+/* ── Nav compact (single-row) mode ───────────────────────── */
+.navCompact {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+}
+
+.navCompact .navItem {
+  flex: 1;
+  justify-content: center;
+  padding: 8px;
+  gap: 0;
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.navCompact .navIcon {
+  font-size: 18px;
+}
+
+.navToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-end;
+  width: 22px;
+  height: 22px;
+  margin: 2px 4px 0 0;
+  padding: 0;
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-warm-dark);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              opacity var(--duration-base) var(--ease-out);
+}
+
+.navToggleBtn:hover {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  opacity: 1;
+}
+
+.navCompact .navToggleBtn {
+  align-self: center;
+  margin: 0 0 0 2px;
+}
+
 /* ── Sections ─────────────────────────────────────────────── */
 .section {
   display: flex;
