@@ -1,11 +1,84 @@
-import { memo, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
+import {
+  Children,
+  cloneElement,
+  createElement,
+  isValidElement,
+  memo,
+  useMemo,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import styles from './MarkdownContent.module.css'
 
 interface Props {
   content: string
   streaming?: boolean
+  /** When provided, @name occurrences whose name is in this list are highlighted inline. */
+  mentionMembers?: readonly string[]
+  /** Class applied to the wrapping <span> around a highlighted mention. */
+  mentionClassName?: string
+}
+
+const MENTION_RE = /@([\w一-鿿][\w.一-鿿-]*)/g
+
+function highlightMentionsInText(
+  text: string,
+  isMember: (name: string) => boolean,
+  className: string | undefined,
+  keyPrefix: string,
+): ReactNode {
+  const out: ReactNode[] = []
+  let last = 0
+  let matched = false
+  let m: RegExpExecArray | null
+  // Each call uses a fresh regex to avoid lastIndex state.
+  const re = new RegExp(MENTION_RE.source, 'g')
+  while ((m = re.exec(text)) !== null) {
+    const name = m[1]
+    if (!isMember(name)) continue
+    matched = true
+    if (m.index > last) out.push(text.slice(last, m.index))
+    out.push(
+      <span key={`${keyPrefix}-${m.index}`} className={className}>
+        @{name}
+      </span>,
+    )
+    last = m.index + m[0].length
+  }
+  if (!matched) return text
+  if (last < text.length) out.push(text.slice(last))
+  return <>{out}</>
+}
+
+function transformMentionChildren(
+  children: ReactNode,
+  isMember: (name: string) => boolean,
+  className: string | undefined,
+  keyPrefix = 'mention',
+): ReactNode {
+  return Children.map(children, (child, idx) => {
+    if (typeof child === 'string') {
+      return highlightMentionsInText(child, isMember, className, `${keyPrefix}-${idx}`)
+    }
+    if (!isValidElement(child)) return child
+    const el = child as ReactElement<{ children?: ReactNode }>
+    // Skip inline / block <code>: @ inside code is package paths, not mentions.
+    if (el.type === 'code' || el.type === 'pre') return el
+    if (el.props && el.props.children != null) {
+      return cloneElement(el, {
+        children: transformMentionChildren(
+          el.props.children,
+          isMember,
+          className,
+          `${keyPrefix}-${idx}`,
+        ),
+      })
+    }
+    return el
+  })
 }
 
 type RawPart =
@@ -112,13 +185,53 @@ function pairExecCalls(raw: RawPart[]): Part[] {
   return out
 }
 
-export const MarkdownContent = memo(function MarkdownContent({ content, streaming }: Props) {
+export const MarkdownContent = memo(function MarkdownContent({
+  content,
+  streaming,
+  mentionMembers,
+  mentionClassName,
+}: Props) {
   const parts = pairExecCalls(parseStructuredBlocks(content))
+
+  const mentionComponents = useMemo<Components | undefined>(() => {
+    if (!mentionMembers || mentionMembers.length === 0) return undefined
+    const memberSet = new Set(mentionMembers)
+    const isMember = (name: string) => memberSet.has(name)
+    const wrap = (tag: keyof JSX.IntrinsicElements) =>
+      function MentionWrapper({ children, node: _node, ...rest }: any) {
+        return createElement(
+          tag,
+          rest,
+          transformMentionChildren(children, isMember, mentionClassName),
+        )
+      }
+    // Cover text-containing markdown elements. <code>/<pre> are explicitly
+    // skipped inside the transformer so package paths like `@types/react`
+    // are not mis-highlighted.
+    return {
+      p: wrap('p'),
+      li: wrap('li'),
+      em: wrap('em'),
+      strong: wrap('strong'),
+      a: wrap('a'),
+      td: wrap('td'),
+      th: wrap('th'),
+      h1: wrap('h1'),
+      h2: wrap('h2'),
+      h3: wrap('h3'),
+      h4: wrap('h4'),
+      h5: wrap('h5'),
+      h6: wrap('h6'),
+      blockquote: wrap('blockquote'),
+    } as Components
+  }, [mentionMembers, mentionClassName])
 
   if (parts.length === 0 || (parts.length === 1 && parts[0].type === 'text')) {
     return (
       <div className={styles.md}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mentionComponents}>
+          {content}
+        </ReactMarkdown>
         {streaming && <span className={styles.cursor}>|</span>}
       </div>
     )
@@ -129,7 +242,11 @@ export const MarkdownContent = memo(function MarkdownContent({ content, streamin
       {parts.map((part, i) => {
         switch (part.type) {
           case 'text':
-            return <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.content}</ReactMarkdown>
+            return (
+              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={mentionComponents}>
+                {part.content}
+              </ReactMarkdown>
+            )
           case 'thinking':
             return <ThinkingBlock key={i} content={part.content} />
           case 'tool-call':

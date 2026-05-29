@@ -114,6 +114,7 @@ export function GroupChatView() {
   // --- Derived state ---
   const selectedGroup = groups.find((g) => g.id === selectedGroupId)
   const isDirectMode = directTarget !== ''
+  const groupMembers = selectedGroup?.members?.map((m) => m.agent_name) || []
 
   // --- Handlers ---
   const handleSendMessage = (text: string) => {
@@ -155,7 +156,10 @@ export function GroupChatView() {
     }
 
     if (!selectedGroupId) return
-    const mentions = extractMentions(trimmed)
+    // Only treat @name as an @-trigger when name is an actual group member.
+    // Non-member @text is left in the message as plain text.
+    const memberSet = new Set(groupMembers)
+    const mentions = extractMentions(trimmed).filter((name) => memberSet.has(name))
     const targets = mentions.filter((name) => name !== myAgentName)
     const baseRequestId = `grp_${Date.now()}`
     const conversation = {
@@ -278,8 +282,6 @@ export function GroupChatView() {
       console.error('Failed to create collaboration:', error)
     }
   }
-
-  const groupMembers = selectedGroup?.members?.map((m) => m.agent_name) || []
 
   return (
     <div className={`${styles.container} ${zenMode ? styles.containerZen : ''}`}>

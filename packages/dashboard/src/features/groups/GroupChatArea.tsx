@@ -12,23 +12,6 @@ import { ConnectionBar } from './ConnectionBar'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import styles from './ChatArea.module.css'
 
-function renderContentWithMentions(content: string, streaming?: boolean) {
-  const mentionPattern = /(@[\w一-鿿][\w.一-鿿-]*)/g
-  if (!mentionPattern.test(content)) {
-    return <MarkdownContent content={content} streaming={streaming} />
-  }
-  const parts = content.split(/(@[\w一-鿿][\w.一-鿿-]*)/g)
-  const textParts = parts.filter(p => !p.startsWith('@')).join('')
-  return (
-    <>
-      <span className={styles.mention}>
-        {parts.filter(p => p.startsWith('@')).join(' ')}
-      </span>{' '}
-      <MarkdownContent content={textParts} streaming={streaming} />
-    </>
-  )
-}
-
 interface GroupChatAreaProps {
   selectedGroup: Group
   agents: Agent[]
@@ -228,7 +211,14 @@ export function GroupChatArea({
                     <span className={styles.dot}></span>
                     <span className={styles.dot}></span>
                   </div>
-                ) : renderContentWithMentions(msg.content, msg.streaming)}
+                ) : (
+                  <MarkdownContent
+                    content={msg.content}
+                    streaming={msg.streaming}
+                    mentionMembers={groupMembers}
+                    mentionClassName={styles.mention}
+                  />
+                )}
               </div>
               <div className={styles.messageTimestamp}>
                 {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
