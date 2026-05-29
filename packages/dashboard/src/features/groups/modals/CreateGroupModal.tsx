@@ -45,7 +45,18 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
   const otherAgents = agents.filter(a => a.name !== myAgentName)
 
   return (
-    <Modal open={open} title="创建群">
+    <Modal
+      open={open}
+      title="创建群"
+      footer={
+        <div className={styles.modalActions}>
+          <Button variant="secondary" size="md" onClick={handleClose} disabled={submitting}>取消</Button>
+          <Button variant="primary" size="md" onClick={handleCreate} disabled={!groupName.trim() || submitting}>
+            {submitting ? '创建中...' : '创建'}
+          </Button>
+        </div>
+      }
+    >
       <div className={styles.formField}>
         <label className={styles.formLabel}>群名称:</label>
         <input type="text" value={groupName} onChange={e => setGroupName(e.target.value)}
@@ -81,12 +92,6 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
             </div>
           )}
         </div>
-      </div>
-      <div className={styles.modalActions}>
-        <Button variant="secondary" size="md" onClick={handleClose} disabled={submitting}>取消</Button>
-        <Button variant="primary" size="md" onClick={handleCreate} disabled={!groupName.trim() || submitting}>
-          {submitting ? '创建中...' : '创建'}
-        </Button>
       </div>
     </Modal>
   )

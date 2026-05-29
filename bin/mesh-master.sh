@@ -20,6 +20,7 @@ PORT="${MESH_MASTER_PORT:-18800}"
 HOST="${MESH_MASTER_HOST:-0.0.0.0}"
 DATA="${MESH_MASTER_DATA:-$SCRIPT_DIR/mesh-data}"
 DAEMON=false
+DEV=false
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
@@ -141,18 +142,25 @@ detect_pkg() {
 ensure_built() {
   local need=false
   [ ! -f "$SERVER_JS" ] && need=true
+  # 选择哪些源文件参与“是否需要重建”的判断
+  # dev: 只看 src/ 下的后端 .ts；prod: 同时看 packages/ 下的前端
+  local watch_dirs="$SCRIPT_DIR/src"
+  [ "$DEV" = false ] && watch_dirs="$watch_dirs $SCRIPT_DIR/packages"
   [ "$need" = false ] && {
     local newer
-    newer=$(find "$SCRIPT_DIR/packages" \( -name '*.ts' -o -name '*.html' \) -newer "$SERVER_JS" -print -quit 2>/dev/null)
+    # shellcheck disable=SC2086
+    newer=$(find $watch_dirs \( -name '*.ts' -o -name '*.html' \) -newer "$SERVER_JS" -print -quit 2>/dev/null)
     [ -n "$newer" ] && need=true
   }
   if [ "$need" = true ]; then
-    echo "[mesh-master] 构建中..."
+    local target="build:master"
+    [ "$DEV" = true ] && target="build"
+    echo "[mesh-master] 构建中 ($target)..."
     local pkg; pkg=$(detect_pkg)
     case "$pkg" in
-      pnpm) (cd "$SCRIPT_DIR" && pnpm build:master) ;;
-      npm)  (cd "$SCRIPT_DIR" && npm run build:master) ;;
-      yarn) (cd "$SCRIPT_DIR" && yarn build:master) ;;
+      pnpm) (cd "$SCRIPT_DIR" && pnpm "$target") ;;
+      npm)  (cd "$SCRIPT_DIR" && npm run "$target") ;;
+      yarn) (cd "$SCRIPT_DIR" && yarn "$target") ;;
       *)    echo "[mesh-master] 未找到包管理器"; return 1 ;;
     esac
   fi
@@ -399,9 +407,12 @@ Digital Employee Mesh — Master 管理脚本
   --host <addr>        地址 (默认: ${HOST})
   --data, -d <dir>     数据目录 (默认: ~/Library/Application Support/a2a-gateway/mesh-data)
   --daemon             后台运行
+  --dev                开发模式：只编译后端，跳过 vite 前端构建
+                       前端用 \`pnpm dashboard:dev\` 单独跑（vite dev :3000）
 
 示例:
   mesh-master start --daemon                 # 后台启动
+  mesh-master start --dev                    # 开发模式（不 build vite）
   mesh-master install-service                # 安装为系统服务
   mesh-master restart                        # 重启（升级后用）
   mesh-master status                         # 查看状态
@@ -416,6 +427,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --port|-p) PORT="$2"; shift 2 ;; --host) HOST="$2"; shift 2 ;;
     --data|-d) DATA="$2"; shift 2 ;; --daemon) DAEMON=true; shift ;;
+    --dev) DEV=true; shift ;;
     --help) do_help; exit 0 ;; *) echo "未知选项: $1"; do_help; exit 1 ;;
   esac
 done

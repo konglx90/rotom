@@ -10,41 +10,102 @@ interface Props {
 }
 
 export function ConfigModal({ open, onConfigured, onClose }: Props) {
-  const [name, setName] = useState('')
   const [token, setToken] = useState('')
+  const [resolvedName, setResolvedName] = useState('')
+  const [error, setError] = useState('')
+  const [resolving, setResolving] = useState(false)
 
   useEffect(() => {
-    const savedName = localStorage.getItem('chat_agent_name')
-    const savedToken = localStorage.getItem('chat_agent_token')
-    if (savedName) setName(savedName)
-    if (savedToken) setToken(savedToken)
+    if (!open) return
+    const savedToken = localStorage.getItem('chat_agent_token') || ''
+    setToken(savedToken)
+    setResolvedName('')
+    setError('')
   }, [open])
 
+  // 粘贴 mesh_xxx → 服务端反查匹配到的员工名
+  useEffect(() => {
+    const trimmed = token.trim()
+    if (!trimmed) {
+      setResolvedName(''); setError(''); setResolving(false)
+      return
+    }
+    if (!trimmed.startsWith('mesh_')) {
+      setResolvedName(''); setError('Token 必须以 mesh_ 开头'); setResolving(false)
+      return
+    }
+    setResolving(true)
+    setError('')
+    const ctrl = new AbortController()
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/whoami', {
+          headers: { Authorization: `Bearer ${trimmed}` },
+          signal: ctrl.signal,
+        })
+        const data = await res.json()
+        if (data?.kind === 'agent' && data.name) {
+          setResolvedName(data.name); setError('')
+        } else {
+          setResolvedName(''); setError('Token 无效，未匹配到员工')
+        }
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') {
+          setResolvedName(''); setError('网络请求失败')
+        }
+      } finally {
+        setResolving(false)
+      }
+    }, 300)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [token])
+
+  const canSave = !!resolvedName && !resolving
   const handleSave = () => {
-    if (!name.trim() || !token.trim()) return
-    localStorage.setItem('chat_agent_name', name.trim())
+    if (!canSave) return
+    localStorage.setItem('chat_agent_name', resolvedName)
     localStorage.setItem('chat_agent_token', token.trim())
-    onConfigured(name.trim(), token.trim())
+    onConfigured(resolvedName, token.trim())
   }
 
   return (
-    <Modal open={open} title="选择我的身份">
+    <Modal
+      open={open}
+      title="选择我的身份"
+      footer={
+        <div className={styles.modalActions}>
+          <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
+          <Button variant="primary" size="md" onClick={handleSave} disabled={!canSave}>
+            绑定
+          </Button>
+        </div>
+      }
+    >
       <p style={{ color: 'var(--color-slate)', fontSize: 14, marginBottom: 16 }}>
-        Dashboard 这边的你是「真人」。挑一个员工身份后，就能用 ta 的名义在群里发消息、看消息流。
+        Dashboard 这边的你是「真人」。粘贴一个员工的 Mesh Token，名字会自动匹配出来。
       </p>
       <div className={styles.formField}>
-        <label className={styles.formLabel}>员工名 (Agent Name)：</label>
-        <input type="text" value={name} onChange={e => setName(e.target.value)}
-          placeholder="例如: my-agent" className={styles.formInput} />
-      </div>
-      <div className={styles.formField}>
         <label className={styles.formLabel}>Mesh Token：</label>
-        <input type="password" value={token} onChange={e => setToken(e.target.value)}
-          placeholder="例如: mesh_xxx" className={styles.formInput} />
+        <input
+          type="password"
+          value={token}
+          onChange={e => setToken(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave() }}
+          placeholder="例如: mesh_xxx"
+          className={styles.formInput}
+          autoFocus
+        />
       </div>
-      <div className={styles.modalActions}>
-        <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
-        <Button variant="primary" size="md" onClick={handleSave}>绑定</Button>
+      <div style={{ minHeight: 22, marginTop: 4, fontSize: 13 }}>
+        {resolving && <span style={{ color: 'var(--color-slate)' }}>匹配中…</span>}
+        {!resolving && resolvedName && (
+          <span style={{ color: 'var(--color-success, #16a34a)' }}>
+            ✓ 已匹配到员工：<strong>{resolvedName}</strong>
+          </span>
+        )}
+        {!resolving && error && (
+          <span style={{ color: 'var(--color-danger, #dc2626)' }}>{error}</span>
+        )}
       </div>
     </Modal>
   )

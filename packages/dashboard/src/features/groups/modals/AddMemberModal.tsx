@@ -30,7 +30,16 @@ export function AddMemberModal({ open, groupMemberNames, agents, onClose, onAdd 
   }
 
   return (
-    <Modal open={open} title="添加成员">
+    <Modal
+      open={open}
+      title="添加成员"
+      footer={
+        <div className={styles.modalActions}>
+          <Button variant="secondary" size="md" onClick={handleClose}>取消</Button>
+          <Button variant="primary" size="md" onClick={handleAdd} disabled={selectedMembers.length === 0}>添加</Button>
+        </div>
+      }
+    >
       {groupMemberNames.length > 0 && (
         <div className={styles.formField}>
           <label className={styles.formLabel}>当前成员:</label>
@@ -71,10 +80,6 @@ export function AddMemberModal({ open, groupMemberNames, agents, onClose, onAdd 
             </div>
           )}
         </div>
-      </div>
-      <div className={styles.modalActions}>
-        <Button variant="secondary" size="md" onClick={handleClose}>取消</Button>
-        <Button variant="primary" size="md" onClick={handleAdd} disabled={selectedMembers.length === 0}>添加</Button>
       </div>
     </Modal>
   )

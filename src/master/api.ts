@@ -98,6 +98,11 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
   // ── Agent list ──────────────────────────────────────────────────────────
   apiRouter.get("/agents", (_req, res) => {
     const agents = db.listAgents();
+    const statsByName = new Map<string, Record<string, unknown>>();
+    for (const row of db.agentMessageStats()) {
+      const name = row.name as string;
+      if (name) statsByName.set(name, row);
+    }
     const safe = agents.map((a: AgentRow) => ({
       id: a.id,
       name: a.name,
@@ -111,6 +116,17 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       connectedAt: a.connected_at,
       registeredAt: a.registered_at,
       profile: parseProfile(a.profile),
+      message_stats: (() => {
+        const s = statsByName.get(a.name);
+        if (!s) return undefined;
+        return {
+          sent: Number(s.sent) || 0,
+          received: Number(s.received) || 0,
+          replied: Number(s.replied) || 0,
+          failed: Number(s.failed) || 0,
+          avg_latency_ms: s.avg_latency_ms == null ? 0 : Number(s.avg_latency_ms),
+        };
+      })(),
     }));
     res.json(safe);
   });
@@ -127,7 +143,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
 
   // ── Register agent ──────────────────────────────────────────────────────
   apiRouter.post("/agents", (req, res) => {
-    const { name, description, domain } = req.body;
+    const { name, description, domain, profile } = req.body;
     if (!name || typeof name !== "string") {
       res.status(400).json({ error: "name is required" });
       return;
@@ -162,6 +178,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       domain,
       tokenHash: hashToken(token),
       token,
+      profile: profile && typeof profile === "object" ? JSON.stringify(profile) : undefined,
     });
 
     log.info(`Agent registered: "${name}" (domain=${domain})`);

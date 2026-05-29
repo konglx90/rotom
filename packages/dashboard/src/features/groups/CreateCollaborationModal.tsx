@@ -78,7 +78,24 @@ export function CreateCollaborationModal({ open, agents, groupMembers, onClose, 
   }
 
   return (
-    <Modal open={open} title="创建协作任务" scrollable={true}>
+    <Modal
+      open={open}
+      title="创建协作任务"
+      scrollable={true}
+      footer={
+        <div className={styles.modalActions}>
+          <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleSubmit}
+            disabled={!title.trim() || !collaborationGoal.trim() || selectedParticipants.length < 2 || !firstSpeaker}
+          >
+            创建协作
+          </Button>
+        </div>
+      }
+    >
       <div className={styles.formField}>
         <label className={styles.formLabel}>标题:</label>
         <input type="text" value={title} onChange={e => setTitle(e.target.value)}
@@ -139,17 +156,6 @@ export function CreateCollaborationModal({ open, agents, groupMembers, onClose, 
             <option key={p.id} value={p.name}>{p.name}</option>
           ))}
         </select>
-      </div>
-      <div className={styles.modalActions}>
-        <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
-        <Button
-          variant="primary"
-          size="md"
-          onClick={handleSubmit}
-          disabled={!title.trim() || !collaborationGoal.trim() || selectedParticipants.length < 2 || !firstSpeaker}
-        >
-          创建协作
-        </Button>
       </div>
     </Modal>
   )

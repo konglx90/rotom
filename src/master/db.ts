@@ -260,10 +260,11 @@ export class MeshDb {
     domain?: string;
     tokenHash: string;
     token: string;
+    profile?: string;
   }): void {
     this.db.prepare(`
-      INSERT INTO agents (id, name, description, domain, token_hash, token)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO agents (id, name, description, domain, token_hash, token, profile)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       agent.id,
       agent.name,
@@ -271,6 +272,7 @@ export class MeshDb {
       agent.domain || null,
       agent.tokenHash,
       agent.token,
+      agent.profile || null,
     );
   }
 

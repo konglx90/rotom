@@ -52,10 +52,20 @@ export function AddAgentModal({ isOpen, onClose, domains, onSuccess, defaultDoma
 
     setLoading(true);
     try {
+      const profileObj: Record<string, string> = {};
+      if (category) profileObj.category = category;
+      if (position.trim()) profileObj.position = position.trim();
+      if (responsibilities.trim()) profileObj.responsibilities = responsibilities.trim();
+      if (techStack.trim()) profileObj.tech_stack = techStack.trim();
+
       const response = await fetch('/api/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), domain })
+        body: JSON.stringify({
+          name: name.trim(),
+          domain,
+          ...(Object.keys(profileObj).length > 0 ? { profile: profileObj } : {}),
+        })
       });
 
       const data = await response.json();
@@ -68,12 +78,6 @@ export function AddAgentModal({ isOpen, onClose, domains, onSuccess, defaultDoma
           name: name.trim(),
           token: data.token
         };
-
-        const profileObj: Record<string, string> = {};
-        if (category) profileObj.category = category;
-        if (position.trim()) profileObj.position = position.trim();
-        if (responsibilities.trim()) profileObj.responsibilities = responsibilities.trim();
-        if (techStack.trim()) profileObj.tech_stack = techStack.trim();
 
         if (Object.keys(profileObj).length > 0) {
           baseConfig.profile = profileObj;

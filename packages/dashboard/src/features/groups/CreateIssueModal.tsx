@@ -51,7 +51,17 @@ export function CreateIssueModal({ open, agents, onClose, onSubmit, defaultWorki
   }
 
   return (
-    <Modal open={open} title="创建 Issue" scrollable={true}>
+    <Modal
+      open={open}
+      title="创建 Issue"
+      scrollable={true}
+      footer={
+        <div className={styles.modalActions}>
+          <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
+          <Button variant="primary" size="md" onClick={handleSubmit} disabled={!title.trim()}>创建</Button>
+        </div>
+      }
+    >
       <div className={styles.formField}>
         <label className={styles.formLabel}>标题:</label>
         <input type="text" value={title} onChange={e => setTitle(e.target.value)}
@@ -97,10 +107,6 @@ export function CreateIssueModal({ open, agents, onClose, onSubmit, defaultWorki
             <option key={a.id} value={a.name}>{a.name}</option>
           ))}
         </select>
-      </div>
-      <div className={styles.modalActions}>
-        <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
-        <Button variant="primary" size="md" onClick={handleSubmit} disabled={!title.trim()}>创建</Button>
       </div>
     </Modal>
   )

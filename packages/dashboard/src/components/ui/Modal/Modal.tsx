@@ -6,10 +6,11 @@ interface ModalProps {
   title: string
   children: ReactNode
   onClose?: () => void
-  scrollable?: boolean  // 新增：是否启用内容滚动
+  scrollable?: boolean  // 是否启用内容滚动
+  footer?: ReactNode    // 固定在底部、不随内容滚动的操作区
 }
 
-export function Modal({ open, title, children, onClose, scrollable = true }: ModalProps) {
+export function Modal({ open, title, children, onClose, scrollable = true, footer }: ModalProps) {
   if (!open) return null
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -32,6 +33,7 @@ export function Modal({ open, title, children, onClose, scrollable = true }: Mod
         ) : (
           children
         )}
+        {footer && <div className={styles.footer}>{footer}</div>}
       </div>
     </div>
   )

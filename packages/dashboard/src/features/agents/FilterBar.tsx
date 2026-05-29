@@ -83,8 +83,11 @@ export function FilterBar({
             onClick={onAddAgent}
             title="添加员工"
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 0a8 8 0 100 16A8 8 0 000-16zM4 8a1 1 0 011-1h2V5a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 010-2zm4 0a1 1 0 011 1v2a1 1 0 01-1 1H8a1 1 0 010-2zm3 1a1 1 0 100-2 1 1 0 000 2z"/>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="6" cy="5" r="2.5"/>
+              <path d="M1.5 13.5c0-2.2 2-4 4.5-4s4.5 1.8 4.5 4"/>
+              <line x1="13" y1="5" x2="13" y2="9"/>
+              <line x1="11" y1="7" x2="15" y2="7"/>
             </svg>
             添加员工
           </Button>

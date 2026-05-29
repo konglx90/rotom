@@ -57,7 +57,37 @@ export function WorkingDirModal({
   }
 
   return (
-    <Modal open={open} title="设置工作目录" onClose={onClose}>
+    <Modal
+      open={open}
+      title="设置工作目录"
+      onClose={onClose}
+      footer={
+        <div className={styles.actions}>
+          <div className={styles.actionsLeft}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClear}
+              disabled={!canClear}
+              title={canClear ? '清除当前的工作目录设置' : '当前未设置工作目录'}
+            >
+              清除设置
+            </Button>
+          </div>
+          <div className={styles.actionsRight}>
+            <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleSave}
+              disabled={!dirty}
+            >
+              保存
+            </Button>
+          </div>
+        </div>
+      }
+    >
       <div className={styles.header}>
         <div className={styles.iconBadge}>📁</div>
         <div className={styles.headerText}>
@@ -108,31 +138,6 @@ export function WorkingDirModal({
             支持 <code>~/</code> 自动展开为用户主目录；必须是已存在的目录。留空保存等同于清除设置。
           </span>
         </p>
-      </div>
-
-      <div className={styles.actions}>
-        <div className={styles.actionsLeft}>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClear}
-            disabled={!canClear}
-            title={canClear ? '清除当前的工作目录设置' : '当前未设置工作目录'}
-          >
-            清除设置
-          </Button>
-        </div>
-        <div className={styles.actionsRight}>
-          <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={handleSave}
-            disabled={!dirty}
-          >
-            保存
-          </Button>
-        </div>
       </div>
     </Modal>
   )
