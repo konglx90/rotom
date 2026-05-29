@@ -18,6 +18,63 @@ import path from "node:path";
 import fs from "node:fs";
 import type { CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
 
+// ── Skill hint loader ────────────────────────────────────────────────────
+//
+// 新版 hermes ACP 适配器去掉了 `/skills xxx` 这条 slash command
+// （acp_adapter/server.py:_handle_slash_command 只剩 help/model/tools/... 白名单），
+// 我们以前那种 `/skills rotom-a2a-communicate ${prompt}` 直接发会被原样灌给
+// LLM，让它把整串当成"用户要我查看 skill 文件"，跑题严重。
+//
+// 改成"按需 hint"：在 chat/collab 的 prompt 前面拼一小段 description
+// （从 SKILL.md frontmatter 提取，~400 字符），告诉 LLM 这个 skill 存在、什么
+// 时候用。LLM 自己决定是否调 `skill_view(name="rotom-a2a-communicate")`
+// 拉完整 12KB 内容。无关问题就完全跳过加载，省 token。
+
+const SKILL_NAME = "rotom-a2a-communicate";
+const SKILL_HINT_PATHS = [
+  path.join(os.homedir(), ".hermes", "skills", SKILL_NAME, "SKILL.md"),
+];
+
+let cachedSkillHint: string | null | undefined;
+
+function loadSkillDescription(): string | null {
+  if (cachedSkillHint !== undefined) return cachedSkillHint;
+  for (const p of SKILL_HINT_PATHS) {
+    try {
+      const md = fs.readFileSync(p, "utf-8");
+      const fmMatch = md.match(/^---\s*\n([\s\S]*?)\n---/);
+      if (!fmMatch) continue;
+      // frontmatter 里 description 可能是单行长文本，也可能是 YAML 折叠/literal
+      // 块。先匹配同名键，吃到下一个顶层键或 frontmatter 结束。
+      const descMatch = fmMatch[1].match(/^description:\s*(.+(?:\n[ \t]+.+)*)/m);
+      if (!descMatch) continue;
+      const desc = descMatch[1].trim().replace(/\s+/g, " ");
+      if (desc) {
+        cachedSkillHint = desc;
+        return desc;
+      }
+    } catch {
+      // file missing / unreadable — try next path
+    }
+  }
+  cachedSkillHint = null;
+  return null;
+}
+
+function buildSkillHintPrompt(userPrompt: string): string {
+  const desc = loadSkillDescription();
+  if (!desc) return userPrompt;
+  return [
+    `[可按需加载的技能 ${SKILL_NAME}]`,
+    desc,
+    `若本次请求涉及上述场景，先调用 skill_view(name="${SKILL_NAME}") 加载完整指令后再处理；否则直接回答。`,
+    "",
+    "---",
+    "",
+    userPrompt,
+  ].join("\n");
+}
+
 // ── ACP JSON-RPC types ──────────────────────────────────────────────────
 
 interface JsonRpcRequest {
@@ -110,6 +167,12 @@ export class HermesCliExecutor implements CliExecutor {
       let sessionId = "";
       let settled = false;
       let inThinking = false;
+      // 新版 hermes ACP 在 session/resume 里会同步 replay 整段对话历史
+      // （user/assistant/thought chunks，跟 live chunk 类型完全相同）。
+      // hermes 是 await 完 replay 才返回 session/resume 的 RPC 响应，所以
+      // 我们用这一段时间窗口作为屏蔽：replayActive=true 时所有 session_update
+      // 全部静默吞掉，避免把历史重复推给前端。
+      let replayActive = false;
 
       // 新版 hermes 把思考内容拆成很多小 chunk 流式下发，必须把连续的
       // thought chunk 合并到同一个 [thinking]...[/thinking] 块里，否则
@@ -291,6 +354,11 @@ export class HermesCliExecutor implements CliExecutor {
         const update = params?.update as Record<string, unknown> | undefined;
         if (!update) return;
 
+        // session/resume 期间到达的全是历史 replay（user/assistant/thought
+        // chunks 形态与 live 完全相同），直接吞掉。等 resume RPC 返回，
+        // replayActive 会被置 false，后续 session/prompt 的 update 才会进 switch。
+        if (replayActive) return;
+
         const updateType = normalizeUpdateType(update);
 
         switch (updateType) {
@@ -451,10 +519,17 @@ export class HermesCliExecutor implements CliExecutor {
 
           // 2. Create or resume session
           if (resumeSessionId) {
-            const resumeResult = (await request("session/resume", {
-              cwd: workingDir || ".",
-              sessionId: resumeSessionId,
-            })) as Record<string, unknown>;
+            replayActive = true;
+            let resumeResult: Record<string, unknown> | undefined;
+            try {
+              resumeResult = (await request("session/resume", {
+                cwd: workingDir || ".",
+                sessionId: resumeSessionId,
+              })) as Record<string, unknown>;
+            } finally {
+              // 不管 resume 成不成功都关掉，避免后续 live update 被误吞。
+              replayActive = false;
+            }
 
             // Server may return a different sessionId if the original was lost
             sessionId = (resumeResult?.sessionId as string) || resumeSessionId;
@@ -473,12 +548,13 @@ export class HermesCliExecutor implements CliExecutor {
           }
 
           // 3. Send prompt
-          // Only chat/collab tasks should trigger the rotom-a2a-communicate
-          // skill — issue tasks execute the prompt directly to avoid being
-          // misled into treating the issue body as a "send a message" task.
+          // chat/collab 走 "按需 hint" 包装：把 rotom-a2a-communicate 的
+          // description 拼到 prompt 前面，由 LLM 自行判断要不要 skill_view
+          // 加载完整内容。issue 路径不包装，避免 LLM 把 issue body 当成
+          // 通信任务误处理（见 buildSkillHintPrompt 注释）。
           const needsCommunicationWrapper = options?.kind === "chat" || options?.kind === "collab";
           const wrappedPrompt = needsCommunicationWrapper
-            ? `/skills rotom-a2a-communicate ${prompt}`
+            ? buildSkillHintPrompt(prompt)
             : prompt;
           await request("session/prompt", {
             sessionId,
