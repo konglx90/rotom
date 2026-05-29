@@ -1,35 +1,17 @@
-import { useState, useEffect } from 'react'
-import { agentsApi } from '../api/agents'
+import { useState } from 'react'
+import { useChatContext } from '../context/ChatContext'
 import type { Agent } from '../api/types'
 
 export type { Agent }
 
 export function useAgents() {
-  const [agents, setAgents] = useState<Agent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchAgents = async (silent = false) => {
-    if (!silent) {
-      setLoading(true)
-    }
-    setError(null)
-    try {
-      const data = await agentsApi.list()
-      setAgents(data)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch agents'
-      setError(message)
-    } finally {
-      setLoading(false)
-    }
+  const { agents, agentsLoading, agentsError, loadAgents } = useChatContext()
+  return {
+    agents,
+    loading: agentsLoading,
+    error: agentsError,
+    refetch: () => loadAgents(true),
   }
-
-  useEffect(() => {
-    fetchAgents()
-  }, [])
-
-  return { agents, loading, error, refetch: () => fetchAgents(true) }
 }
 
 export function useAgentsWithFilters() {

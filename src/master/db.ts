@@ -765,6 +765,23 @@ export class MeshDb {
     `).all() as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; member_count: number }[];
   }
 
+  listGroupsWithMembers(): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; member_count: number; members: { agent_name: string; joined_at: string }[] }[] {
+    const groups = this.listGroups();
+    const rows = this.db.prepare(
+      "SELECT group_id, agent_name, joined_at FROM group_members ORDER BY joined_at",
+    ).all() as { group_id: string; agent_name: string; joined_at: string }[];
+    const byGroup = new Map<string, { agent_name: string; joined_at: string }[]>();
+    for (const r of rows) {
+      let list = byGroup.get(r.group_id);
+      if (!list) {
+        list = [];
+        byGroup.set(r.group_id, list);
+      }
+      list.push({ agent_name: r.agent_name, joined_at: r.joined_at });
+    }
+    return groups.map((g) => ({ ...g, members: byGroup.get(g.id) ?? [] }));
+  }
+
   getGroupById(id: string): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null } | undefined {
     return this.db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null } | undefined;
   }

@@ -639,7 +639,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
   }
 
   apiRouter.get("/groups", (_req, res) => {
-    res.json(db.listGroups());
+    res.json(db.listGroupsWithMembers());
   });
 
   apiRouter.post("/groups", (req, res) => {

@@ -24,6 +24,8 @@ export interface DmGroup extends Group {
 interface ChatContextValue {
   // Data
   agents: Agent[]
+  agentsLoading: boolean
+  agentsError: string | null
   groups: Group[]
   dmGroups: DmGroup[]
   onlineAgents: Agent[]
@@ -48,7 +50,7 @@ interface ChatContextValue {
   setDirectTarget: (name: string) => void
 
   // Data loading
-  loadAgents: () => Promise<void>
+  loadAgents: (silent?: boolean) => Promise<void>
   loadGroups: () => Promise<void>
 
   // Sidebar actions
@@ -66,6 +68,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
 
   const [agents, setAgents] = useState<Agent[]>([])
+  const [agentsLoading, setAgentsLoading] = useState(true)
+  const [agentsError, setAgentsError] = useState<string | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
   // Read saved identity synchronously so route guards don't see an empty
   // value on first render and bounce the user to /agents on every refresh.
@@ -82,29 +86,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [showCreateGroupModal, setShowCreateGroupModal] = useState<boolean>(false)
   const [directTarget, setDirectTargetState] = useState<string>('')
 
-  const loadAgents = useCallback(async () => {
+  const loadAgents = useCallback(async (silent = false) => {
+    if (!silent) setAgentsLoading(true)
+    setAgentsError(null)
     try {
       const data = await agentsApi.list()
       setAgents(data)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load agents'
+      setAgentsError(message)
       console.error('Failed to load agents:', error)
+    } finally {
+      setAgentsLoading(false)
     }
   }, [])
 
   const loadGroups = useCallback(async () => {
     try {
       const data = await groupsApi.list()
-      const groupsWithMembers = await Promise.all(
-        data.map(async (g) => {
-          try {
-            const detail = await groupsApi.getById(g.id)
-            return { ...g, members: detail.members }
-          } catch {
-            return g
-          }
-        }),
-      )
-      setGroups(groupsWithMembers)
+      setGroups(data)
     } catch (error) {
       console.error('Failed to load groups:', error)
     }
@@ -282,6 +282,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const value: ChatContextValue = {
     agents,
+    agentsLoading,
+    agentsError,
     groups,
     dmGroups,
     onlineAgents,

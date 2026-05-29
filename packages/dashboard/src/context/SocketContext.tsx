@@ -125,7 +125,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           JSON.stringify({ tabId: tabIdRef.current, timestamp: Date.now() }),
         )
         startHeartbeat(ws)
-        loadAgentsRef.current()
       } else if (msg.type === 'auth_fail') {
         setStatus('disconnected')
         clearTimers()
@@ -139,7 +138,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           })
         }
       } else if (msg.type === 'directory_update') {
-        loadAgentsRef.current()
+        loadAgentsRef.current(true)
       }
 
       // Fan out the raw message to any subscribers (chat hook etc).
