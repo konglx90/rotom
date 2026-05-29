@@ -256,11 +256,15 @@
 }
 
 .groupItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 10px 12px;
   cursor: pointer;
   border-radius: var(--radius-md);
   transition: background var(--duration-base) var(--ease-out);
   margin-bottom: 2px;
+  position: relative;
 }
 
 .groupItem:hover {
@@ -271,6 +275,19 @@
   background: var(--color-mint);
 }
 
+.groupItem.pinned {
+  background: rgba(159, 232, 112, 0.10);
+}
+
+.groupItem.pinned.active {
+  background: var(--color-mint);
+}
+
+.groupBody {
+  flex: 1;
+  min-width: 0;
+}
+
 .groupName {
   font-weight: 600;
   font-size: 13px;
@@ -278,6 +295,48 @@
   margin-bottom: 2px;
   word-break: break-all;
   letter-spacing: -0.108px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pinnedMark {
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pinBtn {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color-light);
+  background: var(--color-canvas-elevated);
+  color: var(--color-warm-dark);
+  cursor: pointer;
+  opacity: 0;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              opacity var(--duration-base) var(--ease-out);
+}
+
+.groupItem:hover .pinBtn,
+.groupItem .pinBtnActive {
+  opacity: 1;
+}
+
+.pinBtn:hover {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  border-color: var(--color-mint);
+}
+
+.pinBtnActive {
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  border-color: var(--color-wise-green);
 }
 
 .groupItem.active .groupName {

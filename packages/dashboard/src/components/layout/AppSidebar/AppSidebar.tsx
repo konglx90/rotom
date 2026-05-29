@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, useParams } from 'react-router-dom'
+import { NavLink, useMatch } from 'react-router-dom'
 import { Avatar } from '../../ui/Avatar'
 import { useChatContext } from '../../../context/ChatContext'
 import { useZenMode } from '../../../context/ZenModeContext'
@@ -25,7 +25,10 @@ interface AppSidebarProps {
 
 export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const { zenMode, toggleZenMode } = useZenMode()
-  const { groupId: urlGroupId } = useParams<{ groupId?: string }>()
+  // AppSidebar is rendered above <Routes>, so useParams() can't see the route
+  // params. Match the URL directly to discover the active group id.
+  const groupMatch = useMatch('/dashboard/groups/:groupId/*')
+  const urlGroupId = groupMatch?.params.groupId
   const {
     onlineAgents,
     dmGroups,
@@ -38,6 +41,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     selectGroup,
     openCreateGroupModal,
     openConfigModal,
+    toggleGroupPinned,
   } = useChatContext()
 
   const [dragging, setDragging] = useState(false)
@@ -63,7 +67,17 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
 
   const selectedGroupId = urlGroupId || ''
   const isZen = zenMode
-  const displayGroups = groups.filter((g) => !g.name.startsWith('__dm__:'))
+  // Pinned groups first (sorted by most recently pinned), then everything
+  // else in the order the backend returned (created_at DESC).
+  const displayGroups = groups
+    .filter((g) => !g.name.startsWith('__dm__:'))
+    .slice()
+    .sort((a, b) => {
+      if (a.pinned_at && b.pinned_at) return b.pinned_at.localeCompare(a.pinned_at)
+      if (a.pinned_at) return -1
+      if (b.pinned_at) return 1
+      return 0
+    })
 
   const getDmGroupsForTarget = (targetName: string) =>
     dmGroups.filter((g) => g.dmTarget === targetName)
@@ -277,18 +291,39 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                 <div className={styles.hint}>暂无群组</div>
               ) : (
                 <ul className={styles.groupList}>
-                  {displayGroups.map((group) => (
-                    <li
-                      key={group.id}
-                      className={`${styles.groupItem} ${
-                        selectedGroupId === group.id ? styles.active : ''
-                      }`}
-                      onClick={() => selectGroup(group.id)}
-                    >
-                      <div className={styles.groupName}>{group.name}</div>
-                      <div className={styles.groupMeta}>{group.member_count || 0} 位成员</div>
-                    </li>
-                  ))}
+                  {displayGroups.map((group) => {
+                    const isPinned = Boolean(group.pinned_at)
+                    return (
+                      <li
+                        key={group.id}
+                        className={`${styles.groupItem} ${
+                          selectedGroupId === group.id ? styles.active : ''
+                        } ${isPinned ? styles.pinned : ''}`}
+                        onClick={() => selectGroup(group.id)}
+                      >
+                        <div className={styles.groupBody}>
+                          <div className={styles.groupName}>
+                            {isPinned && (
+                              <span className={styles.pinnedMark} title="已置顶">📌</span>
+                            )}
+                            {group.name}
+                          </div>
+                          <div className={styles.groupMeta}>{group.member_count || 0} 位成员</div>
+                        </div>
+                        <button
+                          type="button"
+                          className={`${styles.pinBtn} ${isPinned ? styles.pinBtnActive : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleGroupPinned(group.id, !isPinned)
+                          }}
+                          title={isPinned ? '取消置顶' : '置顶'}
+                        >
+                          {isPinned ? '取消置顶' : '置顶'}
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>

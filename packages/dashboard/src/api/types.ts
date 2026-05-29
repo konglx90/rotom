@@ -169,6 +169,7 @@ export interface Group {
   created_by: string | null
   created_at: string
   working_dir?: string | null
+  pinned_at?: string | null
   member_count?: number
   members?: GroupMember[]
 }

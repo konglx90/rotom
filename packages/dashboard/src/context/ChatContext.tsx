@@ -60,6 +60,7 @@ interface ChatContextValue {
   selectGroup: (groupId: string) => void
   createGroup: (name: string, memberNames: string[], workingDir?: string) => Promise<void>
   updateGroupWorkingDir: (groupId: string, workingDir: string | null) => Promise<void>
+  toggleGroupPinned: (groupId: string, pinned: boolean) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -217,6 +218,28 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [loadGroups],
   )
 
+  // Optimistic toggle: patch local state first so the pin reordering is
+  // instant; reconcile with the server response so the canonical pinned_at
+  // timestamp ends up matching what the next /groups fetch returns.
+  const toggleGroupPinned = useCallback(
+    async (groupId: string, pinned: boolean) => {
+      const optimisticPinnedAt = pinned ? new Date().toISOString() : null
+      setGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, pinned_at: optimisticPinnedAt } : g)),
+      )
+      try {
+        await groupsApi.setPinned(groupId, pinned)
+        await loadGroups()
+      } catch (error) {
+        console.error('Failed to toggle group pin:', error)
+        await loadGroups()
+        const msg = error instanceof Error ? error.message : String(error)
+        window.alert(`置顶操作失败：${msg}`)
+      }
+    },
+    [loadGroups],
+  )
+
   const handleNewDmConversation = useCallback(
     async (targetName: string) => {
       if (!myAgentName) return
@@ -306,6 +329,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     selectGroup,
     createGroup,
     updateGroupWorkingDir,
+    toggleGroupPinned,
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>

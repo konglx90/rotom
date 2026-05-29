@@ -676,14 +676,18 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(404).json({ error: "Group not found" });
       return;
     }
-    const { name, workingDir } = req.body;
+    const { name, workingDir, pinned } = req.body;
     if (name !== undefined && name !== null) {
       db.updateGroupName(req.params.id, String(name));
       log.info(`Group ${req.params.id} name → ${name}`);
     }
-    if (workingDir === undefined && name === undefined) {
+    if (workingDir === undefined && name === undefined && pinned === undefined) {
       res.status(400).json({ error: "no updatable fields" });
       return;
+    }
+    if (pinned !== undefined) {
+      const next = db.updateGroupPinned(req.params.id, Boolean(pinned));
+      log.info(`Group ${req.params.id} pinned_at → ${next ?? "null"}`);
     }
     if (workingDir !== undefined) {
       let next: string;

@@ -730,6 +730,17 @@ export class MeshDb {
   }
 
   /**
+   * Toggle (or set explicitly) the per-group pinned_at timestamp.
+   * Passing `null` unpins; passing a value pins to "now" (UTC string).
+   */
+  updateGroupPinned(id: string, pinned: boolean): string | null {
+    const next = pinned ? new Date().toISOString() : null;
+    this.db.prepare("UPDATE groups SET pinned_at = ? WHERE id = ?")
+      .run(next, id);
+    return next;
+  }
+
+  /**
    * Backfill working_dir on legacy groups (NULL or empty). Caller supplies the
    * `compute` fn — kept out of db.ts so this module stays free of filesystem
    * conventions (homedir, RESULTS_ROOT, etc.). Returns the list of (id, path)
@@ -755,17 +766,17 @@ export class MeshDb {
     return filled;
   }
 
-  listGroups(): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; member_count: number }[] {
+  listGroups(): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; member_count: number }[] {
     return this.db.prepare(`
       SELECT g.*, COUNT(gm.agent_name) as member_count
       FROM groups g
       LEFT JOIN group_members gm ON g.id = gm.group_id
       GROUP BY g.id
       ORDER BY g.created_at DESC
-    `).all() as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; member_count: number }[];
+    `).all() as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; member_count: number }[];
   }
 
-  listGroupsWithMembers(): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; member_count: number; members: { agent_name: string; joined_at: string }[] }[] {
+  listGroupsWithMembers(): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; member_count: number; members: { agent_name: string; joined_at: string }[] }[] {
     const groups = this.listGroups();
     const rows = this.db.prepare(
       "SELECT group_id, agent_name, joined_at FROM group_members ORDER BY joined_at",
@@ -782,8 +793,8 @@ export class MeshDb {
     return groups.map((g) => ({ ...g, members: byGroup.get(g.id) ?? [] }));
   }
 
-  getGroupById(id: string): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null } | undefined {
-    return this.db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null } | undefined;
+  getGroupById(id: string): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null } | undefined {
+    return this.db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null } | undefined;
   }
 
   deleteGroup(id: string): void {

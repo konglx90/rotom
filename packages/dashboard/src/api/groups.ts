@@ -26,6 +26,10 @@ export const groupsApi = {
     return api.patch<{ ok: boolean; working_dir: string | null }>(`/groups/${id}`, { workingDir })
   },
 
+  async setPinned(id: string, pinned: boolean): Promise<{ ok: boolean }> {
+    return api.patch<{ ok: boolean }>(`/groups/${id}`, { pinned })
+  },
+
   async delete(id: string): Promise<{ ok: boolean }> {
     return api.delete<{ ok: boolean }>(`/groups/${id}`)
   },
