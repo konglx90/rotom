@@ -322,8 +322,7 @@
               opacity var(--duration-base) var(--ease-out);
 }
 
-.groupItem:hover .pinBtn,
-.groupItem .pinBtnActive {
+.groupItem:hover .pinBtn {
   opacity: 1;
 }
 
