@@ -9,6 +9,7 @@ import styles from './AppSidebar.module.css'
 const NAV_TABS = [
   { id: 'agents', label: '员工管理', icon: '👥', path: '/dashboard/agents' },
   { id: 'groups', label: '消息', icon: '💬', path: '/dashboard/groups' },
+  { id: 'kanban', label: '看板', icon: '📋', path: '/dashboard/kanban' },
   { id: 'messages', label: '消息流', icon: '📜', path: '/dashboard/messages' },
 ] as const
 

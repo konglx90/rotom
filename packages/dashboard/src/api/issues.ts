@@ -22,6 +22,11 @@ export const issuesApi = {
     return api.get<Issue[]>(`/groups/${groupId}/issues${qs ? `?${qs}` : ''}`)
   },
 
+  async listAll(status?: string): Promise<Issue[]> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+    return api.get<Issue[]>(`/issues${qs}`)
+  },
+
   async create(groupId: string, data: CreateIssueDto): Promise<{ id: string; title: string; status: string }> {
     return api.post<{ id: string; title: string; status: string }>(`/groups/${groupId}/issues`, data)
   },

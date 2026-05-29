@@ -7,6 +7,7 @@ import { AgentsView } from './features/agents/AgentsView'
 import { GroupChatView } from './features/groups/GroupChatView'
 import { IssueDetailPage } from './features/groups/IssueDetailPage'
 import { IssuesListPage } from './features/groups/IssuesListPage'
+import { KanbanView } from './features/kanban/KanbanView'
 import { MessagesView } from './features/messages/MessagesView'
 import { ConfigModal } from './features/groups/modals/ConfigModal'
 import { CreateGroupModal } from './features/groups/modals/CreateGroupModal'
@@ -54,6 +55,7 @@ function App() {
           <AppShell>
             <Routes>
               <Route path="/dashboard/agents" element={<div className="container-full"><AgentsView /></div>} />
+              <Route path="/dashboard/kanban" element={<RequireAgent><div className="container-full"><KanbanView /></div></RequireAgent>} />
               <Route path="/dashboard/messages" element={<RequireAgent><div className="container-full"><MessagesView /></div></RequireAgent>} />
               <Route path="/dashboard/groups" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
               <Route path="/dashboard/groups/:groupId" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />

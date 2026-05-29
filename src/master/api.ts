@@ -827,6 +827,12 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
 
   // ── Issues (task tracking) ─────────────────────────────────────────────
 
+  // Global issue list across all groups (read-only kanban view)
+  apiRouter.get("/issues", (req, res) => {
+    const status = req.query.status as string | undefined;
+    res.json(db.listAllIssues(status));
+  });
+
   // List issues for a group
   apiRouter.get("/groups/:groupId/issues", (req, res) => {
     const group = db.getGroupById(req.params.groupId);

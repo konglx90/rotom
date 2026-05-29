@@ -850,6 +850,14 @@ export class MeshDb {
     return this.db.prepare(sql).all(...params) as IssueRow[];
   }
 
+  listAllIssues(status?: string): IssueRow[] {
+    let sql = "SELECT * FROM issues";
+    const params: unknown[] = [];
+    if (status) { sql += " WHERE status = ?"; params.push(status); }
+    sql += " ORDER BY created_at DESC";
+    return this.db.prepare(sql).all(...params) as IssueRow[];
+  }
+
   updateIssueStatus(id: string, status: string, extra?: {
     assignedTo?: string | null;
     result?: string | null;
