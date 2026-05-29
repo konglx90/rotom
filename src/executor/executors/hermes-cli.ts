@@ -346,6 +346,23 @@ export class HermesCliExecutor implements CliExecutor {
         return kindMap[kind] ?? title ?? kind;
       }
 
+      // 新版 hermes 把"polished"工具（read_file/terminal/skill_view/...）
+      // 的参数写在 content[].content.text 里而不是 rawInput（见
+      // acp_adapter/tools.py:_POLISHED_TOOLS）。我们之前只读 rawInput
+      // 所以这些工具全显示成 `[tool] read_file: undefined`。
+      // 这里把 content 里第一段非空文本块当成参数展示来源。
+      function extractArgsFromContent(update: Record<string, unknown>): string | undefined {
+        const content = update.content as unknown;
+        if (!Array.isArray(content)) return undefined;
+        for (const block of content) {
+          const b = block as Record<string, unknown> | undefined;
+          const inner = b?.content as Record<string, unknown> | undefined;
+          const text = inner?.text as string | undefined;
+          if (typeof text === "string" && text.trim()) return text;
+        }
+        return undefined;
+      }
+
       function handleNotification(raw: Record<string, unknown>): void {
         const method = raw.method as string;
         if (method !== "session/update" && method !== "session/notification") return;
@@ -386,45 +403,41 @@ export class HermesCliExecutor implements CliExecutor {
           }
           case "tool_call": {
             closeThinkingIfOpen();
-            const toolCallId = (update as Record<string, unknown>).toolCallId as string;
-            const title = (update as Record<string, unknown>).title as string;
-            const kind = (update as Record<string, unknown>).kind as string;
-            const rawInput = ((update as Record<string, unknown>).rawInput ??
-              (update as Record<string, unknown>).input ??
-              (update as Record<string, unknown>).parameters) as Record<string, unknown> | undefined;
+            const u = update as Record<string, unknown>;
+            const toolCallId = u.toolCallId as string;
+            const title = u.title as string;
+            const kind = u.kind as string;
+            const rawInput = (u.rawInput ?? u.input ?? u.parameters) as Record<string, unknown> | undefined;
+            // polished 工具的参数走 content text block，rawInput 会是 null
+            const contentArgs = extractArgsFromContent(u);
 
             const toolName = toolNameFromTitle(title ?? "", kind ?? "");
             if (rawInput && Object.keys(rawInput).length > 0) {
               pendingTools.set(toolCallId, { toolName, input: rawInput, argsText: "", emitted: true });
               onOutput(`[tool] ${toolName}: ${JSON.stringify(rawInput)}\n`);
+            } else if (contentArgs) {
+              pendingTools.set(toolCallId, { toolName, argsText: contentArgs, emitted: true });
+              onOutput(`[tool] ${toolName}: ${contentArgs}\n`);
             } else {
               pendingTools.set(toolCallId, { toolName, argsText: "", emitted: false });
             }
             break;
           }
           case "tool_call_update": {
-            const toolCallId = (update as Record<string, unknown>).toolCallId as string;
-            const status = (update as Record<string, unknown>).status as string;
-            const title = ((update as Record<string, unknown>).title ?? (update as Record<string, unknown>).name) as string;
-            const kind = (update as Record<string, unknown>).kind as string;
-            const rawInput = ((update as Record<string, unknown>).rawInput ??
-              (update as Record<string, unknown>).input ??
-              (update as Record<string, unknown>).parameters) as Record<string, unknown> | undefined;
-            const output = ((update as Record<string, unknown>).rawOutput ??
-              (update as Record<string, unknown>).output) as string | undefined;
+            const u = update as Record<string, unknown>;
+            const toolCallId = u.toolCallId as string;
+            const status = u.status as string;
+            const title = (u.title ?? u.name) as string;
+            const kind = u.kind as string;
+            const rawInput = (u.rawInput ?? u.input ?? u.parameters) as Record<string, unknown> | undefined;
+            const output = (u.rawOutput ?? u.output) as string | undefined;
 
             if (status !== "completed" && status !== "failed") {
-              // Mid-stream update — buffer
+              // Mid-stream update — buffer args from content
               const pt = pendingTools.get(toolCallId);
               if (pt && !pt.emitted) {
-                const content = (update as Record<string, unknown>).content as unknown[];
-                if (Array.isArray(content)) {
-                  for (const block of content) {
-                    const b = block as Record<string, unknown>;
-                    const inner = b.content as Record<string, unknown> | undefined;
-                    if (inner?.text) pt.argsText = inner.text as string;
-                  }
-                }
+                const buffered = extractArgsFromContent(u);
+                if (buffered) pt.argsText = buffered;
               }
               return;
             }
@@ -436,8 +449,14 @@ export class HermesCliExecutor implements CliExecutor {
 
             if (!pt?.emitted) {
               const toolName = pt?.toolName ?? toolNameFromTitle(title ?? "", kind ?? "");
-              const input = pt?.input ?? rawInput;
-              onOutput(`[tool] ${toolName}: ${JSON.stringify(input)}\n`);
+              // 优先级:之前缓冲的 input → 缓冲的 argsText → 完成包里的
+              // rawInput → 完成包 content 里的 text → "(no args)"
+              let argsRepr: string;
+              if (pt?.input) argsRepr = JSON.stringify(pt.input);
+              else if (pt?.argsText) argsRepr = pt.argsText;
+              else if (rawInput) argsRepr = JSON.stringify(rawInput);
+              else argsRepr = extractArgsFromContent(u) ?? "(no args)";
+              onOutput(`[tool] ${toolName}: ${argsRepr}\n`);
             }
 
             if (output) {
