@@ -20,6 +20,7 @@ import { WSHub } from "./ws-hub.js";
 import { Router } from "./router.js";
 import { OfflineQueue } from "./offline-queue.js";
 import { createApi } from "./api.js";
+import { TerminalHub } from "./terminal-hub.js";
 import { DEFAULT_MASTER_PORT, DEFAULT_MASTER_HOST } from "../shared/constants.js";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
 
@@ -130,6 +131,11 @@ async function main(): Promise<void> {
   const hub = new WSHub(httpServer, db, auth, router, offlineQueue, log);
   hub.start();
 
+  // Web terminal hub — mounts on /api/terminal alongside the agent /ws.
+  // Lazy-loads node-pty; no-op if the optional dep isn't installed.
+  const terminalHub = new TerminalHub(httpServer, db, log);
+  await terminalHub.start();
+
   // REST API — shares auth service and hub with WSHub
   app.use("/api", createApi(db, auth, hub, router, config.port));
 
@@ -139,6 +145,7 @@ async function main(): Promise<void> {
       log.info(`Running on http://${config.host}:${config.port}`);
       log.info(`Dashboard: http://localhost:${config.port}/dashboard`);
       log.info(`WebSocket: ws://localhost:${config.port}/ws`);
+      log.info(`Terminal:  ws://localhost:${config.port}/api/terminal`);
       log.info(`API: http://localhost:${config.port}/api`);
       log.warn("API authentication is DISABLED (internal network mode)");
       resolve();
@@ -149,6 +156,7 @@ async function main(): Promise<void> {
   const shutdown = () => {
     log.info("Shutting down...");
     hub.stop();
+    terminalHub.stop();
     router.stop();
     db.close();
     httpServer.close(() => {

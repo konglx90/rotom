@@ -1,0 +1,86 @@
+.terminalPane {
+  display: flex;
+  flex-direction: column;
+  /* Compete with siblings (fileTree, previewSection) for vertical space.
+     basis = preferred height; shrink:1 keeps the bottom from being pushed
+     below the visible panel when the file preview is also open on shorter
+     screens; min-height keeps the terminal at least a few rows tall. */
+  flex: 0 1 240px;
+  min-height: 120px;
+  border-top: 1px solid var(--border-color-light);
+  background: #1e1e1e;
+  overflow: hidden;
+  transition: flex-basis 0.15s ease;
+}
+
+.terminalPane.expanded {
+  flex-basis: 420px;
+}
+
+.terminalPane.collapsed {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--color-paper, #fafafa);
+  border-bottom: 1px solid var(--border-color-light);
+  flex-shrink: 0;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+  letter-spacing: -0.01em;
+}
+
+.status {
+  font-size: 11px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+}
+
+.statusOk {
+  color: var(--color-wise-green, #2f7a2f);
+}
+
+.statusPending {
+  color: var(--color-slate, #888);
+}
+
+.statusBad {
+  color: #c0392b;
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.term {
+  flex: 1;
+  min-height: 0;
+  /* No padding here — FitAddon computes rows from clientHeight, and any
+     padding gets subtracted from rendered area but xterm's internal viewport
+     still tries to fill 100%, which clips the last row under the bottom edge.
+     Visual breathing room is provided by xterm itself via cell ascenders. */
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.term :global(.xterm) {
+  height: 100%;
+  padding: 4px 6px;
+  box-sizing: border-box;
+}
+
+.term :global(.xterm-viewport) {
+  background-color: transparent !important;
+}

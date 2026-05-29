@@ -19,7 +19,8 @@
     "dashboard:build": "pnpm --filter @a2a-gateway/dashboard build",
     "dashboard:preview": "pnpm --filter @a2a-gateway/dashboard preview",
     "executor": "node --import tsx src/executor/index.ts",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "postinstall": "node scripts/fix-node-pty-perms.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -35,7 +36,8 @@
     "skill"
   ],
   "optionalDependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^11.0.0",
+    "node-pty": "^1.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
@@ -49,7 +51,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3",
-      "esbuild"
+      "esbuild",
+      "node-pty"
     ]
   },
   "repository": "git@code.alipay.com:cattery/open-a2a-gateway.git"

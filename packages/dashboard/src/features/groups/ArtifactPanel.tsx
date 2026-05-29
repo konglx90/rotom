@@ -3,11 +3,23 @@ import Editor, { DiffEditor } from '@monaco-editor/react'
 import { artifactsApi } from '../../api/artifacts'
 import type { ArtifactFile, ArtifactContent, ArtifactOriginal } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { TerminalPane } from './TerminalPane'
 import styles from './ArtifactPanel.module.css'
 
 interface ArtifactPanelProps {
   groupId: string
 }
+
+/** Depth at which directories are expanded by default on first load. */
+const DEFAULT_EXPAND_DEPTH = 1
+
+/**
+ * Bus for "expand all / collapse all" actions. Bumping `token` re-applies
+ * `mode` even when its value hasn't changed (otherwise React's effect would
+ * skip a second click on the same button). `mode: null` lets nodes use their
+ * own depth-based default.
+ */
+type ExpandSignal = { token: number; mode: 'expand' | 'collapse' | null }
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
@@ -47,15 +59,23 @@ function FileTreeNode({
   selectedPath,
   onSelect,
   depth,
+  expandSignal,
 }: {
   file: ArtifactFile
   selectedPath: string | null
   onSelect: (file: ArtifactFile) => void
   depth: number
+  expandSignal: ExpandSignal
 }) {
-  const [expanded, setExpanded] = useState(true)
   const isDir = file.type === 'directory'
+  const [expanded, setExpanded] = useState(() => isDir && depth < DEFAULT_EXPAND_DEPTH)
   const isActive = file.path === selectedPath
+
+  useEffect(() => {
+    if (!isDir) return
+    if (expandSignal.mode === 'expand') setExpanded(true)
+    else if (expandSignal.mode === 'collapse') setExpanded(false)
+  }, [expandSignal.token, expandSignal.mode, isDir])
 
   return (
     <li>
@@ -87,6 +107,7 @@ function FileTreeNode({
               selectedPath={selectedPath}
               onSelect={onSelect}
               depth={depth + 1}
+              expandSignal={expandSignal}
             />
           ))}
         </ul>
@@ -106,6 +127,7 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
   const [diffLoading, setDiffLoading] = useState(false)
   const [diffBase, setDiffBase] = useState<string>('HEAD')
   const [mode, setMode] = useState<'view' | 'diff'>('view')
+  const [expandSignal, setExpandSignal] = useState<ExpandSignal>({ token: 0, mode: null })
 
   const loadFiles = useCallback(async () => {
     try {
@@ -113,6 +135,9 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
       const data = await artifactsApi.list(groupId)
       setRoot(data.root)
       setFiles(data.files ?? [])
+      // Reset expand-all/collapse-all so freshly-mounted nodes fall back to
+      // their depth-based default (top level open, deeper levels closed).
+      setExpandSignal({ token: 0, mode: null })
     } catch (err) {
       console.error('Failed to load artifacts:', err)
     } finally {
@@ -175,11 +200,30 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
       <div className={styles.artifactHeader}>
         <h3 className={styles.artifactTitle}>{'\u{1F4E6}'} 产物</h3>
         <div className={styles.previewActions}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setExpandSignal((s) => ({ token: s.token + 1, mode: 'expand' }))}
+          >
+            展开
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setExpandSignal((s) => ({ token: s.token + 1, mode: 'collapse' }))}
+          >
+            折叠
+          </Button>
           <Button variant="ghost" size="sm" onClick={loadFiles}>
             刷新
           </Button>
         </div>
       </div>
+      {root && (
+        <div className={styles.rootHint} title={root}>
+          {root}
+        </div>
+      )}
 
       {loading ? (
         <div className={styles.loadingText}>加载中...</div>
@@ -201,6 +245,7 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
               selectedPath={selectedFile?.path ?? null}
               onSelect={handleSelect}
               depth={0}
+              expandSignal={expandSignal}
             />
           ))}
         </ul>
@@ -300,6 +345,8 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
           ) : null}
         </div>
       )}
+
+      <TerminalPane groupId={groupId} />
     </div>
   )
 }

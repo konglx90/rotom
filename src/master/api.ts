@@ -15,6 +15,7 @@ import { AuthService, hashToken } from "./auth.js";
 import type { WSHub } from "./ws-hub.js";
 import type { Router } from "./router.js";
 import type { AgentProfile } from "../shared/protocol.js";
+import { defaultGroupWorkingDir, resolveGroupArtifactRoot } from "./group-paths.js";
 
 import { createLogger } from "../shared/logger.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
@@ -24,14 +25,6 @@ const log = createLogger("mesh-api");
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Root directory under which per-group working dirs (and artifacts) live. */
-const RESULTS_ROOT = path.join(os.homedir(), ".rotom", "results");
-
-/** Absolute default working dir for a group — used as cwd when no override. */
-function defaultGroupWorkingDir(groupId: string): string {
-  return path.join(RESULTS_ROOT, groupId);
-}
 
 /** Idempotent recursive mkdir; throws on permission errors. */
 function ensureDir(p: string): void {
@@ -1429,7 +1422,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
 
   // List artifact files for a group
   apiRouter.get("/artifacts/:groupId", (req, res) => {
-    const groupDir = path.join(RESULTS_ROOT, req.params.groupId);
+    const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
     if (!fs.existsSync(groupDir)) {
       res.json([]);
       return;
@@ -1499,7 +1492,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(400).json({ error: "path query parameter is required" });
       return;
     }
-    const groupDir = path.join(RESULTS_ROOT, req.params.groupId);
+    const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
     const resolved = path.resolve(groupDir, filePath);
     // Path traversal check
     if (!resolved.startsWith(path.resolve(groupDir))) {
@@ -1542,7 +1535,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(400).json({ error: "Invalid base ref" });
       return;
     }
-    const groupDir = path.join(RESULTS_ROOT, req.params.groupId);
+    const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
     const resolved = path.resolve(groupDir, filePath);
     if (!resolved.startsWith(path.resolve(groupDir))) {
       res.status(403).json({ error: "Invalid path" });
@@ -1611,7 +1604,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(400).json({ error: "Invalid base ref" });
       return;
     }
-    const groupDir = path.join(RESULTS_ROOT, req.params.groupId);
+    const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
     const resolved = path.resolve(groupDir, filePath);
     if (!resolved.startsWith(path.resolve(groupDir))) {
       res.status(403).json({ error: "Invalid path" });
