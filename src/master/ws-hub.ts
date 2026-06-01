@@ -615,8 +615,9 @@ export class WSHub {
           if (metadata?.artifacts) extra.artifacts = metadata.artifacts;
           // 续聊用:首次/再次执行结束时 worker 把 cli sessionId 带回来,落到
           // issue 表上,POST /issues/:id/continue 时再读回去 --resume。
-          if (typeof metadata?.sessionId === "string" && metadata.sessionId) {
-            extra.sessionId = metadata.sessionId;
+          // null = resume failed, clear stale session_id in DB.
+          if (metadata?.sessionId !== undefined) {
+            extra.sessionId = metadata.sessionId as string | null;
           }
           if (typeof metadata?.cliTool === "string" && metadata.cliTool) {
             extra.cliTool = metadata.cliTool;

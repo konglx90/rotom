@@ -519,7 +519,14 @@ export class ExecutorWorker {
       // Persist sessionId + cliTool so the master can feed them back for
       // continuation (POST /issues/:id/continue → issue_continue WS).
       const sessionMeta: Record<string, unknown> = { artifacts };
-      if (result.sessionId) sessionMeta.sessionId = result.sessionId;
+      if (result.sessionId) {
+        sessionMeta.sessionId = result.sessionId;
+      } else if (resumeSessionId) {
+        // Resume was requested but executor returned no session (e.g. claude
+        // "No conversation found"). Clear the stale session_id in DB so the
+        // next continuation starts fresh instead of retrying the dead session.
+        sessionMeta.sessionId = null;
+      }
       sessionMeta.cliTool = this.cliTool;
 
       if (result.sessionId) lastSessionId = result.sessionId;
