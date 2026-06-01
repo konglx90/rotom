@@ -32,6 +32,7 @@ export function GroupChatView() {
     openConfigModal,
     loadGroups,
     updateGroupWorkingDir,
+    toggleGroupArchived,
   } = useChatContext()
   const { status: connectionStatus, send, lastIssueChange, reconnect } = useSocket()
 
@@ -229,6 +230,15 @@ export function GroupChatView() {
     }
   }
 
+  const handleArchiveGroup = async (archived: boolean) => {
+    if (!selectedGroupId) return
+    try {
+      await toggleGroupArchived(selectedGroupId, archived)
+    } catch (error) {
+      console.error('Failed to toggle archived:', error)
+    }
+  }
+
   const handleDeleteGroup = async () => {
     if (!selectedGroupId) return
     if (!confirm('确定要删除这个群吗？')) return
@@ -325,6 +335,7 @@ export function GroupChatView() {
             onShowConfig={openConfigModal}
             onAddMembers={() => setShowAddMemberModal(true)}
             onDeleteGroup={handleDeleteGroup}
+            onArchiveGroup={handleArchiveGroup}
             onReconnect={reconnect}
             onUpdateWorkingDir={(dir) => updateGroupWorkingDir(selectedGroup.id, dir)}
           />

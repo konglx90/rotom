@@ -793,7 +793,7 @@ export class MeshDb {
       LEFT JOIN group_members gm ON g.id = gm.group_id
       GROUP BY g.id
       ORDER BY g.created_at DESC
-    `).all() as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; member_count: number }[];
+    `).all() as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null; member_count: number }[];
   }
 
   listGroupsWithMembers(): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null; member_count: number; members: { agent_name: string; joined_at: string }[] }[] {
@@ -814,7 +814,7 @@ export class MeshDb {
   }
 
   getGroupById(id: string): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null } | undefined {
-    return this.db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null } | undefined;
+    return this.db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null } | undefined;
   }
 
   deleteGroup(id: string): void {
@@ -933,11 +933,13 @@ export class MeshDb {
   /** Atomically claim the next unassigned issue for an executor agent. */
   claimNextIssue(agentName: string): IssueRow | undefined {
     const issue = this.db.prepare(`
-      SELECT * FROM issues
-      WHERE status = 'open' AND assigned_to IS NULL AND type = 'task'
+      SELECT i.* FROM issues i
+      JOIN groups g ON g.id = i.group_id
+      WHERE i.status = 'open' AND i.assigned_to IS NULL AND i.type = 'task'
+        AND g.archived_at IS NULL
       ORDER BY
-        CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-        created_at ASC
+        CASE i.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+        i.created_at ASC
       LIMIT 1
     `).get() as IssueRow | undefined;
     if (!issue) return undefined;

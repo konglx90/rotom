@@ -61,6 +61,7 @@ interface ChatContextValue {
   createGroup: (name: string, memberNames: string[], workingDir?: string) => Promise<void>
   updateGroupWorkingDir: (groupId: string, workingDir: string | null) => Promise<void>
   toggleGroupPinned: (groupId: string, pinned: boolean) => Promise<void>
+  toggleGroupArchived: (groupId: string, archived: boolean) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -239,6 +240,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     },
     [loadGroups],
   )
+  const toggleGroupArchived = useCallback(
+    async (groupId: string, archived: boolean) => {
+      setGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, archived } : g)),
+      )
+      try {
+        await groupsApi.setArchived(groupId, archived)
+        await loadGroups()
+      } catch (error) {
+        console.error("Failed to toggle group archive:", error)
+        await loadGroups()
+        const msg = error instanceof Error ? error.message : String(error)
+        window.alert(`归档操作失败：${msg}`)
+      }
+    },
+    [loadGroups],
+  )
+
 
   const handleNewDmConversation = useCallback(
     async (targetName: string) => {
@@ -330,6 +349,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     createGroup,
     updateGroupWorkingDir,
     toggleGroupPinned,
+    toggleGroupArchived,
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>

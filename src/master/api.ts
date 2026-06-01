@@ -677,7 +677,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(404).json({ error: "Group not found" });
       return;
     }
-    const { name, workingDir, pinned } = req.body;
+    const { name, workingDir, pinned, archived } = req.body;
     if (name !== undefined && name !== null) {
       db.updateGroupName(req.params.id, String(name));
       log.info(`Group ${req.params.id} name → ${name}`);

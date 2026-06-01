@@ -23,6 +23,62 @@ interface AppSidebarProps {
   onWidthChange: (w: number) => void
 }
 
+function ArchivedSection({ archivedGroups, selectedGroupId, selectGroup, toggleGroupArchived }: {
+  archivedGroups: { id: string; name: string; pinned_at?: string | null; member_count?: number; created_at: string }[]
+  selectedGroupId: string
+  selectGroup: (id: string) => void
+  toggleGroupArchived: (id: string, archived: boolean) => Promise<void>
+}) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className={styles.archivedSection}>
+      <div
+        className={styles.archivedSectionHeader}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className={styles.archivedSectionArrow}>
+          {expanded ? '▼' : '▶'}
+        </span>
+        <span className={styles.archivedSectionTitle}>已归档</span>
+        <span className={styles.archivedSectionCount}>{archivedGroups.length}</span>
+      </div>
+      {expanded && (
+        <ul className={styles.groupList}>
+          {archivedGroups.map((group) => {
+            const isActive = selectedGroupId === group.id
+            return (
+              <li
+                key={group.id}
+                className={`${styles.groupItem} ${styles.archived} ${isActive ? styles.active : ''}`}
+                onClick={() => selectGroup(group.id)}
+              >
+                <div className={styles.groupBody}>
+                  <div className={styles.groupName}>
+                    <span className={styles.archivedMark} title="已归档">🗄️</span>
+                    {group.name}
+                  </div>
+                  <div className={styles.groupMeta}>已归档</div>
+                </div>
+                <button
+                  type="button"
+                  className={`${styles.archiveBtn} ${styles.archiveBtnActive}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleGroupArchived(group.id, false)
+                  }}
+                  title="取消归档"
+                >
+                  取消归档
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const { zenMode, toggleZenMode } = useZenMode()
   // AppSidebar is rendered above <Routes>, so useParams() can't see the route
@@ -42,9 +98,11 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     openCreateGroupModal,
     openConfigModal,
     toggleGroupPinned,
+    toggleGroupArchived,
   } = useChatContext()
 
   const [dragging, setDragging] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
   const [navCompact, setNavCompact] = useState(() => {
     try {
       return localStorage.getItem('rotom-nav-compact') === '1'
@@ -66,10 +124,10 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
 
   const selectedGroupId = urlGroupId || ''
   const isZen = zenMode
-  // Pinned groups first (sorted by most recently pinned), then everything
-  // else in the order the backend returned (created_at DESC).
-  const displayGroups = groups
-    .filter((g) => !g.name.startsWith('__dm__:'))
+  // Pinned groups first (sorted by most recently pinned), then active groups
+  // by created_at DESC, then archived groups at the bottom.
+  const activeGroups = groups
+    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at)
     .slice()
     .sort((a, b) => {
       if (a.pinned_at && b.pinned_at) return b.pinned_at.localeCompare(a.pinned_at)
@@ -77,6 +135,11 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
       if (b.pinned_at) return 1
       return 0
     })
+  const archivedGroups = groups
+    .filter((g) => g.archived_at)
+    .slice()
+    .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+  const displayGroups = activeGroups
 
   const getDmGroupsForTarget = (targetName: string) =>
     dmGroups.filter((g) => g.dmTarget === targetName)
@@ -164,7 +227,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                 ))}
               </ul>
             )}
-            {onlineAgents.length > 0 && displayGroups.length > 0 && (
+            {(onlineAgents.length > 0 || archivedGroups.length > 0) && displayGroups.length > 0 && (
               <div className={styles.zenDivider} />
             )}
             {displayGroups.length > 0 && (
@@ -189,6 +252,37 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                   </li>
                 ))}
               </ul>
+            )}
+            {archivedGroups.length > 0 && displayGroups.length > 0 && onlineAgents.length === 0 && (
+              <div className={styles.zenDivider} />
+            )}
+            {archivedGroups.length > 0 && (
+              <>
+                {displayGroups.length > 0 && onlineAgents.length > 0 && (
+                  <div className={styles.zenDivider} />
+                )}
+                <ul className={styles.zenList}>
+                  {archivedGroups.map((group) => (
+                    <li key={group.id}>
+                      <button
+                        type="button"
+                        className={`${styles.zenItem} ${styles.zenItemArchived} ${
+                          selectedGroupId === group.id ? styles.zenItemActive : ''
+                        }`}
+                        onClick={() => selectGroup(group.id)}
+                        title={`${group.name} (已归档)`}
+                      >
+                        <span
+                          className={styles.zenLetterAvatar}
+                          style={{ background: getAvatarColor(group.name) }}
+                        >
+                          {(group.name.charAt(0) || '#').toUpperCase()}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
         ) : (
@@ -278,44 +372,69 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                   + 新建群
                 </button>
               </div>
-              {displayGroups.length === 0 ? (
+              {displayGroups.length === 0 && archivedGroups.length === 0 ? (
                 <div className={styles.hint}>暂无群组</div>
               ) : (
-                <ul className={styles.groupList}>
-                  {displayGroups.map((group) => {
-                    const isPinned = Boolean(group.pinned_at)
-                    return (
-                      <li
-                        key={group.id}
-                        className={`${styles.groupItem} ${
-                          selectedGroupId === group.id ? styles.active : ''
-                        } ${isPinned ? styles.pinned : ''}`}
-                        onClick={() => selectGroup(group.id)}
-                      >
-                        <div className={styles.groupBody}>
-                          <div className={styles.groupName}>
-                            {isPinned && (
-                              <span className={styles.pinnedMark} title="已置顶">📌</span>
-                            )}
-                            {group.name}
-                          </div>
-                          <div className={styles.groupMeta}>{group.member_count || 0} 位成员</div>
-                        </div>
-                        <button
-                          type="button"
-                          className={`${styles.pinBtn} ${isPinned ? styles.pinBtnActive : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleGroupPinned(group.id, !isPinned)
-                          }}
-                          title={isPinned ? '取消置顶' : '置顶'}
-                        >
-                          {isPinned ? '取消置顶' : '置顶'}
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
+                <>
+                  {displayGroups.length > 0 && (
+                    <ul className={styles.groupList}>
+                      {displayGroups.map((group) => {
+                        const isPinned = Boolean(group.pinned_at)
+                        return (
+                          <li
+                            key={group.id}
+                            className={`${styles.groupItem} ${
+                              selectedGroupId === group.id ? styles.active : ''
+                            } ${isPinned ? styles.pinned : ''}`}
+                            onClick={() => selectGroup(group.id)}
+                          >
+                            <div className={styles.groupBody}>
+                              <div className={styles.groupName}>
+                                {isPinned && (
+                                  <span className={styles.pinnedMark} title="已置顶">📌</span>
+                                )}
+                                {group.name}
+                              </div>
+                              <div className={styles.groupMeta}>
+                                {`${group.member_count || 0} 位成员`}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className={`${styles.pinBtn} ${isPinned ? styles.pinBtnActive : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleGroupPinned(group.id, !isPinned)
+                              }}
+                              title={isPinned ? '取消置顶' : '置顶'}
+                            >
+                              {isPinned ? '取消置顶' : '置顶'}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.archiveBtn}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleGroupArchived(group.id, true)
+                              }}
+                              title="归档"
+                            >
+                              归档
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                  {archivedGroups.length > 0 && (
+                    <ArchivedSection
+                      archivedGroups={archivedGroups}
+                      selectedGroupId={selectedGroupId}
+                      selectGroup={selectGroup}
+                      toggleGroupArchived={toggleGroupArchived}
+                    />
+                  )}
+                </>
               )}
             </div>
           </>

@@ -300,6 +300,7 @@
   gap: 4px;
 }
 
+
 .pinnedMark {
   font-size: 11px;
   line-height: 1;
@@ -336,6 +337,23 @@
   background: var(--color-wise-green);
   color: var(--color-dark-green);
   border-color: var(--color-wise-green);
+}
+
+.archivedMark {
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.groupItem.archived {
+  opacity: 0.5;
+  filter: grayscale(0.6);
+}
+
+.groupItem.archived:hover {
+  opacity: 0.7;
+  filter: grayscale(0.4);
 }
 
 .groupItem.active .groupName {
@@ -679,4 +697,87 @@
   .resizer {
     display: none;
   }
+}
+
+/* ── Archive button ──────────────────────────────────────── */
+.archiveBtn {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color-light);
+  background: var(--color-canvas-elevated);
+  color: var(--color-warm-dark);
+  cursor: pointer;
+  opacity: 0;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              opacity var(--duration-base) var(--ease-out);
+}
+
+.groupItem:hover .archiveBtn {
+  opacity: 1;
+}
+
+.archiveBtn:hover {
+  background: var(--color-bg-warning);
+  color: var(--color-warning-text);
+  border-color: var(--color-bg-warning);
+}
+
+.archiveBtnActive {
+  background: var(--color-bg-warning);
+  color: var(--color-warning-text);
+  border-color: var(--color-bg-warning);
+}
+
+/* ── Archived section (collapsible) ────────────────────── */
+.archivedSection {
+  margin-top: 4px;
+}
+
+.archivedSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-base);
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+.archivedSectionHeader:hover {
+  background: var(--color-canvas-elevated);
+}
+
+.archivedSectionArrow {
+  font-size: 9px;
+  color: var(--color-gray);
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+}
+
+.archivedSectionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gray);
+}
+
+.archivedSectionCount {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-surface);
+  background: var(--color-gray);
+  border-radius: 10px;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+
+/* ── Zen mode archived item ────────────────────────────── */
+.zenItemArchived .zenLetterAvatar {
+  opacity: 0.4;
+  filter: grayscale(0.7);
 }

@@ -22,6 +22,7 @@ interface GroupChatAreaProps {
   onShowConfig: () => void
   onAddMembers: () => void
   onDeleteGroup: () => void
+  onArchiveGroup: (archived: boolean) => void
   onReconnect: () => void
   onUpdateWorkingDir: (dir: string | null) => void
 }
@@ -36,6 +37,7 @@ export function GroupChatArea({
   onShowConfig,
   onAddMembers,
   onDeleteGroup,
+  onArchiveGroup,
   onReconnect,
   onUpdateWorkingDir,
 }: GroupChatAreaProps) {
@@ -116,8 +118,15 @@ export function GroupChatArea({
     setMessage('')
   }
 
+  const isArchived = Boolean(selectedGroup.archived_at)
+
   return (
     <>
+      {isArchived && (
+        <div className={styles.archivedBanner}>
+          🗄️ 该群已归档，只读模式
+        </div>
+      )}
       <div className={styles.chatHeader}>
         <div className={styles.chatHeaderLeft}>
           <h3 className={styles.chatTitle}>{selectedGroup.name}</h3>
@@ -156,6 +165,16 @@ export function GroupChatArea({
           <Button variant="ghost" size="sm" onClick={onAddMembers}>+ 拉人</Button>
           <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig} title="设置">⚙️</Button>
           <Button variant="danger" outline size="sm" onClick={onDeleteGroup}>删除</Button>
+          {!isArchived && (
+            <Button variant="ghost" size="sm" onClick={() => onArchiveGroup(true)} title="归档此群（只读）">
+              🗄️ 归档
+            </Button>
+          )}
+          {isArchived && (
+            <Button variant="ghost" size="sm" onClick={() => onArchiveGroup(false)} title="取消归档">
+              取消归档
+            </Button>
+          )}
         </div>
       </div>
 
@@ -254,11 +273,13 @@ export function GroupChatArea({
       <div className={styles.inputArea}>
         <textarea ref={inputRef} rows={1} value={message}
           onChange={e => {
+            if (isArchived) return;
             handleInputChange(e.target.value);
             e.target.style.height = 'auto';
             e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
           }}
           onKeyDown={e => {
+            if (isArchived) return;
             if (showMentionDropdown && filteredMentionAgents.length > 0) {
               if (e.key === 'ArrowDown') {
                 e.preventDefault()
@@ -288,12 +309,17 @@ export function GroupChatArea({
               e.currentTarget.style.height = 'auto';
             }
           }}
-          placeholder={connectionStatus === 'connected' ? '输入消息... (Shift+Enter 换行, @ 提及成员)' : '等待连接...'}
+          placeholder={connectionStatus === 'connected' && !selectedGroup.archived_at ? '输入消息... (Shift+Enter 换行, @ 提及成员)' : '等待连接...'}
           disabled={connectionStatus !== 'connected'}
           className={styles.messageInput} />
         <button onClick={handleSend}
-          disabled={!message.trim() || connectionStatus !== 'connected'}
+          disabled={isArchived || !message.trim() || connectionStatus !== 'connected'}
           className={styles.sendBtn}>发送</button>
+        {isArchived && (
+          <div className={styles.archivedNotice}>
+            🗄️ 已归档
+          </div>
+        )}
 
         {showMentionDropdown && filteredMentionAgents.length > 0 && (
           <div className={styles.mentionDropdown}>

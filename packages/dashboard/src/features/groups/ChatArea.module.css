@@ -441,3 +441,24 @@
   border-radius: 50%;
   background: var(--color-gray);
 }
+
+/* ── Archived banner ────────────────────────────────────── */
+.archivedBanner {
+  padding: 8px 16px;
+  background: var(--color-bg-warning);
+  color: var(--color-warning-text);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color-light);
+}
+
+.archivedNotice {
+  position: absolute;
+  bottom: 8px;
+  right: 60px;
+  font-size: 11px;
+  color: var(--color-gray);
+  font-weight: 500;
+  pointer-events: none;
+}
