@@ -356,6 +356,18 @@ export class WSHub {
         const fromDomain = conn?.domain;
         const routeType = "exact";
 
+        // Block messages for archived groups
+        if (msg.conversation?.groupId && this.db.isGroupArchived(msg.conversation.groupId)) {
+          this.send(ws, {
+            type: "route_result",
+            requestId: msg.requestId,
+            delivered: false,
+            queued: false,
+            error: "Group is archived",
+          });
+          return;
+        }
+
         let delivered = false;
         let queued = false;
 

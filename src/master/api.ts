@@ -526,6 +526,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
     if (!hub) { res.status(500).json({ error: "WSHub not available" }); return; }
     const group = db.getGroupById(req.params.groupId);
     if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot send messages" }); return; }
     const { target, message } = req.body || {};
     if (!target || !message) { res.status(400).json({ error: "target and message are required" }); return; }
     const r = hub.sendAsAgent({
@@ -681,13 +682,17 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       db.updateGroupName(req.params.id, String(name));
       log.info(`Group ${req.params.id} name → ${name}`);
     }
-    if (workingDir === undefined && name === undefined && pinned === undefined) {
+    if (workingDir === undefined && name === undefined && pinned === undefined && archived === undefined) {
       res.status(400).json({ error: "no updatable fields" });
       return;
     }
     if (pinned !== undefined) {
       const next = db.updateGroupPinned(req.params.id, Boolean(pinned));
       log.info(`Group ${req.params.id} pinned_at → ${next ?? "null"}`);
+    }
+    if (archived !== undefined) {
+      const next = db.updateGroupArchived(req.params.id, Boolean(archived));
+      log.info(`Group ${req.params.id} archived_at → ${next ?? "null"}`);
     }
     if (workingDir !== undefined) {
       let next: string;
@@ -742,6 +747,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(404).json({ error: "Group not found" });
       return;
     }
+    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot modify members" }); return; }
     const { agentNames } = req.body;
     if (!Array.isArray(agentNames) || agentNames.length === 0) {
       res.status(400).json({ error: "agentNames array is required" });
@@ -757,6 +763,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(404).json({ error: "Group not found" });
       return;
     }
+    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot modify members" }); return; }
     const { agentNames } = req.body;
     if (!Array.isArray(agentNames) || agentNames.length === 0) {
       res.status(400).json({ error: "agentNames array is required" });
@@ -782,6 +789,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(404).json({ error: "Group not found" });
       return;
     }
+    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot send messages" }); return; }
     const { sender, content, mentions } = req.body;
     if (!sender || !content) {
       res.status(400).json({ error: "sender and content are required" });
@@ -849,6 +857,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(404).json({ error: "Group not found" });
       return;
     }
+    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot create issues" }); return; }
     const { title, description, priority, createdBy, workingDir, approvalPolicy } = req.body;
     if (!title || !createdBy) {
       res.status(400).json({ error: "title and createdBy are required" });
@@ -1294,6 +1303,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       res.status(404).json({ error: "Group not found" });
       return;
     }
+    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot create collaborations" }); return; }
     const { title, collaborationGoal, participants, maxRounds, owner, createdBy } = req.body;
     if (!title || !collaborationGoal || !participants?.length) {
       res.status(400).json({ error: "title, collaborationGoal, and participants are required" });
@@ -1452,6 +1462,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       }
       for (const item of items) {
         if (item.name.startsWith(".")) continue;
+        if (item.name === "node_modules") continue;
         const fullPath = path.join(dir, item.name);
         const relPath = path.relative(base, fullPath);
         if (item.isDirectory()) {

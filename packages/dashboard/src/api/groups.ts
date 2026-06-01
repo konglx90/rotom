@@ -30,6 +30,10 @@ export const groupsApi = {
     return api.patch<{ ok: boolean }>(`/groups/${id}`, { pinned })
   },
 
+  async setArchived(id: string, archived: boolean): Promise<{ ok: boolean }> {
+    return api.patch<{ ok: boolean }>(`/groups/${id}`, { archived })
+  },
+
   async delete(id: string): Promise<{ ok: boolean }> {
     return api.delete<{ ok: boolean }>(`/groups/${id}`)
   },

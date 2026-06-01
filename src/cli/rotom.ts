@@ -308,6 +308,8 @@ Read:
   group list
   group members <groupId>
   group history <groupId> [--limit N]
+  group archive <groupId>
+  group unarchive <groupId>
   issue list <groupId> [--status S] [--type task|collaboration]
   issue show <issueId>
   issue events <issueId>
@@ -430,8 +432,8 @@ async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Record<stri
   const sub = rest[0];
   if (sub === "list") {
     const data = await api(agent, "GET", "/groups");
-    printTable(data.map((g: any) => ({ id: g.id, name: g.name, members: (g.members?.length ?? 0), created_at: g.created_at })),
-      ["id", "name", "members", "created_at"]);
+    printTable(data.map((g: any) => ({ id: g.id, name: g.name, members: (g.members?.length ?? 0), created_at: g.created_at, archived: g.archived_at ? 'yes' : '' })),
+      ["id", "name", "members", "created_at", "archived"]);
     return;
   }
   if (sub === "members") {
@@ -453,6 +455,18 @@ async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Record<stri
     const groupId = rest[1]; const target = rest[2]; const message = rest.slice(3).join(" ");
     if (!groupId || !target || !message) fail("usage: rotom group send <groupId> <target> <message...>");
     const data = await api(agent, "POST", `/cli/groups/${encodeURIComponent(groupId)}/send`, { target, message });
+    printJson(data);
+    return;
+  }
+  if (sub === "archive") {
+    const groupId = rest[1]; if (!groupId) fail("usage: rotom group archive <groupId>");
+    const data = await api(agent, "PATCH", `/groups/${encodeURIComponent(groupId)}`, { archived: true });
+    printJson(data);
+    return;
+  }
+  if (sub === "unarchive") {
+    const groupId = rest[1]; if (!groupId) fail("usage: rotom group unarchive <groupId>");
+    const data = await api(agent, "PATCH", `/groups/${encodeURIComponent(groupId)}`, { archived: false });
     printJson(data);
     return;
   }
