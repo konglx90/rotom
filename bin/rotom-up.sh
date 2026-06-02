@@ -113,38 +113,131 @@ wait_master_ready() {
   return 1
 }
 
+# 校验 Claude Code CLI 已安装（默认执行器依赖它）
+ensure_claude_installed() {
+  if command -v claude &>/dev/null; then
+    return 0
+  fi
+  echo "[rotom-up] ❌ 未检测到 Claude Code CLI (\`claude\`)"
+  echo ""
+  echo "  Rotom 默认以 Claude Code 作为执行器，请先安装："
+  echo "    npm install -g @anthropic-ai/claude-code"
+  echo "  详细文档: https://docs.claude.com/en/docs/claude-code"
+  return 1
+}
+
+# 在 master 已就绪的前提下，自动创建「默认公司」+ 注册 Claude Code worker，
+# 写入 executor.config.json，并把 rotom CLI 的 defaultAgent 指向该 worker。
+bootstrap_default_worker() {
+  local domain="默认公司"
+  local short_host
+  short_host=$(hostname -s 2>/dev/null | tr -cd '[:alnum:]_-' || echo local)
+  [ -z "$short_host" ] && short_host=local
+  local base="http://127.0.0.1:$PORT/api"
+
+  # 1. 创建默认公司（201 新建 / 409 已存在 均视为成功）
+  local domain_code
+  domain_code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/domains" \
+    -H 'Content-Type: application/json' \
+    --data-raw "{\"name\":\"$domain\",\"description\":\"默认公司\"}")
+  case "$domain_code" in
+    201|409) ;;
+    *) echo "[rotom-up] ❌ 创建默认公司失败 (HTTP $domain_code)"; return 1 ;;
+  esac
+
+  # 2. 注册 worker；若 409 冲突则追加序号重试
+  local base_name="claude-$short_host" try_name="" token=""
+  for attempt in 1 2 3 4 5; do
+    local name="$base_name"
+    [ $attempt -gt 1 ] && name="$base_name-$attempt"
+    local body_file; body_file=$(mktemp)
+    local code
+    code=$(curl -s -o "$body_file" -w '%{http_code}' -X POST "$base/agents" \
+      -H 'Content-Type: application/json' \
+      --data-raw "{\"name\":\"$name\",\"domain\":\"$domain\"}")
+    if [ "$code" = "201" ]; then
+      token=$(sed -nE 's/.*"token"[[:space:]]*:[[:space:]]*"(mesh_[^"]+)".*/\1/p' "$body_file")
+      try_name="$name"
+      rm -f "$body_file"
+      break
+    fi
+    local resp; resp=$(cat "$body_file"); rm -f "$body_file"
+    [ "$code" = "409" ] && continue
+    echo "[rotom-up] ❌ 注册 worker 失败 (HTTP $code): $resp"
+    return 1
+  done
+  if [ -z "$token" ]; then
+    echo "[rotom-up] ❌ 注册 worker 失败：名字 \"$base_name\" 多次冲突"
+    return 1
+  fi
+
+  # 3. 写入 executor.config.json
+  cat > "$EXECUTOR_CONFIG" <<EOF
+{
+  "master": "ws://localhost:$PORT",
+  "workers": [
+    { "name": "$try_name", "token": "$token", "cliTool": "claude" }
+  ]
+}
+EOF
+
+  # 4. 设置 rotom CLI 默认身份（不覆盖已有配置）
+  local rotom_cfg="$ROTOM_HOME/config.json"
+  if [ ! -f "$rotom_cfg" ]; then
+    cat > "$rotom_cfg" <<EOF
+{
+  "defaultAgent": "$try_name",
+  "agents": {}
+}
+EOF
+  fi
+
+  echo "[rotom-up] ✅ 已注册默认 worker: $try_name (domain=$domain)"
+  echo "           executor 配置: $EXECUTOR_CONFIG"
+  echo "           rotom CLI 默认身份: $try_name"
+}
+
+# 若 `rotom` 不在 PATH 中，尝试用 pnpm link --global 让它全局可用
+ensure_rotom_on_path() {
+  if command -v rotom &>/dev/null; then
+    local current; current=$(command -v rotom)
+    local target;  target=$(readlink "$current" 2>/dev/null || echo "$current")
+    # 同一仓库的 bin/rotom，无需重复链接
+    if [ "$target" = "$SCRIPT_DIR/bin/rotom" ] || [ "$current" = "$SCRIPT_DIR/bin/rotom" ]; then
+      return 0
+    fi
+  fi
+  echo "[rotom-up] 注册 rotom CLI 为全局命令..."
+  if command -v pnpm &>/dev/null && (cd "$SCRIPT_DIR" && pnpm link --global >/dev/null 2>&1); then
+    echo "[rotom-up] ✅ rotom 已全局可用"
+    return 0
+  fi
+  echo "[rotom-up] ⚠️  自动注册失败，可手动执行任一命令："
+  echo "    cd $SCRIPT_DIR && pnpm link --global"
+  echo "    ln -s $SCRIPT_DIR/bin/rotom /usr/local/bin/rotom"
+  return 0
+}
+
 # ── 命令 ──────────────────────────────────────────────────────────────────────
 
 do_start() {
   fix_path || true
 
-  # 1. 校验 executor 配置
-  if [ ! -f "$EXECUTOR_CONFIG" ]; then
-    echo "[rotom-up] ❌ 未找到 executor 配置: $EXECUTOR_CONFIG"
-    echo "  请先创建该文件，最简内容："
-    cat <<EOF
-    {
-      "master": "ws://localhost:$PORT",
-      "workers": [
-        { "name": "Your·Agent", "token": "mesh_xxx", "cliTool": "claude" }
-      ]
-    }
-EOF
-    return 1
-  fi
+  # 0. 校验 Claude Code 已安装（默认执行器依赖它）
+  ensure_claude_installed || return 1
 
-  # 2. 已经在跑就别重复起
+  # 1. 已经在跑就别重复起
   if is_pid_alive "$MASTER_PID" && is_pid_alive "$EXECUTOR_PID"; then
     echo "[rotom-up] 已在运行 (master PID $(cat "$MASTER_PID"), executor PID $(cat "$EXECUTOR_PID"))"
     return 0
   fi
 
-  # 3. 构建
+  # 2. 构建
   ensure_built
 
-  mkdir -p "$RUN_DIR" "$LOG_DIR" "$DATA"
+  mkdir -p "$ROTOM_HOME" "$RUN_DIR" "$LOG_DIR" "$DATA"
 
-  # 4. 启 Master
+  # 3. 启 Master
   if is_pid_alive "$MASTER_PID"; then
     echo "[rotom-up] master 已在运行 (PID $(cat "$MASTER_PID"))，跳过"
   else
@@ -158,6 +251,15 @@ EOF
       return 1
     fi
     echo "[rotom-up] ✅ master 就绪 (PID $(cat "$MASTER_PID"), http://$HOST:$PORT)"
+  fi
+
+  # 4. 首次启动：自动注册「默认公司」+ Claude Code worker
+  if [ ! -f "$EXECUTOR_CONFIG" ]; then
+    echo "[rotom-up] 未检测到 executor 配置，自动注册默认 worker..."
+    if ! bootstrap_default_worker; then
+      stop_pid_file "$MASTER_PID" master || true
+      return 1
+    fi
   fi
 
   # 5. 启 Executor
@@ -176,6 +278,9 @@ EOF
     fi
     echo "[rotom-up] ✅ executor 就绪 (PID $(cat "$EXECUTOR_PID"))"
   fi
+
+  # 6. 让 rotom CLI 全局可用
+  ensure_rotom_on_path
 
   echo ""
   echo "  Dashboard: http://localhost:$PORT/dashboard"
