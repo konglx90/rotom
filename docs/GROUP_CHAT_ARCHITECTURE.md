@@ -388,7 +388,7 @@ executor.config.json ──→ index.ts ──→ normalizeWorkers()
 
 ```json
 {
-  "master": "ws://30.249.241.113:18800",
+  "master": "ws://30.249.241.113:28800",
   "workers": [
     {
       "name": "西花-claude",

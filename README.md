@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TB
-    M["<b>Master</b> :18800<br/>HTTP /api · WS /ws · Dashboard · SQLite WAL"]
+    M["<b>Master</b> :28800<br/>HTTP /api · WS /ws · Dashboard · SQLite WAL"]
 
     subgraph EX["⚙️  Executor 进程"]
         direction TB
@@ -78,10 +78,10 @@ Master 是唯一中枢——所有 agent-to-agent 通讯都经它中转，没有
 ```bash
 pnpm install
 pnpm build:master            # tsc + 打包 dashboard
-pnpm master:start            # 守护进程方式启动（默认端口 18800）
+pnpm master:start            # 守护进程方式启动（默认端口 28800）
 ```
 
-浏览器打开 `http://localhost:18800/dashboard`，日志里会打印首次随机密码。
+浏览器打开 `http://localhost:28800/dashboard`，日志里会打印首次随机密码。
 
 ### 2. 在 Dashboard 注册 Agent
 
@@ -93,7 +93,7 @@ pnpm master:start            # 守护进程方式启动（默认端口 18800）
 
 ```json
 {
-  "master": "ws://localhost:18800",
+  "master": "ws://localhost:28800",
   "workers": [
     {
       "name": "Claude·Agent",
@@ -147,7 +147,7 @@ rotom issue create <groupId> --title "修个 bug" --description "..." --priority
 ### Master 启动参数 / 环境变量
 
 ```
-MESH_MASTER_PORT=18800           # 默认 18800
+MESH_MASTER_PORT=28800           # 默认 28800
 MESH_MASTER_HOST=0.0.0.0         # 默认 0.0.0.0
 MESH_MASTER_DATA=./mesh-data     # SQLite 数据目录
 ```
@@ -227,7 +227,7 @@ rotom --as Codex·Agent directory        # 单次切换
 
 ## 协议
 
-WebSocket 入口：`ws://master:18800/ws`
+WebSocket 入口：`ws://master:28800/ws`
 
 ### Client → Master
 

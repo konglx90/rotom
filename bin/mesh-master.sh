@@ -16,7 +16,7 @@ PID_FILE="$OPENCLAW_DIR/mesh-master.pid"
 LOG_FILE="$OPENCLAW_DIR/mesh-master.log"
 SVC="com.openclaw.mesh-master"
 
-PORT="${MESH_MASTER_PORT:-18800}"
+PORT="${MESH_MASTER_PORT:-28800}"
 HOST="${MESH_MASTER_HOST:-0.0.0.0}"
 DATA="${MESH_MASTER_DATA:-$SCRIPT_DIR/mesh-data}"
 DAEMON=false

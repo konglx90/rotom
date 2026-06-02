@@ -6,7 +6,7 @@
 export const PROTOCOL_VERSION = 2;
 
 /** Default Master WebSocket port */
-export const DEFAULT_MASTER_PORT = 18800;
+export const DEFAULT_MASTER_PORT = 28800;
 
 /** Default Master bind host */
 export const DEFAULT_MASTER_HOST = "0.0.0.0";

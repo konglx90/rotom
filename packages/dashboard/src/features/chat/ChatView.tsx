@@ -126,7 +126,7 @@ export function ChatView() {
     if (!myAgentName || !myAgentToken) return
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsHost = window.location.hostname === 'localhost' ? 'localhost:18800' : `${window.location.hostname}:18800`
+    const wsHost = window.location.hostname === 'localhost' ? 'localhost:28800' : `${window.location.hostname}:28800`
     const wsUrl = `${wsProtocol}//${wsHost}/ws`
 
     console.log('Connecting to WebSocket:', wsUrl)

@@ -3,10 +3,10 @@
  * Digital Employee Mesh — Master server (standalone entry point)
  *
  * Usage:
- *   node dist/master/server.js [--port 18800] [--host 0.0.0.0] [--data ./mesh-data]
+ *   node dist/master/server.js [--port 28800] [--host 0.0.0.0] [--data ./mesh-data]
  *
  * Or via package.json bin:
- *   mesh-master [--port 18800] [--data ./mesh-data]
+ *   mesh-master [--port 28800] [--data ./mesh-data]
  */
 
 import express from "express";

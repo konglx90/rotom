@@ -6,7 +6,7 @@ This file is the entry point for coding agents working in this repository. Keep 
 
 Rotom（仓库名 `a2a-gateway`）是一个**数字员工 Mesh** —— 一个中心化的 agent 协作网络。三个独立组件：
 
-- **Master**（`src/master/`）：唯一中枢服务，HTTP `/api` + WS `/ws` + 内置 Vue Dashboard 都挂在 `:18800`，用 SQLite WAL 持久化群 / Issue / 协作 / 消息日志。
+- **Master**（`src/master/`）：唯一中枢服务，HTTP `/api` + WS `/ws` + 内置 Vue Dashboard 都挂在 `:28800`，用 SQLite WAL 持久化群 / Issue / 协作 / 消息日志。
 - **Executor**（`src/executor/`）：长连接守护进程，单进程托管 N 个 Worker，**1 Worker = 1 Agent**。Worker 持 mesh token 与 Master 维持 WS（接 Issue / 推送），并 spawn 对应 CLI 进程（claude / codex / openclaw / deepseek / hermes / gemini / generic）作为 Agent。
 - **rotom CLI**（`src/cli/rotom.ts`）：所有数字员工行为的统一出口，借 Agent token 调 REST。既被 Agent 在容器内通过 Bash 调用（加载 `skill/rotom-a2a-communicate`），也能由真人 / Claude Code 在 shell 里手动用。
 
@@ -41,7 +41,7 @@ rotom group list --pretty
 rotom issue create <groupId> --title "..." --description "..."
 ```
 
-Master 默认监听 `0.0.0.0:18800`；PID / 日志固定在 `~/.openclaw/mesh-master.{pid,log}`。SQLite 数据目录默认 `./mesh-data/`。
+Master 默认监听 `0.0.0.0:28800`；PID / 日志固定在 `~/.openclaw/mesh-master.{pid,log}`。SQLite 数据目录默认 `./mesh-data/`。
 
 ## Read These Docs
 
@@ -70,7 +70,7 @@ Master 默认监听 `0.0.0.0:18800`；PID / 日志固定在 `~/.openclaw/mesh-ma
 
 | File | Responsibility |
 |------|------|
-| `src/master/server.ts` | Master 独立入口，监听 18800，serves Dashboard + WS + REST |
+| `src/master/server.ts` | Master 独立入口，监听 28800，serves Dashboard + WS + REST |
 | `src/master/embedded.ts` | Master 的可嵌入版本（同进程使用） |
 | `src/master/api.ts` | 全部 REST 端点：agents / domains / groups / messages / issues / artifacts / audit / stats |
 | `src/master/ws-hub.ts` | WebSocket Hub：连接管理、auth、心跳、a2a_send / reply 中转、`postSystemToGroup` 系统通知 |
@@ -106,7 +106,7 @@ Master 默认监听 `0.0.0.0:18800`；PID / 日志固定在 `~/.openclaw/mesh-ma
 - 仓库使用 **pnpm workspace**（`pnpm-workspace.yaml` 声明 `packages/*`）。不要用 `npm install` / `yarn install`，会破坏 workspace symlink 和 onlyBuiltDependencies 白名单。
 - 顶层 `tsconfig.json` 显式 `exclude: ["packages"]`：根 `pnpm build` 不会编译 dashboard，dashboard 由 `pnpm dashboard:build` 独立走 vite。要打全量产物用 `pnpm build:master`。
 - `src/executor/claude-code-hook.cjs` 是 **CommonJS**（与项目 `"type": "module"` 相反），必须保留 `.cjs` 后缀；build script 显式 `cp` 到 `dist/executor/`，不能改成全自动 tsc 输出。
-- Master 端口范围固定 `:18800`（`MESH_MASTER_PORT` 可覆盖）；PID / 日志固定写 `~/.openclaw/mesh-master.{pid,log}` —— 不要改路径，`bin/mesh-master.sh` 和外部监控脚本依赖这个约定。
+- Master 端口范围固定 `:28800`（`MESH_MASTER_PORT` 可覆盖）；PID / 日志固定写 `~/.openclaw/mesh-master.{pid,log}` —— 不要改路径，`bin/mesh-master.sh` 和外部监控脚本依赖这个约定。
 - Agent token 是 `mesh_` 前缀的明文（migration 016 把它从 hash-only 改回 plaintext，方便 Dashboard 取回展示）；存储层留意不要再退回成 hash-only。
 - **rotom CLI 永远不接受 `--from`**：身份由 token 推断（`ROTOM_AGENT` env > `--as` > 默认 agent），不要新增 CLI flag 覆盖发送者身份，避免身份伪造。
 - 系统通知必须走 `ws-hub.postSystemToGroup()`，sender 固定 `"system"`；Agent 之间正常对话走 `sendAsAgent()`。两条链路不要混用 —— `docs/AGENT_COLLABORATION_GUIDE.md` 有完整规范。

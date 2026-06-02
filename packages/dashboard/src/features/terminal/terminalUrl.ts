@@ -1,14 +1,14 @@
 /**
  * URL builders for the master's /api/terminal WebSocket. Mirrors the
  * dev/prod host logic in SocketContext: in dev (vite:3000) the master still
- * listens on :18800, in prod the dashboard is served from the same origin.
+ * listens on :28800, in prod the dashboard is served from the same origin.
  */
 
 function terminalBaseUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.hostname === 'localhost'
-    ? 'localhost:18800'
-    : `${window.location.hostname}:18800`
+    ? 'localhost:28800'
+    : `${window.location.hostname}:28800`
   return `${proto}//${host}/api/terminal`
 }
 

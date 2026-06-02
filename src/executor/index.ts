@@ -72,7 +72,7 @@ function loadConfig(): ExecutorConfig {
   console.error(
     `No config found. Create ${DEFAULT_CONFIG_PATH}:\n` +
     JSON.stringify({
-      master: "ws://localhost:18800",
+      master: "ws://localhost:28800",
       workers: [
         {
           name: "Claude·Agent",

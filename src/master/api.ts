@@ -19,6 +19,7 @@ import { defaultGroupWorkingDir, resolveGroupArtifactRoot } from "./group-paths.
 
 import { createLogger } from "../shared/logger.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
+import { DEFAULT_MASTER_PORT } from "../shared/constants.js";
 
 const log = createLogger("mesh-api");
 
@@ -177,7 +178,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
     log.info(`Agent registered: "${name}" (domain=${domain})`);
 
     // Dynamic config template — prefer LAN IP so agents on other machines can connect
-    const port = serverPort ?? 18800;
+    const port = serverPort ?? DEFAULT_MASTER_PORT;
     const ip = getLocalIp();
     const masterProto = req.secure ? "wss" : "ws";
 
