@@ -20,6 +20,7 @@
 import { URL } from "node:url";
 import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import type { Server, IncomingMessage } from "node:http";
 import type { Socket } from "node:net";
 import { WebSocketServer, WebSocket } from "ws";
@@ -124,17 +125,20 @@ export class TerminalHub {
         this.delegateUpgrade(req, socket, head);
         return;
       }
-      const groupId = this.parseGroupId(req);
-      if (!groupId) {
-        this.rejectUpgrade(socket, 400, "missing groupId");
+      const parsed = this.parseTarget(req);
+      if (!parsed) {
+        this.rejectUpgrade(socket, 400, "missing groupId or cwd");
         return;
       }
-      // resolveGroupArtifactRoot returns a fallback even for unknown groups,
-      // so we let the connection succeed — the shell just opens in the
-      // default ~/.rotom/results/<groupId> path.
-      const cwd = resolveGroupArtifactRoot(this.db, groupId);
+      // Standalone (cwd) mode skips the group lookup entirely; groupId mode
+      // still resolves through the db so it picks up the group's working_dir
+      // override (or the default ~/.rotom/results/<groupId>).
+      const cwd = parsed.kind === "cwd"
+        ? parsed.cwd
+        : resolveGroupArtifactRoot(this.db, parsed.groupId);
+      const label = parsed.kind === "cwd" ? "standalone" : parsed.groupId;
       this.wss!.handleUpgrade(req, socket, head, (ws) => {
-        this.handleConnection(ws, groupId, cwd);
+        this.handleConnection(ws, label, cwd);
       });
     };
     this.httpServer.on("upgrade", this.upgradeHandler);
@@ -182,11 +186,27 @@ export class TerminalHub {
     return pathname === TERMINAL_PATH;
   }
 
-  private parseGroupId(req: IncomingMessage): string | null {
+  private parseTarget(
+    req: IncomingMessage,
+  ): { kind: "group"; groupId: string } | { kind: "cwd"; cwd: string } | null {
     try {
       const url = new URL(req.url || "", "http://localhost");
+      const cwdParam = url.searchParams.get("cwd");
+      if (cwdParam) {
+        // Accept any absolute path the master process can actually open.
+        // The shell already has full local-user privileges, so this isn't
+        // a privilege boundary — we just reject obviously-malformed input
+        // so we don't hand node-pty something unusable.
+        const trimmed = cwdParam.trim();
+        if (!trimmed || trimmed.length > 1024) return null;
+        if (!path.isAbsolute(trimmed)) return null;
+        return { kind: "cwd", cwd: trimmed };
+      }
       const id = url.searchParams.get("groupId");
-      return id && /^[A-Za-z0-9_-]+$/.test(id) ? id : null;
+      if (id && /^[A-Za-z0-9_-]+$/.test(id)) {
+        return { kind: "group", groupId: id };
+      }
+      return null;
     } catch {
       return null;
     }
@@ -202,12 +222,12 @@ export class TerminalHub {
     socket.destroy();
   }
 
-  private handleConnection(ws: WebSocket, groupId: string, cwd: string): void {
+  private handleConnection(ws: WebSocket, sessionLabel: string, cwd: string): void {
     if (!this.pty) {
       ws.close(1011, "pty unavailable");
       return;
     }
-    const sessionId = `${groupId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    const sessionId = `${sessionLabel}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
     this.sessions.add(sessionId);
 
     // posix_spawnp from node-pty fails with a opaque "posix_spawnp failed"
@@ -235,7 +255,7 @@ export class TerminalHub {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`[terminal] spawn failed for group=${groupId} shell=${shell} cwd=${spawnCwd}: ${msg}`);
+      this.logger.error(`[terminal] spawn failed for session=${sessionLabel} shell=${shell} cwd=${spawnCwd}: ${msg}`);
       try {
         ws.send(JSON.stringify({
           type: "error",

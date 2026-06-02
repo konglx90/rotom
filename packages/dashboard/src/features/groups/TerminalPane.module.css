@@ -62,25 +62,3 @@
   display: flex;
   gap: 4px;
 }
-
-.term {
-  flex: 1;
-  min-height: 0;
-  /* No padding here — FitAddon computes rows from clientHeight, and any
-     padding gets subtracted from rendered area but xterm's internal viewport
-     still tries to fill 100%, which clips the last row under the bottom edge.
-     Visual breathing room is provided by xterm itself via cell ascenders. */
-  padding: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.term :global(.xterm) {
-  height: 100%;
-  padding: 4px 6px;
-  box-sizing: border-box;
-}
-
-.term :global(.xterm-viewport) {
-  background-color: transparent !important;
-}
