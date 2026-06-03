@@ -37,7 +37,6 @@ export function GroupChatArea({
   onShowConfig,
   onAddMembers,
   onDeleteGroup,
-  onArchiveGroup,
   onReconnect,
   onUpdateWorkingDir,
 }: GroupChatAreaProps) {
@@ -165,16 +164,6 @@ export function GroupChatArea({
           <Button variant="ghost" size="sm" onClick={onAddMembers}>+ 拉人</Button>
           <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig} title="设置">⚙️</Button>
           <Button variant="danger" outline size="sm" onClick={onDeleteGroup}>删除</Button>
-          {!isArchived && (
-            <Button variant="ghost" size="sm" onClick={() => onArchiveGroup(true)} title="归档此群（只读）">
-              🗄️ 归档
-            </Button>
-          )}
-          {isArchived && (
-            <Button variant="ghost" size="sm" onClick={() => onArchiveGroup(false)} title="取消归档">
-              取消归档
-            </Button>
-          )}
         </div>
       </div>
 

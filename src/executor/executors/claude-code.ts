@@ -46,6 +46,31 @@ function locateHookScript(): string {
 
 const HOOK_TOOL_MATCHER = "Bash|Edit|Write|MultiEdit|NotebookEdit|ExitPlanMode|AskUserQuestion";
 
+/**
+ * 把 cwd 转成 Claude Code 在 ~/.claude/projects/ 下的子目录名。
+ * 编码规则(从实际目录观察): 绝对路径里的 `/` 和 `.` 全部替换为 `-`。
+ *   /Users/kong/ai-work/rotom  → -Users-kong-ai-work-rotom
+ *   /Users/kong/.rotom/results → -Users-kong--rotom-results
+ */
+function claudeProjectDir(cwd: string): string {
+  const resolved = path.resolve(cwd);
+  const encoded = resolved.replace(/[/.]/g, "-");
+  return path.join(os.homedir(), ".claude", "projects", encoded);
+}
+
+/**
+ * Claude Code 的 `--resume <id>` 要求该 session 已经存在于当前 cwd 对应的项目
+ * 目录中(<project>/<id>.jsonl);否则会抛 "No conversation found..."。首次进入
+ * 一个新的工作目录时必须改用 `--session-id <uuid>` 来"创建并使用"。
+ */
+function claudeSessionExists(cwd: string, sessionId: string): boolean {
+  try {
+    return fs.existsSync(path.join(claudeProjectDir(cwd), `${sessionId}.jsonl`));
+  } catch {
+    return false;
+  }
+}
+
 export class ClaudeCodeExecutor implements CliExecutor {
   async execute(
     prompt: string,
@@ -74,8 +99,18 @@ export class ClaudeCodeExecutor implements CliExecutor {
         args.push("--settings", approvalGate.settingsPath);
       }
 
+      let sessionMode: "resume" | "session-id" | "new" = "new";
       if (resumeSessionId) {
-        args.push("--resume", resumeSessionId);
+        if (claudeSessionExists(workingDir, resumeSessionId)) {
+          args.push("--resume", resumeSessionId);
+          sessionMode = "resume";
+        } else {
+          // 调用方期望复用这个 sessionId,但该 cwd 下还没有它对应的 jsonl。
+          // 用 --session-id 创建一个新的对话并把 ID 固定下来,这样下次再传同
+          // 一个 ID 进来时就能走到上面的 --resume 分支。
+          args.push("--session-id", resumeSessionId);
+          sessionMode = "session-id";
+        }
       }
 
       const spawnEnv: NodeJS.ProcessEnv = { ...process.env, ...options?.env };
@@ -83,7 +118,7 @@ export class ClaudeCodeExecutor implements CliExecutor {
         spawnEnv.ROTOM_APPROVAL_SOCKET = approvalGate.socketPath;
         spawnEnv.ROTOM_APPROVAL_TOKEN = approvalGate.token;
       }
-      console.log(`[claude-code] Spawning claude (cwd: ${workingDir}, resume: ${resumeSessionId ?? "new"}, ROTOM_AGENT=${spawnEnv.ROTOM_AGENT}, ROTOM_HOME=${spawnEnv.ROTOM_HOME}, gate=${approvalGate ? "on" : "off"})`);
+      console.log(`[claude-code] Spawning claude (cwd: ${workingDir}, session: ${resumeSessionId ? `${sessionMode}=${resumeSessionId}` : "new"}, ROTOM_AGENT=${spawnEnv.ROTOM_AGENT}, ROTOM_HOME=${spawnEnv.ROTOM_HOME}, gate=${approvalGate ? "on" : "off"})`);
 
       const proc = spawn("claude", args, {
         cwd: workingDir,
