@@ -1,7 +1,7 @@
 /**
  * E2ED — Metrics collection and computation.
  *
- * Computes pipeline metrics from issue events and requirement metadata.
+ * Computes pipeline metrics from issue records and requirement metadata.
  */
 
 import type { MeshDb } from '../master/db.js';
@@ -13,14 +13,14 @@ export function computeMetrics(db: MeshDb, groupId: string): E2edMetrics | null 
   const meta = getRequirement(db, groupId);
   if (!meta) return null;
 
-  const events = db.getIssueEventsByGroup(groupId);
+  const issues = db.listIssuesByGroup(groupId);
 
   const planRounds: RoundMetrics[] = [];
   const codeRounds: RoundMetrics[] = [];
 
   for (const pv of meta.planVersions) {
-    const delivery = findIssueDuration(events, 'plan-delivery', pv.version);
-    const review = findIssueDuration(events, 'plan-review', pv.version);
+    const delivery = findIssueDurationByTitle(issues, 'delivery', `Plan v${pv.version}`);
+    const review = findIssueDurationByTitle(issues, 'review', `Plan Review v${pv.version}`);
 
     planRounds.push({
       version: pv.version,
@@ -31,8 +31,8 @@ export function computeMetrics(db: MeshDb, groupId: string): E2edMetrics | null 
   }
 
   for (const cv of meta.codeVersions) {
-    const delivery = findIssueDuration(events, 'code-delivery', cv.version);
-    const review = findIssueDuration(events, 'code-review', cv.version);
+    const delivery = findIssueDurationByTitle(issues, 'delivery', `Code v${cv.version}`);
+    const review = findIssueDurationByTitle(issues, 'review', `Code Review v${cv.version}`);
 
     codeRounds.push({
       version: cv.version,
@@ -42,12 +42,12 @@ export function computeMetrics(db: MeshDb, groupId: string): E2edMetrics | null 
     });
   }
 
-  // Total duration from first event to last
-  const timestamps = events
-    .map((e) => new Date(e.created_at).getTime())
+  // Total duration from earliest to latest issue creation
+  const timestamps = issues
+    .map((i) => new Date(i.created_at).getTime())
     .filter((t) => !isNaN(t));
   const totalDuration = timestamps.length >= 2
-    ? timestamps[timestamps.length - 1] - timestamps[0]
+    ? Math.max(...timestamps) - Math.min(...timestamps)
     : 0;
 
   return { totalDuration, planRounds, codeRounds };
@@ -71,30 +71,17 @@ export function getTimeline(db: MeshDb, groupId: string): Array<{
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function findIssueDuration(
-  events: Array<{ metadata: string; created_at: string; event_type: string }>,
-  phase: string,
-  version: number,
+function findIssueDurationByTitle(
+  issues: Array<{ type: string; title: string; created_at: string; completed_at: string | null }>,
+  type: string,
+  titleFragment: string,
 ): number {
-  let start: number | null = null;
-  let end: number | null = null;
-
-  for (const e of events) {
-    let meta: any;
-    try { meta = JSON.parse(e.metadata || '{}'); } catch { continue; }
-    if (meta.phase !== phase || meta.version !== version) continue;
-
-    const t = new Date(e.created_at).getTime();
-    if (isNaN(t)) continue;
-
-    if (e.event_type === 'created' || e.event_type === 'assigned') {
-      start ??= t;
-    }
-    if (e.event_type === 'completed' || e.event_type === 'status_changed') {
-      end = t;
-    }
-  }
-
-  if (start && end) return end - start;
-  return 0;
+  const issue = issues.find(
+    (i) => i.type === type && i.title.includes(titleFragment) && i.completed_at,
+  );
+  if (!issue) return 0;
+  const start = new Date(issue.created_at).getTime();
+  const end = new Date(issue.completed_at!).getTime();
+  if (isNaN(start) || isNaN(end)) return 0;
+  return end - start;
 }

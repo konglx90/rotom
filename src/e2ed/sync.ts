@@ -7,7 +7,7 @@
 
 import type { MeshDb } from '../master/db.js';
 import { RequirementStatus } from './types.js';
-import { getRequirement, updateStatus, writeArtifactFile } from './requirement.js';
+import { getRequirement, updateStatus, writeMeta, writeArtifactFile } from './requirement.js';
 
 // Mapping: (issue.type, requirement.status) → new requirement status
 const TRANSITIONS: Record<string, Record<string, string>> = {
@@ -38,6 +38,11 @@ export function syncRequirementFromIssues(db: MeshDb, groupId: string): void {
       writeArtifactFile(groupId, issue.result, 'req-reviews', `review-v${reviewIndex}`, 'report.md');
     }
 
+    // Update reviewStatus on plan/code versions when a review issue completes
+    if (issue.type === 'review' && (issue.status === 'completed')) {
+      updateVersionReviewStatus(db, groupId, issue.title);
+    }
+
     const transitionMap = TRANSITIONS[issue.type || ''];
     if (!transitionMap) continue;
 
@@ -49,5 +54,39 @@ export function syncRequirementFromIssues(db: MeshDb, groupId: string): void {
       updateStatus(db, groupId, nextStatus as any);
       return;
     }
+  }
+}
+
+/** Parse issue title and update plan/code version reviewStatus to 'pass'. */
+function updateVersionReviewStatus(db: MeshDb, groupId: string, title: string): void {
+  const meta = readMeta(db, groupId);
+  if (!meta) return;
+
+  let updated = false;
+
+  // Match "Plan Review v3" or "Code Review v1" in title
+  const planMatch = title.match(/Plan Review v(\d+)/);
+  const codeMatch = title.match(/Code Review v(\d+)/);
+
+  if (planMatch) {
+    const version = parseInt(planMatch[1], 10);
+    const pv = meta.planVersions.find(p => p.version === version);
+    if (pv && !pv.reviewStatus) {
+      pv.reviewStatus = 'pass';
+      updated = true;
+    }
+  }
+
+  if (codeMatch) {
+    const version = parseInt(codeMatch[1], 10);
+    const cv = meta.codeVersions.find(c => c.version === version);
+    if (cv && !cv.reviewStatus) {
+      cv.reviewStatus = 'pass';
+      updated = true;
+    }
+  }
+
+  if (updated) {
+    writeMeta(db, groupId, meta);
   }
 }

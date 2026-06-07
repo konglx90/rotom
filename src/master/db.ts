@@ -961,16 +961,17 @@ export class MeshDb {
     /** Update cli_tool (added in migration 013). `null` clears it. */
     cliTool?: string | null;
   }): void {
-    const sets: string[] = ["status = ?", "updated_at = datetime('now')"];
-    const values: unknown[] = [status];
+    const now = new Date().toISOString();
+    const sets: string[] = ["status = ?", "updated_at = ?"];
+    const values: unknown[] = [status, now];
     if (extra?.assignedTo !== undefined) { sets.push("assigned_to = ?"); values.push(extra.assignedTo); }
     if (extra?.result !== undefined) { sets.push("result = ?"); values.push(extra.result); }
     if (extra?.errorMessage !== undefined) { sets.push("error_message = ?"); values.push(extra.errorMessage); }
     if (extra?.artifacts !== undefined) { sets.push("artifacts = ?"); values.push(JSON.stringify(extra.artifacts)); }
     if (extra?.sessionId !== undefined) { sets.push("session_id = ?"); values.push(extra.sessionId); }
     if (extra?.cliTool !== undefined) { sets.push("cli_tool = ?"); values.push(extra.cliTool); }
-    if (status === "in_progress") { sets.push("started_at = datetime('now')"); }
-    if (status === "completed" || status === "failed" || status === "cancelled") { sets.push("completed_at = datetime('now')"); }
+    if (status === "in_progress") { sets.push("started_at = ?"); values.push(now); }
+    if (status === "completed" || status === "failed" || status === "cancelled") { sets.push("completed_at = ?"); values.push(now); }
     values.push(id);
     this.db.prepare(`UPDATE issues SET ${sets.join(", ")} WHERE id = ?`).run(...values);
 
@@ -995,14 +996,15 @@ export class MeshDb {
     `).get() as IssueRow | undefined;
     if (!issue) return undefined;
     // Atomic update: only claim if still unassigned
+    const now = new Date().toISOString();
     const result = this.db.prepare(
-      "UPDATE issues SET assigned_to = ?, status = 'in_progress', started_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND assigned_to IS NULL",
-    ).run(agentName, issue.id);
+      "UPDATE issues SET assigned_to = ?, status = 'in_progress', started_at = ?, updated_at = ? WHERE id = ? AND assigned_to IS NULL",
+    ).run(agentName, now, now, issue.id);
     if (result.changes === 0) return undefined;
     this.db.prepare(`
-      INSERT INTO issue_events (issue_id, event_type, agent_name, content)
-      VALUES (?, 'assigned', ?, ?)
-    `).run(issue.id, agentName, `Claimed by ${agentName}`);
+      INSERT INTO issue_events (issue_id, event_type, agent_name, content, created_at)
+      VALUES (?, 'assigned', ?, ?, ?)
+    `).run(issue.id, agentName, `Claimed by ${agentName}`, now);
     return this.getIssueById(issue.id);
   }
 
