@@ -18,7 +18,7 @@ import { AuthService } from "./auth.js";
 import { WSHub } from "./ws-hub.js";
 import { Router } from "./router.js";
 import { OfflineQueue } from "./offline-queue.js";
-import { createApi } from "./api.js";
+import { createApi } from "./api/index.js";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

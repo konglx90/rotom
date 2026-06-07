@@ -19,7 +19,7 @@ import { AuthService } from "./auth.js";
 import { WSHub } from "./ws-hub.js";
 import { Router } from "./router.js";
 import { OfflineQueue } from "./offline-queue.js";
-import { createApi } from "./api.js";
+import { createApi } from "./api/index.js";
 import { TerminalHub } from "./terminal-hub.js";
 import { DEFAULT_MASTER_PORT, DEFAULT_MASTER_HOST } from "../shared/constants.js";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
