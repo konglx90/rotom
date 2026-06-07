@@ -9,18 +9,20 @@ interface Props {
   agents: Agent[]
   myAgentName: string
   onClose: () => void
-  onCreate: (name: string, memberNames: string[], workingDir?: string) => Promise<void> | void
+  onCreate: (name: string, memberNames: string[], workingDir?: string, type?: string) => Promise<void> | void
 }
 
 export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate }: Props) {
   const [groupName, setGroupName] = useState('')
   const [workingDir, setWorkingDir] = useState('')
+  const [groupType, setGroupType] = useState('')
   const [selectedMembers, setSelectedMembers] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   const handleClose = () => {
     setGroupName('')
     setWorkingDir('')
+    setGroupType('')
     setSelectedMembers([])
     onClose()
   }
@@ -29,10 +31,11 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
     if (!groupName.trim() || submitting) return
     setSubmitting(true)
     try {
-      await onCreate(groupName.trim(), selectedMembers, workingDir.trim() || undefined)
+      await onCreate(groupName.trim(), selectedMembers, workingDir.trim() || undefined, groupType || undefined)
       // Success: clear inputs (parent will close the modal on its own).
       setGroupName('')
       setWorkingDir('')
+      setGroupType('')
       setSelectedMembers([])
     } catch {
       // Parent already surfaced the error (e.g. via alert). Keep inputs so the
@@ -43,6 +46,16 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
   }
 
   const otherAgents = agents.filter(a => a.name !== myAgentName)
+  const isE2ed = groupType === 'e2ed'
+  const maxMembers = isE2ed ? 2 : Infinity
+
+  const toggleMember = (name: string) => {
+    setSelectedMembers(prev => {
+      if (prev.includes(name)) return prev.filter(n => n !== name)
+      if (isE2ed && prev.length >= maxMembers) return prev
+      return [...prev, name]
+    })
+  }
 
   return (
     <Modal
@@ -71,21 +84,32 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
         </p>
       </div>
       <div className={styles.formField}>
-        <label className={styles.formLabel}>选择成员:</label>
+        <label className={styles.formLabel}>群类型:</label>
+        <select value={groupType} onChange={e => setGroupType(e.target.value)} className={styles.formSelect}>
+          <option value="">普通群</option>
+          <option value="e2ed">E2ED（端到端需求交付）</option>
+        </select>
+      </div>
+      <div className={styles.formField}>
+        <label className={styles.formLabel}>
+          选择成员:
+          {isE2ed && <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 8, color: 'var(--color-info)' }}>E2ED 模式限选 {maxMembers} 人</span>}
+        </label>
         <div className={styles.agentCheckList}>
-          {otherAgents.map(agent => (
-            <label key={agent.id} className={styles.agentCheckItem}>
-              <input type="checkbox" checked={selectedMembers.includes(agent.name)}
-                onChange={e => {
-                  if (e.target.checked) setSelectedMembers(prev => [...prev, agent.name])
-                  else setSelectedMembers(prev => prev.filter(n => n !== agent.name))
-                }} />
-              {agent.name}
-              <span className={`${styles.agentCheckStatus} ${agent.status === 'online' ? styles.online : styles.offline}`}>
-                {agent.status === 'online' ? '在线' : '离线'}
-              </span>
-            </label>
-          ))}
+          {otherAgents.map(agent => {
+            const checked = selectedMembers.includes(agent.name)
+            const disabled = isE2ed && !checked && selectedMembers.length >= maxMembers
+            return (
+              <label key={agent.id} className={styles.agentCheckItem} style={disabled ? { opacity: 0.4 } : undefined}>
+                <input type="checkbox" checked={checked} disabled={disabled}
+                  onChange={() => toggleMember(agent.name)} />
+                {agent.name}
+                <span className={`${styles.agentCheckStatus} ${agent.status === 'online' ? styles.online : styles.offline}`}>
+                  {agent.status === 'online' ? '在线' : '离线'}
+                </span>
+              </label>
+            )
+          })}
           {otherAgents.length === 0 && (
             <div style={{ padding: 16, color: 'var(--color-slate)', textAlign: 'center', fontSize: 13 }}>
               暂无其他 Agent

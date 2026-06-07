@@ -10,6 +10,8 @@ import { IssuesListPage } from './features/groups/IssuesListPage'
 import { KanbanView } from './features/kanban/KanbanView'
 import { MessagesView } from './features/messages/MessagesView'
 import { TerminalPage } from './features/terminal/TerminalPage'
+import { E2edGroupsView } from './features/e2ed/E2edGroupsView'
+import { E2edPipelineView } from './features/e2ed/E2edPipelineView'
 import { ConfigModal } from './features/groups/modals/ConfigModal'
 import { CreateGroupModal } from './features/groups/modals/CreateGroupModal'
 import './styles/App.css'
@@ -64,6 +66,8 @@ function App() {
               <Route path="/dashboard/groups/:groupId/issues-single" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssuesListPage /></div></RequireAgent>} />
               <Route path="/dashboard/groups/:groupId/issues-single/:issueId" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssueDetailPage /></div></RequireAgent>} />
               <Route path="/dashboard/terminal" element={<div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><TerminalPage /></div>} />
+              <Route path="/dashboard/e2ed" element={<div className="container-full"><E2edGroupsView /></div>} />
+              <Route path="/dashboard/e2ed/:groupId" element={<div className="container-full"><E2edPipelineView /></div>} />
               <Route path="/dashboard" element={<Navigate to="/dashboard/agents" replace />} />
               <Route path="*" element={<Navigate to="/dashboard/agents" replace />} />
             </Routes>

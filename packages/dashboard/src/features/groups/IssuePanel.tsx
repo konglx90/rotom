@@ -3,8 +3,7 @@ import type { Agent, Issue } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { IssueDetail } from './IssueDetail'
-import { CreateIssueModal } from './CreateIssueModal'
-import { CreateCollaborationModal } from './CreateCollaborationModal'
+import { CreateIssueDialog } from './CreateIssueDialog'
 import styles from './IssuePanel.module.css'
 
 interface IssuePanelProps {
@@ -46,8 +45,7 @@ export function IssuePanel({
   onCreateIssue,
   onCreateCollaboration,
 }: IssuePanelProps) {
-  const [showCreateIssueModal, setShowCreateIssueModal] = useState(false)
-  const [showCreateCollaborationModal, setShowCreateCollaborationModal] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
 
   return (
     <>
@@ -55,8 +53,7 @@ export function IssuePanel({
         <div className={styles.issuePanelHeader}>
           <h3 className={styles.issuePanelTitle}>Issues</h3>
           <div style={{ display: 'flex', gap: 4 }}>
-            <Button variant="ghost" size="sm" onClick={() => setShowCreateIssueModal(true)}>+ 任务</Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowCreateCollaborationModal(true)}>+ 协作</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowCreateDialog(true)}>+ 创建</Button>
           </div>
         </div>
         {selectedIssueId ? (
@@ -116,27 +113,19 @@ export function IssuePanel({
         )}
       </div>
 
-      <CreateIssueModal
-        open={showCreateIssueModal}
-        agents={agents}
-        onClose={() => setShowCreateIssueModal(false)}
-        onSubmit={(data) => {
-          onCreateIssue(data)
-          setShowCreateIssueModal(false)
-        }}
-        defaultWorkingDir={defaultWorkingDir}
-      />
-
-      <CreateCollaborationModal
-        open={showCreateCollaborationModal}
+      <CreateIssueDialog
+        open={showCreateDialog}
         agents={agents}
         groupMembers={groupMembers}
-        onClose={() => setShowCreateCollaborationModal(false)}
-        onSubmit={(data) => {
-          onCreateCollaboration(data)
-          setShowCreateCollaborationModal(false)
+        myAgentName={myAgentName}
+        defaultWorkingDir={defaultWorkingDir}
+        onClose={() => setShowCreateDialog(false)}
+        onCreateIssue={(data) => {
+          onCreateIssue(data)
         }}
-        createdBy={myAgentName}
+        onCreateCollaboration={(data) => {
+          onCreateCollaboration(data)
+        }}
       />
     </>
   )

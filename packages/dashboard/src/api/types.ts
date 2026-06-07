@@ -184,6 +184,7 @@ export interface CreateGroupDto {
   name: string
   memberNames?: string[]
   workingDir?: string
+  type?: string
 }
 
 // Issue Types (task tracking)

@@ -184,13 +184,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   )
 
   const createGroup = useCallback(
-    async (name: string, memberNames: string[], workingDir?: string) => {
+    async (name: string, memberNames: string[], workingDir?: string, type?: string) => {
       if (!myAgentName) return
       try {
         await groupsApi.create({
           name,
           memberNames: [...memberNames, myAgentName],
           workingDir,
+          type,
         })
         setShowCreateGroupModal(false)
         await loadGroups()

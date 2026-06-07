@@ -638,7 +638,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
   });
 
   apiRouter.post("/groups", (req, res) => {
-    const { name, memberNames, workingDir } = req.body;
+    const { name, memberNames, workingDir, type } = req.body;
     if (!name || typeof name !== "string" || !name.trim()) {
       res.status(400).json({ error: "name is required" });
       return;
@@ -664,12 +664,16 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
         return;
       }
     }
-    db.createGroup(id, name.trim(), undefined, workDir);
+    if (type && typeof type === "string") {
+      db.createGroupTyped({ id, name: name.trim(), type, workingDir: workDir });
+    } else {
+      db.createGroup(id, name.trim(), undefined, workDir);
+    }
     if (Array.isArray(memberNames) && memberNames.length > 0) {
       db.addGroupMembers(id, memberNames);
     }
-    log.info(`Group created: "${name.trim()}" (${id}) cwd=${workDir}`);
-    res.status(201).json({ id, name: name.trim(), working_dir: workDir, memberCount: Array.isArray(memberNames) ? memberNames.length : 0 });
+    log.info(`Group created: "${name.trim()}" (${id}) type=${type || "default"} cwd=${workDir}`);
+    res.status(201).json({ id, name: name.trim(), working_dir: workDir, type: type || null, memberCount: Array.isArray(memberNames) ? memberNames.length : 0 });
   });
 
   apiRouter.patch("/groups/:id", (req, res) => {

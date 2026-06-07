@@ -28,6 +28,7 @@ PORT="${MESH_MASTER_PORT:-28800}"
 HOST="${MESH_MASTER_HOST:-0.0.0.0}"
 DATA="${MESH_MASTER_DATA:-$SCRIPT_DIR/mesh-data}"
 SKIP_BUILD=false
+DEV_MODE=false
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
@@ -65,12 +66,21 @@ ensure_built() {
   if [ -z "$pkg" ]; then
     echo "[rotom-up] 未找到包管理器（pnpm/npm/yarn）"; return 1
   fi
-  echo "[rotom-up] 构建中 (build:master)..."
-  case "$pkg" in
-    pnpm) (cd "$SCRIPT_DIR" && pnpm build:master) ;;
-    npm)  (cd "$SCRIPT_DIR" && npm run build:master) ;;
-    yarn) (cd "$SCRIPT_DIR" && yarn build:master) ;;
-  esac
+  if [ "$DEV_MODE" = true ]; then
+    echo "[rotom-up] 构建中 (build, skip dashboard)..."
+    case "$pkg" in
+      pnpm) (cd "$SCRIPT_DIR" && pnpm build) ;;
+      npm)  (cd "$SCRIPT_DIR" && npm run build) ;;
+      yarn) (cd "$SCRIPT_DIR" && yarn build) ;;
+    esac
+  else
+    echo "[rotom-up] 构建中 (build:master)..."
+    case "$pkg" in
+      pnpm) (cd "$SCRIPT_DIR" && pnpm build:master) ;;
+      npm)  (cd "$SCRIPT_DIR" && npm run build:master) ;;
+      yarn) (cd "$SCRIPT_DIR" && yarn build:master) ;;
+    esac
+  fi
 }
 
 # 校验 PID 文件指向的进程是否仍存活
@@ -282,10 +292,12 @@ do_start() {
   # 6. 让 rotom CLI 全局可用
   ensure_rotom_on_path
 
-  echo ""
-  echo "  Dashboard: http://localhost:$PORT/dashboard"
-  echo "  Logs:      $LOG_DIR/{master,executor}.log"
-  echo "  Stop:      pnpm stop"
+  if [ "$DEV_MODE" != true ]; then
+    echo ""
+    echo "  Dashboard: http://localhost:$PORT/dashboard"
+    echo "  Logs:      $LOG_DIR/{master,executor}.log"
+    echo "  Stop:      pnpm stop"
+  fi
 }
 
 do_stop() {
@@ -329,6 +341,40 @@ do_logs() {
   exec tail -F "$MASTER_LOG" "$EXECUTOR_LOG"
 }
 
+do_start_dev() {
+  # 1. Start master + executor as daemons (reuse do_start logic)
+  DEV_MODE=true do_start || return 1
+
+  # 2. Start Vite dev server in foreground
+  local pkg; pkg=$(detect_pkg)
+  if [ -z "$pkg" ]; then
+    echo "[rotom-up] 未找到包管理器"; return 1
+  fi
+
+  echo "[rotom-up] 启动 Vite dev server (hot reload)..."
+  echo ""
+  echo "  Frontend: http://localhost:3000"
+  echo "  Backend:  http://localhost:$PORT"
+  echo "  Ctrl+C 停止所有服务"
+  echo ""
+
+  # Cleanup background processes on exit
+  dev_cleanup() {
+    echo ""
+    echo "[rotom-up] 停止所有服务..."
+    stop_pid_file "$EXECUTOR_PID" executor 2>/dev/null || true
+    stop_pid_file "$MASTER_PID" master 2>/dev/null || true
+    exit 0
+  }
+  trap dev_cleanup INT TERM
+
+  case "$pkg" in
+    pnpm) exec pnpm --filter @a2a-gateway/dashboard dev ;;
+    npm)  exec npm run --prefix "$SCRIPT_DIR/packages/dashboard" dev ;;
+    yarn) exec yarn --cwd "$SCRIPT_DIR/packages/dashboard" dev ;;
+  esac
+}
+
 do_help() {
   cat <<EOF
 Rotom 一站式启停 —— Master（含 Dashboard）+ Executor 守护进程
@@ -337,7 +383,7 @@ Rotom 一站式启停 —— Master（含 Dashboard）+ Executor 守护进程
 
 命令:
   start      启动 master + executor（守护进程，自动 build）
-  stop       停止两个进程
+  stop       停止所有进程
   restart    重启
   status     查看运行状态
   logs       tail -F 两个日志
@@ -347,6 +393,7 @@ Rotom 一站式启停 —— Master（含 Dashboard）+ Executor 守护进程
   --host <addr>        Master 监听地址 (默认: $HOST)
   --data, -d <dir>     Master 数据目录 (默认: $DATA)
   --no-build           跳过构建检查直接启动
+  --dev                前端开发模式：Vite dev server + hot reload (localhost:3000)
 
 运行时目录:
   PID:  $RUN_DIR/{master,executor}.pid
@@ -365,13 +412,14 @@ while [[ $# -gt 0 ]]; do
     --host)    HOST="$2"; shift 2 ;;
     --data|-d) DATA="$2"; shift 2 ;;
     --no-build) SKIP_BUILD=true; shift ;;
+    --dev)     DEV_MODE=true; shift ;;
     --help|-h) do_help; exit 0 ;;
     *) echo "未知选项: $1"; do_help; exit 1 ;;
   esac
 done
 
 case "$CMD" in
-  start)   do_start ;;
+  start)   [ "$DEV_MODE" = true ] && do_start_dev || do_start ;;
   stop)    do_stop ;;
   restart) do_restart ;;
   status)  do_status ;;

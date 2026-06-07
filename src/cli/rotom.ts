@@ -23,6 +23,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { cmdE2ed } from "./e2ed.js";
 
 const ROTOM_HOME = process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom");
 const ROTOM_CONFIG = path.join(ROTOM_HOME, "config.json");
@@ -332,6 +333,15 @@ Issue / collaboration:
   collab create <groupId> --title T --goal G --participants a,b[,c] [--max-rounds 3] [--owner X]
   collab conclude <issueId> --summary S
 
+E2ED (End-to-End Delivery):
+  e2ed start <file|text> [--title T] [--cwd DIR]     create requirement
+  e2ed ls                                              list requirements
+  e2ed show <groupId>                                  show requirement details
+  e2ed deliver <groupId> [--plan-only|--code-only] [--fix]  start delivery
+  e2ed review <groupId> [--type requirement|plan|code]      start review
+  e2ed metrics <groupId>                               show metrics
+  e2ed timeline <groupId>                              show event timeline
+
 Global flags:
   --pretty   format output for humans (tables / indented JSON)
 `;
@@ -360,6 +370,7 @@ async function main(): Promise<void> {
     case "group":           return cmdGroup(agent, rest, flags);
     case "issue":           return cmdIssue(agent, rest, flags);
     case "collab":          return cmdCollab(agent, rest, flags);
+    case "e2ed":            return cmdE2ed(rest, flags);
     default: fail(`unknown command: ${cmd}\nRun 'rotom help' for usage.`);
   }
 }

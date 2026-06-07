@@ -813,14 +813,52 @@ export class MeshDb {
     return groups.map((g) => ({ ...g, members: byGroup.get(g.id) ?? [] }));
   }
 
-  getGroupById(id: string): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null } | undefined {
-    return this.db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null } | undefined;
+  getGroupById(id: string): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null; type: string | null; metadata: string } | undefined {
+    return this.db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null; type: string | null; metadata: string } | undefined;
   }
 
   deleteGroup(id: string): void {
     this.db.prepare("DELETE FROM group_messages WHERE group_id = ?").run(id);
     this.db.prepare("DELETE FROM group_members WHERE group_id = ?").run(id);
     this.db.prepare("DELETE FROM groups WHERE id = ?").run(id);
+  }
+
+  /** Create group with type and metadata (for e2ed integration) */
+  createGroupTyped(opts: {
+    id: string;
+    name: string;
+    type: string;
+    createdBy?: string;
+    workingDir?: string | null;
+    metadata?: string;
+  }): void {
+    this.db.prepare(
+      "INSERT INTO groups (id, name, created_by, working_dir, type, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(opts.id, opts.name, opts.createdBy || null, opts.workingDir || null, opts.type, opts.metadata || '{}');
+  }
+
+  /** Get group by id including type and metadata columns */
+  getGroupByIdFull(id: string): {
+    id: string; name: string; created_by: string | null; created_at: string;
+    working_dir: string | null; pinned_at: string | null; archived_at: string | null;
+    type: string | null; metadata: string;
+  } | undefined {
+    return this.db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as any;
+  }
+
+  /** List groups filtered by type */
+  listGroupsByType(type: string): Array<{
+    id: string; name: string; created_by: string | null; created_at: string;
+    working_dir: string | null; type: string | null; metadata: string;
+  }> {
+    return this.db.prepare(
+      "SELECT id, name, created_by, created_at, working_dir, type, metadata FROM groups WHERE type = ? ORDER BY created_at DESC",
+    ).all(type) as any[];
+  }
+
+  /** Update group metadata JSON */
+  updateGroupMetadata(id: string, metadata: string): void {
+    this.db.prepare("UPDATE groups SET metadata = ? WHERE id = ?").run(metadata, id);
   }
 
   addGroupMembers(groupId: string, agentNames: string[]): void {
@@ -868,16 +906,19 @@ export class MeshDb {
     priority?: string; createdBy: string; workingDir?: string;
     slashCommand?: string;
     approvalPolicy?: "r_allow" | "rw_allow";
+    type?: string; assignedTo?: string;
   }): void {
     this.db.prepare(`
-      INSERT INTO issues (id, group_id, title, description, priority, created_by, working_dir, type, slash_command, approval_policy)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'task', ?, ?)
+      INSERT INTO issues (id, group_id, title, description, priority, created_by, working_dir, type, slash_command, approval_policy, assigned_to)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       issue.id, issue.groupId, issue.title,
       issue.description || "", issue.priority || "medium",
       issue.createdBy, issue.workingDir || null,
+      issue.type || "task",
       issue.slashCommand || null,
       issue.approvalPolicy || "r_allow",
+      issue.assignedTo || null,
     );
     this.db.prepare(`
       INSERT INTO issue_events (issue_id, event_type, agent_name, content)
@@ -972,6 +1013,13 @@ export class MeshDb {
     return this.db.prepare(
       "SELECT * FROM issue_events WHERE issue_id = ? ORDER BY created_at ASC LIMIT ?",
     ).all(issueId, limit) as IssueEventRow[];
+  }
+
+  /** Get all issue events for a group (across all issues in that group) */
+  getIssueEventsByGroup(groupId: string, limit = 500): IssueEventRow[] {
+    return this.db.prepare(
+      "SELECT ie.* FROM issue_events ie JOIN issues i ON ie.issue_id = i.id WHERE i.group_id = ? ORDER BY ie.created_at ASC LIMIT ?",
+    ).all(groupId, limit) as IssueEventRow[];
   }
 
   /**
