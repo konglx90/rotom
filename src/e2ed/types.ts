@@ -68,6 +68,8 @@ export interface RequirementMeta {
   timeline: Array<{ status: RequirementStatusType; at: string }>;
   source: string;
   links: Array<{ type: string; url: string; branch?: string }>;
+  deliveryAgent?: string;
+  reviewAgent?: string;
 }
 
 /** Review result */

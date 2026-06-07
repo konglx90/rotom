@@ -10,6 +10,7 @@ import {
   readArtifactFile,
   createRequirement,
   closeRequirement,
+  deleteRequirement,
 } from "../../e2ed/requirement.js";
 import { computeMetrics, getTimeline } from "../../e2ed/metrics.js";
 import { startDeliver, startReview } from "../../e2ed/pipeline.js";
@@ -84,11 +85,19 @@ export function registerE2edRoutes(
     res.json(timeline);
   });
 
+  /** List issues for a requirement */
+  apiRouter.get("/e2ed/groups/:groupId/issues", (req, res) => {
+    const meta = getRequirement(db, req.params.groupId);
+    if (!meta) return res.status(404).json({ error: "Not found" });
+    const issues = db.listIssuesByGroup(req.params.groupId);
+    res.json(issues);
+  });
+
   // ── POST ───────────────────────────────────────────────────────────────
 
   /** Create a new requirement */
   apiRouter.post("/e2ed/groups", (req, res) => {
-    const { title, text, source, cwd } = req.body;
+    const { title, text, source, cwd, deliveryAgent, reviewAgent } = req.body;
     if (!text || typeof text !== "string") {
       res.status(400).json({ error: "text is required" });
       return;
@@ -99,6 +108,8 @@ export function registerE2edRoutes(
       text,
       source: source || "api",
       workingDir: cwd || undefined,
+      deliveryAgent: deliveryAgent || undefined,
+      reviewAgent: reviewAgent || undefined,
     });
 
     res.status(201).json({ groupId, status: meta.status });
@@ -141,6 +152,22 @@ export function registerE2edRoutes(
       res.status(201).json({ ok: true, groupId });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
+    }
+  });
+
+  /** Delete a requirement */
+  apiRouter.delete("/e2ed/groups/:groupId", (req, res) => {
+    const { groupId } = req.params;
+
+    try {
+      deleteRequirement(db, groupId);
+      res.json({ ok: true, groupId });
+    } catch (err: any) {
+      if (err.message.includes("not found")) {
+        res.status(404).json({ error: err.message });
+      } else {
+        res.status(400).json({ error: err.message });
+      }
     }
   });
 

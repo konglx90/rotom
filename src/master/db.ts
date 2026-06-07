@@ -146,6 +146,8 @@ export interface IssueEventRow {
 
 export class MeshDb {
   private db: BetterSqlite3.Database;
+  /** Hook fired when an issue transitions to a terminal state. */
+  _onIssueTerminal?: (issueId: string) => void;
 
   constructor(dbPath: string) {
     if (!Database) {
@@ -969,6 +971,12 @@ export class MeshDb {
     if (status === "completed" || status === "failed" || status === "cancelled") { sets.push("completed_at = datetime('now')"); }
     values.push(id);
     this.db.prepare(`UPDATE issues SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+
+    // E2ED auto-sync hook: when an issue reaches terminal state, notify
+    // registered listeners so e2ed can advance requirement status.
+    if (status === "completed" || status === "failed" || status === "cancelled") {
+      this._onIssueTerminal?.(id);
+    }
   }
 
   /** Atomically claim the next unassigned issue for an executor agent. */

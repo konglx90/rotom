@@ -18,7 +18,7 @@ SVC="com.openclaw.mesh-master"
 
 PORT="${MESH_MASTER_PORT:-28800}"
 HOST="${MESH_MASTER_HOST:-0.0.0.0}"
-DATA="${MESH_MASTER_DATA:-$SCRIPT_DIR/mesh-data}"
+DATA="${MESH_MASTER_DATA:-$HOME/.rotom}"
 DAEMON=false
 DEV=false
 

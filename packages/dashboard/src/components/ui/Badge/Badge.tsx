@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import styles from './Badge.module.css'
 
 export type BadgeTone = 'status' | 'priority' | 'category' | 'source' | 'id' | 'tag'
@@ -11,6 +11,8 @@ interface BadgeProps {
   children?: ReactNode
   className?: string
   title?: string
+  style?: CSSProperties
+  onClick?: () => void
 }
 
 // ── 颜色/文案映射 ────────────────────────────────────────────────────
@@ -77,7 +79,7 @@ function pickColor(tone: BadgeTone, value?: string): string {
   }
 }
 
-export function Badge({ tone, value, children, className = '', title }: BadgeProps) {
+export function Badge({ tone, value, children, className = '', title, style, onClick }: BadgeProps) {
   const color = pickColor(tone, value)
   const display = children !== undefined
     ? children
@@ -90,5 +92,5 @@ export function Badge({ tone, value, children, className = '', title }: BadgePro
     className,
   ].filter(Boolean).join(' ')
 
-  return <span className={classes} title={title}>{display}</span>
+  return <span className={classes} title={title} style={style} onClick={onClick}>{display}</span>
 }

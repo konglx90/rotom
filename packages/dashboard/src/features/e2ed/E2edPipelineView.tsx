@@ -5,10 +5,11 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { e2edApi, type E2edRequirement, type E2edMetrics } from '../../api/e2ed'
+import { E2edIssueDrawer } from './E2edIssueDrawer'
 
 const GREEN = '#9fe870'
 const NEAR_BLACK = '#0e0f0c'
@@ -64,11 +65,20 @@ const card = (accent: string): React.CSSProperties => ({
 
 export function E2edPipelineView() {
   const { groupId } = useParams<{ groupId: string }>()
+  const navigate = useNavigate()
   const [req, setReq] = useState<E2edRequirement | null>(null)
   const [metrics, setMetrics] = useState<E2edMetrics | null>(null)
   const [reqText, setReqText] = useState('')
   const [loading, setLoading] = useState(true)
   const [showGuide, setShowGuide] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [issues, setIssues] = useState<Array<{
+    id: string; title: string; status: string; type: string | null;
+    created_by: string | null; assigned_to: string | null;
+    working_dir: string | null; created_at: string;
+  }>>([])
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
 
   const fetchData = useCallback(() => {
     if (!groupId) return
@@ -76,10 +86,22 @@ export function E2edPipelineView() {
       e2edApi.get(groupId).catch(() => null),
       e2edApi.metrics(groupId).catch(() => null),
       e2edApi.text(groupId).then(r => r.text).catch(() => ''),
-    ]).then(([r, m, t]) => { setReq(r); setMetrics(m); setReqText(t || ''); setLoading(false) })
+      e2edApi.issues(groupId).catch(() => []),
+    ]).then(([r, m, t, i]) => { setReq(r); setMetrics(m); setReqText(t || ''); setIssues(i || []); setLoading(false) })
   }, [groupId])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  const handleDelete = useCallback(() => {
+    if (!groupId) return
+    setDeleting(true)
+    e2edApi.delete(groupId).then(() => {
+      navigate('/dashboard/e2ed')
+    }).catch(() => {
+      setDeleting(false)
+      setConfirmDelete(false)
+    })
+  }, [groupId, navigate])
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: GRAY, ...ff }}>Loading...</div>
   if (!req) return (
@@ -111,13 +133,31 @@ export function E2edPipelineView() {
             background: 'transparent', color: GRAY, fontSize: 14, fontWeight: 700,
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', ...ff,
           }}>?</button>
+          {confirmDelete ? (
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: '#d03238', fontWeight: 600, ...ff }}>确认删除？</span>
+              <button onClick={handleDelete} disabled={deleting} style={{
+                padding: '2px 10px', borderRadius: 9999, border: 'none',
+                background: '#fef2f2', color: '#d03238', fontSize: 12, fontWeight: 600,
+                cursor: deleting ? 'wait' : 'pointer', ...ff,
+              }}>{deleting ? '删除中...' : '确认'}</button>
+              <button onClick={() => setConfirmDelete(false)} disabled={deleting} style={{
+                padding: '2px 10px', borderRadius: 9999, border: '1px solid rgba(14,15,12,0.12)',
+                background: 'transparent', color: GRAY, fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', ...ff,
+              }}>取消</button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} title="删除需求" style={{
+              width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(14,15,12,0.12)',
+              background: 'transparent', color: GRAY, fontSize: 14, fontWeight: 700,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', ...ff,
+            }}>×</button>
+          )}
           <span style={pill('#f3e8ff', '#7c3aed')}>{req.compositeVersion}</span>
           <span style={pill(sb.bg, sb.color)}>{STATUS_LABELS[req.status] || req.status}</span>
         </div>
       </div>
-
-      {/* ── Next Step Guidance ────────────────────────────── */}
-      <NextStepGuidance req={req} reqText={reqText} groupId={rid} />
 
       {/* ── Status Flow ─────────────────────────────────── */}
       <div style={card('#0e0f0c')}>
@@ -151,6 +191,44 @@ export function E2edPipelineView() {
 
       {/* ── Available Actions ─────────────────────────────── */}
       <AvailableActions status={req.status} groupId={rid} hasWorkingDir={!!req.workingDir} />
+
+      {/* ── Issues ─────────────────────────────────────── */}
+      {issues.length > 0 && (
+        <div style={card('#ea580c')}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 12, ...ff }}>
+            关联任务
+            <span style={{ fontSize: 12, color: GRAY, fontWeight: 400, marginLeft: 8, ...ff }}>{issues.length} 个</span>
+          </div>
+          {issues.map((issue) => {
+            const isOpen = issue.status === 'open'
+            const isInProgress = issue.status === 'in_progress'
+            const isDone = issue.status === 'done' || issue.status === 'completed'
+            const typeLabel: Record<string, string> = { delivery: '交付', review: '评审', collaboration: '协作' }
+            const statusColors = isOpen
+              ? { bg: '#dbeafe', color: '#1d4ed8', label: '待处理' }
+              : isInProgress
+                ? { bg: '#fef3c7', color: '#92400e', label: '执行中' }
+                : isDone
+                  ? { bg: LIGHT_MINT, color: '#054d28', label: '已完成' }
+                  : { bg: '#f1f5f9', color: '#64748b', label: issue.status }
+            return (
+              <div key={issue.id} onClick={() => setSelectedIssueId(issue.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', borderRadius: 14, marginBottom: 4,
+                background: 'rgba(234,88,12,0.04)', cursor: 'pointer',
+              }}>
+                <span style={pill(statusColors.bg, statusColors.color)}>{statusColors.label}</span>
+                {issue.type && <span style={pill('#f3e8ff', '#7c3aed')}>{typeLabel[issue.type] || issue.type}</span>}
+                <span style={{ flex: 1, fontSize: 13, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...ff }}>
+                  {issue.title}
+                </span>
+                <span style={{ fontSize: 11, color: GRAY, flexShrink: 0, ...ff }}>{issue.assigned_to || '-'}</span>
+                <span style={{ fontSize: 11, color: GRAY, flexShrink: 0, ...ff }}>{new Date(issue.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── Status Timeline ─────────────────────────────── */}
       {req.timeline && req.timeline.length > 0 && (
@@ -278,6 +356,15 @@ export function E2edPipelineView() {
 
       {/* ── Guide Drawer ───────────────────────────────── */}
       <E2edGuideDrawer open={showGuide} onClose={() => setShowGuide(false)} />
+
+      {/* ── Issue Detail Drawer ────────────────────────── */}
+      {selectedIssueId && (
+        <E2edIssueDrawer
+          issueId={selectedIssueId}
+          groupId={rid}
+          onClose={() => setSelectedIssueId(null)}
+        />
+      )}
     </div>
   )
 }
@@ -447,145 +534,6 @@ function CopyButton({ text }: { text: string }) {
       fontSize: 11, fontWeight: 600, cursor: 'pointer', ...ff,
       transition: 'all 0.15s',
     }}>{copied ? '已复制' : '复制'}</button>
-  )
-}
-
-// ── Next Step Guidance ─────────────────────────────────────────────────────
-
-interface GuidanceStep {
-  icon: string
-  title: string
-  desc: string
-  command?: string
-  actions?: { label: string; onClick: () => void }[]
-  accent: string
-}
-
-function getGuidance(req: E2edRequirement, reqText: string, groupId: string): GuidanceStep | null {
-  const s = req.status
-  const shortId = groupId.slice(0, 8)
-
-  // Brief requirement text warning
-  if (s === 'CREATED' && reqText.length < 50) {
-    return {
-      icon: '💡', title: '需求描述偏简短',
-      desc: '建议先补充详细的需求描述，再进行交付。好的需求描述应包含：背景、功能点、验收标准。',
-      command: `rotom e2ed deliver ${shortId} --plan-only --cwd <项目目录>`,
-      accent: '#d97706',
-    }
-  }
-
-  switch (s) {
-    case 'CREATED':
-      return {
-        icon: '▶️', title: '开始交付',
-        desc: '需求已创建，下一步生成实现方案。也可以先做需求评审。',
-        command: `rotom e2ed deliver ${shortId} --plan-only --cwd <项目目录>`,
-        accent: '#7c3aed',
-      }
-    case 'ENV_CHECKING':
-      return { icon: '🔍', title: '环境检测中', desc: '正在检查工作目录和项目环境...', accent: '#2563eb' }
-    case 'ENV_BLOCKED':
-      return { icon: '⚠️', title: '环境未就绪', desc: '请检查工作目录是否存在、是否包含项目文件、是否有写入权限。', command: `rotom e2ed deliver ${shortId} --plan-only --cwd <正确目录>`, accent: '#d03238' }
-    case 'ENV_READY':
-      return {
-        icon: '✅', title: '环境就绪',
-        desc: '工作目录检查通过，可以开始生成方案。',
-        command: `rotom e2ed deliver ${shortId} --plan-only --cwd <项目目录>`,
-        accent: '#054d28',
-      }
-    case 'REQ_REVIEWING':
-      return { icon: '🔍', title: '需求评审中', desc: 'Codex 正在评审需求描述的质量和完整性...', accent: '#2563eb' }
-    case 'REQ_REVIEWED':
-      return {
-        icon: '📋', title: '需求已评审',
-        desc: '需求评审通过，下一步生成实现方案。',
-        command: `rotom e2ed deliver ${shortId} --plan-only --cwd <项目目录>`,
-        accent: '#054d28',
-      }
-    case 'PLANNING':
-      return { icon: '🤖', title: '方案生成中', desc: 'Claude 正在根据需求生成实现方案，请稍候...', accent: '#7c3aed' }
-    case 'PLAN_REVIEWING':
-      return { icon: '🔍', title: '方案评审中', desc: 'Codex 正在评审实现方案的可行性...', accent: '#2563eb' }
-    case 'PLAN_REVIEWED':
-      return {
-        icon: '🚀', title: '开始编码',
-        desc: '方案已评审通过，下一步让 Claude 实现代码。',
-        command: `rotom e2ed deliver ${shortId} --code-only --cwd <项目目录>`,
-        accent: '#054d28',
-      }
-    case 'DELIVERING':
-      return { icon: '🤖', title: '代码交付中', desc: 'Claude 正在根据方案实现代码...', accent: '#d97706' }
-    case 'DELIVERED':
-      return {
-        icon: '🔎', title: '代码已交付',
-        desc: '代码已实现，下一步进行代码评审。',
-        command: `rotom e2ed review ${shortId} --type code --cwd <项目目录>`,
-        accent: '#054d28',
-      }
-    case 'REVIEWING':
-      return { icon: '🔍', title: '代码评审中', desc: 'Codex 正在评审代码质量...', accent: '#2563eb' }
-    case 'REVIEWED':
-      return {
-        icon: '🎉', title: '交付完成',
-        desc: '代码已通过评审，可以关闭此需求。',
-        command: `rotom e2ed close ${shortId}`,
-        accent: '#054d28',
-      }
-    case 'CLOSED':
-      return { icon: '✅', title: '已完成', desc: '此需求已关闭。', accent: GRAY }
-    default:
-      return null
-  }
-}
-
-function NextStepGuidance({ req, reqText, groupId }: { req: E2edRequirement; reqText: string; groupId: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const guidance = getGuidance(req, reqText, groupId)
-  if (!guidance) return null
-
-  const handleCopy = () => {
-    if (!guidance.command) return
-    navigator.clipboard.writeText(guidance.command).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
-  }
-
-  return (
-    <div style={{
-      background: '#fff', borderRadius: 20, padding: 24, marginBottom: 16,
-      boxShadow: 'rgba(14,15,12,0.06) 0px 0px 0px 1px',
-      borderLeft: `4px solid ${guidance.accent}`,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <span style={{ fontSize: 20 }}>{guidance.icon}</span>
-        <span style={{ fontSize: 15, fontWeight: 700, color: NEAR_BLACK, ...ff }}>{guidance.title}</span>
-      </div>
-      <div style={{ fontSize: 14, lineHeight: 1.6, color: '#334155', marginBottom: guidance.command ? 14 : 0, ...ff }}>
-        {guidance.desc}
-      </div>
-      {guidance.command && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          background: 'rgba(14,15,12,0.04)', borderRadius: 12, padding: '10px 14px',
-        }}>
-          <code style={{ flex: 1, fontSize: 13, fontFamily: '"SF Mono", Menlo, monospace', color: '#334155', ...ff }}>
-            {guidance.command}
-          </code>
-          <button onClick={handleCopy} style={{
-            padding: '4px 12px', borderRadius: 9999, border: 'none',
-            background: copied ? LIGHT_MINT : '#f1f5f9',
-            color: copied ? '#054d28' : '#64748b',
-            fontSize: 12, fontWeight: 600, cursor: 'pointer', ...ff,
-            transition: 'all 0.15s',
-          }}>
-            {copied ? '已复制' : '复制'}
-          </button>
-        </div>
-      )}
-    </div>
   )
 }
 

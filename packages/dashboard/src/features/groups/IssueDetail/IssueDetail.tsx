@@ -192,7 +192,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
 
           {issue.result && (
             <div className={shared.artifactsSection}>
-              <div className={shared.artifactsTitle}>执行结果</div>
+              <div className={shared.artifactsTitle}>{issue.type === 'review' ? '评审报告' : '执行结果'}</div>
               <div className={styles.issueDescription}>
                 <MarkdownContent content={issue.result} />
               </div>

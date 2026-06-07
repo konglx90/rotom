@@ -206,7 +206,7 @@ export interface Issue {
   created_at: string
   updated_at: string
   // Collaboration fields
-  type: 'task' | 'collaboration'
+  type: 'task' | 'collaboration' | 'delivery' | 'review'
   collaboration_goal: string | null
   max_rounds: number | null
   current_round: number | null

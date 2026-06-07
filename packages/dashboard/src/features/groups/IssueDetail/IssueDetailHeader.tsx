@@ -31,6 +31,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
   const [assigning, setAssigning] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [savingPolicy, setSavingPolicy] = useState(false)
+  const [copiedId, setCopiedId] = useState(false)
 
   const isFinalState = issue.status === 'completed' || issue.status === 'failed' || issue.status === 'cancelled'
   const isActiveState = issue.status === 'open' || issue.status === 'in_progress'
@@ -128,7 +129,17 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
           {/* 元信息簇：只读 priority + id + 工作目录 */}
           <div className={styles.metaCluster}>
             <Badge tone="priority" value={issue.priority} />
-            <Badge tone="id">#{issue.id.slice(0, 8)}</Badge>
+            <Badge
+              tone="id"
+              style={{ cursor: 'pointer' }}
+              onClick={() => {
+                navigator.clipboard.writeText(issue.id).then(() => {
+                  setCopiedId(true)
+                  setTimeout(() => setCopiedId(false), 1500)
+                })
+              }}
+              title={copiedId ? '已复制' : `点击复制: ${issue.id}`}
+            >{copiedId ? '✓ 已复制' : `#${issue.id.slice(0, 8)}`}</Badge>
             {issue.working_dir && (
               <div className={styles.issueWorkingDir} title={issue.working_dir}>
                 <span className={styles.fieldLabel}>工作目录</span>

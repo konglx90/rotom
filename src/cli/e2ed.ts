@@ -9,7 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { MeshDb } from "../master/db.js";
-import { createRequirement, listRequirements, getRequirement, getRequirementText } from "../e2ed/requirement.js";
+import { createRequirement, listRequirements, getRequirement, getRequirementText, deleteRequirement } from "../e2ed/requirement.js";
 import { startDeliver, startReview } from "../e2ed/pipeline.js";
 import { computeMetrics, getTimeline } from "../e2ed/metrics.js";
 import { RequirementStatus } from "../e2ed/types.js";
@@ -55,10 +55,12 @@ async function cmdStart(rest: string[], flags: Record<string, string | boolean>)
     }
   }
 
-  if (!text) fail("Usage: rotom e2ed start <file.md | text> [--title T] [--cwd DIR]");
+  if (!text) fail("Usage: rotom e2ed start <file.md | text> [--title T] [--cwd DIR] [--delivery-agent NAME] [--review-agent NAME]");
 
   const cwd = flagStr(flags, "cwd") || process.cwd();
-  const { groupId, meta } = createRequirement(db, { title, text, source: "cli", workingDir: cwd });
+  const deliveryAgent = flagStr(flags, "delivery-agent");
+  const reviewAgent = flagStr(flags, "review-agent");
+  const { groupId, meta } = createRequirement(db, { title, text, source: "cli", workingDir: cwd, deliveryAgent, reviewAgent });
 
   if (pretty) {
     process.stdout.write(`Requirement created: ${groupId}\n`);
@@ -164,6 +166,23 @@ async function cmdClose(rest: string[], _flags: Record<string, string | boolean>
   }
 }
 
+async function cmdDelete(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
+  const groupId = rest[0];
+  if (!groupId) fail("Usage: rotom e2ed delete <groupId>");
+
+  const db = openDb();
+  try {
+    deleteRequirement(db, groupId);
+    if (pretty) {
+      process.stdout.write(`Requirement ${groupId} deleted.\n`);
+    } else {
+      printJson({ ok: true, groupId });
+    }
+  } catch (err: any) {
+    fail(err.message);
+  }
+}
+
 async function cmdMetrics(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
   const groupId = rest[0];
   if (!groupId) fail("Usage: rotom e2ed metrics <groupId>");
@@ -217,6 +236,8 @@ export async function cmdE2ed(rest: string[], flags: Record<string, string | boo
     case "deliver":  return cmdDeliver(rest.slice(1), flags);
     case "review":   return cmdReview(rest.slice(1), flags);
     case "close":    return cmdClose(rest.slice(1), flags);
+    case "delete":   return cmdDelete(rest.slice(1), flags);
+    case "rm":       return cmdDelete(rest.slice(1), flags);
     case "metrics":  return cmdMetrics(rest.slice(1), flags);
     case "timeline": return cmdTimeline(rest.slice(1), flags);
     default:
@@ -229,6 +250,7 @@ export async function cmdE2ed(rest: string[], flags: Record<string, string | boo
         `  deliver <groupId>    Start delivery (Claude)\n` +
         `  review <groupId>     Start review (Codex)\n` +
         `  close <groupId>      Close a requirement\n` +
+        `  delete <groupId>     Delete a requirement\n` +
         `  metrics <groupId>    Show metrics and durations\n` +
         `  timeline <groupId>   Show event timeline\n` +
         `\nDeliver flags: --plan-only --code-only --fix --cwd <dir>\n` +

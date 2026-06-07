@@ -36,7 +36,7 @@ interface PipelineOpts {
 }
 
 function makeIssueId(): string {
-  return randomUUID().slice(0, 10);
+  return randomUUID();
 }
 
 function readGitBranch(cwd: string): string | null {
@@ -87,9 +87,10 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
       title: `[e2ed] Plan v${version} — ${meta.reqId}`,
       description: prompt,
       createdBy: 'e2ed',
-      assignedTo: 'claude',
+      assignedTo: meta.deliveryAgent || 'claude',
       type: 'delivery',
       workingDir: cwd,
+      approvalPolicy: 'rw_allow',
     });
 
     console.log(`Plan delivery issue created: ${issueId}`);
@@ -151,7 +152,7 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
     title: `[e2ed] Code v${version} — ${meta.reqId}`,
     description: codePrompt,
     createdBy: 'e2ed',
-    assignedTo: 'claude',
+    assignedTo: meta.deliveryAgent || 'claude',
     type: 'delivery',
     workingDir: cwd,
   });
@@ -200,7 +201,7 @@ function startRequirementReview(
     title: `[e2ed] Req Review #${reviewIndex} — ${meta.reqId}`,
     description: prompt,
     createdBy: 'e2ed',
-    assignedTo: 'codex',
+    assignedTo: meta.reviewAgent || 'codex',
     type: 'review',
     workingDir: cwd,
   });
@@ -230,7 +231,7 @@ function startPlanReview(
     title: `[e2ed] Plan Review v${latestPlan.version} — ${meta.reqId}`,
     description: prompt,
     createdBy: 'e2ed',
-    assignedTo: 'codex',
+    assignedTo: meta.reviewAgent || 'codex',
     type: 'review',
     workingDir: cwd,
   });
@@ -261,7 +262,7 @@ function startCodeReview(
     title: `[e2ed] Code Review v${latestCode.version} — ${meta.reqId}`,
     description: prompt,
     createdBy: 'e2ed',
-    assignedTo: 'codex',
+    assignedTo: meta.reviewAgent || 'codex',
     type: 'review',
     workingDir: cwd,
   });

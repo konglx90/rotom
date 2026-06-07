@@ -82,7 +82,7 @@ function ensureDir(dir: string): void {
 
 export function createRequirement(
   db: MeshDb,
-  opts: { title: string; text: string; source?: string; workingDir?: string },
+  opts: { title: string; text: string; source?: string; workingDir?: string; deliveryAgent?: string; reviewAgent?: string },
 ): { groupId: string; meta: RequirementMeta } {
   const groupId = randomUUID();
   const now = new Date().toISOString();
@@ -104,6 +104,8 @@ export function createRequirement(
       timeline: [{ status: RequirementStatus.CREATED, at: now }],
       source: opts.source || 'manual',
       links: [],
+      deliveryAgent: opts.deliveryAgent || 'claude',
+      reviewAgent: opts.reviewAgent || 'codex',
     }),
   });
 
@@ -301,6 +303,22 @@ export function writeArtifactFile(groupId: string, content: string, ...segments:
 
 export function getWorkingDir(db: MeshDb, groupId: string): string {
   return resolveGroupArtifactRoot(db, groupId);
+}
+
+// ── Delete Requirement ─────────────────────────────────────────────────────
+
+export function deleteRequirement(db: MeshDb, groupId: string): void {
+  const meta = readMeta(db, groupId);
+  if (!meta) throw new Error(`Requirement ${groupId} not found`);
+
+  // Remove filesystem artifacts
+  const dir = metaDir(groupId);
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  // Remove database records
+  db.deleteGroup(groupId);
 }
 
 // ── Close Requirement ─────────────────────────────────────────────────────
