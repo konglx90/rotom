@@ -13,6 +13,8 @@ import { createRequirement, listRequirements, getRequirement, getRequirementText
 import { startDeliver, startReview } from "../e2ed/pipeline.js";
 import { computeMetrics, getTimeline } from "../e2ed/metrics.js";
 import { RequirementStatus } from "../e2ed/types.js";
+import { closeRequirement } from "../e2ed/requirement.js";
+import { checkAndTransitionEnv } from "../e2ed/environment.js";
 
 // ── DB singleton ─────────────────────────────────────────────────────────
 
@@ -63,7 +65,7 @@ async function cmdStart(rest: string[], flags: Record<string, string | boolean>)
 
   if (pretty) {
     process.stdout.write(`Requirement created: ${groupId}\n`);
-    process.stdout.write(`  Title: ${meta.reqId}\n`);
+    process.stdout.write(`  Title: ${title || text.substring(0, 60)}\n`);
     process.stdout.write(`  Status: ${meta.status}\n`);
     process.stdout.write(`  Next: rotom e2ed deliver ${groupId} --plan-only\n`);
   } else {
@@ -114,6 +116,21 @@ async function cmdDeliver(rest: string[], flags: Record<string, string | boolean
   const db = openDb();
   const cwd = flagStr(flags, "cwd");
 
+  // Auto environment check when starting from CREATED
+  const meta = getRequirement(db, groupId);
+  if (!meta) fail(`Requirement ${groupId} not found`);
+
+  if (meta.status === RequirementStatus.CREATED) {
+    const workDir = cwd || process.cwd();
+    const envResult = checkAndTransitionEnv(db, groupId, workDir);
+    if (envResult.status === RequirementStatus.ENV_BLOCKED) {
+      fail(`Environment blocked:\n${envResult.issues.map((i) => `  - ${i}`).join("\n")}`);
+    }
+    if (envResult.issues.length > 0 && pretty) {
+      process.stderr.write(`Warnings:\n${envResult.issues.map((i: string) => `  - ${i}`).join("\n")}\n`);
+    }
+  }
+
   startDeliver(db, groupId, {
     cwd,
     fix: !!flags.fix,
@@ -131,6 +148,23 @@ async function cmdReview(rest: string[], flags: Record<string, string | boolean>
   const type = flagStr(flags, "type") as 'requirement' | 'plan' | 'code' | undefined;
 
   startReview(db, groupId, { cwd, reviewType: type });
+}
+
+async function cmdClose(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
+  const groupId = rest[0];
+  if (!groupId) fail("Usage: rotom e2ed close <groupId>");
+
+  const db = openDb();
+  try {
+    const meta = closeRequirement(db, groupId);
+    if (pretty) {
+      process.stdout.write(`Requirement ${groupId} closed.\n`);
+    } else {
+      printJson({ groupId, status: meta.status });
+    }
+  } catch (err: any) {
+    fail(err.message);
+  }
 }
 
 async function cmdMetrics(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
@@ -185,6 +219,7 @@ export async function cmdE2ed(rest: string[], flags: Record<string, string | boo
     case "show":     return cmdShow(rest.slice(1), flags);
     case "deliver":  return cmdDeliver(rest.slice(1), flags);
     case "review":   return cmdReview(rest.slice(1), flags);
+    case "close":    return cmdClose(rest.slice(1), flags);
     case "metrics":  return cmdMetrics(rest.slice(1), flags);
     case "timeline": return cmdTimeline(rest.slice(1), flags);
     default:
@@ -196,6 +231,7 @@ export async function cmdE2ed(rest: string[], flags: Record<string, string | boo
         `  show <groupId>       Show requirement details\n` +
         `  deliver <groupId>    Start delivery (Claude)\n` +
         `  review <groupId>     Start review (Codex)\n` +
+        `  close <groupId>      Close a requirement\n` +
         `  metrics <groupId>    Show metrics and durations\n` +
         `  timeline <groupId>   Show event timeline\n` +
         `\nDeliver flags: --plan-only --code-only --fix --cwd <dir>\n` +

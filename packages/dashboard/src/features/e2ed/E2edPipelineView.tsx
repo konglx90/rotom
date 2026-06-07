@@ -4,7 +4,7 @@
  * Shows: status flow, plan/code versions, issues list, artifacts.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { e2edApi, type E2edRequirement, type E2edMetrics } from '../../api/e2ed'
 
@@ -44,6 +44,20 @@ export function E2edPipelineView() {
   if (!req) return <div style={{ padding: 24, color: 'red' }}>Requirement not found</div>
 
   const currentIdx = STATUS_FLOW.indexOf(req.status)
+  const rid = req.reqId
+
+  const refresh = () => {
+    if (!rid) return
+    Promise.all([
+      e2edApi.get(rid).catch(() => null),
+      e2edApi.metrics(rid).catch(() => null),
+    ]).then(([r, m]) => { setReq(r); setMetrics(m) })
+  }
+
+  const handleAction = useCallback(async (action: () => Promise<unknown>) => {
+    try { await action(); refresh() }
+    catch (e: any) { alert(e.message) }
+  }, [rid])
 
   return (
     <div style={{ padding: 24 }}>
@@ -85,6 +99,52 @@ export function E2edPipelineView() {
             )}
           </div>
         ))}
+      </div>
+
+      {/* Action buttons */}
+      <div style={{ marginBottom: 24, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {(req.status === 'CREATED' || req.status === 'ENV_READY' || req.status === 'REQ_REVIEWED' || req.status === 'PLAN_REVIEWED') && (
+          <button onClick={() => handleAction(() => e2edApi.deliver(rid, { planOnly: true }))}
+            style={btnStyle('#8b5cf6')}>
+            Deliver (Plan Only)
+          </button>
+        )}
+        {(req.status === 'PLAN_REVIEWED' || req.status === 'DELIVERED') && (
+          <button onClick={() => handleAction(() => e2edApi.deliver(rid, { codeOnly: true }))}
+            style={btnStyle('#f59e0b')}>
+            Deliver (Code Only)
+          </button>
+        )}
+        {(req.status === 'DELIVERED' || req.status === 'REVIEWED') && (
+          <button onClick={() => handleAction(() => e2edApi.deliver(rid, { codeOnly: true, fix: true }))}
+            style={btnStyle('#ef4444')}>
+            Fix & Re-deliver
+          </button>
+        )}
+        {(req.status === 'PLANNING' || req.status === 'PLAN_REVIEWED') && (
+          <button onClick={() => handleAction(() => e2edApi.review(rid, { type: 'plan' }))}
+            style={btnStyle('#3b82f6')}>
+            Review Plan
+          </button>
+        )}
+        {(req.status === 'DELIVERED') && (
+          <button onClick={() => handleAction(() => e2edApi.review(rid, { type: 'code' }))}
+            style={btnStyle('#3b82f6')}>
+            Review Code
+          </button>
+        )}
+        {(req.status === 'CREATED' || req.status === 'ENV_READY') && (
+          <button onClick={() => handleAction(() => e2edApi.review(rid, { type: 'requirement' }))}
+            style={btnStyle('#3b82f6')}>
+            Review Requirement
+          </button>
+        )}
+        {(req.status === 'REVIEWED' || req.status === 'DELIVERED' || req.status === 'PLAN_REVIEWED' || req.status === 'REQ_REVIEWED') && (
+          <button onClick={() => handleAction(() => e2edApi.close(rid))}
+            style={btnStyle('#6b7280')}>
+            Close
+          </button>
+        )}
       </div>
 
       {/* Two columns: versions | metrics */}
@@ -191,4 +251,17 @@ function ReviewBadge({ status }: { status: string | null | undefined }) {
       {status}
     </span>
   )
+}
+
+function btnStyle(bg: string): React.CSSProperties {
+  return {
+    padding: '6px 16px',
+    border: 'none',
+    borderRadius: 6,
+    background: bg,
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
+  }
 }

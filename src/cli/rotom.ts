@@ -359,8 +359,9 @@ async function main(): Promise<void> {
   const rest = positional.slice(1);
   const asFlag = flagStr(flags, "as");
 
-  // Config commands don't need an agent
+  // Config and e2ed commands don't need an agent
   if (cmd === "config") return cmdConfig(rest, flags);
+  if (cmd === "e2ed")   return cmdE2ed(rest, flags);
 
   const agent = resolveAgent(asFlag);
 
@@ -370,7 +371,6 @@ async function main(): Promise<void> {
     case "group":           return cmdGroup(agent, rest, flags);
     case "issue":           return cmdIssue(agent, rest, flags);
     case "collab":          return cmdCollab(agent, rest, flags);
-    case "e2ed":            return cmdE2ed(rest, flags);
     default: fail(`unknown command: ${cmd}\nRun 'rotom help' for usage.`);
   }
 }

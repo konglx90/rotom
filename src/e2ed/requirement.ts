@@ -302,3 +302,23 @@ export function writeArtifactFile(groupId: string, content: string, ...segments:
 export function getWorkingDir(db: MeshDb, groupId: string): string {
   return resolveGroupArtifactRoot(db, groupId);
 }
+
+// ── Close Requirement ─────────────────────────────────────────────────────
+
+const CLOSEABLE_STATES: RequirementStatusType[] = [
+  RequirementStatus.REVIEWED,
+  RequirementStatus.DELIVERED,
+  RequirementStatus.PLAN_REVIEWED,
+  RequirementStatus.REQ_REVIEWED,
+];
+
+export function closeRequirement(db: MeshDb, groupId: string): RequirementMeta {
+  const meta = readMeta(db, groupId);
+  if (!meta) throw new Error(`Requirement ${groupId} not found`);
+
+  if (!CLOSEABLE_STATES.includes(meta.status)) {
+    throw new Error(`Cannot close requirement in state ${meta.status}. Allowed: ${CLOSEABLE_STATES.join(', ')}`);
+  }
+
+  return updateStatus(db, groupId, RequirementStatus.CLOSED);
+}
