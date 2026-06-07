@@ -16,6 +16,8 @@ import type { WSHub } from "./ws-hub.js";
 import type { Router } from "./router.js";
 import type { AgentProfile } from "../shared/protocol.js";
 import { defaultGroupWorkingDir, resolveGroupArtifactRoot } from "./group-paths.js";
+import { listRequirements, getRequirement } from "../e2ed/requirement.js";
+import { computeMetrics, getTimeline } from "../e2ed/metrics.js";
 
 import { createLogger } from "../shared/logger.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
@@ -1677,6 +1679,30 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
       relInRepo,
       diff: result.stdout,
     });
+  });
+
+  // ── E2ED endpoints ─────────────────────────────────────────────────────
+
+  apiRouter.get("/e2ed/groups", (_req, res) => {
+    const reqs = listRequirements(db);
+    res.json(reqs);
+  });
+
+  apiRouter.get("/e2ed/groups/:groupId", (req, res) => {
+    const meta = getRequirement(db, req.params.groupId);
+    if (!meta) return res.status(404).json({ error: "Not found" });
+    res.json(meta);
+  });
+
+  apiRouter.get("/e2ed/groups/:groupId/metrics", (req, res) => {
+    const metrics = computeMetrics(db, req.params.groupId);
+    if (!metrics) return res.status(404).json({ error: "Not found" });
+    res.json(metrics);
+  });
+
+  apiRouter.get("/e2ed/groups/:groupId/timeline", (req, res) => {
+    const timeline = getTimeline(db, req.params.groupId);
+    res.json(timeline);
   });
 
   return apiRouter;

@@ -84,7 +84,7 @@ export function createRequirement(
   db: MeshDb,
   opts: { title: string; text: string; source?: string; workingDir?: string },
 ): { groupId: string; meta: RequirementMeta } {
-  const groupId = randomUUID().slice(0, 10);
+  const groupId = randomUUID();
   const now = new Date().toISOString();
   const title = opts.title || opts.text.substring(0, 60);
 

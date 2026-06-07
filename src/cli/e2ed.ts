@@ -5,6 +5,7 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import { MeshDb } from "../master/db.js";
@@ -17,7 +18,7 @@ import { RequirementStatus } from "../e2ed/types.js";
 
 function openDb(): MeshDb {
   const dbPath = path.join(
-    process.env.ROTOM_HOME || path.join(require("node:os").homedir(), ".rotom"),
+    process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom"),
     "mesh.db",
   );
   return new MeshDb(dbPath);
