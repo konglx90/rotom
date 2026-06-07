@@ -62,7 +62,7 @@ function readMeta(db: MeshDb, groupId: string): RequirementMeta | null {
   return meta;
 }
 
-function writeMeta(db: MeshDb, groupId: string, meta: RequirementMeta): void {
+export function writeMeta(db: MeshDb, groupId: string, meta: RequirementMeta): void {
   meta.compositeVersion = computeCompositeVersion(meta);
   db.updateGroupMetadata(groupId, JSON.stringify(meta));
 }

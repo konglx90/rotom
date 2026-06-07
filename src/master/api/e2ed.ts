@@ -1,13 +1,21 @@
 import { type Router as ExpressRouter } from "express";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { MeshDb } from "../db.js";
 import {
   listRequirements,
   getRequirement,
+  getRequirementText,
+  readArtifactFile,
   createRequirement,
   closeRequirement,
 } from "../../e2ed/requirement.js";
 import { computeMetrics, getTimeline } from "../../e2ed/metrics.js";
 import { startDeliver, startReview } from "../../e2ed/pipeline.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const guidePath = path.resolve(__dirname, "../../../docs/e2ed.md");
 
 export function registerE2edRoutes(
   apiRouter: ExpressRouter,
@@ -15,15 +23,54 @@ export function registerE2edRoutes(
 ): void {
   // ── GET ────────────────────────────────────────────────────────────────
 
+  /** Serve E2ED documentation (single source of truth for project + dashboard) */
+  apiRouter.get("/e2ed/guide", (_req, res) => {
+    try {
+      const content = fs.readFileSync(guidePath, "utf-8");
+      res.type("text/markdown").send(content);
+    } catch {
+      res.status(404).json({ error: "Guide not found" });
+    }
+  });
+
   apiRouter.get("/e2ed/groups", (_req, res) => {
     const reqs = listRequirements(db);
-    res.json(reqs);
+    // Enrich with title and workingDir from groups table
+    const enriched = reqs.map((r) => {
+      const group = db.getGroupById(r.reqId);
+      return { ...r, title: group?.name || r.reqId, workingDir: group?.working_dir || null };
+    });
+    res.json(enriched);
   });
 
   apiRouter.get("/e2ed/groups/:groupId", (req, res) => {
     const meta = getRequirement(db, req.params.groupId);
     if (!meta) return res.status(404).json({ error: "Not found" });
-    res.json(meta);
+
+    // Enrich with title and workingDir from group record
+    const group = db.getGroupById(req.params.groupId);
+    res.json({ ...meta, title: group?.name || meta.reqId, workingDir: group?.working_dir || null });
+  });
+
+  /** Get requirement text content */
+  apiRouter.get("/e2ed/groups/:groupId/text", (req, res) => {
+    const meta = getRequirement(db, req.params.groupId);
+    if (!meta) return res.status(404).json({ error: "Not found" });
+    const text = getRequirementText(req.params.groupId);
+    res.json({ text: text || "" });
+  });
+
+  /** Read an artifact file (plan, review report, reflection, etc.) */
+  apiRouter.get("/e2ed/groups/:groupId/artifacts/*", (req, res) => {
+    const meta = getRequirement(db, req.params.groupId);
+    if (!meta) return res.status(404).json({ error: "Not found" });
+
+    const wildcard = (req.params as unknown as Record<string, string>)["0"];
+    const segments = wildcard?.split("/") || [];
+    const content = readArtifactFile(req.params.groupId, ...segments);
+    if (!content) return res.status(404).json({ error: "Artifact not found" });
+
+    res.type("text/plain").send(content);
   });
 
   apiRouter.get("/e2ed/groups/:groupId/metrics", (req, res) => {

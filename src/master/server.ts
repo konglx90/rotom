@@ -3,10 +3,10 @@
  * Digital Employee Mesh — Master server (standalone entry point)
  *
  * Usage:
- *   node dist/master/server.js [--port 28800] [--host 0.0.0.0] [--data ./mesh-data]
+ *   node dist/master/server.js [--port 28800] [--host 0.0.0.0] [--data ~/.rotom]
  *
  * Or via package.json bin:
- *   mesh-master [--port 28800] [--data ./mesh-data]
+ *   mesh-master [--port 28800] [--data ~/.rotom]
  */
 
 import express from "express";
@@ -22,6 +22,7 @@ import { OfflineQueue } from "./offline-queue.js";
 import { createApi } from "./api/index.js";
 import { TerminalHub } from "./terminal-hub.js";
 import { DEFAULT_MASTER_PORT, DEFAULT_MASTER_HOST } from "../shared/constants.js";
+import os from "node:os";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,12 +38,16 @@ interface MasterConfig {
   dataDir: string;
 }
 
+function resolveDataDir(): string {
+  return process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom");
+}
+
 function parseArgs(): MasterConfig {
   const args = process.argv.slice(2);
   const config: MasterConfig = {
     port: DEFAULT_MASTER_PORT,
     host: DEFAULT_MASTER_HOST,
-    dataDir: "./mesh-data",
+    dataDir: resolveDataDir(),
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -57,7 +62,7 @@ function parseArgs(): MasterConfig {
         break;
       case "--data":
       case "-d":
-        config.dataDir = args[++i] || "./mesh-data";
+        config.dataDir = args[++i] || resolveDataDir();
         break;
     }
   }

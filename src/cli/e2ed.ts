@@ -19,11 +19,8 @@ import { checkAndTransitionEnv } from "../e2ed/environment.js";
 // ── DB singleton ─────────────────────────────────────────────────────────
 
 function openDb(): MeshDb {
-  const dbPath = path.join(
-    process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom"),
-    "mesh.db",
-  );
-  return new MeshDb(dbPath);
+  const dataDir = process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom");
+  return new MeshDb(path.join(dataDir, "mesh.db"));
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────

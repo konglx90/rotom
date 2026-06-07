@@ -7,6 +7,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import type { MeshDb } from '../master/db.js';
 import type { RequirementMeta } from './types.js';
@@ -16,7 +17,7 @@ import {
   createPlanVersion, getLatestPlanVersion, updatePlanVersionStatus,
   createCodeVersion, getLatestCodeVersion, updateCodeVersionStatus,
   createReqReview, readArtifactFile, writeArtifactFile,
-  getWorkingDir,
+  getWorkingDir, writeMeta,
 } from './requirement.js';
 import {
   buildDeliveryPrompt,
@@ -38,6 +39,22 @@ function makeIssueId(): string {
   return randomUUID().slice(0, 10);
 }
 
+function readGitBranch(cwd: string): string | null {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+  } catch { return null; }
+}
+
+function recordLink(db: MeshDb, groupId: string, link: { type: string; url: string; branch?: string }): void {
+  const meta = getRequirement(db, groupId);
+  if (!meta) return;
+  const exists = meta.links.some(l => l.type === link.type && l.branch === link.branch && l.url === link.url);
+  if (!exists) {
+    meta.links.push(link);
+    writeMeta(db, groupId, meta);
+  }
+}
+
 // ── Deliver ──────────────────────────────────────────────────────────────
 
 export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {}): void {
@@ -49,6 +66,10 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
   const isFix = !!opts.fix;
   const isPlanOnly = !!opts.planOnly;
   const isCodeOnly = !!opts.codeOnly;
+
+  // Record git branch as a link
+  const branch = readGitBranch(cwd);
+  if (branch) recordLink(db, groupId, { type: 'git-branch', url: '', branch });
 
   // Phase 1: Plan generation
   if (!isCodeOnly) {

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useZenMode } from '../../../context/ZenModeContext'
 import { useChatContext } from '../../../context/ChatContext'
 import { AppSidebar } from '../AppSidebar/AppSidebar'
+import { E2edSidebar } from '../../../features/e2ed/E2edSidebar'
 import styles from './AppShell.module.css'
 
 const ZEN_DEFAULT = 56
@@ -20,6 +21,7 @@ export function AppShell({ children }: AppShellProps) {
   const hideSidebar = /^\/dashboard\/groups\/[^/]+\/issues-single(\/|$)/.test(
     location.pathname,
   )
+  const isE2edRoute = location.pathname.startsWith('/dashboard/e2ed')
   const widthStorageKey = zenMode ? 'sidebar_width_zen' : 'sidebar_width_normal'
 
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -73,7 +75,8 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       )}
       <div className={styles.shellInner}>
-        {!hideSidebar && <AppSidebar width={sidebarWidth} onWidthChange={handleWidthChange} />}
+        {!hideSidebar && !isE2edRoute && <AppSidebar width={sidebarWidth} onWidthChange={handleWidthChange} />}
+        {isE2edRoute && <E2edSidebar />}
         <main
           className={`${styles.main} ${zenMode ? styles.mainZen : ''} ${
             isFullBleed ? styles.mainFullBleed : ''
