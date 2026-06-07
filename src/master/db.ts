@@ -910,9 +910,10 @@ export class MeshDb {
     approvalPolicy?: "r_allow" | "rw_allow";
     type?: string; assignedTo?: string;
   }): void {
+    const now = new Date().toISOString();
     this.db.prepare(`
-      INSERT INTO issues (id, group_id, title, description, priority, created_by, working_dir, type, slash_command, approval_policy, assigned_to)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO issues (id, group_id, title, description, priority, created_by, working_dir, type, slash_command, approval_policy, assigned_to, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       issue.id, issue.groupId, issue.title,
       issue.description || "", issue.priority || "medium",
@@ -921,11 +922,12 @@ export class MeshDb {
       issue.slashCommand || null,
       issue.approvalPolicy || "r_allow",
       issue.assignedTo || null,
+      now,
     );
     this.db.prepare(`
-      INSERT INTO issue_events (issue_id, event_type, agent_name, content)
-      VALUES (?, 'created', ?, ?)
-    `).run(issue.id, issue.createdBy, issue.title);
+      INSERT INTO issue_events (issue_id, event_type, agent_name, content, created_at)
+      VALUES (?, 'created', ?, ?, ?)
+    `).run(issue.id, issue.createdBy, issue.title, now);
   }
 
   getIssueById(id: string): IssueRow | undefined {
@@ -1009,11 +1011,12 @@ export class MeshDb {
     content?: string; metadata?: Record<string, unknown>;
   }): void {
     this.db.prepare(`
-      INSERT INTO issue_events (issue_id, event_type, agent_name, content, metadata)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO issue_events (issue_id, event_type, agent_name, content, metadata, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       event.issueId, event.eventType, event.agentName,
       event.content || "", JSON.stringify(event.metadata || {}),
+      new Date().toISOString(),
     );
   }
 

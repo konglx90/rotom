@@ -469,31 +469,35 @@ export class ExecutorWorker {
     let lastSessionId: string | undefined = resumeSessionId;
 
     const effectivePolicy: "r_allow" | "rw_allow" = approvalPolicy === "rw_allow" ? "rw_allow" : "r_allow";
-    // rw_allow 走纯 bypass：不传 onApprovalRequest，让 claude / codex 走各自的
-    // auto-accept 路径（claude --permission-mode bypassPermissions 不挂 hook；
-    // codex executor 内部 respond(id, { decision: "accept" })）。
-    // r_allow（默认）保留现有 onApprovalRequest 闭包，写类工具仍走人工审批。
-    const onApprovalRequest = effectivePolicy === "rw_allow"
-      ? undefined
-      : (req: ApprovalRequestInput) => {
-          const approvalId = randomUUID();
-          return new Promise<ApprovalDecision>((resolve) => {
-            this.pendingApprovals.set(approvalId, { issueId, resolve });
-            this.send({
-              type: "issue_approval_request",
-              issueId,
-              approvalId,
-              kind: req.kind,
-              summary: req.summary,
-              command: req.command,
-              cwd: req.cwd,
-              files: req.files,
-              plan: req.plan,
-              diff: req.diff,
-              questions: req.questions,
-            });
-          });
-        };
+    // 无论 rw_allow 还是 r_allow 都传 onApprovalRequest，确保 PreToolUse hook
+    // 始终挂载，避免 claude 自己的权限提示因 stdin 关闭而卡死。
+    // rw_allow：转发到 Dashboard 做可见性记录，但立即 auto-accept，不等用户确认。
+    // r_allow（默认）：保留 pendingApprovals 阻塞等待 Dashboard 用户审批。
+    const onApprovalRequest = (req: ApprovalRequestInput) => {
+      const approvalId = randomUUID();
+      // 公用转发：Dashboard 侧能看到请求记录
+      this.send({
+        type: "issue_approval_request",
+        issueId,
+        approvalId,
+        kind: req.kind,
+        summary: req.summary,
+        command: req.command,
+        cwd: req.cwd,
+        files: req.files,
+        plan: req.plan,
+        diff: req.diff,
+        questions: req.questions,
+      });
+      if (effectivePolicy === "rw_allow") {
+        // 立即放行，不等用户
+        return Promise.resolve({ decision: "accept" } satisfies ApprovalDecision);
+      }
+      // r_allow：挂起等待 Dashboard 用户确认
+      return new Promise<ApprovalDecision>((resolve) => {
+        this.pendingApprovals.set(approvalId, { issueId, resolve });
+      });
+    };
 
     try {
       const result = await this.executor.execute(prompt, cwd, (chunk) => {
@@ -548,7 +552,9 @@ export class ExecutorWorker {
     } finally {
       this.activeTasks.delete(issueId);
       for (const [approvalId, p] of this.pendingApprovals) {
-        if (p.issueId === issueId) this.pendingApprovals.delete(approvalId);
+        if (p.issueId !== issueId) continue;
+        this.pendingApprovals.delete(approvalId);
+        p.resolve({ decision: "deny" });
       }
       // 取消的任务丢弃排队 append(用户主动放弃,不该再触发续跑);
       // 正常 / 失败结束才消费队列起新一轮。

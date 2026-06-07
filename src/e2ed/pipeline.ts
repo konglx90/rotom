@@ -71,12 +71,23 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
   const branch = readGitBranch(cwd);
   if (branch) recordLink(db, groupId, { type: 'git-branch', url: '', branch });
 
-  // Phase 1: Plan generation
+  // Phase 1: Plan + Implement (delivery agent writes code to working directory)
   if (!isCodeOnly) {
-    const { version, dirName, planDir } = createPlanVersion(db, groupId);
+    const { version, planDir } = createPlanVersion(db, groupId);
     const planPath = path.join(planDir, 'plan.md');
 
-    const prompt = buildDeliveryPrompt(requirement, planPath, '/dev/null', '');
+    // Create code version entry upfront so that code review can find it.
+    // Even in Phase 1, the delivery prompt tells the agent to implement code
+    // in the working directory — the code version metadata is needed for review.
+    const codeVersion = isPlanOnly ? null : createCodeVersion(db, groupId, {
+      parentPlanVersion: version,
+      author: 'ai',
+      isFix: false,
+      fixForCodeVersion: null,
+    });
+    const reflectionPath = codeVersion ? path.join(codeVersion.codeDirPath, 'reflection.md') : '/dev/null';
+
+    const prompt = buildDeliveryPrompt(requirement, planPath, reflectionPath, '');
 
     updateStatus(db, groupId, RequirementStatus.PLANNING);
 
@@ -101,7 +112,7 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
       return;
     }
 
-    console.log(`\nAfter plan is done, run: rotom e2ed deliver ${groupId} --code-only`);
+    console.log(`\nAfter code is done, run: rotom e2ed review ${groupId}`);
     return;
   }
 
@@ -121,7 +132,7 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
     }
   }
 
-  const { version, dirName, codeDirPath } = createCodeVersion(db, groupId, {
+  const { version, codeDirPath } = createCodeVersion(db, groupId, {
     parentPlanVersion: activePlan.version,
     author: 'ai',
     isFix,
@@ -155,6 +166,7 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
     assignedTo: meta.deliveryAgent || 'claude',
     type: 'delivery',
     workingDir: cwd,
+    approvalPolicy: 'rw_allow',
   });
 
   console.log(`Code delivery issue created: ${issueId}`);
@@ -204,6 +216,7 @@ function startRequirementReview(
     assignedTo: meta.reviewAgent || 'codex',
     type: 'review',
     workingDir: cwd,
+    approvalPolicy: 'rw_allow',
   });
 
   console.log(`Requirement review issue created: ${issueId}`);
@@ -234,6 +247,7 @@ function startPlanReview(
     assignedTo: meta.reviewAgent || 'codex',
     type: 'review',
     workingDir: cwd,
+    approvalPolicy: 'rw_allow',
   });
 
   console.log(`Plan review issue created: ${issueId}`);
@@ -243,7 +257,23 @@ function startCodeReview(
   db: MeshDb, groupId: string, meta: RequirementMeta,
   requirement: string, cwd: string,
 ): void {
-  const latestCode = getLatestCodeVersion(db, groupId);
+  let latestCode = getLatestCodeVersion(db, groupId);
+
+  // Backward compatibility: if code was generated during Phase 1 delivery
+  // (before the fix that creates code version upfront), auto-create one.
+  if (!latestCode && meta.status === RequirementStatus.DELIVERED) {
+    const latestPlan = getLatestPlanVersion(db, groupId);
+    if (latestPlan) {
+      createCodeVersion(db, groupId, {
+        parentPlanVersion: latestPlan.version,
+        author: 'ai',
+        isFix: false,
+        fixForCodeVersion: null,
+      });
+      latestCode = getLatestCodeVersion(db, groupId);
+    }
+  }
+
   if (!latestCode) {
     throw new Error('No code delivery found. Run deliver first.');
   }
@@ -265,6 +295,7 @@ function startCodeReview(
     assignedTo: meta.reviewAgent || 'codex',
     type: 'review',
     workingDir: cwd,
+    approvalPolicy: 'rw_allow',
   });
 
   console.log(`Code review issue created: ${issueId}`);

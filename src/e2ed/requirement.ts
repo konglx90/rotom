@@ -65,6 +65,11 @@ function readMeta(db: MeshDb, groupId: string): RequirementMeta | null {
 export function writeMeta(db: MeshDb, groupId: string, meta: RequirementMeta): void {
   meta.compositeVersion = computeCompositeVersion(meta);
   db.updateGroupMetadata(groupId, JSON.stringify(meta));
+
+  // Sync meta.json to filesystem so metadata is visible outside SQLite
+  const metaPath = path.join(metaDir(groupId), 'meta.json');
+  ensureDir(metaDir(groupId));
+  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
 }
 
 function computeCompositeVersion(meta: RequirementMeta): string {

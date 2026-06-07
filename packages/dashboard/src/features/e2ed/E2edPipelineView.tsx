@@ -9,7 +9,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { e2edApi, type E2edRequirement, type E2edMetrics } from '../../api/e2ed'
+import { useSocket } from '../../context/SocketContext'
 import { E2edIssueDrawer } from './E2edIssueDrawer'
+
+// 每次 issue_changed 的最小间隔(ms)内只触发一次刷新,避免反复调接口。
+const FETCH_DEBOUNCE_MS = 2000
 
 const GREEN = '#9fe870'
 const NEAR_BLACK = '#0e0f0c'
@@ -80,6 +84,9 @@ export function E2edPipelineView() {
   }>>([])
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
 
+  // WebSocket 监听:收到 issue_changed 时重新拉取数据
+  const { lastIssueChange } = useSocket()
+
   const fetchData = useCallback(() => {
     if (!groupId) return
     Promise.all([
@@ -91,6 +98,13 @@ export function E2edPipelineView() {
   }, [groupId])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // 有 issue_changed 时自动重新拉取(去抖 2s)
+  useEffect(() => {
+    if (!lastIssueChange || !groupId) return
+    const timer = setTimeout(() => fetchData(), FETCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [lastIssueChange, groupId, fetchData])
 
   const handleDelete = useCallback(() => {
     if (!groupId) return

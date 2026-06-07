@@ -11,9 +11,11 @@
  * the human in the dashboard. When no callback is supplied we keep the
  * legacy `bypassPermissions` behavior so non-interactive callers still work.
  *
- * Whether `onApprovalRequest` is supplied is decided by the worker based on
- * `issue.approval_policy`: `r_allow`(默认)→ 传 callback；`rw_allow` → 不传，
- * 走纯 bypass。
+ * `onApprovalRequest` is always supplied by the worker. For `rw_allow`
+ * the callback auto-accepts immediately; for `r_allow` it awaits Dashboard
+ * user decision. Either way the PreToolUse hook is always installed,
+ * preventing Claude Code's own permission prompts from hanging on closed
+ * stdin.
  */
 
 import { spawn } from "node:child_process";
