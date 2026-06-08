@@ -13,11 +13,23 @@ import { defaultGroupWorkingDir, resolveGroupArtifactRoot } from '../master/grou
 import type {
   RequirementMeta,
   RequirementStatusType,
+  ActiveTask,
   PlanVersionMeta,
   CodeVersionMeta,
   CompositeVersion,
 } from './types.js';
 import { RequirementStatus } from './types.js';
+
+// ── Backward compat: migrate old ING statuses ────────────────────────────
+
+const OLD_ING_MIGRATION: Record<string, { status: RequirementStatusType; activeTask: string }> = {
+  ENV_CHECKING:   { status: RequirementStatus.CREATED,      activeTask: 'env_checking' },
+  REQ_REVIEWING:  { status: RequirementStatus.ENV_READY,     activeTask: 'req_reviewing' },
+  PLANNING:       { status: RequirementStatus.REQ_REVIEWED,  activeTask: 'planning' },
+  PLAN_REVIEWING: { status: RequirementStatus.DELIVERED,     activeTask: 'plan_reviewing' },
+  DELIVERING:     { status: RequirementStatus.PLAN_REVIEWED, activeTask: 'delivering' },
+  REVIEWING:      { status: RequirementStatus.DELIVERED,     activeTask: 'code_reviewing' },
+};
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -51,6 +63,7 @@ function readMeta(db: MeshDb, groupId: string): RequirementMeta | null {
   // Ensure required fields
   meta.reqId ??= groupId;
   meta.status ??= RequirementStatus.CREATED;
+  meta.activeTask ??= null;
   meta.planVersions ??= [];
   meta.codeVersions ??= [];
   meta.runCount ??= { deliver: 0, review: 0, reqReview: 0, planReview: 0, codeReview: 0 };
@@ -58,6 +71,13 @@ function readMeta(db: MeshDb, groupId: string): RequirementMeta | null {
   meta.source ??= 'manual';
   meta.links ??= [];
   meta.compositeVersion ??= computeCompositeVersion(meta);
+
+  // Migrate old ING statuses to activeTask
+  const migration = OLD_ING_MIGRATION[meta.status];
+  if (migration) {
+    meta.status = migration.status;
+    meta.activeTask = migration.activeTask as ActiveTask;
+  }
 
   return meta;
 }
@@ -102,6 +122,7 @@ export function createRequirement(
     metadata: JSON.stringify({
       reqId: groupId,
       status: RequirementStatus.CREATED,
+      activeTask: null,
       compositeVersion: 'R1.P0.C0',
       planVersions: [],
       codeVersions: [],
@@ -157,6 +178,14 @@ export function updateStatus(db: MeshDb, groupId: string, status: RequirementSta
 
   writeMeta(db, groupId, meta);
   return meta;
+}
+
+export function setActiveTask(db: MeshDb, groupId: string, task: ActiveTask): void {
+  const meta = readMeta(db, groupId);
+  if (!meta) throw new Error(`Requirement ${groupId} not found`);
+
+  meta.activeTask = task;
+  writeMeta(db, groupId, meta);
 }
 
 export function getRequirementText(groupId: string): string | null {
@@ -344,6 +373,10 @@ const CLOSEABLE_STATES: RequirementStatusType[] = [
 export function closeRequirement(db: MeshDb, groupId: string): RequirementMeta {
   const meta = readMeta(db, groupId);
   if (!meta) throw new Error(`Requirement ${groupId} not found`);
+
+  if (meta.activeTask) {
+    throw new Error(`Cannot close requirement while task is active: ${meta.activeTask}`);
+  }
 
   if (!CLOSEABLE_STATES.includes(meta.status)) {
     throw new Error(`Cannot close requirement in state ${meta.status}. Allowed: ${CLOSEABLE_STATES.join(', ')}`);

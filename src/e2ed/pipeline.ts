@@ -13,7 +13,7 @@ import type { MeshDb } from '../master/db.js';
 import type { RequirementMeta } from './types.js';
 import { RequirementStatus } from './types.js';
 import {
-  getRequirement, updateStatus, getRequirementText,
+  getRequirement, updateStatus, setActiveTask, getRequirementText,
   createPlanVersion, getLatestPlanVersion, updatePlanVersionStatus,
   createCodeVersion, getLatestCodeVersion, updateCodeVersionStatus,
   createReqReview, readArtifactFile, writeArtifactFile,
@@ -89,7 +89,7 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
 
     const prompt = buildDeliveryPrompt(requirement, planPath, reflectionPath, '', isPlanOnly);
 
-    updateStatus(db, groupId, RequirementStatus.PLANNING);
+    setActiveTask(db, groupId, 'planning');
 
     const issueId = makeIssueId();
     db.createIssue({
@@ -154,7 +154,7 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
     codePrompt += `\n\n## IMPORTANT: Fix Required\nA previous review found issues. Fix ALL issues identified below.\n\n### Review Feedback\n${reviewFeedback}`;
   }
 
-  updateStatus(db, groupId, RequirementStatus.DELIVERING);
+  setActiveTask(db, groupId, 'delivering');
 
   const issueId = makeIssueId();
   db.createIssue({
@@ -204,7 +204,7 @@ function startRequirementReview(
   const { reviewIndex, reviewDir } = createReqReview(db, groupId);
   const prompt = buildRequirementReviewPrompt(requirement, meta.reqId);
 
-  updateStatus(db, groupId, RequirementStatus.REQ_REVIEWING);
+  setActiveTask(db, groupId, 'req_reviewing');
 
   const issueId = makeIssueId();
   db.createIssue({
@@ -235,7 +235,7 @@ function startPlanReview(
   const planText = readArtifactFile(groupId, 'plans', latestPlan.dirName, 'plan.md') || '(no plan content)';
   const prompt = buildPlanReviewPrompt(requirement, planText, latestPlan.version);
 
-  updateStatus(db, groupId, RequirementStatus.PLAN_REVIEWING);
+  setActiveTask(db, groupId, 'plan_reviewing');
 
   const issueId = makeIssueId();
   db.createIssue({
@@ -283,7 +283,7 @@ function startCodeReview(
 
   const prompt = buildCodeReviewPrompt(requirement, planText, reflection, [], '');
 
-  updateStatus(db, groupId, RequirementStatus.REVIEWING);
+  setActiveTask(db, groupId, 'code_reviewing');
 
   const issueId = makeIssueId();
   db.createIssue({

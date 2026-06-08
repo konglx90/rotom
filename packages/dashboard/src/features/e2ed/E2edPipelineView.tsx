@@ -18,9 +18,7 @@ const STATUS_FLOW = [
   "CREATED",
   "ENV_READY",
   "REQ_REVIEWED",
-  "PLANNING",
   "PLAN_REVIEWED",
-  "DELIVERING",
   "DELIVERED",
   "REVIEWED",
 ];
@@ -28,27 +26,29 @@ const STATUS_FLOW = [
 const STATUS_LABELS: Record<string, string> = {
   CREATED: "已创建",
   ENV_BLOCKED: "环境阻塞",
-  ENV_CHECKING: "环境检测中",
   ENV_READY: "环境就绪",
-  REQ_REVIEWING: "需求评审中",
   REQ_REVIEWED: "需求已评",
-  PLANNING: "方案设计中",
-  PLAN_REVIEWING: "方案评审中",
   PLAN_REVIEWED: "方案已评",
-  DELIVERING: "交付中",
   DELIVERED: "已交付",
-  REVIEWING: "评审中",
   REVIEWED: "已评审",
   CLOSED: "已完成",
 };
 
+const ACTIVE_TASK_LABELS: Record<string, string> = {
+  env_checking: "环境检测中",
+  req_reviewing: "需求评审中",
+  planning: "方案生成中",
+  plan_reviewing: "方案评审中",
+  delivering: "代码交付中",
+  code_reviewing: "代码评审中",
+};
+
 const STATUS_BADGE: Record<string, string> = {
   CREATED: "pillGray",
+  ENV_BLOCKED: "pillRed",
   ENV_READY: "pillGreen",
   REQ_REVIEWED: "pillGreen",
-  PLANNING: "pillPurple",
   PLAN_REVIEWED: "pillGreen",
-  DELIVERING: "pillAmber",
   DELIVERED: "pillGreen",
   REVIEWED: "pillGreen",
   CLOSED: "pillGray",
@@ -58,9 +58,7 @@ const FLOW_COLORS: Record<string, string> = {
   CREATED: "#868685",
   ENV_READY: "#054d28",
   REQ_REVIEWED: "#054d28",
-  PLANNING: "#7c3aed",
   PLAN_REVIEWED: "#054d28",
-  DELIVERING: "#d97706",
   DELIVERED: "#054d28",
   REVIEWED: "#054d28",
 };
@@ -277,6 +275,7 @@ export function E2edPipelineView() {
         status={req.status}
         groupId={rid}
         hasWorkingDir={!!req.workingDir}
+        activeTask={req.activeTask ?? null}
       />
 
       {/* Issues */}
@@ -626,7 +625,10 @@ function getAvailableActions(
   status: string,
   groupId: string,
   hasCwd: boolean,
+  activeTask: string | null,
 ): ActionDef[] {
+  if (activeTask) return [];
+
   const cwd = hasCwd ? "" : " --cwd <项目目录>";
   switch (status) {
     case "CREATED":
@@ -714,12 +716,6 @@ function getAvailableActions(
           accent: "purple",
         },
       ];
-    case "REQ_REVIEWING":
-    case "PLANNING":
-    case "PLAN_REVIEWING":
-    case "DELIVERING":
-    case "REVIEWING":
-    case "ENV_CHECKING":
     case "CLOSED":
       return [];
     default:
@@ -731,23 +727,20 @@ function AvailableActions({
   status,
   groupId,
   hasWorkingDir,
+  activeTask,
 }: {
   status: string;
   groupId: string;
   hasWorkingDir: boolean;
+  activeTask: string | null;
 }) {
-  const actions = getAvailableActions(status, groupId, hasWorkingDir);
+  const actions = getAvailableActions(status, groupId, hasWorkingDir, activeTask);
   if (actions.length === 0) {
-    const waitingStates: Record<string, string> = {
-      ENV_CHECKING: "环境检测中...",
-      REQ_REVIEWING: "需求评审中...",
-      PLANNING: "方案生成中...",
-      PLAN_REVIEWING: "方案评审中...",
-      DELIVERING: "代码交付中...",
-      REVIEWING: "代码评审中...",
-      CLOSED: "此需求已完成",
-    };
-    const hint = waitingStates[status];
+    const hint = activeTask
+      ? ACTIVE_TASK_LABELS[activeTask]
+      : status === "CLOSED"
+        ? "此需求已完成"
+        : null;
     if (hint) {
       return (
         <div className={`${shared.card} ${shared.cardTopGray}`}>
@@ -835,7 +828,9 @@ function E2edGuideDrawer({
         </div>
         <div className={shared.drawerBody}>
           {content ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            <div className="e2ed-guide-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            </div>
           ) : (
             <span className={shared.loadingText}>Loading...</span>
           )}

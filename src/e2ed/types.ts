@@ -2,25 +2,29 @@
  * E2ED — End-to-End Requirement Delivery type definitions.
  */
 
-/** Requirement lifecycle status */
+/** Requirement lifecycle status (milestones only) */
 export const RequirementStatus = {
   CREATED: 'CREATED',
-  ENV_CHECKING: 'ENV_CHECKING',
   ENV_READY: 'ENV_READY',
   ENV_BLOCKED: 'ENV_BLOCKED',
-  REQ_REVIEWING: 'REQ_REVIEWING',
   REQ_REVIEWED: 'REQ_REVIEWED',
-  PLANNING: 'PLANNING',
-  PLAN_REVIEWING: 'PLAN_REVIEWING',
   PLAN_REVIEWED: 'PLAN_REVIEWED',
-  DELIVERING: 'DELIVERING',
   DELIVERED: 'DELIVERED',
-  REVIEWING: 'REVIEWING',
   REVIEWED: 'REVIEWED',
   CLOSED: 'CLOSED',
 } as const;
 
 export type RequirementStatusType = (typeof RequirementStatus)[keyof typeof RequirementStatus];
+
+/** Active task — tracks in-progress work independently from status */
+export type ActiveTask =
+  | 'env_checking'
+  | 'req_reviewing'
+  | 'planning'
+  | 'plan_reviewing'
+  | 'delivering'
+  | 'code_reviewing'
+  | null;
 
 /** Composite version: R.P.C (Requirement.Plan.Code) */
 export interface CompositeVersion {
@@ -55,6 +59,7 @@ export interface CodeVersionMeta {
 export interface RequirementMeta {
   reqId: string;          // group id (same as group.id)
   status: RequirementStatusType;
+  activeTask: ActiveTask;
   compositeVersion: string;
   planVersions: PlanVersionMeta[];
   codeVersions: CodeVersionMeta[];

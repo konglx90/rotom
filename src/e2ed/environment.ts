@@ -9,7 +9,7 @@ import path from 'node:path';
 import type { MeshDb } from '../master/db.js';
 import { RequirementStatus } from './types.js';
 import type { RequirementStatusType } from './types.js';
-import { getRequirement, updateStatus } from './requirement.js';
+import { getRequirement, updateStatus, setActiveTask } from './requirement.js';
 
 export interface EnvCheckResult {
   ready: boolean;
@@ -74,15 +74,17 @@ export function checkAndTransitionEnv(db: MeshDb, groupId: string, cwd: string):
     return { status: meta.status, issues: [] };
   }
 
-  updateStatus(db, groupId, RequirementStatus.ENV_CHECKING);
+  setActiveTask(db, groupId, 'env_checking');
 
   const result = checkEnvironment(cwd);
 
   if (result.ready) {
     updateStatus(db, groupId, RequirementStatus.ENV_READY);
+    setActiveTask(db, groupId, null);
     return { status: RequirementStatus.ENV_READY, issues: result.issues };
   }
 
   updateStatus(db, groupId, RequirementStatus.ENV_BLOCKED);
+  setActiveTask(db, groupId, null);
   return { status: RequirementStatus.ENV_BLOCKED, issues: result.issues };
 }

@@ -1,49 +1,58 @@
 # E2ED — End-to-End Requirement Delivery
 
-端到端需求交付流水线，覆盖从需求创建、计划生成、代码实现到独立评审的完整生命周期。
+Claude 生产，Codex 评审，三类产物对抗交付。
 
 ## 核心理念
 
-| 角色 | Agent | 职责 |
-|------|-------|------|
-| Delivery Agent | Claude | 分析需求、制定计划、实现代码、自我反思 |
-| Review Agent | Codex | 独立评审需求/方案/代码，不修改任何内容 |
+两个 Agent 各司其职，形成生产-评审对抗闭环：
 
-Delivery 与 Review 严格分离：执行者不自评，评审者不执行。
+| 角色 | Agent | 做什么 | 不做什么 |
+|------|-------|--------|----------|
+| 生产者 | Claude | 生成需求分析、实现方案、代码 | 不自评 |
+| 评审者 | Codex | 独立评审三类产物，给出评分和改进意见 | 不修改任何内容 |
+
+三类产物，每类都经过"生产 → 评审"一轮对抗：
+
+| 产物 | 生产（Claude） | 评审（Codex） |
+|------|----------------|----------------|
+| 需求 | — | 评审清晰度、完整性、可测试性 |
+| 方案 | 生成实现方案（文件变更、API、数据模型、测试策略） | 评审可行性、需求覆盖、风险评估 |
+| 代码 | 实现代码 + 自我反思 | 评审需求覆盖、代码质量、可维护性 |
 
 ## 状态流转
 
 ```
-CREATED ──→ REQ_REVIEWING ──→ REQ_REVIEWED ──→ PLANNING ──→ PLAN_REVIEWING ──→ PLAN_REVIEWED
-                                                                        │
-          CLOSED ←── REVIEWED ←── REVIEWING ←── DELIVERED ←── DELIVERING ←─┘
+CREATED ──→ ENV_READY ──→ REQ_REVIEWED ──→ DELIVERED ──→ PLAN_REVIEWED ──→ DELIVERED ──→ REVIEWED ──→ CLOSED
+                 │                             │                            │
+                 └──→ ENV_BLOCKED              │                            │
+                                               ↑                            ↑
+                                    (方案评审完成后)              (代码实现完成后)
 ```
 
-环境检查分支：
-
-```
-CREATED ──→ ENV_CHECKING ──→ ENV_READY  (继续流转)
-                        └──→ ENV_BLOCKED (阻塞)
-```
-
-完整状态枚举：
+状态枚举（8 个里程碑）：
 
 | 状态 | 说明 |
 |------|------|
 | `CREATED` | 需求已创建 |
-| `ENV_CHECKING` | 环境检查中 |
 | `ENV_READY` | 环境就绪 |
 | `ENV_BLOCKED` | 环境阻塞 |
-| `REQ_REVIEWING` | 需求评审中 |
 | `REQ_REVIEWED` | 需求已评审 |
-| `PLANNING` | 计划生成中 |
-| `PLAN_REVIEWING` | 计划评审中 |
-| `PLAN_REVIEWED` | 计划已评审 |
-| `DELIVERING` | 代码实现中 |
-| `DELIVERED` | 代码已交付 |
-| `REVIEWING` | 代码评审中 |
-| `REVIEWED` | 代码已评审 |
+| `PLAN_REVIEWED` | 方案已评审 |
+| `DELIVERED` | 已交付 |
+| `REVIEWED` | 已评审 |
 | `CLOSED` | 已关闭 |
+
+活跃任务（`activeTask` 字段）：
+
+| activeTask | 含义 |
+|------------|------|
+| `env_checking` | 环境检查中 |
+| `req_reviewing` | 需求评审中 |
+| `planning` | 方案生成中 |
+| `plan_reviewing` | 方案评审中 |
+| `delivering` | 代码实现中 |
+| `code_reviewing` | 代码评审中 |
+| `null` | 无进行中任务 |
 
 ## 典型工作流
 
@@ -60,55 +69,42 @@ rotom e2ed start <file.md | text> [--title T] [--cwd DIR]
 
 从 Markdown 文件或内联文本创建需求，生成 UUID 作为 `groupId`。
 
-### 2. 需求评审
+### 2. 交付 & 评审
 
-Codex Agent 独立评审需求的质量，检查清晰度、完整性、可测试性和歧义。评分 80+ 即通过。
-
-```bash
-rotom e2ed review <groupId> --type requirement
-```
-
-### 3. 生成方案
-
-Claude Agent 根据需求分析生成实现方案，包括文件变更、API 设计、数据模型和测试策略。
+`deliver` 和 `review` 会根据当前状态自动推断该做什么：
 
 ```bash
-rotom e2ed deliver <groupId> --plan-only
+# 自动：无 plan 时生成方案，有 plan 且已评审时实现代码
+rotom e2ed deliver <groupId>
+
+# 自动：根据未评审的产物推断类型（需求/方案/代码）
+rotom e2ed review <groupId>
 ```
 
-### 4. 方案评审
-
-Codex Agent 评审方案的可行性、需求覆盖、风险评估和方案质量。
+典型的分步流程：
 
 ```bash
-rotom e2ed review <groupId> --type plan
+rotom e2ed deliver <groupId>   # 生成方案（自动推断 --plan-only）
+rotom e2ed review <groupId>    # 评审方案（自动推断 --type plan）
+rotom e2ed deliver <groupId>   # 实现代码（自动推断 --code-only）
+rotom e2ed review <groupId>    # 评审代码（自动推断 --type code）
 ```
 
-### 5. 代码实现
-
-Claude Agent 根据方案实现代码，完成后自动生成自我反思报告。
+如果评审未通过，使用 `--fix` 基于反馈修复：
 
 ```bash
-rotom e2ed deliver <groupId> --code-only
+rotom e2ed deliver <groupId> --fix
 ```
 
-### 6. 代码评审
-
-Codex Agent 评审代码的需求覆盖、代码质量、边界校验和可维护性。
+### 3. 查看状态
 
 ```bash
-rotom e2ed review <groupId> --type code
+rotom e2ed status <groupId> --pretty
 ```
 
-### 7. 修复迭代
+展示需求基本信息、各轮交付/评审耗时、最近事件时间线。
 
-如果评审未通过，使用 `--fix` 参数基于反馈修复后重新提交。
-
-```bash
-rotom e2ed deliver <groupId> --code-only --fix
-```
-
-### 8. 关闭需求
+### 4. 关闭需求
 
 代码通过评审后，关闭需求完成交付。
 
@@ -125,11 +121,13 @@ rotom e2ed ls        # 或 list
 rotom e2ed ls --pretty
 ```
 
-### 查看需求详情
+### 查看需求状态
 
 ```bash
-rotom e2ed show <groupId> [--pretty]
+rotom e2ed status <groupId> [--pretty]
 ```
+
+展示需求信息、各轮交付/评审耗时度量和最近事件时间线。
 
 ### 启动交付
 
@@ -137,10 +135,12 @@ rotom e2ed show <groupId> [--pretty]
 rotom e2ed deliver <groupId> [flags]
 ```
 
+自动推断：无方案时生成方案，方案已评审时实现代码。
+
 | 标志 | 说明 |
 |------|------|
-| `--plan-only` | 只生成计划，不写代码 |
-| `--code-only` | 只实现代码（需要已有计划） |
+| `--plan-only` | 强制只生成计划，不写代码 |
+| `--code-only` | 强制只实现代码（需要已有计划） |
 | `--fix` | 基于上次评审反馈修复 |
 | `--cwd <dir>` | 指定工作目录 |
 
@@ -150,27 +150,19 @@ rotom e2ed deliver <groupId> [flags]
 rotom e2ed review <groupId> [--type requirement|plan|code] [--cwd DIR]
 ```
 
+自动推断：根据未评审的产物选择评审类型。
+
 | 类型 | 说明 |
 |------|------|
 | `requirement` | 独立需求评审 |
 | `plan` | 计划可行性评审 |
 | `code` | 代码实现评审（默认） |
 
-### 查看度量
+### 查看需求详情
 
 ```bash
-rotom e2ed metrics <groupId> [--pretty]
+rotom e2ed show <groupId> [--pretty]
 ```
-
-输出每轮计划和代码的交付耗时、评审耗时和评审结果。
-
-### 查看时间线
-
-```bash
-rotom e2ed timeline <groupId> [--pretty]
-```
-
-输出所有事件的时间线记录。
 
 ### 通用标志
 
@@ -248,7 +240,7 @@ rotom e2ed timeline <groupId> [--pretty]
 ## 最佳实践
 
 - **需求描述越详细越好** — 包含背景、功能点、验收标准、边界情况。简短的需求会导致方案偏差和返工
-- **推荐分步执行** — 先 `--plan-only` 生成方案，评审通过后再 `--code-only` 实现代码，避免一步到位导致质量不可控
+- **`deliver` 和 `review` 会自动推断** — 无需手动指定 `--plan-only` / `--code-only` / `--type`，系统根据当前状态自动决定
 - **利用评审反馈修复** — 评审未通过时使用 `--fix` 参数，Claude 会基于评审报告修复问题
 - **指定正确的工作目录** — 使用 `--cwd` 指向目标项目目录，Claude 需要读取项目结构才能生成准确的方案和代码
 - **Dashboard 可直接操作** — 除了 CLI，也可以直接在页面点击操作按钮完成交付和评审
@@ -263,6 +255,7 @@ rotom e2ed timeline <groupId> [--pretty]
 interface RequirementMeta {
   reqId: string;              // 等同 groupId (UUID v4)
   status: RequirementStatusType;
+  activeTask: ActiveTask;     // 当前进行中的任务，null 表示空闲
   compositeVersion: string;   // "R1.P2.C3"
   planVersions: PlanVersionMeta[];
   codeVersions: CodeVersionMeta[];

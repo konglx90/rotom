@@ -5,18 +5,22 @@ import s from "./E2edSidebar.module.css";
 
 const STATUS_DOT: Record<string, string> = {
   CREATED: "#868685",
-  ENV_CHECKING: "#2563eb",
+  ENV_BLOCKED: "#d03238",
   ENV_READY: "#22c55e",
-  REQ_REVIEWING: "#2563eb",
   REQ_REVIEWED: "#22c55e",
-  PLANNING: "#7c3aed",
-  PLAN_REVIEWING: "#2563eb",
   PLAN_REVIEWED: "#22c55e",
-  DELIVERING: "#d97706",
   DELIVERED: "#22c55e",
-  REVIEWING: "#2563eb",
   REVIEWED: "#22c55e",
   CLOSED: "#868685",
+};
+
+const ACTIVE_TASK_DOT: Record<string, string> = {
+  env_checking: "#2563eb",
+  req_reviewing: "#2563eb",
+  planning: "#7c3aed",
+  plan_reviewing: "#2563eb",
+  delivering: "#d97706",
+  code_reviewing: "#2563eb",
 };
 
 export function E2edSidebar() {
@@ -164,7 +168,9 @@ function ReqItem({
   onClick: () => void;
   dimmed?: boolean;
 }) {
-  const dotColor = STATUS_DOT[req.status] || "#868685";
+  const dotColor = (req.activeTask && ACTIVE_TASK_DOT[req.activeTask])
+    || STATUS_DOT[req.status]
+    || "#868685";
   return (
     <div
       onClick={onClick}

@@ -180,12 +180,29 @@ async function cmdDeliver(rest: string[], flags: Record<string, string | boolean
     }
   }
 
-  startDeliver(db, groupId, {
-    cwd,
-    fix: !!flags.fix,
-    planOnly: !!flags["plan-only"],
-    codeOnly: !!flags["code-only"],
-  });
+  // Auto-infer plan-only vs code-only when neither flag is set
+  let planOnly = !!flags["plan-only"];
+  let codeOnly = !!flags["code-only"];
+  const fix = !!flags.fix;
+
+  if (!planOnly && !codeOnly) {
+    const latestPlan = meta.planVersions[meta.planVersions.length - 1];
+    if (fix) {
+      codeOnly = true;
+    } else if (!latestPlan) {
+      planOnly = true;
+    } else if (latestPlan.reviewStatus !== null) {
+      codeOnly = true;
+    } else {
+      planOnly = true;
+    }
+
+    if (pretty) {
+      process.stdout.write(`Auto-detected: ${planOnly ? "plan generation" : "code implementation"}\n`);
+    }
+  }
+
+  startDeliver(db, groupId, { cwd, fix, planOnly, codeOnly });
 }
 
 async function cmdReview(rest: string[], flags: Record<string, string | boolean>): Promise<void> {
@@ -194,7 +211,30 @@ async function cmdReview(rest: string[], flags: Record<string, string | boolean>
 
   const db = openDb();
   const cwd = flagStr(flags, "cwd");
-  const type = flagStr(flags, "type") as 'requirement' | 'plan' | 'code' | undefined;
+  let type = flagStr(flags, "type") as 'requirement' | 'plan' | 'code' | undefined;
+
+  // Auto-infer review type when --type is not set
+  if (!type) {
+    const meta = getRequirement(db, groupId);
+    if (!meta) fail(`Requirement ${groupId} not found`);
+
+    const latestPlan = meta.planVersions[meta.planVersions.length - 1];
+    const latestCode = meta.codeVersions[meta.codeVersions.length - 1];
+
+    if (!latestPlan && !latestCode && meta.status === RequirementStatus.ENV_READY) {
+      type = 'requirement';
+    } else if (latestPlan && latestPlan.reviewStatus === null) {
+      type = 'plan';
+    } else if (latestCode && latestCode.reviewStatus === null) {
+      type = 'code';
+    } else {
+      type = 'code';
+    }
+
+    if (pretty) {
+      process.stdout.write(`Auto-detected: ${type} review\n`);
+    }
+  }
 
   startReview(db, groupId, { cwd, reviewType: type });
 }
@@ -233,42 +273,50 @@ async function cmdDelete(rest: string[], _flags: Record<string, string | boolean
   }
 }
 
-async function cmdMetrics(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
+async function cmdStatus(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
   const groupId = rest[0];
-  if (!groupId) fail("Usage: rotom e2ed metrics <groupId>");
+  if (!groupId) fail("Usage: rotom e2ed status <groupId>");
 
   const db = openDb();
+  const meta = getRequirement(db, groupId);
+  if (!meta) fail(`Requirement ${groupId} not found`);
+
   const metrics = computeMetrics(db, groupId);
-  if (!metrics) fail(`Requirement ${groupId} not found`);
-
-  if (pretty) {
-    process.stdout.write(`Total duration: ${(metrics.totalDuration / 1000).toFixed(1)}s\n`);
-    process.stdout.write(`Plan rounds: ${metrics.planRounds.length}\n`);
-    for (const r of metrics.planRounds) {
-      process.stdout.write(`  v${r.version}: delivery ${(r.deliveryDuration / 1000).toFixed(1)}s, review ${(r.reviewDuration / 1000).toFixed(1)}s → ${r.result}\n`);
-    }
-    process.stdout.write(`Code rounds: ${metrics.codeRounds.length}\n`);
-    for (const r of metrics.codeRounds) {
-      process.stdout.write(`  v${r.version}: delivery ${(r.deliveryDuration / 1000).toFixed(1)}s, review ${(r.reviewDuration / 1000).toFixed(1)}s → ${r.result}\n`);
-    }
-  } else {
-    printJson(metrics);
-  }
-}
-
-async function cmdTimeline(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
-  const groupId = rest[0];
-  if (!groupId) fail("Usage: rotom e2ed timeline <groupId>");
-
-  const db = openDb();
   const timeline = getTimeline(db, groupId);
+  const text = getRequirementText(groupId);
 
   if (pretty) {
-    for (const e of timeline) {
-      process.stdout.write(`${e.createdAt}  ${e.eventType.padEnd(20)} ${e.agentName}\n`);
+    process.stdout.write(`ID:              ${meta.reqId}\n`);
+    process.stdout.write(`Title:           ${text ? text.substring(0, 80).split("\n")[0] : "-"}\n`);
+    process.stdout.write(`Status:          ${meta.status}\n`);
+    process.stdout.write(`Version:         ${meta.compositeVersion}\n`);
+    process.stdout.write(`Active Task:     ${meta.activeTask || "none"}\n`);
+    process.stdout.write(`Delivery Agent:  ${meta.deliveryAgent || "claude"}\n`);
+    process.stdout.write(`Review Agent:    ${meta.reviewAgent || "codex"}\n`);
+
+    if (metrics) {
+      process.stdout.write(`\n── Metrics ──\n`);
+      process.stdout.write(`Total duration: ${(metrics.totalDuration / 1000).toFixed(1)}s\n`);
+
+      process.stdout.write(`\nPlan rounds: ${metrics.planRounds.length}\n`);
+      for (const r of metrics.planRounds) {
+        process.stdout.write(`  v${r.version}: delivery ${(r.deliveryDuration / 1000).toFixed(1)}s, review ${(r.reviewDuration / 1000).toFixed(1)}s → ${r.result}\n`);
+      }
+
+      process.stdout.write(`\nCode rounds: ${metrics.codeRounds.length}\n`);
+      for (const r of metrics.codeRounds) {
+        process.stdout.write(`  v${r.version}: delivery ${(r.deliveryDuration / 1000).toFixed(1)}s, review ${(r.reviewDuration / 1000).toFixed(1)}s → ${r.result}\n`);
+      }
+    }
+
+    if (timeline.length > 0) {
+      process.stdout.write(`\n── Recent Events ──\n`);
+      for (const e of timeline.slice(-10)) {
+        process.stdout.write(`  ${e.createdAt}  ${e.eventType.padEnd(20)} ${e.agentName}\n`);
+      }
     }
   } else {
-    printJson(timeline);
+    printJson({ meta, metrics, timeline });
   }
 }
 
@@ -283,26 +331,23 @@ export async function cmdE2ed(rest: string[], flags: Record<string, string | boo
     case "ls":       return cmdList(rest.slice(1), flags);
     case "list":     return cmdList(rest.slice(1), flags);
     case "show":     return cmdShow(rest.slice(1), flags);
+    case "status":   return cmdStatus(rest.slice(1), flags);
     case "deliver":  return cmdDeliver(rest.slice(1), flags);
     case "review":   return cmdReview(rest.slice(1), flags);
     case "close":    return cmdClose(rest.slice(1), flags);
     case "delete":   return cmdDelete(rest.slice(1), flags);
     case "rm":       return cmdDelete(rest.slice(1), flags);
-    case "metrics":  return cmdMetrics(rest.slice(1), flags);
-    case "timeline": return cmdTimeline(rest.slice(1), flags);
     default:
       process.stderr.write(
         `Usage: rotom e2ed <command> [args]\n\n` +
         `Commands:\n` +
         `  start <file|text>    Create a new requirement\n` +
         `  ls                   List all requirements\n` +
-        `  show <groupId>       Show requirement details\n` +
-        `  deliver <groupId>    Start delivery (Claude)\n` +
-        `  review <groupId>     Start review (Codex)\n` +
+        `  status <groupId>     Show status, metrics & timeline\n` +
+        `  deliver <groupId>    Start delivery (auto: plan or code)\n` +
+        `  review <groupId>     Start review (auto: req/plan/code)\n` +
         `  close <groupId>      Close a requirement\n` +
         `  delete <groupId>     Delete a requirement\n` +
-        `  metrics <groupId>    Show metrics and durations\n` +
-        `  timeline <groupId>   Show event timeline\n` +
         `\nDeliver flags: --plan-only --code-only --fix --cwd <dir>\n` +
         `Review flags:  --type requirement|plan|code --cwd <dir>\n`,
       );

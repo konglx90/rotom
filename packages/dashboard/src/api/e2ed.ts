@@ -4,10 +4,16 @@
 
 import { api } from '../api/client'
 
+export type ActiveTask =
+  | 'env_checking' | 'req_reviewing' | 'planning'
+  | 'plan_reviewing' | 'delivering' | 'code_reviewing'
+  | null;
+
 export interface E2edRequirement {
   reqId: string
   title?: string
   status: string
+  activeTask?: ActiveTask
   compositeVersion: string
   planVersions: Array<{ version: number; dirName: string; reviewStatus: string | null; createdAt: string }>
   codeVersions: Array<{ version: number; dirName: string; reviewStatus: string | null; createdAt: string }>
