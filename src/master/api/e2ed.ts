@@ -103,6 +103,16 @@ export function registerE2edRoutes(
       return;
     }
 
+    // Validate agents if specified
+    if (deliveryAgent) {
+      const agent = db.getAgentByName(deliveryAgent);
+      if (!agent) { res.status(400).json({ error: `Delivery agent "${deliveryAgent}" is not registered` }); return; }
+    }
+    if (reviewAgent) {
+      const agent = db.getAgentByName(reviewAgent);
+      if (!agent) { res.status(400).json({ error: `Review agent "${reviewAgent}" is not registered` }); return; }
+    }
+
     const { groupId, meta } = createRequirement(db, {
       title: title || "",
       text,

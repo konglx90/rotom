@@ -118,6 +118,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     loadGroups()
   }, [loadAgents, loadGroups])
 
+  // Refresh agent status when page returns to foreground
+  const lastRefreshRef = useRef(0)
+  useEffect(() => {
+    const REFRESH_COOLDOWN = 30_000
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      const now = Date.now()
+      if (now - lastRefreshRef.current < REFRESH_COOLDOWN) return
+      lastRefreshRef.current = now
+      loadAgents(true)
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [loadAgents])
+
   const setMyAgentConfig = useCallback((name: string, token: string) => {
     setMyAgentName(name)
     setMyAgentToken(token)

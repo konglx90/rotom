@@ -109,10 +109,16 @@ export function createRequirement(
       timeline: [{ status: RequirementStatus.CREATED, at: now }],
       source: opts.source || 'manual',
       links: [],
-      deliveryAgent: opts.deliveryAgent || 'claude',
-      reviewAgent: opts.reviewAgent || 'codex',
+      deliveryAgent: opts.deliveryAgent || undefined,
+      reviewAgent: opts.reviewAgent || undefined,
     }),
   });
+
+  // Add delivery and review agents as group members so broadcastToGroup can reach them
+  const memberNames = [opts.deliveryAgent, opts.reviewAgent].filter((n): n is string => !!n);
+  if (memberNames.length > 0) {
+    db.addGroupMembers(groupId, memberNames);
+  }
 
   // Create artifact directories
   const dir = metaDir(groupId);

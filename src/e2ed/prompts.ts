@@ -166,7 +166,7 @@ VERDICT_JSON_END
 Scoring: 80-100 pass | 50-79 needs-review | 0-49 fail`;
 }
 
-export function buildDeliveryPrompt(requirement: string, planPath: string, reflectionPath: string, reviewFeedback?: string): string {
+export function buildDeliveryPrompt(requirement: string, planPath: string, reflectionPath: string, reviewFeedback?: string, planOnly?: boolean): string {
   let prompt = `You are a Delivery Agent. Complete the following requirement with self-reflection.
 
 ## Requirement
@@ -183,8 +183,11 @@ ${requirement}
    - 影响范围: files/modules affected
    - 技术方案: concrete implementation approach
    - 风险点: potential issues
-   - 验收标准: how to verify completion
+   - 验收标准: how to verify completion`;
 
+  if (!planOnly) {
+    prompt += `
+${reflectionPath !== '/dev/null' ? `
 ### Phase 2: Implement
 1. Implement the plan by editing code files
 2. Follow existing project conventions
@@ -199,7 +202,16 @@ ${requirement}
    ## Known Risks
    ## Deviations from Original Requirement
    ## Files Changed
-   ## What I Would Do Differently
+   ## What I Would Do Differently` : ''}`;
+  } else {
+    prompt += `
+
+## IMPORTANT
+This is a PLAN-ONLY task. Do NOT implement any code or create any project files.
+Only write the plan markdown file. Stop after the plan is written.`;
+  }
+
+  prompt += `
 
 ## Constraints
 - Do NOT self-evaluate quality (that is the Reviewer's job)

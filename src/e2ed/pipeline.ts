@@ -87,7 +87,7 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
     });
     const reflectionPath = codeVersion ? path.join(codeVersion.codeDirPath, 'reflection.md') : '/dev/null';
 
-    const prompt = buildDeliveryPrompt(requirement, planPath, reflectionPath, '');
+    const prompt = buildDeliveryPrompt(requirement, planPath, reflectionPath, '', isPlanOnly);
 
     updateStatus(db, groupId, RequirementStatus.PLANNING);
 

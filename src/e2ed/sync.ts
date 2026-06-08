@@ -59,7 +59,7 @@ export function syncRequirementFromIssues(db: MeshDb, groupId: string): void {
 
 /** Parse issue title and update plan/code version reviewStatus to 'pass'. */
 function updateVersionReviewStatus(db: MeshDb, groupId: string, title: string): void {
-  const meta = readMeta(db, groupId);
+  const meta = getRequirement(db, groupId);
   if (!meta) return;
 
   let updated = false;
@@ -70,7 +70,7 @@ function updateVersionReviewStatus(db: MeshDb, groupId: string, title: string): 
 
   if (planMatch) {
     const version = parseInt(planMatch[1], 10);
-    const pv = meta.planVersions.find(p => p.version === version);
+    const pv = meta.planVersions.find((p: { version: number }) => p.version === version);
     if (pv && !pv.reviewStatus) {
       pv.reviewStatus = 'pass';
       updated = true;
@@ -79,7 +79,7 @@ function updateVersionReviewStatus(db: MeshDb, groupId: string, title: string): 
 
   if (codeMatch) {
     const version = parseInt(codeMatch[1], 10);
-    const cv = meta.codeVersions.find(c => c.version === version);
+    const cv = meta.codeVersions.find((c: { version: number }) => c.version === version);
     if (cv && !cv.reviewStatus) {
       cv.reviewStatus = 'pass';
       updated = true;

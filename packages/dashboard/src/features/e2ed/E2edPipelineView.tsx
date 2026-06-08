@@ -1,9 +1,3 @@
-/**
- * E2edPipelineView — Requirement report page.
- *
- * Wise-inspired design: Lime Green accent, pill buttons, Inter font weight 600.
- */
-
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
@@ -11,14 +5,9 @@ import remarkGfm from 'remark-gfm'
 import { e2edApi, type E2edRequirement, type E2edMetrics } from '../../api/e2ed'
 import { useSocket } from '../../context/SocketContext'
 import { E2edIssueDrawer } from './E2edIssueDrawer'
+import s from './E2ed.module.css'
 
-// 每次 issue_changed 的最小间隔(ms)内只触发一次刷新,避免反复调接口。
 const FETCH_DEBOUNCE_MS = 2000
-
-const GREEN = '#9fe870'
-const NEAR_BLACK = '#0e0f0c'
-const GRAY = '#868685'
-const LIGHT_MINT = '#e2f6d5'
 
 const STATUS_FLOW = [
   'CREATED', 'ENV_READY', 'REQ_REVIEWED',
@@ -36,36 +25,35 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED: '已完成',
 }
 
-const STATUS_BADGE: Record<string, { bg: string; color: string }> = {
-  CREATED: { bg: '#f1f5f9', color: '#64748b' },
-  ENV_READY: { bg: LIGHT_MINT, color: '#054d28' },
-  REQ_REVIEWED: { bg: LIGHT_MINT, color: '#054d28' },
-  PLANNING: { bg: '#f3e8ff', color: '#7c3aed' },
-  PLAN_REVIEWED: { bg: LIGHT_MINT, color: '#054d28' },
-  DELIVERING: { bg: '#fef3c7', color: '#92400e' },
-  DELIVERED: { bg: LIGHT_MINT, color: '#054d28' },
-  REVIEWED: { bg: LIGHT_MINT, color: '#054d28' },
-  CLOSED: { bg: '#f3f4f6', color: '#9ca3af' },
+const STATUS_BADGE: Record<string, string> = {
+  CREATED: 'pillGray',
+  ENV_READY: 'pillGreen',
+  REQ_REVIEWED: 'pillGreen',
+  PLANNING: 'pillPurple',
+  PLAN_REVIEWED: 'pillGreen',
+  DELIVERING: 'pillAmber',
+  DELIVERED: 'pillGreen',
+  REVIEWED: 'pillGreen',
+  CLOSED: 'pillGray',
 }
 
 const FLOW_COLORS: Record<string, string> = {
-  CREATED: GRAY, ENV_READY: '#054d28',
+  CREATED: '#868685', ENV_READY: '#054d28',
   REQ_REVIEWED: '#054d28', PLANNING: '#7c3aed',
   PLAN_REVIEWED: '#054d28', DELIVERING: '#d97706',
   DELIVERED: '#054d28', REVIEWED: '#054d28',
 }
 
-const ff = { fontFeatureSettings: '"calt"' } as React.CSSProperties
+const ACCENT_MAP = {
+  green: 'actionCardGreen',
+  purple: 'actionCardPurple',
+  amber: 'actionCardAmber',
+  red: 'actionCardRed',
+} as const
 
-function pill(bg: string, color: string): React.CSSProperties {
-  return { display: 'inline-block', padding: '2px 10px', borderRadius: 9999, fontSize: 12, fontWeight: 600, background: bg, color, ...ff }
+const ACCENT_TITLE_COLOR: Record<string, string> = {
+  green: '#054d28', purple: '#7c3aed', amber: '#92400e', red: '#d03238',
 }
-
-const card = (accent: string): React.CSSProperties => ({
-  background: '#fff', borderRadius: 20, padding: 24, marginBottom: 16,
-  boxShadow: `rgba(14,15,12,0.06) 0px 0px 0px 1px`,
-  borderTop: `3px solid ${accent}`,
-})
 
 export function E2edPipelineView() {
   const { groupId } = useParams<{ groupId: string }>()
@@ -84,7 +72,6 @@ export function E2edPipelineView() {
   }>>([])
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
 
-  // WebSocket 监听:收到 issue_changed 时重新拉取数据
   const { lastIssueChange } = useSocket()
 
   const fetchData = useCallback(() => {
@@ -99,7 +86,6 @@ export function E2edPipelineView() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // 有 issue_changed 时自动重新拉取(去抖 2s)
   useEffect(() => {
     if (!lastIssueChange || !groupId) return
     const timer = setTimeout(() => fetchData(), FETCH_DEBOUNCE_MS)
@@ -117,85 +103,61 @@ export function E2edPipelineView() {
     })
   }, [groupId, navigate])
 
-  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: GRAY, ...ff }}>Loading...</div>
+  if (loading) return <div className={s.centerFill}><span className={s.loadingText}>Loading...</span></div>
   if (!req) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', ...ff }}>
-      <div style={{ color: GRAY, marginBottom: 8 }}>未找到该需求</div>
+    <div className={s.centerCol}>
+      <span className={s.loadingText}>未找到该需求</span>
     </div>
   )
 
   const rid = req.reqId
-  const sb = STATUS_BADGE[req.status] || STATUS_BADGE.CREATED
+  const badgeCls = s[STATUS_BADGE[req.status] as keyof typeof s] || s.pillGray
   const currentFlowIdx = STATUS_FLOW.indexOf(req.status)
   const createdAt = req.timeline?.[0]?.at ? new Date(req.timeline[0].at).toLocaleString() : '-'
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '28px 28px 60px', fontFamily: 'Inter, -apple-system, sans-serif', ...ff }}>
-      {/* ── Header ──────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 24 }}>
+    <div className={s.pageWrap}>
+      {/* Header */}
+      <div className={s.header}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, color: NEAR_BLACK, letterSpacing: -0.3, marginBottom: 4, lineHeight: 1.1, ...ff }}>
-            {req.title || rid}
-          </h1>
-          <div style={{ fontSize: 12, color: GRAY, ...ff }}>
-            {rid.slice(0, 8)}... · {createdAt}
-          </div>
+          <h1 className={s.headerTitle}>{req.title || rid}</h1>
+          <div className={s.headerSub}>{rid.slice(0, 8)}... · {createdAt}</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => setShowGuide(true)} title="使用指南" style={{
-            width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(14,15,12,0.12)',
-            background: 'transparent', color: GRAY, fontSize: 14, fontWeight: 700,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', ...ff,
-          }}>?</button>
+        <div className={s.headerActions}>
+          <button onClick={() => setShowGuide(true)} title="使用指南" className={s.iconBtn}>?</button>
           {confirmDelete ? (
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: '#d03238', fontWeight: 600, ...ff }}>确认删除？</span>
-              <button onClick={handleDelete} disabled={deleting} style={{
-                padding: '2px 10px', borderRadius: 9999, border: 'none',
-                background: '#fef2f2', color: '#d03238', fontSize: 12, fontWeight: 600,
-                cursor: deleting ? 'wait' : 'pointer', ...ff,
-              }}>{deleting ? '删除中...' : '确认'}</button>
-              <button onClick={() => setConfirmDelete(false)} disabled={deleting} style={{
-                padding: '2px 10px', borderRadius: 9999, border: '1px solid rgba(14,15,12,0.12)',
-                background: 'transparent', color: GRAY, fontSize: 12, fontWeight: 600,
-                cursor: 'pointer', ...ff,
-              }}>取消</button>
+            <div className={s.deleteConfirm}>
+              <span className={s.deleteConfirmText}>确认删除？</span>
+              <button onClick={handleDelete} disabled={deleting} className={`${s.pill} ${s.pillRed}`}
+                style={{ cursor: deleting ? 'wait' : 'pointer' }}>{deleting ? '删除中...' : '确认'}</button>
+              <button onClick={() => setConfirmDelete(false)} disabled={deleting} className={s.outlinePill}>取消</button>
             </div>
           ) : (
-            <button onClick={() => setConfirmDelete(true)} title="删除需求" style={{
-              width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(14,15,12,0.12)',
-              background: 'transparent', color: GRAY, fontSize: 14, fontWeight: 700,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', ...ff,
-            }}>×</button>
+            <button onClick={() => setConfirmDelete(true)} title="删除需求" className={s.iconBtn}>×</button>
           )}
-          <span style={pill('#f3e8ff', '#7c3aed')}>{req.compositeVersion}</span>
-          <span style={pill(sb.bg, sb.color)}>{STATUS_LABELS[req.status] || req.status}</span>
+          <span className={`${s.pill} ${s.pillPurple}`}>{req.compositeVersion}</span>
+          <span className={`${s.pill} ${badgeCls}`}>{STATUS_LABELS[req.status] || req.status}</span>
         </div>
       </div>
 
-      {/* ── Status Flow ─────────────────────────────────── */}
-      <div style={card('#0e0f0c')}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 16, ...ff }}>状态流程</div>
-        <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', padding: '4px 0' }}>
-          {STATUS_FLOW.map((s, i) => {
-            const isActive = s === req.status
+      {/* Status Flow */}
+      <div className={`${s.card} ${s.cardTopBlack}`}>
+        <div className={s.cardTitle}>状态流程</div>
+        <div className={s.flowWrap}>
+          {STATUS_FLOW.map((st, i) => {
+            const isActive = st === req.status
             const isPassed = i < currentFlowIdx || req.status === 'CLOSED'
-            const c = FLOW_COLORS[s] || GRAY
+            const c = FLOW_COLORS[st] || '#868685'
             return (
-              <div key={s} style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 56 }}>
-                  <div style={{
-                    width: isActive ? 14 : 10, height: isActive ? 14 : 10, borderRadius: '50%',
-                    background: isActive || isPassed ? c : '#e2e8f0',
-                    border: isActive ? `2px solid ${c}` : 'none',
-                    boxShadow: isActive ? `0 0 0 3px ${c}33` : 'none',
-                  }} />
-                  <span style={{ fontSize: 10, marginTop: 4, color: isActive ? c : isPassed ? NEAR_BLACK : GRAY, fontWeight: isActive ? 700 : 400, whiteSpace: 'nowrap', ...ff }}>
-                    {STATUS_LABELS[s]}
-                  </span>
+              <div key={st} style={{ display: 'flex', alignItems: 'center' }}>
+                <div className={s.flowNode}>
+                  <div className={`${s.flowDot} ${isActive ? s.flowDotActive : isPassed ? s.flowDotPassed : s.flowDotDefault}`}
+                    style={isActive || isPassed ? { background: c, borderColor: c, boxShadow: isActive ? `0 0 0 3px ${c}33` : undefined } : undefined} />
+                  <span className={isActive ? s.flowLabelActive : isPassed ? s.flowLabelPassed : s.flowLabel}
+                    style={{ color: isActive ? c : undefined }}>{STATUS_LABELS[st]}</span>
                 </div>
                 {i < STATUS_FLOW.length - 1 && (
-                  <div style={{ flex: '0 0 20px', height: 2, background: isPassed ? '#054d28' : '#e2e8f0', marginTop: -14 }} />
+                  <div className={`${s.flowLine} ${isPassed ? s.flowLinePassed : s.flowLineDefault}`} />
                 )}
               </div>
             )
@@ -203,60 +165,50 @@ export function E2edPipelineView() {
         </div>
       </div>
 
-      {/* ── Available Actions ─────────────────────────────── */}
+      {/* Available Actions */}
       <AvailableActions status={req.status} groupId={rid} hasWorkingDir={!!req.workingDir} />
 
-      {/* ── Issues ─────────────────────────────────────── */}
+      {/* Issues */}
       {issues.length > 0 && (
-        <div style={card('#ea580c')}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 12, ...ff }}>
+        <div className={`${s.card} ${s.cardTopOrange}`}>
+          <div className={s.cardTitle}>
             关联任务
-            <span style={{ fontSize: 12, color: GRAY, fontWeight: 400, marginLeft: 8, ...ff }}>{issues.length} 个</span>
+            <span className={s.cardTitleMeta}>{issues.length} 个</span>
           </div>
           {issues.map((issue) => {
             const isOpen = issue.status === 'open'
             const isInProgress = issue.status === 'in_progress'
             const isDone = issue.status === 'done' || issue.status === 'completed'
             const typeLabel: Record<string, string> = { delivery: '交付', review: '评审', collaboration: '协作' }
-            const statusColors = isOpen
-              ? { bg: '#dbeafe', color: '#1d4ed8', label: '待处理' }
-              : isInProgress
-                ? { bg: '#fef3c7', color: '#92400e', label: '执行中' }
-                : isDone
-                  ? { bg: LIGHT_MINT, color: '#054d28', label: '已完成' }
-                  : { bg: '#f1f5f9', color: '#64748b', label: issue.status }
+            const statusCls = isOpen ? s.pillPurple
+              : isInProgress ? s.pillAmber
+              : isDone ? s.pillGreen
+              : s.pillGray
+            const statusLabel = isOpen ? '待处理' : isInProgress ? '执行中' : isDone ? '已完成' : issue.status
             return (
-              <div key={issue.id} onClick={() => setSelectedIssueId(issue.id)} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 14px', borderRadius: 14, marginBottom: 4,
-                background: 'rgba(234,88,12,0.04)', cursor: 'pointer',
-              }}>
-                <span style={pill(statusColors.bg, statusColors.color)}>{statusColors.label}</span>
-                {issue.type && <span style={pill('#f3e8ff', '#7c3aed')}>{typeLabel[issue.type] || issue.type}</span>}
-                <span style={{ flex: 1, fontSize: 13, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...ff }}>
-                  {issue.title}
-                </span>
-                <span style={{ fontSize: 11, color: GRAY, flexShrink: 0, ...ff }}>{issue.assigned_to || '-'}</span>
-                <span style={{ fontSize: 11, color: GRAY, flexShrink: 0, ...ff }}>{new Date(issue.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+              <div key={issue.id} className={s.issueRow} onClick={() => setSelectedIssueId(issue.id)}>
+                <span className={`${s.pill} ${statusCls}`}>{statusLabel}</span>
+                {issue.type && <span className={`${s.pill} ${s.pillPurple}`}>{typeLabel[issue.type] || issue.type}</span>}
+                <span className={s.issueTitle}>{issue.title}</span>
+                <span className={s.issueMeta}>{issue.assigned_to || '-'}</span>
+                <span className={s.issueMeta}>{new Date(issue.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
               </div>
             )
           })}
         </div>
       )}
 
-      {/* ── Status Timeline ─────────────────────────────── */}
+      {/* Status Timeline */}
       {req.timeline && req.timeline.length > 0 && (
-        <div style={card('#2563eb')}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 12, ...ff }}>状态变化</div>
-          <div style={{ position: 'relative', paddingLeft: 20 }}>
-            {/* Vertical line */}
-            <div style={{ position: 'absolute', left: 6, top: 6, bottom: 6, width: 2, background: 'rgba(37,99,235,0.15)', borderRadius: 1 }} />
+        <div className={`${s.card} ${s.cardTopBlue}`}>
+          <div className={s.cardTitle}>状态变化</div>
+          <div className={s.timelineWrap}>
+            <div className={s.timelineLine} />
             {req.timeline.map((evt, i) => {
               const isLast = i === req.timeline.length - 1
-              const sb = STATUS_BADGE[evt.status] || STATUS_BADGE.CREATED
+              const badgeCls2 = s[STATUS_BADGE[evt.status] as keyof typeof s] || s.pillGray
               const time = new Date(evt.at)
               const label = STATUS_LABELS[evt.status] || evt.status
-              // Compute duration since previous event
               let duration = ''
               if (i > 0) {
                 const prev = new Date(req.timeline[i - 1].at)
@@ -266,21 +218,20 @@ export function E2edPipelineView() {
                 else if (diff < 3600000) duration = `${Math.floor(diff / 60000)}m ${Math.round((diff % 60000) / 1000)}s`
                 else duration = `${Math.floor(diff / 3600000)}h ${Math.round((diff % 3600000) / 60000)}m`
               }
+              const sb = STATUS_BADGE[evt.status] ? { bg: evt.status === 'CLOSED' ? '#f3f4f6' : '#e2f6d5', color: evt.status === 'CLOSED' ? '#9ca3af' : '#054d28' } : { bg: '#f1f5f9', color: '#64748b' }
               return (
-                <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: isLast ? 0 : 10, position: 'relative' }}>
-                  {/* Dot on the line */}
-                  <div style={{
-                    position: 'absolute', left: -17, top: 4,
-                    width: isLast ? 10 : 8, height: isLast ? 10 : 8, borderRadius: '50%',
-                    background: isLast ? sb.color : '#c7d2fe',
-                    border: isLast ? `2px solid ${sb.color}` : 'none',
-                    boxShadow: isLast ? `0 0 0 3px ${sb.color}22` : 'none',
-                  }} />
-                  <span style={{ fontSize: 12, color: GRAY, fontWeight: 400, width: 78, flexShrink: 0, ...ff }}>
+                <div key={i} className={s.timelineRow}>
+                  <div className={`${s.timelineDot} ${isLast ? s.timelineDotActive : s.timelineDotDefault}`}
+                    style={isLast ? { background: sb.color, border: `2px solid ${sb.color}`, boxShadow: `0 0 0 3px ${sb.color}22` } : undefined} />
+                  <span className={s.timelineTime}>
                     {time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
-                  <span style={isLast ? pill(sb.bg, sb.color) : { fontSize: 12, color: '#64748b', ...ff }}>{label}</span>
-                  {duration && <span style={{ fontSize: 11, color: '#94a3b8', ...ff }}>+{duration}</span>}
+                  {isLast ? (
+                    <span className={`${s.pill} ${s[badgeCls2 as keyof typeof s]}`}>{label}</span>
+                  ) : (
+                    <span className={s.timelineLabel}>{label}</span>
+                  )}
+                  {duration && <span className={s.timelineDuration}>+{duration}</span>}
                 </div>
               )
             })}
@@ -288,65 +239,63 @@ export function E2edPipelineView() {
         </div>
       )}
 
-      {/* ── Versions ────────────────────────────────────── */}
+      {/* Versions */}
       {(req.planVersions?.length > 0 || req.codeVersions?.length > 0) && (
-        <div style={card('#7c3aed')}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 12, ...ff }}>
+        <div className={`${s.card} ${s.cardTopPurple}`}>
+          <div className={s.cardTitle}>
             版本历史
-            <span style={{ fontSize: 12, color: GRAY, fontWeight: 400, marginLeft: 8, ...ff }}>
-              {req.planVersions?.length || 0} 方案 · {req.codeVersions?.length || 0} 代码
-            </span>
+            <span className={s.cardTitleMeta}>{req.planVersions?.length || 0} 方案 · {req.codeVersions?.length || 0} 代码</span>
           </div>
           {req.planVersions.map((pv) => (
-            <div key={`p${pv.version}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 16, marginBottom: 4, background: 'rgba(124,58,237,0.04)' }}>
-              <span style={pill('#f3e8ff', '#7c3aed')}>Plan v{pv.version}</span>
-              <span style={{ fontSize: 12, color: GRAY, ...ff }}>{new Date(pv.createdAt).toLocaleString()}</span>
+            <div key={`p${pv.version}`} className={`${s.versionRow} ${s.versionRowPurple}`}>
+              <span className={`${s.pill} ${s.pillPurple}`}>Plan v{pv.version}</span>
+              <span className={s.versionTime}>{new Date(pv.createdAt).toLocaleString()}</span>
               <ReviewBadge status={pv.reviewStatus} />
             </div>
           ))}
           {req.codeVersions.map((cv) => (
-            <div key={`c${cv.version}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 16, marginBottom: 4, background: 'rgba(5,77,40,0.04)' }}>
-              <span style={pill(LIGHT_MINT, '#054d28')}>Code v{cv.version}</span>
-              <span style={{ fontSize: 12, color: GRAY, ...ff }}>{new Date(cv.createdAt).toLocaleString()}</span>
+            <div key={`c${cv.version}`} className={`${s.versionRow} ${s.versionRowGreen}`}>
+              <span className={`${s.pill} ${s.pillGreen}`}>Code v{cv.version}</span>
+              <span className={s.versionTime}>{new Date(cv.createdAt).toLocaleString()}</span>
               <ReviewBadge status={cv.reviewStatus} />
             </div>
           ))}
         </div>
       )}
 
-      {/* ── Metrics ─────────────────────────────────────── */}
+      {/* Metrics */}
       {metrics && (
-        <div style={card('#d97706')}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 12, ...ff }}>度量指标</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 }}>
+        <div className={`${s.card} ${s.cardTopAmber}`}>
+          <div className={s.cardTitle}>度量指标</div>
+          <div className={s.metricsGrid}>
             <MetricBox label="总耗时" value={`${(metrics.totalDuration / 1000).toFixed(1)}s`} />
             <MetricBox label="方案轮次" value={`${metrics.planRounds.length}`} />
             <MetricBox label="代码轮次" value={`${metrics.codeRounds.length}`} />
           </div>
           {metrics.planRounds.map((r) => (
-            <div key={`mp${r.version}`} style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 13, padding: '6px 0', ...ff }}>
-              <span style={pill('#f3e8ff', '#7c3aed')}>Plan v{r.version}</span>
-              <span style={{ color: GRAY, ...ff }}>交付 {(r.deliveryDuration / 1000).toFixed(1)}s</span>
-              <span style={{ color: GRAY, ...ff }}>评审 {(r.reviewDuration / 1000).toFixed(1)}s</span>
+            <div key={`mp${r.version}`} className={s.metricRow}>
+              <span className={`${s.pill} ${s.pillPurple}`}>Plan v{r.version}</span>
+              <span className={s.metricRowLabel}>交付 {(r.deliveryDuration / 1000).toFixed(1)}s</span>
+              <span className={s.metricRowLabel}>评审 {(r.reviewDuration / 1000).toFixed(1)}s</span>
               <ReviewBadge status={r.result} />
             </div>
           ))}
           {metrics.codeRounds.map((r) => (
-            <div key={`mc${r.version}`} style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 13, padding: '6px 0', ...ff }}>
-              <span style={pill(LIGHT_MINT, '#054d28')}>Code v{r.version}</span>
-              <span style={{ color: GRAY, ...ff }}>交付 {(r.deliveryDuration / 1000).toFixed(1)}s</span>
-              <span style={{ color: GRAY, ...ff }}>评审 {(r.reviewDuration / 1000).toFixed(1)}s</span>
+            <div key={`mc${r.version}`} className={s.metricRow}>
+              <span className={`${s.pill} ${s.pillGreen}`}>Code v{r.version}</span>
+              <span className={s.metricRowLabel}>交付 {(r.deliveryDuration / 1000).toFixed(1)}s</span>
+              <span className={s.metricRowLabel}>评审 {(r.reviewDuration / 1000).toFixed(1)}s</span>
               <ReviewBadge status={r.result} />
             </div>
           ))}
         </div>
       )}
 
-      {/* ── Context Info ────────────────────────────────── */}
+      {/* Context Info */}
       {(req.source || req.workingDir || (req.links && req.links.length > 0)) && (
-        <div style={card('#64748b')}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 12, ...ff }}>上下文信息</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className={`${s.card} ${s.cardTopGray}`}>
+          <div className={s.cardTitle}>上下文信息</div>
+          <div className={s.contextWrap}>
             {req.source && (
               <ContextRow label="来源" value={req.source === 'cli' ? 'CLI 命令' : req.source === 'api' ? 'Dashboard' : req.source} />
             )}
@@ -358,47 +307,40 @@ export function E2edPipelineView() {
         </div>
       )}
 
-      {/* ── Requirement Content ──────────────────────────── */}
+      {/* Requirement Content */}
       {reqText && (
-        <div style={card(GRAY)}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 12, ...ff }}>需求内容</div>
-          <div style={{ fontSize: 14, lineHeight: 1.6, color: '#334155', whiteSpace: 'pre-wrap', ...ff }}>
-            {reqText}
-          </div>
+        <div className={`${s.card} ${s.cardTopGray}`}>
+          <div className={s.cardTitle}>需求内容</div>
+          <div className={s.reqContent}>{reqText}</div>
         </div>
       )}
 
-      {/* ── Guide Drawer ───────────────────────────────── */}
       <E2edGuideDrawer open={showGuide} onClose={() => setShowGuide(false)} />
 
-      {/* ── Issue Detail Drawer ────────────────────────── */}
       {selectedIssueId && (
-        <E2edIssueDrawer
-          issueId={selectedIssueId}
-          groupId={rid}
-          onClose={() => setSelectedIssueId(null)}
-        />
+        <E2edIssueDrawer issueId={selectedIssueId} groupId={rid} onClose={() => setSelectedIssueId(null)} />
       )}
     </div>
   )
 }
 
 function ReviewBadge({ status }: { status: string | null | undefined }) {
-  if (!status) return <span style={{ fontSize: 12, color: GRAY, ...ff }}>待评审</span>
-  const m: Record<string, { bg: string; color: string; label: string }> = {
-    pass: { bg: LIGHT_MINT, color: '#054d28', label: '通过' },
-    fail: { bg: '#fef2f2', color: '#d03238', label: '不通过' },
-    'needs-review': { bg: '#fef3c7', color: '#92400e', label: '需确认' },
+  if (!status) return <span className={s.timelineLabel}>待评审</span>
+  const m: Record<string, { cls: string; label: string }> = {
+    pass: { cls: 'pillGreen', label: '通过' },
+    fail: { cls: 'pillRed', label: '不通过' },
+    'needs-review': { cls: 'pillAmber', label: '需确认' },
   }
-  const s = m[status] || { bg: '#f3f4f6', color: GRAY, label: status }
-  return <span style={pill(s.bg, s.color)}>{s.label}</span>
+  const entry = m[status]
+  if (entry) return <span className={`${s.pill} ${s[entry.cls as keyof typeof s]}`}>{entry.label}</span>
+  return <span className={`${s.pill} ${s.pillGray}`}>{status}</span>
 }
 
 function MetricBox({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ padding: 16, background: 'rgba(14,15,12,0.03)', borderRadius: 16, textAlign: 'center' }}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: NEAR_BLACK, ...ff }}>{value}</div>
-      <div style={{ fontSize: 12, color: GRAY, marginTop: 2, ...ff }}>{label}</div>
+    <div className={s.metricBox}>
+      <div className={s.metricValue}>{value}</div>
+      <div className={s.metricLabel}>{label}</div>
     </div>
   )
 }
@@ -409,35 +351,25 @@ function ContextRow({ label, value, copyable }: { label: string; value: string; 
     navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) })
   }
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px', borderRadius: 12, background: 'rgba(14,15,12,0.02)' }}>
-      <span style={{ fontSize: 12, fontWeight: 600, color: GRAY, width: 60, flexShrink: 0, ...ff }}>{label}</span>
-      <code style={{ flex: 1, fontSize: 13, fontFamily: '"SF Mono", Menlo, monospace', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...ff }}>{value}</code>
+    <div className={s.contextRow}>
+      <span className={s.contextLabel}>{label}</span>
+      <code className={s.contextValue}>{value}</code>
       {copyable && (
-        <button onClick={handleCopy} style={{
-          padding: '2px 10px', borderRadius: 9999, border: 'none',
-          background: copied ? LIGHT_MINT : '#f1f5f9',
-          color: copied ? '#054d28' : '#64748b',
-          fontSize: 11, fontWeight: 600, cursor: 'pointer', ...ff,
-        }}>{copied ? '已复制' : '复制'}</button>
+        <button onClick={handleCopy} className={`${s.copyBtn} ${copied ? s.copyBtnCopied : ''}`}>
+          {copied ? '已复制' : '复制'}
+        </button>
       )}
     </div>
   )
 }
 
-// ── Available Actions (state machine) ──────────────────────────────────────
+// ── Available Actions ─────────────────────────────────────────────
 
 interface ActionDef {
   label: string
   desc: string
   cmd: string
   accent: 'green' | 'purple' | 'amber' | 'red'
-}
-
-const ACCENT_MAP = {
-  green: { bg: LIGHT_MINT, color: '#054d28', border: 'rgba(5,77,40,0.15)' },
-  purple: { bg: '#f3e8ff', color: '#7c3aed', border: 'rgba(124,58,237,0.15)' },
-  amber: { bg: '#fef3c7', color: '#92400e', border: 'rgba(146,64,14,0.15)' },
-  red: { bg: '#fef2f2', color: '#d03238', border: 'rgba(208,50,56,0.15)' },
 }
 
 function getAvailableActions(status: string, groupId: string, hasCwd: boolean): ActionDef[] {
@@ -479,7 +411,6 @@ function getAvailableActions(status: string, groupId: string, hasCwd: boolean): 
     case 'DELIVERING':
     case 'REVIEWING':
     case 'ENV_CHECKING':
-      return []
     case 'CLOSED':
       return []
     default:
@@ -502,9 +433,9 @@ function AvailableActions({ status, groupId, hasWorkingDir }: { status: string; 
     const hint = waitingStates[status]
     if (hint) {
       return (
-        <div style={card(GRAY)}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 4, ...ff }}>可用操作</div>
-          <div style={{ fontSize: 13, color: GRAY, ...ff }}>{hint}，暂时没有可执行的操作。</div>
+        <div className={`${s.card} ${s.cardTopGray}`}>
+          <div className={s.cardTitle}>可用操作</div>
+          <div className={s.actionWaiting}>{hint}，暂时没有可执行的操作。</div>
         </div>
       )
     }
@@ -512,22 +443,19 @@ function AvailableActions({ status, groupId, hasWorkingDir }: { status: string; 
   }
 
   return (
-    <div style={card(GREEN)}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: NEAR_BLACK, marginBottom: 12, ...ff }}>可用操作</div>
+    <div className={`${s.card} ${s.cardTopGreen}`}>
+      <div className={s.cardTitle}>可用操作</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {actions.map((a) => {
-          const c = ACCENT_MAP[a.accent]
+          const cardCls = s[ACCENT_MAP[a.accent] as keyof typeof s]
           return (
-            <div key={a.label} style={{
-              padding: '12px 16px', borderRadius: 14,
-              border: `1px solid ${c.border}`, background: c.bg,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: c.color, ...ff }}>{a.label}</span>
+            <div key={a.label} className={`${s.actionCard} ${cardCls}`}>
+              <div className={s.actionHeader}>
+                <span className={s.actionTitle} style={{ color: ACCENT_TITLE_COLOR[a.accent] }}>{a.label}</span>
               </div>
-              <div style={{ fontSize: 12, color: '#334155', marginBottom: 8, lineHeight: 1.4, ...ff }}>{a.desc}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.6)', borderRadius: 8, padding: '6px 10px' }}>
-                <code style={{ flex: 1, fontSize: 12, fontFamily: '"SF Mono", Menlo, monospace', color: '#334155', ...ff }}>{a.cmd}</code>
+              <div className={s.actionDesc}>{a.desc}</div>
+              <div className={s.actionCmd}>
+                <code className={s.actionCmdCode}>{a.cmd}</code>
                 <CopyButton text={a.cmd} />
               </div>
             </div>
@@ -541,17 +469,15 @@ function AvailableActions({ status, groupId, hasWorkingDir }: { status: string; 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
-    <button onClick={() => navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) })} style={{
-      padding: '2px 10px', borderRadius: 9999, border: 'none',
-      background: copied ? LIGHT_MINT : 'rgba(14,15,12,0.06)',
-      color: copied ? '#054d28' : '#64748b',
-      fontSize: 11, fontWeight: 600, cursor: 'pointer', ...ff,
-      transition: 'all 0.15s',
-    }}>{copied ? '已复制' : '复制'}</button>
+    <button onClick={() => navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) })}
+      className={`${s.copyBtn} ${copied ? s.copyBtnCopied : ''}`}
+      style={{ transition: 'all 0.15s' }}>
+      {copied ? '已复制' : '复制'}
+    </button>
   )
 }
 
-// ── E2edGuideDrawer ──────────────────────────────────────────────────────────
+// ── Guide Drawer ──────────────────────────────────────────────────
 
 function E2edGuideDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [content, setContent] = useState('')
@@ -564,29 +490,14 @@ function E2edGuideDrawer({ open, onClose }: { open: boolean; onClose: () => void
 
   return (
     <>
-      <div onClick={onClose} style={{
-        position: 'fixed', inset: 0, background: 'rgba(14,15,12,0.3)',
-        zIndex: 1000, backdropFilter: 'blur(2px)',
-      }} />
-
-      <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 560,
-        background: '#fff', boxShadow: '-4px 0 24px rgba(14,15,12,0.1)',
-        zIndex: 1001, display: 'flex', flexDirection: 'column',
-        fontFamily: 'Inter, -apple-system, sans-serif', ...ff,
-        overflow: 'hidden',
-      }}>
-        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(14,15,12,0.08)', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: NEAR_BLACK, margin: 0, ...ff }}>E2ED 使用指南</h2>
-          <button onClick={onClose} style={{
-            width: 28, height: 28, borderRadius: '50%', border: 'none',
-            background: '#f1f5f9', color: GRAY, fontSize: 16, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>&times;</button>
+      <div className={s.drawerOverlay} onClick={onClose} />
+      <div className={`${s.drawer} ${s.drawerNarrow}`}>
+        <div className={s.drawerHeader}>
+          <h2 className={s.drawerTitle}>E2ED 使用指南</h2>
+          <button onClick={onClose} className={s.iconBtnSmall}>&times;</button>
         </div>
-
-        <div className="e2ed-guide-content" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 40px' }}>
-          {content ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown> : <div style={{ color: GRAY, ...ff }}>Loading...</div>}
+        <div className={s.drawerBody}>
+          {content ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown> : <span className={s.loadingText}>Loading...</span>}
         </div>
       </div>
     </>

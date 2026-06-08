@@ -7,6 +7,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import * as readline from "node:readline";
 
 import { MeshDb } from "../master/db.js";
 import { createRequirement, listRequirements, getRequirement, getRequirementText, deleteRequirement } from "../e2ed/requirement.js";
@@ -36,6 +37,49 @@ function fail(msg: string): never {
   process.exit(1);
 }
 
+// ── Agent selection helpers ──────────────────────────────────────────────
+
+function listRegisteredAgents(db: MeshDb): { name: string; status: string }[] {
+  return db.listAgents({ enabled: true }).map((a) => ({ name: a.name, status: a.status }));
+}
+
+async function promptSelectAgent(agents: { name: string; status: string }[], role: string): Promise<string> {
+  process.stdout.write(`\nAvailable agents for ${role}:\n`);
+  agents.forEach((a, i) => {
+    process.stdout.write(`  ${i + 1}) ${a.name} (${a.status})\n`);
+  });
+  process.stdout.write(`Select [1-${agents.length}]: `);
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const answer: string = await new Promise((resolve) => {
+    rl.question("", (res) => { rl.close(); resolve(res.trim()); });
+  });
+
+  const idx = parseInt(answer, 10);
+  if (isNaN(idx) || idx < 1 || idx > agents.length) {
+    fail(`Invalid selection "${answer}". Aborting.`);
+  }
+  return agents[idx - 1].name;
+}
+
+function resolveAgentOrDefault(db: MeshDb, provided: string | undefined, role: string, defaultName: string): string | Promise<string> {
+  if (provided) {
+    const agent = db.getAgentByName(provided);
+    if (!agent) fail(`Agent "${provided}" is not registered. Use "rotom agent ls" to see available agents.`);
+    return provided;
+  }
+  const agents = listRegisteredAgents(db);
+  if (agents.length === 0) {
+    fail(`No registered agents found. Register an agent first before creating E2ED requirements.`);
+  }
+  if (agents.length === 1) return agents[0].name;
+  // Auto-match by name if a well-known default exists
+  const match = agents.find((a) => a.name === defaultName);
+  if (match) return match.name;
+  // Need user to pick
+  return promptSelectAgent(agents, role);
+}
+
 // ── Subcommands ──────────────────────────────────────────────────────────
 
 async function cmdStart(rest: string[], flags: Record<string, string | boolean>): Promise<void> {
@@ -58,8 +102,14 @@ async function cmdStart(rest: string[], flags: Record<string, string | boolean>)
   if (!text) fail("Usage: rotom e2ed start <file.md | text> [--title T] [--cwd DIR] [--delivery-agent NAME] [--review-agent NAME]");
 
   const cwd = flagStr(flags, "cwd") || process.cwd();
-  const deliveryAgent = flagStr(flags, "delivery-agent");
-  const reviewAgent = flagStr(flags, "review-agent");
+  const deliveryAgent = await resolveAgentOrDefault(db, flagStr(flags, "delivery-agent"), "delivery", "claude");
+  const reviewAgent = await resolveAgentOrDefault(db, flagStr(flags, "review-agent"), "review", "codex");
+
+  if (pretty) {
+    process.stdout.write(`Delivery agent: ${deliveryAgent}\n`);
+    process.stdout.write(`Review agent:   ${reviewAgent}\n`);
+  }
+
   const { groupId, meta } = createRequirement(db, { title, text, source: "cli", workingDir: cwd, deliveryAgent, reviewAgent });
 
   if (pretty) {
