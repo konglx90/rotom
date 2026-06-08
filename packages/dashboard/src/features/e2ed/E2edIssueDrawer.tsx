@@ -4,7 +4,7 @@ import { MarkdownContent } from "../../components/ui/MarkdownContent";
 import { IssueDetail } from "../groups/IssueDetail";
 import { useChatContext } from "../../context/ChatContext";
 import { useSocket } from "../../context/SocketContext";
-import s from "./E2ed.module.css";
+import s from "./E2edShared.module.css";
 
 interface E2edIssueDrawerProps {
   issueId: string;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { e2edApi, type E2edRequirement } from "../../api/e2ed";
-import s from "./E2ed.module.css";
+import s from "./E2edSidebar.module.css";
 
 const STATUS_DOT: Record<string, string> = {
   CREATED: "#868685",

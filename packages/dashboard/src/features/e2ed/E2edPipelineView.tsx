@@ -9,7 +9,8 @@ import {
 } from "../../api/e2ed";
 import { useSocket } from "../../context/SocketContext";
 import { E2edIssueDrawer } from "./E2edIssueDrawer";
-import s from "./E2ed.module.css";
+import s from "./E2edPipelineView.module.css";
+import shared from "./E2edShared.module.css";
 
 const FETCH_DEBOUNCE_MS = 2000;
 
@@ -149,14 +150,14 @@ export function E2edPipelineView() {
 
   if (loading)
     return (
-      <div className={s.centerFill}>
-        <span className={s.loadingText}>Loading...</span>
+      <div className={shared.centerFill}>
+        <span className={shared.loadingText}>Loading...</span>
       </div>
     );
   if (!req)
     return (
-      <div className={s.centerCol}>
-        <span className={s.loadingText}>未找到该需求</span>
+      <div className={shared.centerCol}>
+        <span className={shared.loadingText}>未找到该需求</span>
       </div>
     );
 
@@ -168,7 +169,7 @@ export function E2edPipelineView() {
     : "-";
 
   return (
-    <div className={s.pageWrap}>
+    <div className={shared.pageWrap}>
       {/* Header */}
       <div className={s.header}>
         <div>
@@ -181,7 +182,7 @@ export function E2edPipelineView() {
           <button
             onClick={() => setShowGuide(true)}
             title="使用指南"
-            className={s.iconBtn}
+            className={shared.iconBtn}
           >
             ?
           </button>
@@ -191,7 +192,7 @@ export function E2edPipelineView() {
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className={`${s.pill} ${s.pillRed}`}
+                className={`${shared.pill} ${shared.pillRed}`}
                 style={{ cursor: deleting ? "wait" : "pointer" }}
               >
                 {deleting ? "删除中..." : "确认"}
@@ -208,23 +209,23 @@ export function E2edPipelineView() {
             <button
               onClick={() => setConfirmDelete(true)}
               title="删除需求"
-              className={s.iconBtn}
+              className={shared.iconBtn}
             >
               ×
             </button>
           )}
-          <span className={`${s.pill} ${s.pillPurple}`}>
+          <span className={`${shared.pill} ${shared.pillPurple}`}>
             {req.compositeVersion}
           </span>
-          <span className={`${s.pill} ${badgeCls}`}>
+          <span className={`${shared.pill} ${shared[badgeCls as keyof typeof shared] || shared.pillGray}`}>
             {STATUS_LABELS[req.status] || req.status}
           </span>
         </div>
       </div>
 
       {/* Status Flow */}
-      <div className={`${s.card} ${s.cardTopBlack}`}>
-        <div className={s.cardTitle}>状态流程</div>
+      <div className={`${shared.card} ${shared.cardTopBlack}`}>
+        <div className={shared.cardTitle}>状态流程</div>
         <div className={s.flowWrap}>
           {STATUS_FLOW.map((st, i) => {
             const isActive = st === req.status;
@@ -280,10 +281,10 @@ export function E2edPipelineView() {
 
       {/* Issues */}
       {issues.length > 0 && (
-        <div className={`${s.card} ${s.cardTopOrange}`}>
-          <div className={s.cardTitle}>
+        <div className={`${shared.card} ${shared.cardTopOrange}`}>
+          <div className={shared.cardTitle}>
             关联任务
-            <span className={s.cardTitleMeta}>{issues.length} 个</span>
+            <span className={shared.cardTitleMeta}>{issues.length} 个</span>
           </div>
           {issues.map((issue) => {
             const isOpen = issue.status === "open";
@@ -296,12 +297,12 @@ export function E2edPipelineView() {
               collaboration: "协作",
             };
             const statusCls = isOpen
-              ? s.pillPurple
+              ? shared.pillPurple
               : isInProgress
-                ? s.pillAmber
+                ? shared.pillAmber
                 : isDone
-                  ? s.pillGreen
-                  : s.pillGray;
+                  ? shared.pillGreen
+                  : shared.pillGray;
             const statusLabel = isOpen
               ? "待处理"
               : isInProgress
@@ -315,9 +316,9 @@ export function E2edPipelineView() {
                 className={s.issueRow}
                 onClick={() => setSelectedIssueId(issue.id)}
               >
-                <span className={`${s.pill} ${statusCls}`}>{statusLabel}</span>
+                <span className={`${shared.pill} ${statusCls}`}>{statusLabel}</span>
                 {issue.type && (
-                  <span className={`${s.pill} ${s.pillPurple}`}>
+                  <span className={`${shared.pill} ${shared.pillPurple}`}>
                     {typeLabel[issue.type] || issue.type}
                   </span>
                 )}
@@ -339,8 +340,8 @@ export function E2edPipelineView() {
 
       {/* Status Timeline */}
       {req.timeline && req.timeline.length > 0 && (
-        <div className={`${s.card} ${s.cardTopBlue}`}>
-          <div className={s.cardTitle}>状态变化</div>
+        <div className={`${shared.card} ${shared.cardTopBlue}`}>
+          <div className={shared.cardTitle}>状态变化</div>
           <div className={s.timelineWrap}>
             <div className={s.timelineLine} />
             {req.timeline.map((evt, i) => {
@@ -390,7 +391,7 @@ export function E2edPipelineView() {
                   </span>
                   {isLast ? (
                     <span
-                      className={`${s.pill} ${s[badgeCls2 as keyof typeof s]}`}
+                      className={`${shared.pill} ${shared[badgeCls2 as keyof typeof shared] || shared.pillGray}`}
                     >
                       {label}
                     </span>
@@ -409,10 +410,10 @@ export function E2edPipelineView() {
 
       {/* Versions */}
       {(req.planVersions?.length > 0 || req.codeVersions?.length > 0) && (
-        <div className={`${s.card} ${s.cardTopPurple}`}>
-          <div className={s.cardTitle}>
+        <div className={`${shared.card} ${shared.cardTopPurple}`}>
+          <div className={shared.cardTitle}>
             版本历史
-            <span className={s.cardTitleMeta}>
+            <span className={shared.cardTitleMeta}>
               {req.planVersions?.length || 0} 方案 ·{" "}
               {req.codeVersions?.length || 0} 代码
             </span>
@@ -422,7 +423,7 @@ export function E2edPipelineView() {
               key={`p${pv.version}`}
               className={`${s.versionRow} ${s.versionRowPurple}`}
             >
-              <span className={`${s.pill} ${s.pillPurple}`}>
+              <span className={`${shared.pill} ${shared.pillPurple}`}>
                 Plan v{pv.version}
               </span>
               <span className={s.versionTime}>
@@ -436,7 +437,7 @@ export function E2edPipelineView() {
               key={`c${cv.version}`}
               className={`${s.versionRow} ${s.versionRowGreen}`}
             >
-              <span className={`${s.pill} ${s.pillGreen}`}>
+              <span className={`${shared.pill} ${shared.pillGreen}`}>
                 Code v{cv.version}
               </span>
               <span className={s.versionTime}>
@@ -450,8 +451,8 @@ export function E2edPipelineView() {
 
       {/* Metrics */}
       {metrics && (
-        <div className={`${s.card} ${s.cardTopAmber}`}>
-          <div className={s.cardTitle}>度量指标</div>
+        <div className={`${shared.card} ${shared.cardTopAmber}`}>
+          <div className={shared.cardTitle}>度量指标</div>
           <div className={s.metricsGrid}>
             <MetricBox
               label="总耗时"
@@ -468,7 +469,7 @@ export function E2edPipelineView() {
           </div>
           {metrics.planRounds.map((r) => (
             <div key={`mp${r.version}`} className={s.metricRow}>
-              <span className={`${s.pill} ${s.pillPurple}`}>
+              <span className={`${shared.pill} ${shared.pillPurple}`}>
                 Plan v{r.version}
               </span>
               <span className={s.metricRowLabel}>
@@ -482,7 +483,7 @@ export function E2edPipelineView() {
           ))}
           {metrics.codeRounds.map((r) => (
             <div key={`mc${r.version}`} className={s.metricRow}>
-              <span className={`${s.pill} ${s.pillGreen}`}>
+              <span className={`${shared.pill} ${shared.pillGreen}`}>
                 Code v{r.version}
               </span>
               <span className={s.metricRowLabel}>
@@ -501,8 +502,8 @@ export function E2edPipelineView() {
       {(req.source ||
         req.workingDir ||
         (req.links && req.links.length > 0)) && (
-        <div className={`${s.card} ${s.cardTopGray}`}>
-          <div className={s.cardTitle}>上下文信息</div>
+        <div className={`${shared.card} ${shared.cardTopGray}`}>
+          <div className={shared.cardTitle}>上下文信息</div>
           <div className={s.contextWrap}>
             {req.source && (
               <ContextRow
@@ -535,8 +536,8 @@ export function E2edPipelineView() {
 
       {/* Requirement Content */}
       {reqText && (
-        <div className={`${s.card} ${s.cardTopGray}`}>
-          <div className={s.cardTitle}>需求内容</div>
+        <div className={`${shared.card} ${shared.cardTopGray}`}>
+          <div className={shared.cardTitle}>需求内容</div>
           <div className={s.reqContent}>{reqText}</div>
         </div>
       )}
@@ -564,11 +565,11 @@ function ReviewBadge({ status }: { status: string | null | undefined }) {
   const entry = m[status];
   if (entry)
     return (
-      <span className={`${s.pill} ${s[entry.cls as keyof typeof s]}`}>
+      <span className={`${shared.pill} ${shared[entry.cls as keyof typeof shared]}`}>
         {entry.label}
       </span>
     );
-  return <span className={`${s.pill} ${s.pillGray}`}>{status}</span>;
+  return <span className={`${shared.pill} ${shared.pillGray}`}>{status}</span>;
 }
 
 function MetricBox({ label, value }: { label: string; value: string }) {
@@ -603,7 +604,7 @@ function ContextRow({
       {copyable && (
         <button
           onClick={handleCopy}
-          className={`${s.copyBtn} ${copied ? s.copyBtnCopied : ""}`}
+          className={`${shared.copyBtn} ${copied ? shared.copyBtnCopied : ""}`}
         >
           {copied ? "已复制" : "复制"}
         </button>
@@ -749,8 +750,8 @@ function AvailableActions({
     const hint = waitingStates[status];
     if (hint) {
       return (
-        <div className={`${s.card} ${s.cardTopGray}`}>
-          <div className={s.cardTitle}>可用操作</div>
+        <div className={`${shared.card} ${shared.cardTopGray}`}>
+          <div className={shared.cardTitle}>可用操作</div>
           <div className={s.actionWaiting}>{hint}，暂时没有可执行的操作。</div>
         </div>
       );
@@ -759,8 +760,8 @@ function AvailableActions({
   }
 
   return (
-    <div className={`${s.card} ${s.cardTopGreen}`}>
-      <div className={s.cardTitle}>可用操作</div>
+    <div className={`${shared.card} ${shared.cardTopGreen}`}>
+      <div className={shared.cardTitle}>可用操作</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {actions.map((a) => {
           const cardCls = s[ACCENT_MAP[a.accent] as keyof typeof s];
@@ -797,7 +798,7 @@ function CopyButton({ text }: { text: string }) {
           setTimeout(() => setCopied(false), 1500);
         })
       }
-      className={`${s.copyBtn} ${copied ? s.copyBtnCopied : ""}`}
+      className={`${shared.copyBtn} ${copied ? shared.copyBtnCopied : ""}`}
       style={{ transition: "all 0.15s" }}
     >
       {copied ? "已复制" : "复制"}
@@ -824,19 +825,19 @@ function E2edGuideDrawer({
 
   return (
     <>
-      <div className={s.drawerOverlay} onClick={onClose} />
-      <div className={`${s.drawer} ${s.drawerNarrow}`}>
-        <div className={s.drawerHeader}>
-          <h2 className={s.drawerTitle}>E2ED 使用指南</h2>
-          <button onClick={onClose} className={s.iconBtnSmall}>
+      <div className={shared.drawerOverlay} onClick={onClose} />
+      <div className={`${shared.drawer} ${shared.drawerNarrow}`}>
+        <div className={shared.drawerHeader}>
+          <h2 className={shared.drawerTitle}>E2ED 使用指南</h2>
+          <button onClick={onClose} className={shared.iconBtnSmall}>
             &times;
           </button>
         </div>
-        <div className={s.drawerBody}>
+        <div className={shared.drawerBody}>
           {content ? (
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           ) : (
-            <span className={s.loadingText}>Loading...</span>
+            <span className={shared.loadingText}>Loading...</span>
           )}
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { e2edApi, type E2edRequirement } from "../../api/e2ed";
-import s from "./E2ed.module.css";
+import s from "./E2edGroupsView.module.css";
+import shared from "./E2edShared.module.css";
 
 export function E2edGroupsView() {
   const [reqs, setReqs] = useState<E2edRequirement[]>([]);
@@ -18,8 +19,8 @@ export function E2edGroupsView() {
 
   if (loading)
     return (
-      <div className={s.centerFill}>
-        <span className={s.loadingText}>Loading...</span>
+      <div className={shared.centerFill}>
+        <span className={shared.loadingText}>Loading...</span>
       </div>
     );
 
@@ -129,7 +130,7 @@ function Step({
           <code className={s.stepCmdCode}>{cmd}</code>
           <button
             onClick={handleCopy}
-            className={`${s.copyBtn} ${copied ? s.copyBtnCopied : ""}`}
+            className={`${shared.copyBtn} ${copied ? shared.copyBtnCopied : ""}`}
           >
             {copied ? "✓" : "复制"}
           </button>
