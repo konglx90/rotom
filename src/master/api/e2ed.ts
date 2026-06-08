@@ -11,6 +11,9 @@ import {
   createRequirement,
   closeRequirement,
   deleteRequirement,
+  resumeFromPause,
+  setActiveTask,
+  writeMeta,
 } from "../../e2ed/requirement.js";
 import { computeMetrics, getTimeline } from "../../e2ed/metrics.js";
 import { startDeliver, startReview } from "../../e2ed/pipeline.js";
@@ -178,6 +181,48 @@ export function registerE2edRoutes(
       } else {
         res.status(400).json({ error: err.message });
       }
+    }
+  });
+
+  /** Resume a paused auto-pilot pipeline */
+  apiRouter.post("/e2ed/groups/:groupId/resume", (req, res) => {
+    const { groupId } = req.params;
+    const meta = getRequirement(db, groupId);
+    if (!meta) return res.status(404).json({ error: "Not found" });
+
+    try {
+      const { wasPaused, pauseReason } = resumeFromPause(db, groupId);
+
+      // Trigger next step via orchestrator if auto-pilot
+      if (meta.autoPilot) {
+        import("../../e2ed/orchestrator.js").then(({ orchestrateNextStep }) => {
+          orchestrateNextStep(db, groupId);
+        });
+      }
+
+      res.json({ ok: true, groupId, resumed: true, pauseReason });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  /** Abort active task and disable auto-pilot */
+  apiRouter.post("/e2ed/groups/:groupId/abort", (req, res) => {
+    const { groupId } = req.params;
+    const meta = getRequirement(db, groupId);
+    if (!meta) return res.status(404).json({ error: "Not found" });
+
+    if (!meta.activeTask) {
+      return res.status(400).json({ error: "No active task to abort" });
+    }
+
+    try {
+      setActiveTask(db, groupId, null);
+      meta.autoPilot = false;
+      writeMeta(db, groupId, meta);
+      res.json({ ok: true, groupId, aborted: true });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
     }
   });
 

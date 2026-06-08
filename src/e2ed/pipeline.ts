@@ -17,7 +17,7 @@ import {
   createPlanVersion, getLatestPlanVersion, updatePlanVersionStatus,
   createCodeVersion, getLatestCodeVersion, updateCodeVersionStatus,
   createReqReview, readArtifactFile, writeArtifactFile,
-  getWorkingDir, writeMeta,
+  getWorkingDir, writeMeta, getDecisionContext,
 } from './requirement.js';
 import {
   buildDeliveryPrompt,
@@ -87,7 +87,7 @@ export function startDeliver(db: MeshDb, groupId: string, opts: PipelineOpts = {
     });
     const reflectionPath = codeVersion ? path.join(codeVersion.codeDirPath, 'reflection.md') : '/dev/null';
 
-    const prompt = buildDeliveryPrompt(requirement, planPath, reflectionPath, '', isPlanOnly);
+    const prompt = buildDeliveryPrompt(requirement, planPath, reflectionPath, '', isPlanOnly, getDecisionContext(db, groupId));
 
     setActiveTask(db, groupId, 'planning');
 
@@ -281,7 +281,7 @@ function startCodeReview(
   const planText = readArtifactFile(groupId, 'plans', `plan-v${latestCode.parentPlanVersion}`, 'plan.md') || '(no plan)';
   const reflection = readArtifactFile(groupId, 'code', latestCode.dirName, 'reflection.md') || '(no reflection)';
 
-  const prompt = buildCodeReviewPrompt(requirement, planText, reflection, [], '');
+  const prompt = buildCodeReviewPrompt(requirement, planText, reflection, [], '', getDecisionContext(db, groupId));
 
   setActiveTask(db, groupId, 'code_reviewing');
 

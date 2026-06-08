@@ -24,7 +24,16 @@ export type ActiveTask =
   | 'plan_reviewing'
   | 'delivering'
   | 'code_reviewing'
+  | 'paused_for_human'
   | null;
+
+/** Why the pipeline paused for human intervention */
+export type PauseReason =
+  | 'env_blocked'
+  | 'review_failed'
+  | 'max_retries_reached'
+  | 'agent_question'
+  | 'error';
 
 /** Composite version: R.P.C (Requirement.Plan.Code) */
 export interface CompositeVersion {
@@ -75,6 +84,10 @@ export interface RequirementMeta {
   links: Array<{ type: string; url: string; branch?: string }>;
   deliveryAgent?: string;
   reviewAgent?: string;
+  autoPilot?: boolean;
+  pauseReason?: PauseReason;
+  decisionContext?: DecisionContextEntry[];
+  retryState?: RetryState;
 }
 
 /** Review result */
@@ -101,6 +114,39 @@ export interface E2edMetrics {
   totalDuration: number;
   planRounds: RoundMetrics[];
   codeRounds: RoundMetrics[];
+}
+
+/** Decision context accumulated across rounds */
+export interface DecisionContextEntry {
+  /** Which phase produced this entry */
+  phase: 'requirement-review' | 'plan-review' | 'code-review' | 'delivery';
+  /** Which version/round this came from */
+  version: number;
+  /** Timestamp */
+  at: string;
+  /** Key decisions made (what and why) */
+  decisions: string[];
+  /** Issues found in review (carried forward for fix verification) */
+  issues: string[];
+  /** Approaches considered but rejected, with reasons */
+  rejectedAlternatives?: string[];
+  /** Constraints discovered during this round */
+  constraints?: string[];
+}
+
+/** Retry configuration for pipeline steps */
+export interface RetryConfig {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+}
+
+/** Retry state tracked per-requirement */
+export interface RetryState {
+  attempt: number;
+  lastAttemptAt: string;
+  lastError?: string;
+  issueId?: string;
 }
 
 /** Issue types for e2ed */

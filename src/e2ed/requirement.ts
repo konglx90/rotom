@@ -17,6 +17,8 @@ import type {
   PlanVersionMeta,
   CodeVersionMeta,
   CompositeVersion,
+  DecisionContextEntry,
+  PauseReason,
 } from './types.js';
 import { RequirementStatus } from './types.js';
 
@@ -70,6 +72,8 @@ function readMeta(db: MeshDb, groupId: string): RequirementMeta | null {
   meta.timeline ??= [];
   meta.source ??= 'manual';
   meta.links ??= [];
+  meta.autoPilot ??= false;
+  meta.decisionContext ??= [];
   meta.compositeVersion ??= computeCompositeVersion(meta);
 
   // Migrate old ING statuses to activeTask
@@ -359,6 +363,60 @@ export function deleteRequirement(db: MeshDb, groupId: string): void {
 
   // Remove database records
   db.deleteGroup(groupId);
+}
+
+// ── Decision Context ──────────────────────────────────────────────────────
+
+const MAX_DECISION_CONTEXT_ENTRIES = 20;
+
+export function appendDecisionContext(
+  db: MeshDb, groupId: string, entry: DecisionContextEntry,
+): void {
+  const meta = readMeta(db, groupId);
+  if (!meta) return;
+
+  meta.decisionContext ??= [];
+  meta.decisionContext.push(entry);
+
+  // Prune oldest entries beyond budget
+  if (meta.decisionContext.length > MAX_DECISION_CONTEXT_ENTRIES) {
+    meta.decisionContext = meta.decisionContext.slice(-MAX_DECISION_CONTEXT_ENTRIES);
+  }
+
+  writeMeta(db, groupId, meta);
+}
+
+export function getDecisionContext(db: MeshDb, groupId: string): DecisionContextEntry[] {
+  const meta = readMeta(db, groupId);
+  return meta?.decisionContext ?? [];
+}
+
+// ── Pause / Resume ───────────────────────────────────────────────────────
+
+export function pauseForHuman(
+  db: MeshDb, groupId: string, reason: PauseReason,
+): void {
+  const meta = readMeta(db, groupId);
+  if (!meta) return;
+
+  meta.activeTask = 'paused_for_human';
+  meta.pauseReason = reason;
+  writeMeta(db, groupId, meta);
+}
+
+export function resumeFromPause(
+  db: MeshDb, groupId: string,
+): { wasPaused: boolean; pauseReason: PauseReason | undefined } {
+  const meta = readMeta(db, groupId);
+  if (!meta || meta.activeTask !== 'paused_for_human') {
+    return { wasPaused: false, pauseReason: undefined };
+  }
+
+  const reason = meta.pauseReason;
+  meta.activeTask = null;
+  meta.pauseReason = undefined;
+  writeMeta(db, groupId, meta);
+  return { wasPaused: true, pauseReason: reason };
 }
 
 // ── Close Requirement ─────────────────────────────────────────────────────

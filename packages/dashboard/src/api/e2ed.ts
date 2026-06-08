@@ -7,6 +7,7 @@ import { api } from '../api/client'
 export type ActiveTask =
   | 'env_checking' | 'req_reviewing' | 'planning'
   | 'plan_reviewing' | 'delivering' | 'code_reviewing'
+  | 'paused_for_human'
   | null;
 
 export interface E2edRequirement {
@@ -24,6 +25,9 @@ export interface E2edRequirement {
   workingDir?: string | null
   deliveryAgent?: string
   reviewAgent?: string
+  autoPilot?: boolean
+  pauseReason?: string
+  retryState?: { attempt: number; lastAttemptAt: string; lastError?: string; issueId?: string }
 }
 
 export interface E2edMetrics {
@@ -54,5 +58,9 @@ export const e2edApi = {
     api.post(`/e2ed/groups/${id}/close`),
   delete: (id: string) =>
     api.delete(`/e2ed/groups/${id}`),
+  resume: (id: string) =>
+    api.post(`/e2ed/groups/${id}/resume`),
+  abort: (id: string) =>
+    api.post(`/e2ed/groups/${id}/abort`),
   guide: () => fetch('/api/e2ed/guide').then(r => r.ok ? r.text() : ''),
 }

@@ -41,6 +41,15 @@ const ACTIVE_TASK_LABELS: Record<string, string> = {
   plan_reviewing: "方案评审中",
   delivering: "代码交付中",
   code_reviewing: "代码评审中",
+  paused_for_human: "等待人工处理",
+};
+
+const PAUSE_REASON_LABELS: Record<string, string> = {
+  env_blocked: "环境检查未通过",
+  review_failed: "评审未通过",
+  max_retries_reached: "重试次数已达上限",
+  agent_question: "Agent 需要回答",
+  error: "执行出错",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -218,6 +227,11 @@ export function E2edPipelineView() {
           <span className={`${shared.pill} ${shared[badgeCls as keyof typeof shared] || shared.pillGray}`}>
             {STATUS_LABELS[req.status] || req.status}
           </span>
+          {req.autoPilot && (
+            <span className={`${shared.pill} ${shared.pillAmber}`}>
+              Auto-pilot
+            </span>
+          )}
         </div>
       </div>
 
@@ -276,6 +290,8 @@ export function E2edPipelineView() {
         groupId={rid}
         hasWorkingDir={!!req.workingDir}
         activeTask={req.activeTask ?? null}
+        pauseReason={req.pauseReason}
+        retryState={req.retryState}
       />
 
       {/* Issues */}
@@ -728,12 +744,55 @@ function AvailableActions({
   groupId,
   hasWorkingDir,
   activeTask,
+  pauseReason,
+  retryState,
 }: {
   status: string;
   groupId: string;
   hasWorkingDir: boolean;
   activeTask: string | null;
+  pauseReason?: string;
+  retryState?: { attempt: number; lastAttemptAt: string; lastError?: string; issueId?: string };
 }) {
+  const [resuming, setResuming] = useState(false);
+
+  // Show pause banner with resume button
+  if (activeTask === 'paused_for_human') {
+    const reasonLabel = pauseReason ? PAUSE_REASON_LABELS[pauseReason] || pauseReason : '';
+    return (
+      <div className={`${shared.card} ${shared.cardTopAmber}`}>
+        <div className={shared.cardTitle}>
+          等待处理
+          {retryState && retryState.attempt > 0 && (
+            <span className={shared.cardTitleMeta}>已重试 {retryState.attempt} 次</span>
+          )}
+        </div>
+        <div className={s.actionWaiting}>
+          {reasonLabel && <div style={{ marginBottom: 8 }}>{reasonLabel}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className={`${shared.pill} ${shared.pillAmber}`}
+              style={{ cursor: resuming ? 'wait' : 'pointer' }}
+              disabled={resuming}
+              onClick={() => {
+                setResuming(true);
+                e2edApi.resume(groupId).finally(() => setResuming(false));
+              }}
+            >
+              {resuming ? '恢复中...' : '恢复执行'}
+            </button>
+            <button
+              className={s.outlinePill}
+              onClick={() => e2edApi.abort(groupId)}
+            >
+              终止
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const actions = getAvailableActions(status, groupId, hasWorkingDir, activeTask);
   if (actions.length === 0) {
     const hint = activeTask
@@ -819,7 +878,7 @@ function E2edGuideDrawer({
   return (
     <>
       <div className={shared.drawerOverlay} onClick={onClose} />
-      <div className={`${shared.drawer} ${shared.drawerNarrow}`}>
+      <div className={`${shared.drawer} ${shared.drawerWide}`}>
         <div className={shared.drawerHeader}>
           <h2 className={shared.drawerTitle}>E2ED 使用指南</h2>
           <button onClick={onClose} className={shared.iconBtnSmall}>

@@ -10,12 +10,13 @@ import * as path from "node:path";
 import * as readline from "node:readline";
 
 import { MeshDb } from "../master/db.js";
-import { createRequirement, listRequirements, getRequirement, getRequirementText, deleteRequirement } from "../e2ed/requirement.js";
+import { createRequirement, listRequirements, getRequirement, getRequirementText, deleteRequirement, resumeFromPause, setActiveTask } from "../e2ed/requirement.js";
 import { startDeliver, startReview } from "../e2ed/pipeline.js";
 import { computeMetrics, getTimeline } from "../e2ed/metrics.js";
 import { RequirementStatus } from "../e2ed/types.js";
-import { closeRequirement } from "../e2ed/requirement.js";
+import { closeRequirement, writeMeta } from "../e2ed/requirement.js";
 import { checkAndTransitionEnv } from "../e2ed/environment.js";
+import { orchestrateNextStep } from "../e2ed/orchestrator.js";
 
 // ── DB singleton ─────────────────────────────────────────────────────────
 
@@ -111,6 +112,28 @@ async function cmdStart(rest: string[], flags: Record<string, string | boolean>)
   }
 
   const { groupId, meta } = createRequirement(db, { title, text, source: "cli", workingDir: cwd, deliveryAgent, reviewAgent });
+
+  // Enable auto-pilot if --auto flag is set
+  if (flags.auto === true || flagStr(flags, "auto") === "true") {
+    meta.autoPilot = true;
+    writeMeta(db, groupId, meta);
+
+    if (pretty) {
+      process.stdout.write(`Auto-pilot: enabled\n`);
+    }
+
+    // Auto-trigger env check and start the pipeline
+    const envResult = checkAndTransitionEnv(db, groupId, cwd);
+    if (envResult.status === RequirementStatus.ENV_BLOCKED) {
+      fail(`Environment blocked:\n${envResult.issues.map((i) => `  - ${i}`).join("\n")}`);
+    }
+    if (envResult.issues.length > 0 && pretty) {
+      process.stderr.write(`Warnings:\n${envResult.issues.map((i: string) => `  - ${i}`).join("\n")}\n`);
+    }
+
+    // Kick off auto-pilot
+    orchestrateNextStep(db, groupId);
+  }
 
   if (pretty) {
     process.stdout.write(`Requirement created: ${groupId}\n`);
@@ -273,6 +296,55 @@ async function cmdDelete(rest: string[], _flags: Record<string, string | boolean
   }
 }
 
+async function cmdResume(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
+  const groupId = rest[0];
+  if (!groupId) fail("Usage: rotom e2ed resume <groupId>");
+
+  const db = openDb();
+  const meta = getRequirement(db, groupId);
+  if (!meta) fail(`Requirement ${groupId} not found`);
+
+  const { wasPaused, pauseReason } = resumeFromPause(db, groupId);
+  if (!wasPaused && !meta.autoPilot) {
+    fail(`Requirement ${groupId} is not paused. Current state: ${meta.status} / ${meta.activeTask || "idle"}`);
+  }
+
+  if (pretty) {
+    process.stdout.write(`Requirement ${groupId} resumed.\n`);
+    if (pauseReason) process.stdout.write(`  Was paused for: ${pauseReason}\n`);
+    process.stdout.write(`  Status: ${meta.status}\n`);
+  } else {
+    printJson({ groupId, status: meta.status, resumed: true });
+  }
+
+  // Trigger next step via orchestrator
+  orchestrateNextStep(db, groupId);
+}
+
+async function cmdAbort(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
+  const groupId = rest[0];
+  if (!groupId) fail("Usage: rotom e2ed abort <groupId>");
+
+  const db = openDb();
+  const meta = getRequirement(db, groupId);
+  if (!meta) fail(`Requirement ${groupId} not found`);
+
+  if (!meta.activeTask) {
+    fail(`Requirement ${groupId} has no active task to abort.`);
+  }
+
+  setActiveTask(db, groupId, null);
+  meta.autoPilot = false;
+  writeMeta(db, groupId, meta);
+
+  if (pretty) {
+    process.stdout.write(`Requirement ${groupId} aborted.\n`);
+    process.stdout.write(`  Auto-pilot disabled.\n`);
+  } else {
+    printJson({ groupId, status: meta.status, aborted: true });
+  }
+}
+
 async function cmdStatus(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
   const groupId = rest[0];
   if (!groupId) fail("Usage: rotom e2ed status <groupId>");
@@ -337,6 +409,8 @@ export async function cmdE2ed(rest: string[], flags: Record<string, string | boo
     case "close":    return cmdClose(rest.slice(1), flags);
     case "delete":   return cmdDelete(rest.slice(1), flags);
     case "rm":       return cmdDelete(rest.slice(1), flags);
+    case "resume":   return cmdResume(rest.slice(1), flags);
+    case "abort":    return cmdAbort(rest.slice(1), flags);
     default:
       process.stderr.write(
         `Usage: rotom e2ed <command> [args]\n\n` +
@@ -348,7 +422,10 @@ export async function cmdE2ed(rest: string[], flags: Record<string, string | boo
         `  review <groupId>     Start review (auto: req/plan/code)\n` +
         `  close <groupId>      Close a requirement\n` +
         `  delete <groupId>     Delete a requirement\n` +
-        `\nDeliver flags: --plan-only --code-only --fix --cwd <dir>\n` +
+        `  resume <groupId>     Resume a paused auto-pilot pipeline\n` +
+        `  abort <groupId>      Abort active task and disable auto-pilot\n` +
+        `\nStart flags:   --auto --cwd <dir> --delivery-agent <name> --review-agent <name>\n` +
+        `Deliver flags: --plan-only --code-only --fix --cwd <dir>\n` +
         `Review flags:  --type requirement|plan|code --cwd <dir>\n`,
       );
   }
