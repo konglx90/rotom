@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc && cp src/executor/claude-code-hook.cjs dist/executor/claude-code-hook.cjs",
-    "link": "pnpm link --global",
+    "link": "CI=1 pnpm link --global . --yes",
     "build:master": "tsc && pnpm dashboard:build && rm -rf dist/master/dashboard && cp -r packages/dashboard/dist/src/master/dashboard dist/master/dashboard && cp src/executor/claude-code-hook.cjs dist/executor/claude-code-hook.cjs",
     "master": "bash bin/mesh-master.sh start",
     "master:start": "bash bin/mesh-master.sh start --daemon",
@@ -29,6 +29,7 @@
     "postinstall": "node scripts/fix-node-pty-perms.mjs"
   },
   "dependencies": {
+    "a2a-gateway": "link:",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "ws": "^8.18.0"
