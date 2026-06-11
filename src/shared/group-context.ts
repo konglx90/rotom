@@ -73,6 +73,12 @@ export function injectGroupContext(
  * spawn cwd alone is invisible to the model — it only sees the prompt text.
  *
  * No-op when cwd is empty (e.g. fallback to executor default).
+ *
+ * Read-only semantics: the working directory is a **read-only** mount for the
+ * agent. The agent may Read / Grep / Glob / Bash (read-only commands) but
+ * must NOT call Write / Edit or any other disk-mutating tool on paths under
+ * this directory. Cross-machine deployments enforce this so each executor
+ * machine's local FS doesn't diverge.
  */
 export function prependWorkingDir(
   prompt: string,
@@ -82,7 +88,9 @@ export function prependWorkingDir(
   return (
     `[工作目录] ${cwd}\n` +
     `所有相对路径基于此目录解析；spawn 的子进程 cwd 已设置在这里，` +
-    `Read/Bash/Edit/Write 直接用相对路径即可，不要用 \`cd\` 切换到其他目录。\n\n` +
+    `Read/Grep/Glob 直接用相对路径即可，不要用 \`cd\` 切换到其他目录。\n` +
+    `**重要：此目录为只读，agent 仅可 Read/Grep/Glob/Bash（只读命令），不得调用 Write/Edit 等写盘工具。**\n` +
+    `需要持久化的产出请通过 issue 评论 / artifact 工具回传 master，或用 Bash 写到非 workingDir 的沙箱目录。\n\n` +
     prompt
   );
 }

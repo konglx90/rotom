@@ -157,6 +157,22 @@ for (const w of workers) {
     console.error(`Worker requires: name, token (got: ${JSON.stringify({ name: w.name, token: w.token ? "***" : undefined })})`);
     process.exit(1);
   }
+  // workingDir 必填 + 存在性 + 可读性校验
+  // 跨机器部署时该路径必须存在于 executor 本地 FS,与 master 无关
+  if (!w.workingDir) {
+    console.error(`[executor] worker "${w.name}" missing required "workingDir" in executor.config.json — agent needs a local project dir to read. Aborting.`);
+    process.exit(1);
+  }
+  if (!fs.existsSync(w.workingDir)) {
+    console.error(`[executor] worker "${w.name}" workingDir "${w.workingDir}" does not exist on this machine. Aborting.`);
+    process.exit(1);
+  }
+  try {
+    fs.accessSync(w.workingDir, fs.constants.R_OK);
+  } catch {
+    console.error(`[executor] worker "${w.name}" workingDir "${w.workingDir}" is not readable. Aborting.`);
+    process.exit(1);
+  }
 }
 
 const fallbackCli = detectCliTool();
@@ -167,6 +183,7 @@ for (const w of workers) {
   const executor = createExecutor(cliTool);
   const worker = new ExecutorWorker(w, executor, master, cliTool);
   workerInstances.push(worker);
+  console.log(`[executor] worker "${w.name}" cwd: ${w.workingDir} (read-only)`);
 }
 
 console.log(`[executor] Starting ${workerInstances.length} worker(s) (fallback cli: ${fallbackCli})`);
