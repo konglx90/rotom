@@ -154,43 +154,62 @@ export function useGroupChatWebSocket({
         const curDirectTarget = directTargetRef.current
         const curMyName = myAgentNameRef.current
 
-        if (msg.conversation?.type === 'group' && msg.conversation.groupId === curGroupId) {
-          const rid = msg.requestId || ''
-          const streamId = `stream_${rid}`
-          streamContentRef.current.delete(rid)
-          setMessages(prev => prev.map(m => m.id === streamId ? { ...m, streaming: false, cwd: msg.cwd ?? m.cwd } : m))
-          if (curGroupId) {
-            groupsApi.getMessages(curGroupId).then(historyMsgs => {
-              setMessages(prev => {
-                const existingIds = new Set(prev.map(m => m.id))
-                const existingSigs = new Set(prev.map(m => `${m.from}::${m.content}`))
-                const newFromHistory = historyMsgs
-                  .map(m => ({
-                    id: `gm_${m.id}`,
-                    from: m.sender,
-                    content: m.content,
-                    timestamp: new Date(m.created_at + (m.created_at.includes('Z') || m.created_at.includes('+') ? '' : 'Z')),
-                    isIncoming: m.sender !== curMyName,
-                    mentions: JSON.parse(m.mentions || '[]'),
-                  }))
-                  .filter(m => !existingIds.has(m.id) && !existingSigs.has(`${m.from}::${m.content}`))
-                if (newFromHistory.length === 0) return prev
-                return [...prev, ...newFromHistory].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
-              })
-            }).catch(() => {})
-          }
+        const rid = msg.requestId || ''
+        const streamId = `stream_${rid}`
+        streamContentRef.current.delete(rid)
+
+        const apply = (targetGroupId: string) => {
+          groupsApi.getMessages(targetGroupId).then(historyMsgs => {
+            setMessages(prev => {
+              const streamMsg = prev.find(m => m.id === streamId)
+              const hydrated = historyMsgs.map(m => ({
+                id: `gm_${m.id}`,
+                from: m.sender,
+                content: m.content,
+                timestamp: new Date(m.created_at + (m.created_at.includes('Z') || m.created_at.includes('+') ? '' : 'Z')),
+                isIncoming: m.sender !== curMyName,
+                mentions: JSON.parse(m.mentions || '[]'),
+                composedPrompt: m.composed_prompt,
+              }))
+              const hydratedIds = new Set(hydrated.map(h => h.id))
+              // 找持久化后的"真身"消息 —— 用 (from + content) 匹配流式占位
+              const persistedTwin = streamMsg
+                ? hydrated.find(h => h.from === streamMsg.from && h.content === streamMsg.content)
+                : null
+
+              // 1. 移除流式占位
+              let next = prev.filter(m => m.id !== streamId)
+              // 2. 移除 hydrated 之外的所有历史 id(防止旧的 deleted 行残留)
+              next = next
+                .filter(m => !m.id.startsWith('gm_') || hydratedIds.has(m.id))
+                .map(m => m)
+              // 3. 如果有真身,合并进去(并去重)
+              if (persistedTwin && !next.some(m => m.id === persistedTwin.id)) {
+                next = [...next, persistedTwin]
+              }
+              // 4. 把 hydrated 中"在 prev 里没出现过的"也加进来
+              const nextIds = new Set(next.map(m => m.id))
+              const newcomers = hydrated.filter(h => !nextIds.has(h.id))
+              next = [...next, ...newcomers]
+
+              return next.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+            })
+          }).catch(() => {
+            setMessages(prev => prev.map(m => m.id === streamId ? { ...m, streaming: false, cwd: msg.cwd ?? m.cwd } : m))
+          })
         }
 
+        if (msg.conversation?.type === 'group' && msg.conversation.groupId === curGroupId && curGroupId) {
+          apply(curGroupId)
+        }
         if (
           curDirectTarget &&
           msg.from?.name === curDirectTarget &&
           msg.conversation?.type === 'single' &&
-          msg.conversation?.groupId === curGroupId
+          msg.conversation?.groupId === curGroupId &&
+          curGroupId
         ) {
-          const rid = msg.requestId || ''
-          const streamId = `stream_${rid}`
-          streamContentRef.current.delete(rid)
-          setMessages(prev => prev.map(m => m.id === streamId ? { ...m, streaming: false } : m))
+          apply(curGroupId)
         }
       }
     })
@@ -210,6 +229,7 @@ export function useGroupChatWebSocket({
         timestamp: new Date(m.created_at + (m.created_at.includes('Z') || m.created_at.includes('+') ? '' : 'Z')),
         isIncoming: m.sender !== myAgentName,
         mentions: JSON.parse(m.mentions || '[]'),
+        composedPrompt: m.composed_prompt,
       })))
     }).catch(() => setMessages([]))
   }, [selectedGroupId, myAgentName])

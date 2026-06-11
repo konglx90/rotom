@@ -7,6 +7,7 @@ import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { MemberListModal } from './modals/MemberListModal'
+import { ComposedPromptModal } from './modals/ComposedPromptModal'
 import { ConnectionBar } from './ConnectionBar'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import styles from './ChatArea.module.css'
@@ -48,6 +49,7 @@ export function GroupChatArea({
   const [mentionStartIndex, setMentionStartIndex] = useState(-1)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
   const [showMemberList, setShowMemberList] = useState(false)
+  const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
 
   const groupMembers = selectedGroup.members?.map(m => m.agent_name) || []
   const filteredMentionAgents = agents.filter(a =>
@@ -161,15 +163,35 @@ export function GroupChatArea({
 
       <ConnectionBar connectionStatus={connectionStatus} myAgentName={myAgentName} onReconnect={onReconnect} />
 
+      <ComposedPromptModal
+        open={composedPromptFor !== null}
+        messageLabel={composedPromptFor ? `${composedPromptFor.from} @ ${composedPromptFor.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}` : undefined}
+        composedPrompt={composedPromptFor?.composedPrompt ?? { layers: [], final: '', generated_at: '', prompt_version: '' }}
+        onClose={() => setComposedPromptFor(null)}
+      />
+
       <div className={styles.messagesArea}>
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>在群 {selectedGroup.name} 中开始对话吧</div>
         ) : messages.map(msg => {
           const isSystem = msg.from === 'system'
+          const hasPrompt = Boolean(msg.composedPrompt)
           return (
           <div key={msg.id} className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''}`}>
             <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={36} className={styles.messageAvatar} />
-            <div className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''}`}>
+            <div
+              className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''} ${hasPrompt ? styles.clickablePrompt : ''}`}
+              onClick={hasPrompt ? () => setComposedPromptFor(msg) : undefined}
+              title={hasPrompt ? '点击查看 prompt 组合' : undefined}
+              role={hasPrompt ? 'button' : undefined}
+              tabIndex={hasPrompt ? 0 : undefined}
+              onKeyDown={hasPrompt ? (e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setComposedPromptFor(msg)
+                }
+              } : undefined}
+            >
               {msg.isIncoming && (
                 <div className={styles.messageSender}>
                   {msg.from}

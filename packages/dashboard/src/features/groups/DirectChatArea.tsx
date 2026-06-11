@@ -6,6 +6,7 @@ import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { ConnectionBar } from './ConnectionBar'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
+import { ComposedPromptModal } from './modals/ComposedPromptModal'
 import styles from './ChatArea.module.css'
 
 interface DirectChatAreaProps {
@@ -32,6 +33,7 @@ export function DirectChatArea({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState<string>('')
+  const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -77,10 +79,24 @@ export function DirectChatArea({
       <div className={styles.messagesArea}>
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>与 {directTarget} 开始一对一对话</div>
-        ) : messages.map(msg => (
+        ) : messages.map(msg => {
+          const hasPrompt = Boolean(msg.composedPrompt)
+          return (
           <div key={msg.id} className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing}`}>
             <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={36} className={styles.messageAvatar} />
-            <div className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing}`}>
+            <div
+              className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${hasPrompt ? styles.clickablePrompt : ''}`}
+              onClick={hasPrompt ? () => setComposedPromptFor(msg) : undefined}
+              title={hasPrompt ? '点击查看 prompt 组合' : undefined}
+              role={hasPrompt ? 'button' : undefined}
+              tabIndex={hasPrompt ? 0 : undefined}
+              onKeyDown={hasPrompt ? (e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setComposedPromptFor(msg)
+                }
+              } : undefined}
+            >
               {msg.isIncoming && <div className={styles.messageSender}>{msg.from}</div>}
               <div className={styles.messageContent}>
                 {msg.isLoading ? (
@@ -104,9 +120,17 @@ export function DirectChatArea({
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
         <div ref={messagesEndRef} />
       </div>
+
+      <ComposedPromptModal
+        open={composedPromptFor !== null}
+        messageLabel={composedPromptFor ? `${composedPromptFor.from} @ ${composedPromptFor.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}` : undefined}
+        composedPrompt={composedPromptFor?.composedPrompt ?? { layers: [], final: '', generated_at: '', prompt_version: '' }}
+        onClose={() => setComposedPromptFor(null)}
+      />
 
       <div className={styles.inputArea}>
         <textarea ref={textareaRef} rows={1} value={message}

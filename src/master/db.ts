@@ -926,16 +926,88 @@ export class MeshDb {
     return result.changes > 0;
   }
 
-  addGroupMessage(groupId: string, sender: string, content: string, mentions: string[] = []): void {
-    this.db.prepare(
+  addGroupMessage(groupId: string, sender: string, content: string, mentions: string[] = []): number {
+    const result = this.db.prepare(
       "INSERT INTO group_messages (group_id, sender, content, mentions) VALUES (?, ?, ?, ?)",
     ).run(groupId, sender, content, JSON.stringify(mentions));
+    return Number(result.lastInsertRowid);
   }
 
-  getGroupMessages(groupId: string, limit = 200): { id: number; sender: string; content: string; mentions: string; created_at: string }[] {
-    return this.db.prepare(
-      "SELECT id, sender, content, mentions, created_at FROM group_messages WHERE group_id = ? ORDER BY created_at ASC LIMIT ?",
-    ).all(groupId, limit) as { id: number; sender: string; content: string; mentions: string; created_at: string }[];
+  /**
+   * 把 worker 算出的 ComposedPrompt 持久化到 chat_message_prompts,keyed by
+   * group_messages.id。Dashboard 点击消息时读这张表渲染分层组成。
+   */
+  addChatMessagePrompt(
+    groupMessageId: number,
+    layersJson: string,
+    final: string,
+    generatedAt: string,
+    promptVersion: string,
+  ): void {
+    this.db.prepare(
+      `INSERT INTO chat_message_prompts (group_message_id, layers, final, generated_at, prompt_version)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(groupMessageId, layersJson, final, generatedAt, promptVersion);
+  }
+
+  getChatMessagePrompt(groupMessageId: number): {
+    layers: { layer: string; content: string; source: string }[];
+    final: string;
+    generated_at: string;
+    prompt_version: string;
+  } | null {
+    const row = this.db.prepare(
+      `SELECT layers, final, generated_at, prompt_version
+       FROM chat_message_prompts WHERE group_message_id = ?`,
+    ).get(groupMessageId) as { layers: string; final: string; generated_at: string; prompt_version: string } | undefined;
+    if (!row) return null;
+    return {
+      layers: JSON.parse(row.layers),
+      final: row.final,
+      generated_at: row.generated_at,
+      prompt_version: row.prompt_version,
+    };
+  }
+
+  getGroupMessages(groupId: string, limit = 200): {
+    id: number; sender: string; content: string; mentions: string; created_at: string;
+    composed_prompt: {
+      layers: { layer: string; content: string; source: string }[];
+      final: string;
+      generated_at: string;
+      prompt_version: string;
+    } | null;
+  }[] {
+    const rows = this.db.prepare(
+      `SELECT m.id, m.sender, m.content, m.mentions, m.created_at,
+              p.layers, p.final, p.generated_at, p.prompt_version
+       FROM group_messages m
+       LEFT JOIN chat_message_prompts p ON p.group_message_id = m.id
+       WHERE m.group_id = ?
+       ORDER BY m.created_at ASC
+       LIMIT ?`,
+    ).all(groupId, limit) as Array<{
+      id: number; sender: string; content: string; mentions: string; created_at: string;
+      layers: string | null; final: string | null; generated_at: string | null; prompt_version: string | null;
+    }>;
+    return rows.map((r) => {
+      let composed_prompt: {
+        layers: { layer: string; content: string; source: string }[];
+        final: string; generated_at: string; prompt_version: string;
+      } | null = null;
+      if (r.layers && r.final && r.generated_at && r.prompt_version) {
+        composed_prompt = {
+          layers: JSON.parse(r.layers),
+          final: r.final,
+          generated_at: r.generated_at,
+          prompt_version: r.prompt_version,
+        };
+      }
+      return {
+        id: r.id, sender: r.sender, content: r.content, mentions: r.mentions, created_at: r.created_at,
+        composed_prompt,
+      };
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

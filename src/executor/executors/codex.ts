@@ -52,19 +52,7 @@ export class CodexExecutor implements CliExecutor {
     return new Promise((resolve) => {
       const resumeSessionId = options?.sessionId || "";
 
-      const needsCommunicationWrapper = options?.kind === "chat" || options?.kind === "collab";
-      const wrappedPrompt = needsCommunicationWrapper
-        ? [
-            `关键规则：`,
-            `- 如果是"给某人发消息私聊" → 执行 Bash: rotom send <对方名字> "<消息内容>"`,
-            `- 如果是"在群里 @某人 发消息" → 执行 Bash: rotom group send <群ID> <对方名字> "@<对方名字> <消息内容>"`,
-            `- ⚠️ 绝对不要使用 --as 参数，rotom 会自动使用你的身份`,
-            `- 执行完 rotom 命令后，将其 stdout/stderr 的真实返回作为你的回复`,
-            `- ⚠️ 禁止仅回复文字假装已执行，必须通过 Bash 实际调用 rotom`,
-            ``,
-            prompt,
-          ].join("\n")
-        : prompt;
+      // prompt 已经由 worker 用 composePrompt() 拼好,executor 不再二次包装。
 
       const args = ["app-server", "--listen", "stdio://"];
       const spawnEnv = { ...process.env, ...options?.env };
@@ -473,7 +461,7 @@ export class CodexExecutor implements CliExecutor {
 
           await request("turn/start", {
             threadId,
-            input: [{ type: "text", text: wrappedPrompt }],
+            input: [{ type: "text", text: prompt }],
           });
 
           const aborted = await turnDone;

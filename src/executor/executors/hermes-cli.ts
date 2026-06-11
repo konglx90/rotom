@@ -18,63 +18,6 @@ import path from "node:path";
 import fs from "node:fs";
 import type { CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
 
-// ── Skill hint loader ────────────────────────────────────────────────────
-//
-// 新版 hermes ACP 适配器去掉了 `/skills xxx` 这条 slash command
-// （acp_adapter/server.py:_handle_slash_command 只剩 help/model/tools/... 白名单），
-// 我们以前那种 `/skills rotom-a2a-communicate ${prompt}` 直接发会被原样灌给
-// LLM，让它把整串当成"用户要我查看 skill 文件"，跑题严重。
-//
-// 改成"按需 hint"：在 chat/collab 的 prompt 前面拼一小段 description
-// （从 SKILL.md frontmatter 提取，~400 字符），告诉 LLM 这个 skill 存在、什么
-// 时候用。LLM 自己决定是否调 `skill_view(name="rotom-a2a-communicate")`
-// 拉完整 12KB 内容。无关问题就完全跳过加载，省 token。
-
-const SKILL_NAME = "rotom-a2a-communicate";
-const SKILL_HINT_PATHS = [
-  path.join(os.homedir(), ".hermes", "skills", SKILL_NAME, "SKILL.md"),
-];
-
-let cachedSkillHint: string | null | undefined;
-
-function loadSkillDescription(): string | null {
-  if (cachedSkillHint !== undefined) return cachedSkillHint;
-  for (const p of SKILL_HINT_PATHS) {
-    try {
-      const md = fs.readFileSync(p, "utf-8");
-      const fmMatch = md.match(/^---\s*\n([\s\S]*?)\n---/);
-      if (!fmMatch) continue;
-      // frontmatter 里 description 可能是单行长文本，也可能是 YAML 折叠/literal
-      // 块。先匹配同名键，吃到下一个顶层键或 frontmatter 结束。
-      const descMatch = fmMatch[1].match(/^description:\s*(.+(?:\n[ \t]+.+)*)/m);
-      if (!descMatch) continue;
-      const desc = descMatch[1].trim().replace(/\s+/g, " ");
-      if (desc) {
-        cachedSkillHint = desc;
-        return desc;
-      }
-    } catch {
-      // file missing / unreadable — try next path
-    }
-  }
-  cachedSkillHint = null;
-  return null;
-}
-
-function buildSkillHintPrompt(userPrompt: string): string {
-  const desc = loadSkillDescription();
-  if (!desc) return userPrompt;
-  return [
-    `[可按需加载的技能 ${SKILL_NAME}]`,
-    desc,
-    `若本次请求涉及上述场景，先调用 skill_view(name="${SKILL_NAME}") 加载完整指令后再处理；否则直接回答。`,
-    "",
-    "---",
-    "",
-    userPrompt,
-  ].join("\n");
-}
-
 // ── ACP JSON-RPC types ──────────────────────────────────────────────────
 
 interface JsonRpcRequest {
@@ -567,17 +510,10 @@ export class HermesCliExecutor implements CliExecutor {
           }
 
           // 3. Send prompt
-          // chat/collab 走 "按需 hint" 包装：把 rotom-a2a-communicate 的
-          // description 拼到 prompt 前面，由 LLM 自行判断要不要 skill_view
-          // 加载完整内容。issue 路径不包装，避免 LLM 把 issue body 当成
-          // 通信任务误处理（见 buildSkillHintPrompt 注释）。
-          const needsCommunicationWrapper = options?.kind === "chat" || options?.kind === "collab";
-          const wrappedPrompt = needsCommunicationWrapper
-            ? buildSkillHintPrompt(prompt)
-            : prompt;
+          // prompt 已经由 worker 用 composePrompt() 拼好,executor 不再二次包装。
           await request("session/prompt", {
             sessionId,
-            prompt: [{ type: "text", text: wrappedPrompt }],
+            prompt: [{ type: "text", text: prompt }],
           });
         } catch (err) {
           console.error(`[hermes-cli] ACP lifecycle error: ${(err as Error).message}`);

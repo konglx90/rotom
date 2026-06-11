@@ -142,35 +142,13 @@ export class ClaudeCodeExecutor implements CliExecutor {
       }
 
       // Write structured input (stream-json format)
-      // ── Skill injection ──────────────────────────────────────────
-      // Only chat/collab tasks should be wrapped with the rotom communication
-      // prefix — those are the cases where the agent's job is to send a
-      // message via `rotom`. Issue tasks (the default) execute the prompt
-      // directly: wrapping them with "[rotom-a2a-communicate mode]" makes
-      // claude treat the issue body as a "send a message" request and ask
-      // for a recipient instead of doing the actual work. The header uses
-      // brackets (not a leading `/`) so claude doesn't mistake the skill
-      // marker for a rotom CLI subcommand and try to execute it via Bash.
-      const needsCommunicationWrapper = options?.kind === "chat" || options?.kind === "collab";
-      const wrappedPrompt = needsCommunicationWrapper
-        ? [
-            `[rotom-a2a-communicate mode]`,
-            ``,
-            `关键规则：`,
-            `- 如果是"给某人发消息私聊" → 执行 Bash: rotom send <对方名字> "<消息内容>"`,
-            `- 如果是"在群里 @某人 发消息" → 执行 Bash: rotom group send <群ID> <对方名字> "@<对方名字> <消息内容>"`,
-            `- ⚠️ 绝对不要使用 --as 参数，rotom 会自动使用你的身份`,
-            `- 执行完 rotom 命令后，将其 stdout/stderr 的真实返回作为你的回复`,
-            `- ⚠️ 禁止仅回复文字假装已执行，必须通过 Bash 实际调用 rotom`,
-            ``,
-            prompt,
-          ].join("\n")
-        : prompt;
+      // prompt 已经由 worker 用 composePrompt() 拼好(rotom-cli + agent-role +
+      // group-basic + cwd + task),executor 不再二次包装,直接喂给 CLI。
       const inputPayload = JSON.stringify({
         type: "user",
         message: {
           role: "user",
-          content: [{ type: "text", text: wrappedPrompt }],
+          content: [{ type: "text", text: prompt }],
         },
       }) + "\n";
       proc.stdin!.write(inputPayload);

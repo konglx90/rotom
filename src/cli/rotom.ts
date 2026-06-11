@@ -30,6 +30,43 @@ import { cmdE2ed } from "./e2ed.js";
 const ROTOM_HOME = process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom");
 const ROTOM_CONFIG = path.join(ROTOM_HOME, "config.json");
 const DEFAULT_EXECUTOR_CONFIG = path.join(ROTOM_HOME, "executor.config.json");
+const ROTOM_SKILL_MD = path.join(ROTOM_HOME, "SKILL.md");
+
+/**
+ * 把仓库内的 `skill/rotom-a2a-communicate/SKILL.md` 写到 `~/.rotom/SKILL.md`。
+ *
+ * 幂等:内容相同就跳过,不触发文件 mtime 变化(避免和正在跑的 agent 抢文件)。
+ * 这个文件是 rotom 自家的"完整 rotom CLI 命令参考" — 跟 `src/shared/rotom-cli-prompt.ts`
+ * 里的 [rotom CLI 使用规则] 段配对使用:prompt 段塞短 hint,agent 真要查命令时
+ * 自己 `Read ~/.rotom/SKILL.md`。这样不依赖任何 provider 的 skill 机制。
+ */
+function ensureRotomSkillMd(): void {
+  try {
+    // 解析仓库根:本文件位于 src/cli/rotom.ts (开发) 或 dist/cli/rotom.js (打包),
+    // 仓库根 = __dirname/../..(开发时是 src/cli/..=repo, 打包后是 dist/cli/..=repo)
+    const here = typeof __dirname !== "undefined" ? __dirname : process.cwd();
+    const skillSrc = path.join(here, "..", "..", "skill", "rotom-a2a-communicate", "SKILL.md");
+    if (!fs.existsSync(skillSrc)) {
+      // 仓库内没找到 SKILL.md(可能是 npm 全局安装但 files 配置漏了 skill/),跳过
+      return;
+    }
+    const content = fs.readFileSync(skillSrc, "utf-8");
+    let needsWrite = true;
+    if (fs.existsSync(ROTOM_SKILL_MD)) {
+      try {
+        const existing = fs.readFileSync(ROTOM_SKILL_MD, "utf-8");
+        if (existing === content) needsWrite = false;
+      } catch { /* 读失败 → 重写 */ }
+    }
+    if (needsWrite) {
+      if (!fs.existsSync(ROTOM_HOME)) fs.mkdirSync(ROTOM_HOME, { recursive: true });
+      fs.writeFileSync(ROTOM_SKILL_MD, content, "utf-8");
+    }
+  } catch (err: any) {
+    // 静默失败 — 不阻塞主命令。SKILL.md 是 best-effort,rotom 不强依赖。
+    process.stderr.write(`[rotom] WARN: failed to write ~/.rotom/SKILL.md: ${err.message}\n`);
+  }
+}
 
 interface RotomAgentEntry {
   configPath: string;
@@ -362,6 +399,9 @@ Global flags:
 `;
 
 async function main(): Promise<void> {
+  // 启动时把 SKILL.md 落到 ~/.rotom/。幂等(内容相同则跳过),best-effort。
+  ensureRotomSkillMd();
+
   const { positional, flags } = parseArgs(process.argv.slice(2));
   pretty = flags.pretty === true;
 

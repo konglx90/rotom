@@ -11,7 +11,8 @@ import path from "node:path";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { ApprovalDecision, ApprovalRequestInput, CliExecutor } from "./cli-executor.js";
-import { injectGroupContext, prependWorkingDir } from "../shared/group-context.js";
+import { composePrompt, type ComposedPrompt } from "../shared/prompt-composer.js";
+import { parseAgentProfile, type AgentProfile } from "../shared/agent-profile.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
 
 // ── Session store ──────────────────────────────────────────────────────
@@ -165,6 +166,8 @@ export class ExecutorWorker {
   private readonly workingDir: string;
   private readonly maxConcurrent: number;
   private readonly cliTool: string;
+  /** agents.profile 解析后缓存,供 composePrompt() 渲染 agent-role 层。 */
+  private readonly agentProfile: AgentProfile | null;
 
   constructor(
     private readonly config: WorkerConfig,
@@ -188,6 +191,7 @@ export class ExecutorWorker {
     this.maxConcurrent = config.maxConcurrent ?? 2;
     this.cliTool = cliTool;
     this.sessionStore = new SessionStore(this.rotomHome);
+    this.agentProfile = parseAgentProfile(JSON.stringify(config.profile ?? null));
 
     // 不再 mkdirSync this.workingDir —— 启动时已校验 base 存在;
     // per-group 子目录在 resolveIssueCwd() 首次解析时按需 mkdir -p。
@@ -349,7 +353,15 @@ export class ExecutorWorker {
       console.log(`${this.tag} Issue continue: ${issueId} (session=${sessionId ?? "(none)"}${slashCommand ? `, slash=${slashCommand}` : ""}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
       // cwd 按 groupId 派生
       const cwd = this.resolveIssueCwd(groupId);
-      this.runIssueExecution(issueId, prompt, cwd, sessionId, slashCommand, approvalPolicy);
+      const composed = composePrompt({
+        mode: "issue",
+        agentName: this.config.name,
+        agentProfile: this.agentProfile,
+        group: null,
+        cwd,
+        body: prompt,
+      });
+      this.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed);
     }
 
     // Issue append — user typed a follow-up while the issue is still active.
@@ -374,7 +386,15 @@ export class ExecutorWorker {
         console.log(`${this.tag} Issue append (idle, run now): ${issueId} (session=${sessionId ?? "(none)"}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
         // cwd 按 groupId 派生
         const cwd = this.resolveIssueCwd(groupId);
-        this.runIssueExecution(issueId, prompt, cwd, sessionId, slashCommand, approvalPolicy);
+        const composed = composePrompt({
+          mode: "issue",
+          agentName: this.config.name,
+          agentProfile: this.agentProfile,
+          group: null,
+          cwd,
+          body: prompt,
+        });
+        this.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed);
       }
     }
 
@@ -446,9 +466,10 @@ export class ExecutorWorker {
     }
   }
 
-  private sendUpdate(issueId: string, status: string, content?: string, metadata?: Record<string, unknown>, cwd?: string): void {
+  private sendUpdate(issueId: string, status: string, content?: string, metadata?: Record<string, unknown>, cwd?: string, composedPrompt?: ComposedPrompt): void {
     const msg: Record<string, unknown> = { type: "issue_update", issueId, status, content, metadata };
     if (cwd) msg.cwd = cwd;
+    if (composedPrompt) msg.composedPrompt = composedPrompt;
     this.send(msg);
   }
 
@@ -456,7 +477,7 @@ export class ExecutorWorker {
     this.send({ type: "a2a_reply_chunk", requestId, delta });
   }
 
-  private sendChatEnd(requestId: string, fullContent: string, conversation: any, cwd?: string): void {
+  private sendChatEnd(requestId: string, fullContent: string, conversation: any, cwd?: string, composedPrompt?: ComposedPrompt): void {
     const msg: Record<string, unknown> = {
       type: "a2a_reply_end",
       requestId,
@@ -464,6 +485,7 @@ export class ExecutorWorker {
       conversation,
     };
     if (cwd) msg.cwd = cwd;
+    if (composedPrompt) msg.composedPrompt = composedPrompt;
     this.send(msg);
   }
 
@@ -517,9 +539,18 @@ export class ExecutorWorker {
         cleanTitle = parsed.stripped || title;
       }
     }
-    const basePrompt = description ? `${cleanTitle}\n\n${description}` : cleanTitle;
-    const prompt = prependWorkingDir(basePrompt, cwd);
-    this.runIssueExecution(issueId, prompt, cwd, undefined, slashCommand, approvalPolicy);
+    const body = description ? `${cleanTitle}\n\n${description}` : cleanTitle;
+    // issue 模式没有 conversation(group_basic 层无法渲染,因为 worker 这边没有
+    // activeIssues 数据);只拼 rotom-cli + agent-role + cwd + task 四层。
+    const composed = composePrompt({
+      mode: "issue",
+      agentName: this.config.name,
+      agentProfile: this.agentProfile,
+      group: null,
+      cwd,
+      body,
+    });
+    this.runIssueExecution(issueId, composed.final, cwd, undefined, slashCommand, approvalPolicy, composed);
   }
 
   /**
@@ -528,7 +559,7 @@ export class ExecutorWorker {
    * CLI gets --resume / thread/resume so the conversation picks up where it
    * left off.
    */
-  private async runIssueExecution(issueId: string, prompt: string, cwd: string, resumeSessionId?: string, slashCommand?: string, approvalPolicy?: "r_allow" | "rw_allow"): Promise<void> {
+  private async runIssueExecution(issueId: string, prompt: string, cwd: string, resumeSessionId?: string, slashCommand?: string, approvalPolicy?: "r_allow" | "rw_allow", composedPrompt?: ComposedPrompt): Promise<void> {
     if (this.activeTasks.size >= this.maxConcurrent) {
       console.log(`${this.tag} At capacity (${this.maxConcurrent}), skip ${issueId}`);
       return;
@@ -614,10 +645,10 @@ export class ExecutorWorker {
       if (result.sessionId) lastSessionId = result.sessionId;
 
       if (result.exitCode === 0) {
-        this.sendUpdate(issueId, "completed", result.fullOutput, sessionMeta, cwd);
+        this.sendUpdate(issueId, "completed", result.fullOutput, sessionMeta, cwd, composedPrompt);
         console.log(`${this.tag} Issue done: ${issueId} (exit=0, session=${result.sessionId ?? "none"})`);
       } else {
-        this.sendUpdate(issueId, "failed", `Exit ${result.exitCode}\n${result.fullOutput}`, sessionMeta, cwd);
+        this.sendUpdate(issueId, "failed", `Exit ${result.exitCode}\n${result.fullOutput}`, sessionMeta, cwd, composedPrompt);
         console.log(`${this.tag} Issue failed: ${issueId} (exit=${result.exitCode})`);
       }
     } catch (err: any) {
@@ -667,12 +698,9 @@ export class ExecutorWorker {
     const task = { aborted: false, controller };
     this.activeTasks.set(taskKey, task);
 
-    let prompt = content.replace(`@${this.config.name}`, "").trim();
+    const body = content.replace(`@${this.config.name}`, "").trim();
 
-    // Inject group context so the executor agent knows which group it's in
-    prompt = injectGroupContext(prompt, conversation, this.config.name);
-
-    if (!prompt) {
+    if (!body) {
       this.activeTasks.delete(taskKey);
       this.sendChatEnd(requestId, "你好，有什么可以帮你的？", conversation, this.resolveIssueCwd(conversation?.id ?? conversation?.groupId));
       return;
@@ -684,10 +712,26 @@ export class ExecutorWorker {
 
     // cwd 按 groupId 派生(<base>/<groupId>),忽略 conversation.workingDir
     const cwd = this.resolveIssueCwd(groupId || undefined);
-    prompt = prependWorkingDir(prompt, cwd);
+
+    // 拼 prompt:rotom-cli → agent-role → group-basic → cwd → task。
+    // group 信息从 conversation 抽出(master 已 enrich 过 activeIssues / groupName)。
+    const composed = composePrompt({
+      mode: "chat",
+      agentName: this.config.name,
+      agentProfile: this.agentProfile,
+      group: conversation?.groupId
+        ? {
+            id: conversation.groupId,
+            name: conversation.groupName || conversation.groupId,
+            activeIssues: conversation.activeIssues ?? [],
+          }
+        : null,
+      cwd,
+      body,
+    });
 
     console.log(`${this.tag} Session lookup: cliTool=${this.cliTool}, groupId=${groupId}, sessionId=${sessionId ?? "(none)"}, conversation=${JSON.stringify(conversation)}`);
-    console.log(`${this.tag} Replying to ${fromName}: ${prompt.slice(0, 60)}...`);
+    console.log(`${this.tag} Replying to ${fromName}: ${composed.final.slice(0, 60)}...`);
 
     try {
       let fullContent = "";
@@ -701,11 +745,11 @@ export class ExecutorWorker {
       //     fail with `invalid_request_error: An assistant message with
       //     'tool_calls' must be followed by tool messages…`.
       // File writes here still need a backing in-progress issue (the prompt
-      // tells the agent so — see injectGroupContext active_issues block).
+      // tells the agent so — see composePrompt group-basic active_issues block).
       const execOptions: Parameters<typeof this.executor.execute>[3] = { signal: controller.signal, env: this.agentEnv(), kind: "chat" };
       if (sessionId) execOptions.sessionId = sessionId;
       // cwd 按 groupId 派生
-      const result = await this.executor.execute(prompt, cwd, (chunk) => {
+      const result = await this.executor.execute(composed.final, cwd, (chunk) => {
         if (task.aborted) return;
         fullContent += chunk;
         this.sendChatChunk(requestId, chunk);
@@ -724,12 +768,12 @@ export class ExecutorWorker {
       }
 
       if (!task.aborted) {
-        this.sendChatEnd(requestId, fullContent, conversation, cwd);
+        this.sendChatEnd(requestId, fullContent, conversation, cwd, composed);
         console.log(`${this.tag} Reply sent to ${fromName} (${fullContent.length} chars)`);
       }
     } catch (err: any) {
       if (!task.aborted) {
-        this.sendChatEnd(requestId, `[错误] ${err.message}`, conversation, cwd);
+        this.sendChatEnd(requestId, `[错误] ${err.message}`, conversation, cwd, composed);
         console.error(`${this.tag} Reply error:`, err.message);
       }
     } finally {
@@ -754,7 +798,7 @@ export class ExecutorWorker {
     const sessionId = groupId ? this.sessionStore.get(this.cliTool, groupId) : undefined;
 
     try {
-      const basePrompt = [
+      const body = [
         `你被指定为协作任务「${title}」的首位发言人，由你来推进协作并决策走向。`,
         `协作目标：${collaborationGoal}`,
         `参与者：${participants.join("、")}（你在第一位，其余成员等待你 @ 邀请发言）`,
@@ -764,18 +808,27 @@ export class ExecutorWorker {
         `行动指引（按这个顺序考虑）：`,
         `1) 先在群里发表你的初步观点 / 方案 / 问题分析`,
         `2) 决定下一步：`,
-        `   - 若需要其他成员补充：用 mesh_group_send 在 message 开头 @目标名字，等待对方回复后再继续`,
-        `   - 若已经达成目标、或继续协作收益不大：调用 mesh_conclude_collaboration(issueId, summary) 主动结束`,
+        `   - 若需要其他成员补充：用 rotom group send 在 message 开头 @目标名字，等待对方回复后再继续`,
+        `   - 若已经达成目标、或继续协作收益不大：调用 rotom collab conclude ${issueId} --summary "..." 主动结束`,
         `3) 不要尝试一次 @ 多个人；每轮只 @ 一位下一个发言人`,
         `4) 不要替别人代答；等他们的真实回复`,
       ].join("\n");
 
-      const collabExecOptions: Parameters<typeof this.executor.execute>[3] = { signal: controller.signal, env: this.agentEnv(), kind: "collab" };
-      if (sessionId) collabExecOptions.sessionId = sessionId;
       // cwd 按 groupId 派生
       const cwd = this.resolveIssueCwd(groupId);
-      const prompt = prependWorkingDir(basePrompt, cwd);
-      const result = await this.executor.execute(prompt, cwd, (_chunk) => {
+      // collab 模式也没有 activeIssues(group-basic 层折叠),只拼 rotom-cli +
+      // agent-role + cwd + task 四层。
+      const composed = composePrompt({
+        mode: "collab",
+        agentName: this.config.name,
+        agentProfile: this.agentProfile,
+        group: null,
+        cwd,
+        body,
+      });
+      const collabExecOptions: Parameters<typeof this.executor.execute>[3] = { signal: controller.signal, env: this.agentEnv(), kind: "collab" };
+      if (sessionId) collabExecOptions.sessionId = sessionId;
+      const result = await this.executor.execute(composed.final, cwd, (_chunk) => {
         if (task.aborted) return;
         // Stream chunks — the agent's tools handle communication
       }, collabExecOptions);
@@ -788,7 +841,7 @@ export class ExecutorWorker {
 
       if (task.aborted) return;
 
-      // The agent's tools (mesh_group_send) handle communication.
+      // The agent's tools (rotom group send) handle communication.
       // The collaboration tracking in Master will pick up the group messages automatically.
       console.log(`${this.tag} Collaboration contribution ready for "${title}" (${result.fullOutput.length} chars)`);
     } catch (err: any) {

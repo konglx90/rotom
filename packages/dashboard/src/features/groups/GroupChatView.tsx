@@ -119,7 +119,7 @@ export function GroupChatView() {
   const groupMembers = selectedGroup?.members?.map((m) => m.agent_name) || []
 
   // --- Handlers ---
-  const handleSendMessage = (text: string) => {
+  const handleSendMessage = async (text: string) => {
     if (!text || connectionStatus !== 'connected') return
 
     const trimmed = text
@@ -158,6 +158,21 @@ export function GroupChatView() {
     }
 
     if (!selectedGroupId) return
+
+    // Ensure current user is a group member. The master delivers group stream
+    // chunks via broadcastToGroup(groupId, ...) which only reaches agents
+    // listed in group_members; if the dashboard user isn't a member, every
+    // chunk is silently dropped until a2a_stream_end persists the final text.
+    // Awaiting here (not fire-and-forget) is required: the worker may start
+    // streaming back before a background addMembers would have committed,
+    // losing the live chunks.
+    try {
+      await groupsApi.addMembers(selectedGroupId, [myAgentName])
+    } catch (err) {
+      console.error('Self-join failed; chunks may not stream live:', err)
+    }
+    await loadGroups()
+
     // Only treat @name as an @-trigger when name is an actual group member.
     // Non-member @text is left in the message as plain text.
     const memberSet = new Set(groupMembers)
