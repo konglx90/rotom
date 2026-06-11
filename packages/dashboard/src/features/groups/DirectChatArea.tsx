@@ -6,7 +6,6 @@ import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { ConnectionBar } from './ConnectionBar'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
-import { WorkingDirModal } from './modals/WorkingDirModal'
 import styles from './ChatArea.module.css'
 
 interface DirectChatAreaProps {
@@ -18,8 +17,6 @@ interface DirectChatAreaProps {
   onNewDmConversation: () => void
   onShowConfig: () => void
   onReconnect: () => void
-  workingDir?: string | null
-  onUpdateWorkingDir?: (dir: string | null) => void
 }
 
 export function DirectChatArea({
@@ -31,13 +28,10 @@ export function DirectChatArea({
   onNewDmConversation,
   onShowConfig,
   onReconnect,
-  workingDir,
-  onUpdateWorkingDir,
 }: DirectChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState<string>('')
-  const [showWorkingDirModal, setShowWorkingDirModal] = useState(false)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -48,16 +42,6 @@ export function DirectChatArea({
       textareaRef.current.style.height = 'auto';
     }
   }, [message])
-
-  const handleEditWorkingDir = () => {
-    if (!onUpdateWorkingDir) return
-    setShowWorkingDirModal(true)
-  }
-
-  const handleSubmitWorkingDir = (dir: string | null) => {
-    setShowWorkingDirModal(false)
-    onUpdateWorkingDir?.(dir)
-  }
 
   const { handleKeyDown: handleHistoryNav } = useMessageHistoryNav({
     value: message,
@@ -81,16 +65,6 @@ export function DirectChatArea({
             <h3 className={styles.chatTitle}>{directTarget}</h3>
             <div style={{ fontSize: 12, color: 'var(--color-success)' }}>在线</div>
           </div>
-          {onUpdateWorkingDir && (
-            <button
-              type="button"
-              onClick={handleEditWorkingDir}
-              className={styles.workingDirChip}
-              title="点击修改工作目录"
-            >
-              📁 {workingDir || '(未设置)'}
-            </button>
-          )}
         </div>
         <div className={styles.chatHeaderActions}>
           <Button variant="ghost" size="sm" onClick={onNewDmConversation}>新对话</Button>
@@ -99,17 +73,6 @@ export function DirectChatArea({
       </div>
 
       <ConnectionBar connectionStatus={connectionStatus} myAgentName={myAgentName} onReconnect={onReconnect} />
-
-      {onUpdateWorkingDir && (
-        <WorkingDirModal
-          open={showWorkingDirModal}
-          scope="direct"
-          scopeName={directTarget}
-          currentDir={workingDir}
-          onClose={() => setShowWorkingDirModal(false)}
-          onSubmit={handleSubmitWorkingDir}
-        />
-      )}
 
       <div className={styles.messagesArea}>
         {messages.length === 0 ? (
@@ -130,11 +93,6 @@ export function DirectChatArea({
               </div>
               <div className={styles.messageTimestamp}>
                 {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
-                {workingDir && (
-                  <span className={styles.messageCwd} title={workingDir}>
-                    📁 {workingDir}
-                  </span>
-                )}
               </div>
             </div>
           </div>
