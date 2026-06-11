@@ -23,6 +23,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { execSync } from "node:child_process";
+import * as readline from "node:readline";
 import { cmdE2ed } from "./e2ed.js";
 
 const ROTOM_HOME = process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom");
@@ -301,6 +303,19 @@ Config:
   config add-executor <name> <executor.json>   register an executor worker
   config remove <name>
 
+Bootstrap (first-time setup):
+  init                                         detect claude/codex/hermes, ask for
+                                               names + master IP, register agents,
+                                               and write ~/.rotom/executor.config.json
+    Flags:
+      --master <ip:port>     skip prompt (default: 127.0.0.1:28800)
+      --domain <name>        skip prompt (default: pick from master's existing
+                             domains; falls back to "默认部门" or "default")
+      --name-prefix <p>      default name = <p>-<tool>  (default: $USER)
+      --tools <a,b,c>        limit detection to a subset of claude,codex,hermes
+      --yes / -y             accept all defaults, do not overwrite without confirm
+      --force                overwrite existing executor.config.json without prompt
+
 Identity:
   whoami
 
@@ -362,6 +377,7 @@ async function main(): Promise<void> {
   // Config and e2ed commands don't need an agent
   if (cmd === "config") return cmdConfig(rest, flags);
   if (cmd === "e2ed")   return cmdE2ed(rest, flags);
+  if (cmd === "init")   return cmdInit(rest, flags);
 
   const agent = resolveAgent(asFlag);
 
@@ -604,6 +620,298 @@ async function cmdCollab(agent: ResolvedAgent, rest: string[], flags: Record<str
     return;
   }
   fail(`unknown collab subcommand: ${sub || "(none)"}`);
+}
+
+// ── init ──────────────────────────────────────────────────────────────────
+//
+// First-time bootstrap:
+//   1. detect installed CLI tools (claude/codex/hermes, optionally more)
+//   2. ask user which to register + custom name per tool
+//   3. ask for master IP:port
+//   4. resolve (or create) a domain on the master
+//   5. POST /api/agents for each, collecting the returned mesh_xxx tokens
+//   6. write ~/.rotom/executor.config.json with master + workers[]
+//
+// Non-interactive override flags make the same flow scriptable.
+
+const INIT_KNOWN_TOOLS = ["claude", "codex", "hermes", "deepseek", "openclaw"] as const;
+
+function detectCliTools(wanted: readonly string[]): { tool: string; path: string }[] {
+  const out: { tool: string; path: string }[] = [];
+  for (const tool of wanted) {
+    try {
+      const p = execSync(`command -v ${tool}`, { stdio: ["ignore", "pipe", "ignore"] })
+        .toString()
+        .trim();
+      if (p) out.push({ tool, path: p });
+    } catch {
+      /* not installed */
+    }
+  }
+  return out;
+}
+
+function isInteractive(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
+function askYN(question: string, defaultYes: boolean): Promise<boolean> {
+  return new Promise((resolve) => {
+    const hint = defaultYes ? "[Y/n]" : "[y/N]";
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`${question} ${hint}: `, (ans) => {
+      rl.close();
+      const a = ans.trim().toLowerCase();
+      if (!a) return resolve(defaultYes);
+      if (a === "y" || a === "yes") return resolve(true);
+      if (a === "n" || a === "no") return resolve(false);
+      resolve(defaultYes);
+    });
+  });
+}
+
+function askText(question: string, defaultValue?: string): Promise<string> {
+  return new Promise((resolve) => {
+    const suffix = defaultValue ? ` [${defaultValue}]` : "";
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`${question}${suffix}: `, (ans) => {
+      rl.close();
+      const trimmed = ans.trim();
+      resolve(trimmed || defaultValue || "");
+    });
+  });
+}
+
+interface ParsedMaster {
+  host: string;
+  port: number;
+  url: string;
+}
+
+function parseMasterSpec(spec: string, defaultPort: number): ParsedMaster {
+  // Accept "host", "host:port", "ws://host:port", "http://host:port"
+  let s = spec.trim();
+  s = s.replace(/^wss?:\/\//, "").replace(/^https?:\/\//, "");
+  s = s.replace(/\/+$/, "");
+  let host = s;
+  let port = defaultPort;
+  const colon = s.lastIndexOf(":");
+  if (colon !== -1) {
+    const tail = s.slice(colon + 1);
+    const n = Number(tail);
+    if (Number.isInteger(n) && n > 0 && n < 65536) {
+      host = s.slice(0, colon);
+      port = n;
+    }
+  }
+  if (!host) fail(`invalid master spec: ${spec}`);
+  return { host, port, url: `ws://${host}:${port}` };
+}
+
+async function httpJsonNoAuth(method: string, url: string, body?: unknown): Promise<{ status: number; data: any }> {
+  const init: RequestInit = {
+    method,
+    headers: { "Content-Type": "application/json" },
+  };
+  if (body !== undefined) (init as any).body = JSON.stringify(body);
+  let resp: Response;
+  try {
+    resp = await fetch(url, init);
+  } catch (e) {
+    fail(`network error calling ${url}: ${(e as Error).message}`);
+  }
+  const text = await resp.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  return { status: resp.status, data };
+}
+
+interface DomainInfo { id: string; name: string; }
+
+async function listMasterDomains(httpBase: string): Promise<DomainInfo[]> {
+  const { status, data } = await httpJsonNoAuth("GET", `${httpBase}/api/domains`);
+  if (status !== 200 || !Array.isArray(data)) return [];
+  return data.map((d: any) => ({ id: d.id, name: d.name }));
+}
+
+async function ensureDomain(httpBase: string, name: string): Promise<DomainInfo> {
+  const existing = await listMasterDomains(httpBase);
+  const hit = existing.find((d) => d.name === name);
+  if (hit) return hit;
+  const { status, data } = await httpJsonNoAuth("POST", `${httpBase}/api/domains`, {
+    name,
+    description: `Created by 'rotom init' at ${new Date().toISOString()}`,
+  });
+  if (status === 201 && data?.id) return { id: data.id, name: data.name };
+  if (status === 409) {
+    // Race: someone created it. Re-fetch.
+    const after = await listMasterDomains(httpBase);
+    const again = after.find((d) => d.name === name);
+    if (again) return again;
+  }
+  fail(`failed to create domain "${name}" (HTTP ${status}): ${JSON.stringify(data)}`);
+}
+
+interface RegisteredAgent { name: string; cliTool: string; token: string; }
+
+async function registerAgent(httpBase: string, name: string, domain: string, cliTool: string): Promise<RegisteredAgent> {
+  const { status, data } = await httpJsonNoAuth("POST", `${httpBase}/api/agents`, {
+    name,
+    domain,
+    profile: {
+      category: "Agent",
+      position: `${cliTool} 后端`,
+      responsibilities: "由 rotom init 自动注册",
+      tech_stack: cliTool,
+    },
+  });
+  if (status === 201 && data?.token) {
+    return { name, cliTool, token: data.token };
+  }
+  if (status === 409) {
+    fail(`agent "${name}" already exists on master. Pick a different name (or delete the existing one first).`);
+  }
+  fail(`failed to register "${name}" (HTTP ${status}): ${JSON.stringify(data)}`);
+}
+
+async function pickDomain(master: ParsedMaster, hintFlag?: string, yesMode = false): Promise<string> {
+  const httpBase = `http://${master.host}:${master.port}`;
+  const existing = await listMasterDomains(httpBase);
+  if (hintFlag) {
+    if (!existing.find((d) => d.name === hintFlag)) {
+      if (yesMode) return ensureDomain(httpBase, hintFlag).then((d) => d.name);
+      const create = await askYN(`domain "${hintFlag}" does not exist. Create it?`, true);
+      if (!create) fail(`aborted: domain "${hintFlag}" missing on master`);
+      return ensureDomain(httpBase, hintFlag).then((d) => d.name);
+    }
+    return hintFlag;
+  }
+  if (existing.length === 0) {
+    // Pick a sensible default and create.
+    const fallback = "默认部门";
+    return ensureDomain(httpBase, fallback).then((d) => d.name);
+  }
+  if (existing.length === 1) return existing[0].name;
+  // Multiple domains: prompt unless --yes.
+  if (yesMode) {
+    // Prefer "默认部门" or any "default" if present.
+    const preferred = existing.find((d) => d.name === "默认部门")
+      || existing.find((d) => d.name.toLowerCase() === "default")
+      || existing[0];
+    return preferred.name;
+  }
+  process.stdout.write(`\nMaster has multiple domains:\n`);
+  existing.forEach((d, i) => process.stdout.write(`  ${i + 1}) ${d.name}\n`));
+  const idxRaw = await askText(`Pick domain [1-${existing.length}]`, "1");
+  const idx = parseInt(idxRaw, 10);
+  if (isNaN(idx) || idx < 1 || idx > existing.length) fail("invalid domain selection");
+  return existing[idx - 1].name;
+}
+
+async function cmdInit(_rest: string[], flags: Record<string, string | boolean>): Promise<void> {
+  const yesMode = flags.yes === true || flags.y === true;
+  const force = flags.force === true;
+  const masterSpec = flagStr(flags, "master");
+  const domainFlag = flagStr(flags, "domain");
+  const namePrefix = flagStr(flags, "name-prefix") || process.env.USER || "user";
+  const toolsFlag = flagStr(flags, "tools");
+
+  const wantedTools = (toolsFlag ? toolsFlag.split(",").map((s) => s.trim()).filter(Boolean) : [...INIT_KNOWN_TOOLS]) as string[];
+
+  if (!isInteractive() && !yesMode) {
+    fail(`rotom init needs an interactive TTY (or pass --yes to accept all defaults)`);
+  }
+
+  if (fs.existsSync(DEFAULT_EXECUTOR_CONFIG) && !force) {
+    if (yesMode) {
+      fail(`${DEFAULT_EXECUTOR_CONFIG} already exists. Re-run with --force to overwrite.`);
+    }
+    const overwrite = await askYN(`${DEFAULT_EXECUTOR_CONFIG} already exists. Overwrite?`, false);
+    if (!overwrite) {
+      process.stdout.write(`Aborted. Existing file left untouched.\n`);
+      return;
+    }
+  }
+
+  process.stdout.write(`\nScanning for CLI tools (${wantedTools.join(", ")})...\n`);
+  const detected = detectCliTools(wantedTools);
+  if (detected.length === 0) {
+    fail(`none of [${wantedTools.join(", ")}] are on PATH. Install at least one, or pass --tools with what's available.`);
+  }
+  for (const { tool, path: p } of detected) {
+    process.stdout.write(`  ✓ ${tool}  (${p})\n`);
+  }
+  for (const tool of wantedTools) {
+    if (!detected.find((d) => d.tool === tool)) process.stdout.write(`  ✗ ${tool}  (not installed)\n`);
+  }
+
+  const selected: { tool: string; path: string; name: string }[] = [];
+  for (const { tool, path: p } of detected) {
+    if (yesMode) {
+      selected.push({ tool, path: p, name: `${namePrefix}-${tool}` });
+      continue;
+    }
+    const want = await askYN(`Register ${tool}?`, true);
+    if (!want) continue;
+    const defaultName = `${namePrefix}-${tool}`;
+    const name = (await askText(`  Name for ${tool}`, defaultName)).trim();
+    if (!name) fail("name cannot be empty");
+    selected.push({ tool, path: p, name });
+  }
+
+  if (selected.length === 0) {
+    process.stdout.write(`\nNo tools selected. Nothing to do.\n`);
+    return;
+  }
+
+  const master: ParsedMaster = masterSpec
+    ? parseMasterSpec(masterSpec, 28800)
+    : yesMode
+      ? parseMasterSpec("127.0.0.1:28800", 28800)
+      : await (async () => {
+          const ip = await askText("Master IP", "127.0.0.1");
+          const portStr = await askText("Master port", "28800");
+          const port = Number(portStr);
+          if (!Number.isInteger(port) || port <= 0) fail("invalid port");
+          return { host: ip, port, url: `ws://${ip}:${port}` };
+        })();
+
+  process.stdout.write(`\nMaster: ${master.url}\n`);
+
+  // Probe master to fail fast on typos.
+  const httpBase = `http://${master.host}:${master.port}`;
+  const probe = await httpJsonNoAuth("GET", `${httpBase}/api/domains`).catch(() => null);
+  if (!probe || probe.status === 0) {
+    fail(`master ${master.url} unreachable. Start it first (e.g. \`mesh-master start --daemon\`) or check the IP.`);
+  }
+  if (probe.status >= 500) {
+    fail(`master ${master.url} returned HTTP ${probe.status}: ${JSON.stringify(probe.data)}`);
+  }
+
+  const domain = await pickDomain(master, domainFlag, yesMode);
+  process.stdout.write(`Domain: ${domain}\n`);
+
+  process.stdout.write(`\nRegistering ${selected.length} agent(s)...\n`);
+  const workers: RegisteredAgent[] = [];
+  for (const s of selected) {
+    const reg = await registerAgent(httpBase, s.name, domain, s.tool);
+    process.stdout.write(`  ✓ ${reg.name}  (${s.tool})  token=${reg.token.slice(0, 12)}…\n`);
+    workers.push(reg);
+  }
+
+  if (!fs.existsSync(ROTOM_HOME)) fs.mkdirSync(ROTOM_HOME, { recursive: true });
+  const cfg = {
+    master: master.url,
+    workers: workers.map((w) => ({
+      name: w.name,
+      token: w.token,
+      cliTool: w.cliTool,
+      profile: { category: "Agent" },
+    })),
+  };
+  fs.writeFileSync(DEFAULT_EXECUTOR_CONFIG, JSON.stringify(cfg, null, 2) + "\n");
+  process.stdout.write(`\nWrote ${DEFAULT_EXECUTOR_CONFIG} with ${workers.length} worker(s).\n`);
+  process.stdout.write(`Next: run \`pnpm executor\` (or \`rotom executor\`) to connect them.\n`);
 }
 
 main().catch((e: Error) => fail(e.message));
