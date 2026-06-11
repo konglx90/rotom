@@ -76,6 +76,7 @@ export function useGroupChatWebSocket({
               timestamp: new Date(),
               isIncoming: true,
               mentions: extractMentions(content),
+              cwd: msg.cwd,
             }]
           })
         }
@@ -94,6 +95,7 @@ export function useGroupChatWebSocket({
               content,
               timestamp: new Date(),
               isIncoming: true,
+              cwd: msg.cwd,
             }]
           })
         }
@@ -156,7 +158,7 @@ export function useGroupChatWebSocket({
           const rid = msg.requestId || ''
           const streamId = `stream_${rid}`
           streamContentRef.current.delete(rid)
-          setMessages(prev => prev.map(m => m.id === streamId ? { ...m, streaming: false } : m))
+          setMessages(prev => prev.map(m => m.id === streamId ? { ...m, streaming: false, cwd: msg.cwd ?? m.cwd } : m))
           if (curGroupId) {
             groupsApi.getMessages(curGroupId).then(historyMsgs => {
               setMessages(prev => {

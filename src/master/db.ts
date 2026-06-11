@@ -821,6 +821,7 @@ export class MeshDb {
 
   deleteGroup(id: string): void {
     this.db.prepare("DELETE FROM group_messages WHERE group_id = ?").run(id);
+    this.db.prepare("DELETE FROM group_member_settings WHERE group_id = ?").run(id);
     this.db.prepare("DELETE FROM group_members WHERE group_id = ?").run(id);
     this.db.prepare("DELETE FROM groups WHERE id = ?").run(id);
   }
@@ -873,18 +874,56 @@ export class MeshDb {
   }
 
   removeGroupMembers(groupId: string, agentNames: string[]): void {
-    const stmt = this.db.prepare(
-      "DELETE FROM group_members WHERE group_id = ? AND agent_name = ?",
-    );
-    for (const name of agentNames) {
-      stmt.run(groupId, name);
-    }
+    const tx = this.db.transaction((names: string[]) => {
+      const m = this.db.prepare("DELETE FROM group_members WHERE group_id = ? AND agent_name = ?");
+      const s = this.db.prepare("DELETE FROM group_member_settings WHERE group_id = ? AND agent_name = ?");
+      for (const name of names) {
+        m.run(groupId, name);
+        s.run(groupId, name);
+      }
+    });
+    tx(agentNames);
   }
 
-  getGroupMembers(groupId: string): { agent_name: string; joined_at: string }[] {
+  getGroupMembers(groupId: string): { agent_name: string; joined_at: string; working_dir: string | null }[] {
+    return this.db.prepare(`
+      SELECT gm.agent_name, gm.joined_at, gms.working_dir
+      FROM group_members gm
+      LEFT JOIN group_member_settings gms
+        ON gms.group_id = gm.group_id AND gms.agent_name = gm.agent_name
+      WHERE gm.group_id = ?
+      ORDER BY gm.joined_at
+    `).all(groupId) as { agent_name: string; joined_at: string; working_dir: string | null }[];
+  }
+
+  getGroupMemberSetting(groupId: string, agentName: string): string | null {
+    const row = this.db.prepare(
+      "SELECT working_dir FROM group_member_settings WHERE group_id = ? AND agent_name = ?",
+    ).get(groupId, agentName) as { working_dir: string } | undefined;
+    return row?.working_dir ?? null;
+  }
+
+  listGroupMemberSettings(groupId: string): { agent_name: string; working_dir: string; updated_at: string }[] {
     return this.db.prepare(
-      "SELECT agent_name, joined_at FROM group_members WHERE group_id = ? ORDER BY joined_at",
-    ).all(groupId) as { agent_name: string; joined_at: string }[];
+      "SELECT agent_name, working_dir, updated_at FROM group_member_settings WHERE group_id = ? ORDER BY agent_name",
+    ).all(groupId) as { agent_name: string; working_dir: string; updated_at: string }[];
+  }
+
+  upsertGroupMemberSetting(groupId: string, agentName: string, workingDir: string): void {
+    this.db.prepare(`
+      INSERT INTO group_member_settings (group_id, agent_name, working_dir, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(group_id, agent_name) DO UPDATE SET
+        working_dir = excluded.working_dir,
+        updated_at  = excluded.updated_at
+    `).run(groupId, agentName, workingDir, new Date().toISOString());
+  }
+
+  clearGroupMemberSetting(groupId: string, agentName: string): boolean {
+    const result = this.db.prepare(
+      "DELETE FROM group_member_settings WHERE group_id = ? AND agent_name = ?",
+    ).run(groupId, agentName);
+    return result.changes > 0;
   }
 
   addGroupMessage(groupId: string, sender: string, content: string, mentions: string[] = []): void {
@@ -980,6 +1019,12 @@ export class MeshDb {
     if (status === "completed" || status === "failed" || status === "cancelled") {
       this._onIssueTerminal?.(id);
     }
+  }
+
+  updateIssueWorkingDir(id: string, workingDir: string | null): void {
+    this.db.prepare(
+      "UPDATE issues SET working_dir = ?, updated_at = ? WHERE id = ?",
+    ).run(workingDir, new Date().toISOString(), id);
   }
 
   /** Atomically claim the next unassigned issue for an executor agent. */

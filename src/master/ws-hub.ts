@@ -444,7 +444,7 @@ export class WSHub {
           const conn = this.connections.get(agentId);
           const fromName = conn?.name || "unknown";
           const enrichedConversation = this.enrichConversationWithCollaboration(conversation);
-          const replyMsg = {
+          const replyMsg: Record<string, unknown> = {
             type: "a2a_message" as const,
             requestId: msg.requestId,
             from: { name: fromName, domain: conn?.domain, status: "online" as const },
@@ -452,6 +452,7 @@ export class WSHub {
             routeType: "reply" as const,
             conversation: enrichedConversation,
           };
+          if (msg.cwd) replyMsg.cwd = msg.cwd;
 
           // Persist to group history BEFORE sending (avoids race with history refresh)
           if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
@@ -461,12 +462,12 @@ export class WSHub {
           // Group replies: broadcast to all members so everyone sees it in real-time
           // DM replies: send to original sender only
           if (conversation?.type === "group" && conversation.groupId) {
-            this.broadcastToGroup(conversation.groupId, replyMsg, [agentId]);
+            this.broadcastToGroup(conversation.groupId, replyMsg as unknown as ServerMessage, [agentId]);
 
             // Track collaboration turns if there's an active collaboration in this group
             this.trackCollaborationTurn(conversation.groupId, fromName, msg.payload?.message || "");
           } else {
-            this.sendToAgent(targetId, replyMsg);
+            this.sendToAgent(targetId, replyMsg as unknown as ServerMessage);
           }
 
           // Log reply with latency
@@ -524,12 +525,13 @@ export class WSHub {
         if (targetId) {
           const conn = this.connections.get(agentId);
           const fromName = conn?.name || "unknown";
-          const endMsg = {
+          const endMsg: Record<string, unknown> = {
             type: "a2a_stream_end" as const,
             requestId: msg.requestId,
             from: { name: fromName, domain: conn?.domain, status: "online" as const },
             conversation,
           };
+          if (msg.cwd) endMsg.cwd = msg.cwd;
           // Persist to group history BEFORE sending (avoids race with history refresh)
           if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
             this.db.addGroupMessage(conversation.groupId, fromName, msg.payload?.message || "", []);
@@ -537,11 +539,11 @@ export class WSHub {
 
           // Group stream end: broadcast to all members
           if (conversation?.type === "group" && conversation.groupId) {
-            this.broadcastToGroup(conversation.groupId, endMsg, [agentId]);
+            this.broadcastToGroup(conversation.groupId, endMsg as unknown as ServerMessage, [agentId]);
             // 流式结束同样计入协作轮次贡献
             this.trackCollaborationTurn(conversation.groupId, fromName, msg.payload?.message || "");
           } else {
-            this.sendToAgent(targetId, endMsg);
+            this.sendToAgent(targetId, endMsg as unknown as ServerMessage);
           }
 
           // Log complete reply with latency
@@ -649,7 +651,7 @@ export class WSHub {
                      status === "cancelled" ? "cancelled" : "output",
           agentName: conn.name,
           content: content || "",
-          metadata,
+          metadata: msg.cwd ? { ...(metadata || {}), cwd: msg.cwd } : metadata,
         });
 
         // Notify group when issue is completed or failed

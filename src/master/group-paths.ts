@@ -31,3 +31,31 @@ export function resolveGroupArtifactRoot(db: MeshDb, groupId: string): string {
   const dir = group?.working_dir?.trim();
   return dir && path.isAbsolute(dir) ? dir : defaultGroupWorkingDir(groupId);
 }
+
+/**
+ * Resolve the working directory for a specific (group, agent) pair.
+ *
+ * Three-tier fallback:
+ *  1. per-(group, agent) override in `group_member_settings`
+ *  2. group's `working_dir` (when set to an absolute path)
+ *  3. `~/.rotom/results/<groupId>` default
+ *
+ * Used at issue-assignment time to compute the cwd that should be recorded
+ * on the issue. Executor workers continue to use their own per-group mapping
+ * (`executor.config.json.workingDirMap`); this function is the master-side
+ * authoritative resolution only.
+ */
+export function resolveGroupAgentWorkingDir(
+  db: MeshDb,
+  groupId: string,
+  agentName: string,
+): string {
+  const override = db.getGroupMemberSetting(groupId, agentName);
+  if (override) return override;
+
+  const group = db.getGroupById(groupId);
+  const dir = group?.working_dir?.trim();
+  if (dir && path.isAbsolute(dir)) return dir;
+
+  return defaultGroupWorkingDir(groupId);
+}

@@ -46,6 +46,26 @@ export const groupsApi = {
     return api.delete<{ ok: boolean }>(`/groups/${groupId}/members`, { agentNames })
   },
 
+  async setMemberWorkingDir(
+    groupId: string,
+    agentName: string,
+    workingDir: string,
+  ): Promise<{ ok: boolean; working_dir: string }> {
+    return api.put<{ ok: boolean; working_dir: string }>(
+      `/groups/${groupId}/members/${encodeURIComponent(agentName)}/working-dir`,
+      { workingDir },
+    )
+  },
+
+  async clearMemberWorkingDir(
+    groupId: string,
+    agentName: string,
+  ): Promise<{ ok: boolean; removed: boolean }> {
+    return api.delete<{ ok: boolean; removed: boolean }>(
+      `/groups/${groupId}/members/${encodeURIComponent(agentName)}/working-dir`,
+    )
+  },
+
   async getMessages(groupId: string): Promise<GroupMessage[]> {
     return api.get<GroupMessage[]>(`/groups/${groupId}/messages`)
   },

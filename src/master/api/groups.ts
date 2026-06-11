@@ -205,6 +205,42 @@ export function registerGroupRoutes(
     res.json({ ok: true });
   });
 
+  // Set or update the per-(group, agent) working_dir override.
+  // Body: { workingDir: "<absolute path>" }
+  apiRouter.put("/groups/:id/members/:agentName/working-dir", (req, res) => {
+    const group = db.getGroupById(req.params.id);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot modify settings" }); return; }
+    const agentName = String(req.params.agentName);
+    const members = db.getGroupMembers(req.params.id);
+    if (!members.some(m => m.agent_name === agentName)) {
+      res.status(404).json({ error: `Agent "${agentName}" is not a member of this group` });
+      return;
+    }
+    const v = validateWorkingDir(req.body?.workingDir);
+    if (!v.ok) { res.status(400).json({ error: v.error }); return; }
+    db.upsertGroupMemberSetting(req.params.id, agentName, v.path);
+    log.info(`Group ${req.params.id} member ${agentName} working_dir → ${v.path}`);
+    res.json({ ok: true, working_dir: v.path });
+  });
+
+  // Clear the per-(group, agent) working_dir override. Falls back to
+  // group.working_dir for resolution.
+  apiRouter.delete("/groups/:id/members/:agentName/working-dir", (req, res) => {
+    const group = db.getGroupById(req.params.id);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot modify settings" }); return; }
+    const agentName = String(req.params.agentName);
+    const members = db.getGroupMembers(req.params.id);
+    if (!members.some(m => m.agent_name === agentName)) {
+      res.status(404).json({ error: `Agent "${agentName}" is not a member of this group` });
+      return;
+    }
+    const removed = db.clearGroupMemberSetting(req.params.id, agentName);
+    log.info(`Group ${req.params.id} member ${agentName} working_dir cleared (removed=${removed})`);
+    res.json({ ok: true, removed });
+  });
+
   apiRouter.get("/groups/:id/messages", (req, res) => {
     const group = db.getGroupById(req.params.id);
     if (!group) {

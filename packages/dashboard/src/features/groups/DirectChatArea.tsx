@@ -93,6 +93,14 @@ export function DirectChatArea({
               </div>
               <div className={styles.messageTimestamp}>
                 {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
+                {msg.isIncoming && msg.cwd && (
+                  <span
+                    className={styles.messageCwd}
+                    title={`Agent 实际工作目录：${msg.cwd}`}
+                  >
+                    📁 {msg.cwd}
+                  </span>
+                )}
               </div>
             </div>
           </div>

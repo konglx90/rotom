@@ -178,6 +178,8 @@ export interface Group {
 export interface GroupMember {
   agent_name: string
   joined_at: string
+  /** Per-(group, agent) override; null = inherit from groups.working_dir. */
+  working_dir: string | null
 }
 
 export interface CreateGroupDto {

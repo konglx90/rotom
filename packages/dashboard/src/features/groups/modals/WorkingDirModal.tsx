@@ -5,9 +5,11 @@ import styles from './WorkingDirModal.module.css'
 
 interface WorkingDirModalProps {
   open: boolean
-  scope: 'group' | 'direct'
+  scope: 'group' | 'direct' | 'member'
   scopeName: string
   currentDir: string | null | undefined
+  /** When scope='member', display this in the empty-state hint. */
+  fallbackDir?: string | null
   onClose: () => void
   onSubmit: (dir: string | null) => void
 }
@@ -17,6 +19,7 @@ export function WorkingDirModal({
   scope,
   scopeName,
   currentDir,
+  fallbackDir,
   onClose,
   onSubmit,
 }: WorkingDirModalProps) {
@@ -33,10 +36,15 @@ export function WorkingDirModal({
     }
   }, [open, currentDir])
 
-  const scopeLabel = scope === 'group' ? '群' : '对话'
+  const scopeLabel = scope === 'group' ? '群' : scope === 'direct' ? '对话' : '成员'
   const trimmed = value.trim()
   const dirty = trimmed !== (currentDir || '').trim()
   const canClear = Boolean(currentDir)
+
+  const emptyHint =
+    scope === 'member' && fallbackDir
+      ? `当前未设置（将使用群工作目录：${fallbackDir}）`
+      : '当前未设置（将使用 Agent 默认目录）'
 
   const handleSave = () => {
     onSubmit(trimmed ? trimmed : null)
@@ -96,7 +104,7 @@ export function WorkingDirModal({
             className={`${styles.headerSubtitle} ${currentDir ? '' : styles.headerSubtitleEmpty}`}
             title={currentDir || undefined}
           >
-            {currentDir ? `当前：${currentDir}` : '当前未设置（将使用 Agent 默认目录）'}
+            {currentDir ? `当前：${currentDir}` : emptyHint}
           </p>
         </div>
       </div>

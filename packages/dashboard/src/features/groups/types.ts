@@ -11,6 +11,8 @@ export interface ChatMessage {
   status?: 'pending' | 'delivered' | 'queued' | 'failed'
   /** Server error when status === 'failed'. */
   statusError?: string
+  /** Cwd the sending agent was using when producing this message. */
+  cwd?: string
 }
 
 export interface ServerMessage {
@@ -30,6 +32,8 @@ export interface ServerMessage {
   kind?: 'created' | 'updated' | 'event_appended' | 'deleted'
   conversation?: { type: 'single' | 'group'; groupId?: string; groupName?: string }
   agent?: { name: string; domain?: string; status: 'online' | 'offline' }
+  /** Cwd the upstream agent reported. Filled in for a2a_message / a2a_stream_end. */
+  cwd?: string
 }
 
 export const DM_GROUP_PREFIX = '__dm__:'

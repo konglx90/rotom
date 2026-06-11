@@ -23,6 +23,7 @@ interface GroupChatAreaProps {
   onDeleteGroup: () => void
   onArchiveGroup: (archived: boolean) => void
   onReconnect: () => void
+  onUpdateMemberWorkingDir: (groupId: string, agentName: string, dir: string | null) => Promise<void> | void
 }
 
 export function GroupChatArea({
@@ -36,6 +37,7 @@ export function GroupChatArea({
   onAddMembers,
   onDeleteGroup,
   onReconnect,
+  onUpdateMemberWorkingDir,
 }: GroupChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -149,9 +151,12 @@ export function GroupChatArea({
 
       <MemberListModal
         open={showMemberList}
-        memberNames={groupMembers}
+        members={selectedGroup.members || []}
         agents={agents}
+        groupId={selectedGroup.id}
+        groupWorkingDir={selectedGroup.working_dir ?? null}
         onClose={() => setShowMemberList(false)}
+        onUpdateMemberWorkingDir={onUpdateMemberWorkingDir}
       />
 
       <ConnectionBar connectionStatus={connectionStatus} myAgentName={myAgentName} onReconnect={onReconnect} />
@@ -200,6 +205,14 @@ export function GroupChatArea({
               </div>
               <div className={styles.messageTimestamp}>
                 {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
+                {msg.isIncoming && msg.cwd && (
+                  <span
+                    className={styles.messageCwd}
+                    title={`Agent 实际工作目录：${msg.cwd}`}
+                  >
+                    📁 {msg.cwd}
+                  </span>
+                )}
                 {!msg.isIncoming && msg.status && (
                   <span
                     className={`${styles.messageStatus} ${styles[`status_${msg.status}`] || ''}`}
