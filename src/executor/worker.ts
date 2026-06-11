@@ -259,6 +259,12 @@ export class ExecutorWorker {
         token: this.config.token,
         version: 2,
         profile: this.config.profile || {},
+        instance: {
+          instanceId: `${os.hostname()}-${process.pid}-${randomUUID()}`,
+          hostname: os.hostname(),
+          platform: `${process.platform} ${process.arch}`,
+          endpoint: this.masterUrl,
+        },
       }));
     });
 

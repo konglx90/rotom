@@ -13,17 +13,14 @@ interface CreateIssueModalProps {
     title: string
     description?: string
     priority?: string
-    workingDir?: string
     assignedTo?: string
   }) => void
-  defaultWorkingDir?: string
 }
 
-export function CreateIssueModal({ open, agents, onClose, onSubmit, defaultWorkingDir }: CreateIssueModalProps) {
+export function CreateIssueModal({ open, agents, onClose, onSubmit }: CreateIssueModalProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('medium')
-  const [workingDir, setWorkingDir] = useState(defaultWorkingDir || '')
   const [assignedTo, setAssignedTo] = useState('')
   const [usePlanMode, setUsePlanMode] = useState(false)
 
@@ -39,13 +36,11 @@ export function CreateIssueModal({ open, agents, onClose, onSubmit, defaultWorki
       title: finalTitle,
       description: description.trim() || undefined,
       priority: priority !== 'medium' ? priority : undefined,
-      workingDir: workingDir.trim() || undefined,
       assignedTo: assignedTo || undefined,
     })
     setTitle('')
     setDescription('')
     setPriority('medium')
-    setWorkingDir('')
     setAssignedTo('')
     setUsePlanMode(false)
   }
@@ -92,11 +87,6 @@ export function CreateIssueModal({ open, agents, onClose, onSubmit, defaultWorki
           <option value="high">High</option>
           <option value="critical">Critical</option>
         </select>
-      </div>
-      <div className={styles.formField}>
-        <label className={styles.formLabel}>工作目录:</label>
-        <input type="text" value={workingDir} onChange={e => setWorkingDir(e.target.value)}
-          placeholder="例如: /path/to/project (留空使用默认)" className={styles.formInput} />
       </div>
       <div className={styles.formField}>
         <label className={styles.formLabel}>指派 Agent (可选):</label>

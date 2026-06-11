@@ -12,13 +12,11 @@ interface CreateIssueDialogProps {
   agents: Agent[]
   groupMembers: string[]
   myAgentName: string
-  defaultWorkingDir?: string
   onClose: () => void
   onCreateIssue: (data: {
     title: string
     description?: string
     priority?: string
-    workingDir?: string
     assignedTo?: string
   }) => void
   onCreateCollaboration: (data: {
@@ -38,7 +36,6 @@ export function CreateIssueDialog({
   agents,
   groupMembers,
   myAgentName,
-  defaultWorkingDir,
   onClose,
   onCreateIssue,
   onCreateCollaboration,
@@ -49,7 +46,6 @@ export function CreateIssueDialog({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('medium')
-  const [workingDir, setWorkingDir] = useState(defaultWorkingDir || '')
   const [assignedTo, setAssignedTo] = useState('')
   const [usePlanMode, setUsePlanMode] = useState(false)
 
@@ -82,7 +78,6 @@ export function CreateIssueDialog({
     setTitle('')
     setDescription('')
     setPriority('medium')
-    setWorkingDir('')
     setAssignedTo('')
     setUsePlanMode(false)
     setCollabGoal('')
@@ -110,7 +105,6 @@ export function CreateIssueDialog({
       title: finalTitle,
       description: description.trim() || undefined,
       priority: priority !== 'medium' ? priority : undefined,
-      workingDir: workingDir.trim() || undefined,
       assignedTo: assignedTo || undefined,
     })
     handleClose()
@@ -206,11 +200,6 @@ export function CreateIssueDialog({
               <option value="high">High</option>
               <option value="critical">Critical</option>
             </select>
-          </div>
-          <div className={styles.formField}>
-            <label className={styles.formLabel}>工作目录:</label>
-            <input type="text" value={workingDir} onChange={e => setWorkingDir(e.target.value)}
-              placeholder="例如: /path/to/project (留空使用默认)" className={styles.formInput} />
           </div>
           <div className={styles.formField}>
             <label className={styles.formLabel}>指派 Agent (可选):</label>

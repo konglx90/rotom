@@ -7,7 +7,6 @@ import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { MemberListModal } from './modals/MemberListModal'
-import { WorkingDirModal } from './modals/WorkingDirModal'
 import { ConnectionBar } from './ConnectionBar'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import styles from './ChatArea.module.css'
@@ -24,7 +23,6 @@ interface GroupChatAreaProps {
   onDeleteGroup: () => void
   onArchiveGroup: (archived: boolean) => void
   onReconnect: () => void
-  onUpdateWorkingDir: (dir: string | null) => void
 }
 
 export function GroupChatArea({
@@ -38,7 +36,6 @@ export function GroupChatArea({
   onAddMembers,
   onDeleteGroup,
   onReconnect,
-  onUpdateWorkingDir,
 }: GroupChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -49,7 +46,6 @@ export function GroupChatArea({
   const [mentionStartIndex, setMentionStartIndex] = useState(-1)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
   const [showMemberList, setShowMemberList] = useState(false)
-  const [showWorkingDirModal, setShowWorkingDirModal] = useState(false)
 
   const groupMembers = selectedGroup.members?.map(m => m.agent_name) || []
   const filteredMentionAgents = agents.filter(a =>
@@ -94,15 +90,6 @@ export function GroupChatArea({
     inputRef.current?.focus()
   }
 
-  const handleEditWorkingDir = () => {
-    setShowWorkingDirModal(true)
-  }
-
-  const handleSubmitWorkingDir = (dir: string | null) => {
-    setShowWorkingDirModal(false)
-    onUpdateWorkingDir(dir)
-  }
-
   const { handleKeyDown: handleHistoryNav } = useMessageHistoryNav({
     value: message,
     setValue: setMessage,
@@ -129,14 +116,6 @@ export function GroupChatArea({
       <div className={styles.chatHeader}>
         <div className={styles.chatHeaderLeft}>
           <h3 className={styles.chatTitle}>{selectedGroup.name}</h3>
-          <button
-            type="button"
-            onClick={handleEditWorkingDir}
-            className={styles.workingDirChip}
-            title="点击修改工作目录"
-          >
-            📁 {selectedGroup.working_dir || '(未设置)'}
-          </button>
           <div className={styles.memberAvatars}>
             {(selectedGroup.members || []).slice(0, 3).map(m => {
               const agent = agents.find(a => a.name === m.agent_name)
@@ -173,15 +152,6 @@ export function GroupChatArea({
         memberNames={groupMembers}
         agents={agents}
         onClose={() => setShowMemberList(false)}
-      />
-
-      <WorkingDirModal
-        open={showWorkingDirModal}
-        scope="group"
-        scopeName={selectedGroup.name}
-        currentDir={selectedGroup.working_dir}
-        onClose={() => setShowWorkingDirModal(false)}
-        onSubmit={handleSubmitWorkingDir}
       />
 
       <ConnectionBar connectionStatus={connectionStatus} myAgentName={myAgentName} onReconnect={onReconnect} />
@@ -230,11 +200,6 @@ export function GroupChatArea({
               </div>
               <div className={styles.messageTimestamp}>
                 {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
-                {selectedGroup.working_dir && (
-                  <span className={styles.messageCwd} title={selectedGroup.working_dir}>
-                    📁 {selectedGroup.working_dir}
-                  </span>
-                )}
                 {!msg.isIncoming && msg.status && (
                   <span
                     className={`${styles.messageStatus} ${styles[`status_${msg.status}`] || ''}`}

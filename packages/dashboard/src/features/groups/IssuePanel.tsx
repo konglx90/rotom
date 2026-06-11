@@ -15,12 +15,10 @@ interface IssuePanelProps {
   groupMembers: string[]
   myAgentName: string
   setSelectedIssueId: (id: string) => void
-  defaultWorkingDir?: string
   onCreateIssue: (data: {
     title: string
     description?: string
     priority?: string
-    workingDir?: string
     assignedTo?: string
   }) => void
   onCreateCollaboration: (data: {
@@ -41,7 +39,6 @@ export function IssuePanel({
   groupMembers,
   myAgentName,
   setSelectedIssueId,
-  defaultWorkingDir,
   onCreateIssue,
   onCreateCollaboration,
 }: IssuePanelProps) {
@@ -118,7 +115,6 @@ export function IssuePanel({
         agents={agents}
         groupMembers={groupMembers}
         myAgentName={myAgentName}
-        defaultWorkingDir={defaultWorkingDir}
         onClose={() => setShowCreateDialog(false)}
         onCreateIssue={(data) => {
           onCreateIssue(data)

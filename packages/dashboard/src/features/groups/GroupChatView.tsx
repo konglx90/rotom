@@ -31,7 +31,6 @@ export function GroupChatView() {
     directTarget,
     openConfigModal,
     loadGroups,
-    updateGroupWorkingDir,
     toggleGroupArchived,
   } = useChatContext()
   const { status: connectionStatus, send, lastIssueChange, reconnect } = useSocket()
@@ -255,7 +254,6 @@ export function GroupChatView() {
     title: string
     description?: string
     priority?: string
-    workingDir?: string
     assignedTo?: string
   }) => {
     if (!selectedGroupId) return
@@ -265,7 +263,6 @@ export function GroupChatView() {
         description: data.description,
         priority: data.priority as any,
         createdBy: myAgentName,
-        workingDir: data.workingDir,
       })
       if (data.assignedTo && result.id) {
         await issuesApi.update(result.id, { assignedTo: data.assignedTo })
@@ -317,12 +314,6 @@ export function GroupChatView() {
             }}
             onShowConfig={openConfigModal}
             onReconnect={reconnect}
-            workingDir={selectedGroup?.working_dir ?? null}
-            onUpdateWorkingDir={
-              selectedGroupId
-                ? (dir) => updateGroupWorkingDir(selectedGroupId, dir)
-                : undefined
-            }
           />
         ) : selectedGroup ? (
           <GroupChatArea
@@ -337,7 +328,6 @@ export function GroupChatView() {
             onDeleteGroup={handleDeleteGroup}
             onArchiveGroup={handleArchiveGroup}
             onReconnect={reconnect}
-            onUpdateWorkingDir={(dir) => updateGroupWorkingDir(selectedGroup.id, dir)}
           />
         ) : (
           <div className={chatStyles.emptyChat}>
@@ -380,7 +370,6 @@ export function GroupChatView() {
               groupMembers={groupMembers}
               myAgentName={myAgentName}
               setSelectedIssueId={setSelectedIssueId}
-              defaultWorkingDir={selectedGroup?.working_dir as string}
               onCreateIssue={handleCreateIssue}
               onCreateCollaboration={handleCreateCollaboration}
             />
