@@ -146,13 +146,15 @@ export class ClaudeCodeExecutor implements CliExecutor {
       // Only chat/collab tasks should be wrapped with the rotom communication
       // prefix — those are the cases where the agent's job is to send a
       // message via `rotom`. Issue tasks (the default) execute the prompt
-      // directly: wrapping them with "/rotom-a2a-communicate" makes claude
-      // treat the issue body as a "send a message" request and ask for a
-      // recipient instead of doing the actual work.
+      // directly: wrapping them with "[rotom-a2a-communicate mode]" makes
+      // claude treat the issue body as a "send a message" request and ask
+      // for a recipient instead of doing the actual work. The header uses
+      // brackets (not a leading `/`) so claude doesn't mistake the skill
+      // marker for a rotom CLI subcommand and try to execute it via Bash.
       const needsCommunicationWrapper = options?.kind === "chat" || options?.kind === "collab";
       const wrappedPrompt = needsCommunicationWrapper
         ? [
-            `/rotom-a2a-communicate`,
+            `[rotom-a2a-communicate mode]`,
             ``,
             `关键规则：`,
             `- 如果是"给某人发消息私聊" → 执行 Bash: rotom send <对方名字> "<消息内容>"`,

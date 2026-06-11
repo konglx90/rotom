@@ -11,7 +11,7 @@ const ZenModeContext = createContext<ZenModeContextValue>({
 })
 
 export function ZenModeProvider({ children }: { children: React.ReactNode }) {
-  const [zenMode, setZenMode] = useState(true)
+  const [zenMode, setZenMode] = useState(false)
   const toggleZenMode = () => setZenMode(v => !v)
 
   return (

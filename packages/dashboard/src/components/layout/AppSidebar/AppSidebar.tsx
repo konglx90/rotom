@@ -93,8 +93,8 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     directTarget,
     myAgentName,
     handleDirectChat,
-    handleNewDmConversation,
     activateDmGroup,
+    handleNewDmConversation,
     selectGroup,
     openCreateGroupModal,
     openConfigModal,
@@ -105,11 +105,17 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const [dragging, setDragging] = useState(false)
   const [navCompact, setNavCompact] = useState(() => {
     try {
-      return localStorage.getItem('rotom-nav-compact') === '1'
+      const _stored = localStorage.getItem('rotom-nav-compact');
+      if (_stored === null) {
+        localStorage.setItem('rotom-nav-compact', '1');
+        return true;
+      }
+      return _stored === '1'
     } catch {
       return false
     }
   })
+  const [dmExpanded, setDmExpanded] = useState(false)
   const startStateRef = useRef<{ x: number; w: number } | null>(null)
 
   const toggleNavCompact = () => {
@@ -290,10 +296,20 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             <div className={styles.section}>
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>一对一</h3>
+                {dmExpanded && (
+                  <button
+                    type="button"
+                    className={styles.navToggleBtn}
+                    onClick={() => setDmExpanded((v) => !v)}
+                    title="收起一对一"
+                  >
+                    ⇱
+                  </button>
+                )}
               </div>
               {onlineAgents.length === 0 ? (
                 <div className={styles.hint}>暂无在线 Agent</div>
-              ) : (
+              ) : dmExpanded ? (
                 <ul className={styles.directList}>
                   {onlineAgents.map((agent) => {
                     const conversations = getDmGroupsForTarget(agent.name)
@@ -306,7 +322,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                           }`}
                           onClick={() => handleDirectChat(agent.name)}
                         >
-                          <Avatar name={agent.name} size={32} />
+                          <Avatar name={agent.name} size={28} />
                           <div className={styles.directInfo}>
                             <div className={styles.directName}>{agent.name}</div>
                             {conversations.length > 1 && (
@@ -360,6 +376,38 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                     )
                   })}
                 </ul>
+              ) : (
+                <div className={styles.dmAvatarRow}>
+                  <div className={styles.dmAvatars}>
+                    {onlineAgents.map((agent) => {
+                      const conversations = getDmGroupsForTarget(agent.name)
+                      return (
+                        <div
+                          key={agent.id}
+                          className={`${styles.dmAvatarItem} ${
+                            directTarget === agent.name ? styles.dmAvatarActive : ''
+                          }`}
+                          onClick={() => handleDirectChat(agent.name)}
+                          title={agent.name + (conversations.length > 1 ? ` (${conversations.length} 对话)` : '')}
+                        >
+                          <Avatar name={agent.name} size={32} />
+                          <div className={styles.dmAvatarDot} />
+                          {conversations.length > 1 && (
+                            <span className={styles.dmAvatarBadge}>{conversations.length}</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.navToggleBtn}
+                    onClick={() => setDmExpanded((v) => !v)}
+                    title={dmExpanded ? '收起一对一' : '展开一对一'}
+                  >
+                    {dmExpanded ? '⇱' : '⇲'}
+                  </button>
+                </div>
               )}
             </div>
 

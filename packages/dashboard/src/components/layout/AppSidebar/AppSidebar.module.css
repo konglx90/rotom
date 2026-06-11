@@ -781,3 +781,83 @@
   opacity: 0.4;
   filter: grayscale(0.7);
 }
+
+/* ── DM Horizontal Avatar Row ───────────────────────────── */
+.dmAvatarRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 8px;
+}
+
+.dmAvatarItem {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
+}
+
+.dmAvatarItem:hover {
+  transform: scale(1.1);
+}
+
+.dmAvatarItem:active {
+  transform: scale(0.95);
+}
+
+.dmAvatarActive {
+  box-shadow: 0 0 0 2px var(--color-wise-green);
+  border-radius: 50%;
+}
+
+.dmAvatarActive img {
+  border-radius: 50%;
+}
+
+.dmAvatarDot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-wise-green);
+  border: 2px solid var(--color-canvas-elevated);
+  box-shadow: none;
+}
+
+.dmAvatarBadge {
+  position: absolute;
+  bottom: -2px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-error);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── DM section toggle button ───────────────────────────── */
+
+.dmAvatars {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
