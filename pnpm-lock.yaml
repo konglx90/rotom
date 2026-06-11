@@ -4,10 +4,16 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  a2a-gateway: 'link:'
+
 importers:
 
   .:
     dependencies:
+      a2a-gateway:
+        specifier: 'link:'
+        version: 'link:'
       express:
         specifier: ^4.21.2
         version: 4.22.1
@@ -17,13 +23,6 @@ importers:
       ws:
         specifier: ^8.18.0
         version: 8.19.0
-    optionalDependencies:
-      better-sqlite3:
-        specifier: ^11.0.0
-        version: 11.10.0
-      node-pty:
-        specifier: ^1.0.0
-        version: 1.1.0
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.12
@@ -46,6 +45,13 @@ importers:
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
+    optionalDependencies:
+      better-sqlite3:
+        specifier: ^11.0.0
+        version: 11.10.0
+      node-pty:
+        specifier: ^1.0.0
+        version: 1.1.0
 
   packages/dashboard:
     dependencies:
