@@ -13,6 +13,9 @@ export interface ChatMessage {
   statusError?: string
   /** Cwd the sending agent was using when producing this message. */
   cwd?: string
+  /** 喂给该 agent 的 prompt 分层组成(从 group_messages JOIN chat_message_prompts 读出)。
+   *  非空时气泡可点击 → 弹出 ComposedPromptModal 展示分层。 */
+  composedPrompt?: import('../../api/groups').ComposedPrompt | null
 }
 
 export interface ServerMessage {

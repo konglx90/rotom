@@ -87,7 +87,7 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
         <label className={styles.formLabel}>群类型:</label>
         <select value={groupType} onChange={e => setGroupType(e.target.value)} className={styles.formSelect}>
           <option value="">普通群</option>
-          <option value="e2ed">E2ED（端到端需求交付）</option>
+          {/* <option value="e2ed">E2ED（端到端需求交付）</option> */}
         </select>
       </div>
       <div className={styles.formField}>

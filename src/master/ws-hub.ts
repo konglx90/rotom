@@ -534,7 +534,24 @@ export class WSHub {
           if (msg.cwd) endMsg.cwd = msg.cwd;
           // Persist to group history BEFORE sending (avoids race with history refresh)
           if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
-            this.db.addGroupMessage(conversation.groupId, fromName, msg.payload?.message || "", []);
+            const msgId = this.db.addGroupMessage(conversation.groupId, fromName, msg.payload?.message || "", []);
+            // 把 worker 回传的 composedPrompt 持久化,前端点击消息可直接读出来渲染分层。
+            const cp = (msg as any).composedPrompt as
+              | { layers: { layer: string; content: string; source: string }[]; final: string; generatedAt: string; promptVersion: string }
+              | undefined;
+            if (cp && cp.layers && cp.final) {
+              try {
+                this.db.addChatMessagePrompt(
+                  msgId,
+                  JSON.stringify(cp.layers),
+                  cp.final,
+                  cp.generatedAt ?? new Date().toISOString(),
+                  cp.promptVersion ?? "unknown",
+                );
+              } catch (err: any) {
+                this.logger.warn(`[mesh] Failed to persist composedPrompt for msgId=${msgId}: ${err.message}`);
+              }
+            }
           }
 
           // Group stream end: broadcast to all members
