@@ -6,6 +6,7 @@ import fs from "node:fs";
 import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import { parseSlashCommand } from "../../shared/slash-commands.js";
+import { resolveGroupAgentWorkingDir } from "../group-paths.js";
 import { createLogger } from "../../shared/logger.js";
 
 const log = createLogger("mesh-api");
@@ -141,6 +142,20 @@ export function registerIssueRoutes(
         agentName: normalized || "system",
         content: normalized ? `Assigned to ${normalized}` : `Unassigned`,
       });
+      // Re-resolve working_dir from per-(group, agent) override → group.working_dir → default.
+      if (normalized && (issue.status === "open" || issue.status === "in_progress")) {
+        const resolved = resolveGroupAgentWorkingDir(db, issue.group_id, normalized);
+        if (resolved !== issue.working_dir) {
+          db.updateIssueWorkingDir(req.params.id, resolved);
+          db.addIssueEvent({
+            issueId: req.params.id, eventType: "working_dir_resolved",
+            agentName: "system",
+            content: `working_dir → ${resolved}`,
+            metadata: { source: "assignment", assignee: normalized },
+          });
+          log.info(`Issue ${req.params.id} working_dir re-resolved to ${resolved} for assignee ${normalized}`);
+        }
+      }
     }
     if (priority !== undefined) {
       db.updateIssuePriority(req.params.id, priority);

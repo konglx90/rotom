@@ -60,6 +60,8 @@ interface ChatContextValue {
   selectGroup: (groupId: string) => void
   createGroup: (name: string, memberNames: string[], workingDir?: string) => Promise<void>
   updateGroupWorkingDir: (groupId: string, workingDir: string | null) => Promise<void>
+  setGroupMemberWorkingDir: (groupId: string, agentName: string, workingDir: string) => Promise<void>
+  clearGroupMemberWorkingDir: (groupId: string, agentName: string) => Promise<void>
   toggleGroupPinned: (groupId: string, pinned: boolean) => Promise<void>
   toggleGroupArchived: (groupId: string, archived: boolean) => Promise<void>
 }
@@ -237,6 +239,58 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [loadGroups],
   )
 
+  // Optimistic local update of one member's per-(group, agent) working_dir
+  // override. Rolls back to the server truth on failure.
+  const setGroupMemberWorkingDir = useCallback(
+    async (groupId: string, agentName: string, workingDir: string) => {
+      const snapshot = groups
+      setGroups((prev) =>
+        prev.map((g) => {
+          if (g.id !== groupId) return g
+          const members = (g.members || []).map((m) =>
+            m.agent_name === agentName ? { ...m, working_dir: workingDir } : m,
+          )
+          return { ...g, members }
+        }),
+      )
+      try {
+        await groupsApi.setMemberWorkingDir(groupId, agentName, workingDir)
+      } catch (error) {
+        console.error('Failed to set member workingDir:', error)
+        setGroups(snapshot)
+        const msg = error instanceof Error ? error.message : String(error)
+        window.alert(`设置成员工作目录失败：${msg}`)
+        throw error
+      }
+    },
+    [groups],
+  )
+
+  const clearGroupMemberWorkingDir = useCallback(
+    async (groupId: string, agentName: string) => {
+      const snapshot = groups
+      setGroups((prev) =>
+        prev.map((g) => {
+          if (g.id !== groupId) return g
+          const members = (g.members || []).map((m) =>
+            m.agent_name === agentName ? { ...m, working_dir: null } : m,
+          )
+          return { ...g, members }
+        }),
+      )
+      try {
+        await groupsApi.clearMemberWorkingDir(groupId, agentName)
+      } catch (error) {
+        console.error('Failed to clear member workingDir:', error)
+        setGroups(snapshot)
+        const msg = error instanceof Error ? error.message : String(error)
+        window.alert(`清除成员工作目录失败：${msg}`)
+        throw error
+      }
+    },
+    [groups],
+  )
+
   // Optimistic toggle: patch local state first so the pin reordering is
   // instant; reconcile with the server response so the canonical pinned_at
   // timestamp ends up matching what the next /groups fetch returns.
@@ -366,6 +420,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     selectGroup,
     createGroup,
     updateGroupWorkingDir,
+    setGroupMemberWorkingDir,
+    clearGroupMemberWorkingDir,
     toggleGroupPinned,
     toggleGroupArchived,
   }

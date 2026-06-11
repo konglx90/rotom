@@ -167,6 +167,9 @@ export interface ClientA2AReplyMessage {
   type: "a2a_reply";
   requestId: string;
   payload: MessagePayload;
+  /** Cwd the agent actually used for this reply. Surfaced in the dashboard
+   *  chat bubble so users can see where the agent was running. */
+  cwd?: string;
 }
 
 export interface ClientA2AReplyChunkMessage {
@@ -179,6 +182,8 @@ export interface ClientA2AReplyEndMessage {
   type: "a2a_reply_end";
   requestId: string;
   payload: MessagePayload;
+  /** Cwd the agent actually used. Sent once at end-of-turn. */
+  cwd?: string;
 }
 
 export interface ClientUpdateInfoMessage {
@@ -201,6 +206,8 @@ export interface ClientIssueUpdateMessage {
   status: "in_progress" | "completed" | "failed";
   content?: string;
   metadata?: { artifacts?: string[]; [key: string]: unknown };
+  /** Cwd the agent used while executing this issue. */
+  cwd?: string;
 }
 
 /**
@@ -295,6 +302,9 @@ export interface ServerA2AMessage {
   payload: MessagePayload;
   routeType: string;
   conversation?: ConversationContext;
+  /** Cwd the sending agent was using. Filled in by master from the upstream
+   *  ClientA2AReplyMessage / ClientA2AReplyEndMessage. */
+  cwd?: string;
 }
 
 export interface ServerRouteResultMessage {
@@ -341,6 +351,8 @@ export interface ServerA2AStreamEndMessage {
   requestId: string;
   from: AgentInfo;
   conversation?: ConversationContext;
+  /** Cwd the sending agent was using. */
+  cwd?: string;
 }
 
 // --- Issue system (Master → Client) ---

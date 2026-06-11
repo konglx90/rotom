@@ -32,6 +32,8 @@ export function GroupChatView() {
     openConfigModal,
     loadGroups,
     toggleGroupArchived,
+    setGroupMemberWorkingDir,
+    clearGroupMemberWorkingDir,
   } = useChatContext()
   const { status: connectionStatus, send, lastIssueChange, reconnect } = useSocket()
 
@@ -328,6 +330,13 @@ export function GroupChatView() {
             onDeleteGroup={handleDeleteGroup}
             onArchiveGroup={handleArchiveGroup}
             onReconnect={reconnect}
+            onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
+              if (dir === null) {
+                await clearGroupMemberWorkingDir(gid, agentName)
+              } else {
+                await setGroupMemberWorkingDir(gid, agentName, dir)
+              }
+            }}
           />
         ) : (
           <div className={chatStyles.emptyChat}>

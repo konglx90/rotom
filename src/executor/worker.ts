@@ -446,21 +446,25 @@ export class ExecutorWorker {
     }
   }
 
-  private sendUpdate(issueId: string, status: string, content?: string, metadata?: Record<string, unknown>): void {
-    this.send({ type: "issue_update", issueId, status, content, metadata });
+  private sendUpdate(issueId: string, status: string, content?: string, metadata?: Record<string, unknown>, cwd?: string): void {
+    const msg: Record<string, unknown> = { type: "issue_update", issueId, status, content, metadata };
+    if (cwd) msg.cwd = cwd;
+    this.send(msg);
   }
 
   private sendChatChunk(requestId: string, delta: string): void {
     this.send({ type: "a2a_reply_chunk", requestId, delta });
   }
 
-  private sendChatEnd(requestId: string, fullContent: string, conversation: any): void {
-    this.send({
+  private sendChatEnd(requestId: string, fullContent: string, conversation: any, cwd?: string): void {
+    const msg: Record<string, unknown> = {
       type: "a2a_reply_end",
       requestId,
       payload: { message: fullContent },
       conversation,
-    });
+    };
+    if (cwd) msg.cwd = cwd;
+    this.send(msg);
   }
 
   // ── Issue claiming ────────────────────────────────────────────────────
@@ -536,7 +540,7 @@ export class ExecutorWorker {
     this.activeTasks.set(issueId, task);
 
     const cliName = this.config.cliTool || "cli";
-    this.sendUpdate(issueId, "in_progress", `${resumeSessionId ? "Resuming" : "Starting"} with ${cliName}...`);
+    this.sendUpdate(issueId, "in_progress", `${resumeSessionId ? "Resuming" : "Starting"} with ${cliName}...`, undefined, cwd);
 
     // 本轮结束后用于喂给 append 续跑的 sessionId — 优先用本轮新产出的,
     // fall back 到入参 resumeSessionId(本轮没拿到新 session 时,比如 codex 早退)。
@@ -576,7 +580,7 @@ export class ExecutorWorker {
     try {
       const result = await this.executor.execute(prompt, cwd, (chunk) => {
         if (task.aborted) return;
-        this.sendUpdate(issueId, "in_progress", chunk);
+        this.sendUpdate(issueId, "in_progress", chunk, undefined, cwd);
       }, {
         signal: controller.signal,
         env: this.agentEnv(),
@@ -588,7 +592,7 @@ export class ExecutorWorker {
       });
 
       if (task.aborted) {
-        this.sendUpdate(issueId, "cancelled", "Execution cancelled by user");
+        this.sendUpdate(issueId, "cancelled", "Execution cancelled by user", undefined, cwd);
         return;
       }
 
@@ -610,17 +614,17 @@ export class ExecutorWorker {
       if (result.sessionId) lastSessionId = result.sessionId;
 
       if (result.exitCode === 0) {
-        this.sendUpdate(issueId, "completed", result.fullOutput, sessionMeta);
+        this.sendUpdate(issueId, "completed", result.fullOutput, sessionMeta, cwd);
         console.log(`${this.tag} Issue done: ${issueId} (exit=0, session=${result.sessionId ?? "none"})`);
       } else {
-        this.sendUpdate(issueId, "failed", `Exit ${result.exitCode}\n${result.fullOutput}`, sessionMeta);
+        this.sendUpdate(issueId, "failed", `Exit ${result.exitCode}\n${result.fullOutput}`, sessionMeta, cwd);
         console.log(`${this.tag} Issue failed: ${issueId} (exit=${result.exitCode})`);
       }
     } catch (err: any) {
       if (task.aborted) {
-        this.sendUpdate(issueId, "cancelled", "Execution cancelled by user");
+        this.sendUpdate(issueId, "cancelled", "Execution cancelled by user", undefined, cwd);
       } else {
-        this.sendUpdate(issueId, "failed", err.message);
+        this.sendUpdate(issueId, "failed", err.message, undefined, cwd);
         console.error(`${this.tag} Issue error: ${issueId}`, err.message);
       }
     } finally {
@@ -655,7 +659,7 @@ export class ExecutorWorker {
     if (this.activeTasks.has(taskKey)) return;
 
     if (this.activeTasks.size >= this.maxConcurrent) {
-      this.sendChatEnd(requestId, `[系统] 当前任务繁忙，请稍后再试`, conversation);
+      this.sendChatEnd(requestId, `[系统] 当前任务繁忙，请稍后再试`, conversation, this.resolveIssueCwd(conversation?.id ?? conversation?.groupId));
       return;
     }
 
@@ -670,7 +674,7 @@ export class ExecutorWorker {
 
     if (!prompt) {
       this.activeTasks.delete(taskKey);
-      this.sendChatEnd(requestId, "你好，有什么可以帮你的？", conversation);
+      this.sendChatEnd(requestId, "你好，有什么可以帮你的？", conversation, this.resolveIssueCwd(conversation?.id ?? conversation?.groupId));
       return;
     }
 
@@ -720,12 +724,12 @@ export class ExecutorWorker {
       }
 
       if (!task.aborted) {
-        this.sendChatEnd(requestId, fullContent, conversation);
+        this.sendChatEnd(requestId, fullContent, conversation, cwd);
         console.log(`${this.tag} Reply sent to ${fromName} (${fullContent.length} chars)`);
       }
     } catch (err: any) {
       if (!task.aborted) {
-        this.sendChatEnd(requestId, `[错误] ${err.message}`, conversation);
+        this.sendChatEnd(requestId, `[错误] ${err.message}`, conversation, cwd);
         console.error(`${this.tag} Reply error:`, err.message);
       }
     } finally {

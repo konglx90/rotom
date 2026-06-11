@@ -181,6 +181,18 @@
   opacity: 0.75;
 }
 
+.messageCwd {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--color-slate);
+  opacity: 0.7;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 .messageStatus.status_pending {
   color: var(--color-gray);
 }
