@@ -900,17 +900,33 @@ async function cmdInit(_rest: string[], flags: Record<string, string | boolean>)
   }
 
   if (!fs.existsSync(ROTOM_HOME)) fs.mkdirSync(ROTOM_HOME, { recursive: true });
+
+  // 询问 workingDir(base 路径),用于 per-group cwd 派生
+  // 默认 ~/.rotom/results —— 与 e2ed pipeline 的 defaultGroupWorkingDir 一致
+  const defaultBase = path.join(ROTOM_HOME, "results");
+  const workingDir = yesMode
+    ? defaultBase
+    : (await askText("Working dir base (per-group cwd will be <base>/<groupId>)", defaultBase)).trim();
+  if (!workingDir) fail("workingDir cannot be empty");
+  if (!path.isAbsolute(workingDir)) {
+    if (yesMode) fail(`workingDir must be an absolute path, got: ${workingDir}`);
+    const expand = await askYN(`workingDir "${workingDir}" is not absolute. Use as-is?`, false);
+    if (!expand) fail("aborted: workingDir must be absolute");
+  }
+
   const cfg = {
     master: master.url,
     workers: workers.map((w) => ({
       name: w.name,
       token: w.token,
       cliTool: w.cliTool,
+      workingDir,
       profile: { category: "Agent" },
     })),
   };
   fs.writeFileSync(DEFAULT_EXECUTOR_CONFIG, JSON.stringify(cfg, null, 2) + "\n");
   process.stdout.write(`\nWrote ${DEFAULT_EXECUTOR_CONFIG} with ${workers.length} worker(s).\n`);
+  process.stdout.write(`  base workingDir: ${workingDir} (per-group: <base>/<groupId>)\n`);
   process.stdout.write(`Next: run \`pnpm executor\` (or \`rotom executor\`) to connect them.\n`);
 }
 
