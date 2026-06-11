@@ -54,12 +54,5 @@
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "esbuild",
-      "node-pty"
-    ]
-  },
   "repository": "git@code.alipay.com:cattery/open-a2a-gateway.git"
 }
