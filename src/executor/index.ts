@@ -181,9 +181,11 @@ const workerInstances: ExecutorWorker[] = [];
 for (const w of workers) {
   const cliTool = w.cliTool || fallbackCli;
   const executor = createExecutor(cliTool);
-  const worker = new ExecutorWorker(w, executor, master, cliTool);
+  // 第 5 个参数 rotomHome:SessionStore 文件落点,与 per-group cwd 派生路径解耦
+  const worker = new ExecutorWorker(w, executor, master, cliTool, ROTOM_HOME);
   workerInstances.push(worker);
-  console.log(`[executor] worker "${w.name}" cwd: ${w.workingDir} (read-only)`);
+  const mapCount = w.workingDirMap ? Object.keys(w.workingDirMap).length : 0;
+  console.log(`[executor] worker "${w.name}" base cwd: ${w.workingDir} (per-group: <base>/<groupId>${mapCount > 0 ? `, ${mapCount} explicit override(s)` : ""})`);
 }
 
 console.log(`[executor] Starting ${workerInstances.length} worker(s) (fallback cli: ${fallbackCli})`);
