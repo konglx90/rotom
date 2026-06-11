@@ -113,7 +113,12 @@ export interface WorkerConfig {
     responsibilities?: string;
     tech_stack?: string;
   };
-  /** 工作目录 (default: ~/.rotom) */
+  /**
+   * 工作目录 —— 必填,本机可读。Agent 在该目录下**只读**访问:
+   * Read / Grep / Glob / Bash(只读命令)允许,Write / Edit 等写盘工具禁止。
+   * 跨机器部署时,该路径必须存在于 executor 所在机器的本地 FS(无需与 master 共享)。
+   * index.ts 启动时校验存在性与可读性,缺失或不合法会 fail-fast。
+   */
   workingDir?: string;
   /** 最大并发任务数 (default: 2) */
   maxConcurrent?: number;
@@ -154,13 +159,18 @@ export class ExecutorWorker {
     cliTool: string,
   ) {
     this.tag = `[executor:${config.name}]`;
+    // workingDir 是 agent 唯一的工作目录,完全本机解析,与 master 无关。
+    // index.ts 启动时已校验存在 / 可读;此处仅做兜底默认值。
+    if (!config.workingDir) {
+      console.warn(`${this.tag} WARN: no workingDir configured, falling back to ~/.rotom (likely not a project dir, agent may have nothing to read)`);
+    }
     this.workingDir = config.workingDir || path.join(os.homedir(), ".rotom");
     this.maxConcurrent = config.maxConcurrent ?? 2;
     this.cliTool = cliTool;
     this.sessionStore = new SessionStore(this.workingDir);
 
-    fs.mkdirSync(this.workingDir, { recursive: true });
-    fs.mkdirSync(path.join(this.workingDir, "results"), { recursive: true });
+    // 不再 mkdirSync this.workingDir —— 启动时已校验存在,只读语义下不应
+    // 自动创建用户未声明的目录;results/ 子目录也不再需要(artifact 走 WS 上传)。
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -239,9 +249,11 @@ export class ExecutorWorker {
 
     // Issue assignment
     if (msg.type === "issue_assigned") {
-      const { issueId, title, description, workingDir: issueWorkDir, slashCommand, approvalPolicy } = msg as any;
+      const { issueId, title, description, slashCommand, approvalPolicy } = msg as any;
       console.log(`${this.tag} Issue assigned: "${title}" (${issueId})${slashCommand ? ` [${slashCommand}]` : ""}${approvalPolicy ? ` [${approvalPolicy}]` : ""}`);
-      this.executeIssue(issueId, title, description || "", issueWorkDir || this.workingDir, slashCommand, approvalPolicy);
+      // cwd 始终使用 executor 本地 workingDir,忽略 master WS 推送的 workingDir
+      // (跨机器部署时 master 路径在 executor 机器上不存在)
+      this.executeIssue(issueId, title, description || "", this.workingDir, slashCommand, approvalPolicy);
     }
 
     if (msg.type === "issue_created") {
@@ -275,12 +287,12 @@ export class ExecutorWorker {
       const issueId = (msg as any).issueId as string | undefined;
       const prompt = (msg as any).prompt as string | undefined;
       const sessionId = (msg as any).sessionId as string | undefined;
-      const workingDir = (msg as any).workingDir as string | undefined;
       const slashCommand = (msg as any).slashCommand as string | undefined;
       const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
       if (!issueId || !prompt) return;
       console.log(`${this.tag} Issue continue: ${issueId} (session=${sessionId ?? "(none)"}${slashCommand ? `, slash=${slashCommand}` : ""}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
-      this.runIssueExecution(issueId, prompt, workingDir || this.workingDir, sessionId, slashCommand, approvalPolicy);
+      // cwd 始终使用 executor 本地 workingDir,忽略 master WS 推送的 workingDir
+      this.runIssueExecution(issueId, prompt, this.workingDir, sessionId, slashCommand, approvalPolicy);
     }
 
     // Issue append — user typed a follow-up while the issue is still active.
@@ -292,7 +304,6 @@ export class ExecutorWorker {
       const issueId = (msg as any).issueId as string | undefined;
       const prompt = (msg as any).prompt as string | undefined;
       const sessionId = (msg as any).sessionId as string | undefined;
-      const workingDir = (msg as any).workingDir as string | undefined;
       const slashCommand = (msg as any).slashCommand as string | undefined;
       const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
       if (!issueId || !prompt) return;
@@ -303,7 +314,8 @@ export class ExecutorWorker {
         console.log(`${this.tag} Issue append queued: ${issueId} (queue=${queue.length})`);
       } else {
         console.log(`${this.tag} Issue append (idle, run now): ${issueId} (session=${sessionId ?? "(none)"}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
-        this.runIssueExecution(issueId, prompt, workingDir || this.workingDir, sessionId, slashCommand, approvalPolicy);
+        // cwd 始终使用 executor 本地 workingDir,忽略 master WS 推送的 workingDir
+        this.runIssueExecution(issueId, prompt, this.workingDir, sessionId, slashCommand, approvalPolicy);
       }
     }
 
@@ -346,9 +358,10 @@ export class ExecutorWorker {
 
     // Collaboration started notification
     if (msg.type === "collaboration_started") {
-      const { issueId, title, collaborationGoal, participants, maxRounds, round, groupId, workingDir } = msg as any;
+      const { issueId, title, collaborationGoal, participants, maxRounds, round, groupId } = msg as any;
       console.log(`${this.tag} Collaboration started: "${title}" round=${round}/${maxRounds}`);
-      this.handleCollaborationStarted(issueId, title, collaborationGoal, participants, round, maxRounds, groupId, workingDir);
+      // cwd 始终使用 executor 本地 workingDir,忽略 master WS 推送的 workingDir
+      this.handleCollaborationStarted(issueId, title, collaborationGoal, participants, round, maxRounds, groupId);
     }
 
     // Collaboration concluded notification
@@ -412,11 +425,13 @@ export class ExecutorWorker {
         const issue = await resp.json() as Record<string, unknown> | null;
         if (issue && typeof issue.id === "string") {
           console.log(`${this.tag} Claimed: "${issue.title}" (${issue.id})`);
+          // cwd 始终使用 executor 本地 workingDir,忽略 issue row 里的 working_dir
+          // (跨机器部署时该路径是 master 端绝对路径,在 executor 机器上不存在)
           this.executeIssue(
             issue.id as string,
             issue.title as string,
             (issue.description as string) || "",
-            (issue.working_dir as string) || this.workingDir,
+            this.workingDir,
           );
         }
       } else {
@@ -604,10 +619,9 @@ export class ExecutorWorker {
     const groupId: string = conversation?.id ?? conversation?.groupId ?? "";
     const sessionId = groupId ? this.sessionStore.get(this.cliTool, groupId) : undefined;
 
-    const cwd = (conversation && typeof conversation === "object" && typeof (conversation as any).workingDir === "string" && (conversation as any).workingDir)
-      ? (conversation as any).workingDir as string
-      : this.workingDir;
-    prompt = prependWorkingDir(prompt, cwd);
+    // cwd 始终使用 executor 本地 workingDir,忽略 conversation.workingDir
+    // (跨机器部署时该路径是 master 端绝对路径,在 executor 机器上不存在)
+    prompt = prependWorkingDir(prompt, this.workingDir);
 
     console.log(`${this.tag} Session lookup: cliTool=${this.cliTool}, groupId=${groupId}, sessionId=${sessionId ?? "(none)"}, conversation=${JSON.stringify(conversation)}`);
     console.log(`${this.tag} Replying to ${fromName}: ${prompt.slice(0, 60)}...`);
@@ -627,7 +641,8 @@ export class ExecutorWorker {
       // tells the agent so — see injectGroupContext active_issues block).
       const execOptions: Parameters<typeof this.executor.execute>[3] = { signal: controller.signal, env: this.agentEnv(), kind: "chat" };
       if (sessionId) execOptions.sessionId = sessionId;
-      const result = await this.executor.execute(prompt, cwd, (chunk) => {
+      // cwd 始终使用 executor 本地 workingDir
+      const result = await this.executor.execute(prompt, this.workingDir, (chunk) => {
         if (task.aborted) return;
         fullContent += chunk;
         this.sendChatChunk(requestId, chunk);
@@ -665,7 +680,6 @@ export class ExecutorWorker {
   private async handleCollaborationStarted(
     issueId: string, title: string, collaborationGoal: string,
     participants: string[], round: number, maxRounds: number, groupId: string,
-    workingDir?: string,
   ): Promise<void> {
     const taskKey = `collab-${issueId}`;
     if (this.activeTasks.has(taskKey)) return;
@@ -695,9 +709,9 @@ export class ExecutorWorker {
 
       const collabExecOptions: Parameters<typeof this.executor.execute>[3] = { signal: controller.signal, env: this.agentEnv(), kind: "collab" };
       if (sessionId) collabExecOptions.sessionId = sessionId;
-      const cwd = workingDir || this.workingDir;
-      const prompt = prependWorkingDir(basePrompt, cwd);
-      const result = await this.executor.execute(prompt, cwd, (_chunk) => {
+      // cwd 始终使用 executor 本地 workingDir
+      const prompt = prependWorkingDir(basePrompt, this.workingDir);
+      const result = await this.executor.execute(prompt, this.workingDir, (_chunk) => {
         if (task.aborted) return;
         // Stream chunks — the agent's tools handle communication
       }, collabExecOptions);
