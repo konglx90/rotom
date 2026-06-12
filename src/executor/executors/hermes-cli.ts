@@ -259,6 +259,13 @@ export class HermesCliExecutor implements CliExecutor {
         }
       }
 
+      // hermes 给的 `title` 通常是 `terminal: $ rotom ...`,直接塞进
+      // [tool:exec] 会被前端 ToolCallBlock 渲染成 `$ $ rotom ...`(block
+      // 本身就前置一个 `$` 提示符)。这里把开头的 `$` 去掉,让渲染干净。
+      function stripLeadingDollarPrompt(s: string): string {
+        return s.replace(/^\$\s*/, "");
+      }
+
       function toolNameFromTitle(title: string, kind: string): string {
         if (title === "execute code") return "execute_code";
         const idx = title.indexOf(":");
@@ -357,10 +364,10 @@ export class HermesCliExecutor implements CliExecutor {
             const toolName = toolNameFromTitle(title ?? "", kind ?? "");
             if (rawInput && Object.keys(rawInput).length > 0) {
               pendingTools.set(toolCallId, { toolName, input: rawInput, argsText: "", emitted: true });
-              onOutput(`[tool] ${toolName}: ${JSON.stringify(rawInput)}\n`);
+              onOutput(`[tool:exec]${stripLeadingDollarPrompt(JSON.stringify(rawInput))}[/tool:exec]\n`);
             } else if (contentArgs) {
               pendingTools.set(toolCallId, { toolName, argsText: contentArgs, emitted: true });
-              onOutput(`[tool] ${toolName}: ${contentArgs}\n`);
+              onOutput(`[tool:exec]${stripLeadingDollarPrompt(contentArgs)}[/tool:exec]\n`);
             } else {
               pendingTools.set(toolCallId, { toolName, argsText: "", emitted: false });
             }
@@ -399,11 +406,11 @@ export class HermesCliExecutor implements CliExecutor {
               else if (pt?.argsText) argsRepr = pt.argsText;
               else if (rawInput) argsRepr = JSON.stringify(rawInput);
               else argsRepr = extractArgsFromContent(u) ?? "(no args)";
-              onOutput(`[tool] ${toolName}: ${argsRepr}\n`);
+              onOutput(`[tool:exec]${stripLeadingDollarPrompt(argsRepr)}[/tool:exec]\n`);
             }
 
             if (output) {
-              onOutput(`[tool-result] ${output.slice(0, 500)}${output.length > 500 ? "..." : ""}\n`);
+              onOutput(`[tool-result:exec]${output.slice(0, 500)}${output.length > 500 ? "..." : ""}[/tool-result:exec]\n`);
             }
             break;
           }

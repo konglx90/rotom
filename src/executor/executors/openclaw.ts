@@ -116,14 +116,14 @@ export class OpenclawExecutor implements CliExecutor {
             }
             return true;
           case "tool_use":
-            onOutput(`[tool] ${event.tool}: ${JSON.stringify(event.input ?? {})}\n`);
+            onOutput(`[tool:exec]${JSON.stringify(event.input ?? {})}[/tool:exec]\n`);
             return true;
           case "tool_result":
             if (event.text) {
               const truncated = event.text.length > 500
                 ? `${event.text.slice(0, 500)}...`
                 : event.text;
-              onOutput(`[tool-result] ${truncated}\n`);
+              onOutput(`[tool-result:exec]${truncated}[/tool-result:exec]\n`);
             }
             return true;
           case "error": {
