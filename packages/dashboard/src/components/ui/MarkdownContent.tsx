@@ -6,6 +6,7 @@ import {
   memo,
   useMemo,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type ReactElement,
   type ReactNode,
 } from 'react'
@@ -23,6 +24,13 @@ interface Props {
 }
 
 const MENTION_RE = /@([\w一-鿿][\w.一-鿿-]*)/g
+
+// MarkdownContent 经常被放进一个 onClick 触发弹窗的气泡里(<details>/<summary>
+// 默认会让 click 冒泡上去,导致展开思考/工具调用时也弹出 prompt 弹窗)。
+// 这里在交互元素上拦掉冒泡,让外层只在「点空白」时才触发。
+function stopBubble(e: ReactMouseEvent) {
+  e.stopPropagation()
+}
 
 function highlightMentionsInText(
   text: string,
@@ -279,8 +287,13 @@ export const MarkdownContent = memo(function MarkdownContent({
 function ThinkingBlock({ content }: { content: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <details className={styles.thinkingBlock} open={open} onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary className={styles.thinkingSummary}>💭 思考</summary>
+    <details
+      className={styles.thinkingBlock}
+      open={open}
+      onClick={stopBubble}
+      onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
+    >
+      <summary className={styles.thinkingSummary} onClick={stopBubble}>💭 思考</summary>
       {open && <div className={styles.thinkingContent}>{content}</div>}
     </details>
   )
@@ -306,9 +319,10 @@ function ToolCallBlock({
     <details
       className={styles.toolBlock}
       open={open}
+      onClick={stopBubble}
       onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
     >
-      <summary className={styles.toolSummary}>
+      <summary className={styles.toolSummary} onClick={stopBubble}>
         <span className={styles.toolPrompt}>$</span>
         <span className={styles.toolCommand}>{command.trim() || '(empty command)'}</span>
         {hint && <span className={styles.toolHint}>{hint}</span>}
@@ -349,9 +363,10 @@ function PatchBlock({ content }: { content: string }) {
     <details
       className={styles.toolBlock}
       open={open}
+      onClick={stopBubble}
       onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
     >
-      <summary className={styles.toolSummary}>
+      <summary className={styles.toolSummary} onClick={stopBubble}>
         <span className={styles.patchPill}>📝 apply patch</span>
         {displayPath && <span className={styles.toolCommand}>{displayPath}</span>}
         <span className={styles.toolHint}>
@@ -427,9 +442,10 @@ function AskBlock({
     <details
       className={styles.toolBlock}
       open={open}
+      onClick={stopBubble}
       onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
     >
-      <summary className={styles.toolSummary}>
+      <summary className={styles.toolSummary} onClick={stopBubble}>
         <span className={styles.askPill}>❓ ask</span>
         <span className={styles.toolCommand}>{firstQ}{more}</span>
         <span className={styles.toolHint}>{hint}</span>
