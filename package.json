@@ -1,8 +1,8 @@
 {
-  "name": "a2a-gateway",
-  "version": "2.0.34",
+  "name": "@alipay/rotom",
+  "version": "2.1.2",
   "type": "module",
-  "description": "Digital Employee Mesh — Enterprise agent collaboration network",
+  "description": "Digital Employee Mesh — Enterprise agent collaboration network (rotom CLI)",
   "bin": {
     "mesh-master": "./dist/master/server.js",
     "rotom": "./bin/rotom"
@@ -29,7 +29,6 @@
     "postinstall": "node scripts/fix-node-pty-perms.mjs"
   },
   "dependencies": {
-    "a2a-gateway": "link:",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "ws": "^8.18.0"
@@ -40,6 +39,9 @@
     "dist/executor",
     "dist/cli",
     "dist/shared",
+    "dist/e2ed",
+    "migrations",
+    "scripts",
     "skill"
   ],
   "optionalDependencies": {
@@ -54,6 +56,10 @@
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "publishConfig": {
+    "registry": "https://registry.antgroup-inc.cn",
+    "access": "public"
   },
   "repository": "git@code.alipay.com:cattery/open-a2a-gateway.git"
 }

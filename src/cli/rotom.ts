@@ -23,7 +23,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { execSync, spawn } from "node:child_process";
 import * as readline from "node:readline";
 import { cmdE2ed } from "./e2ed.js";
 
@@ -44,7 +45,8 @@ function ensureRotomSkillMd(): void {
   try {
     // 解析仓库根:本文件位于 src/cli/rotom.ts (开发) 或 dist/cli/rotom.js (打包),
     // 仓库根 = __dirname/../..(开发时是 src/cli/..=repo, 打包后是 dist/cli/..=repo)
-    const here = typeof __dirname !== "undefined" ? __dirname : process.cwd();
+    // ESM 没有 __dirname —— 用 import.meta.url 反推。
+    const here = path.dirname(fileURLToPath(import.meta.url));
     const skillSrc = path.join(here, "..", "..", "skill", "rotom-a2a-communicate", "SKILL.md");
     if (!fs.existsSync(skillSrc)) {
       // 仓库内没找到 SKILL.md(可能是 npm 全局安装但 files 配置漏了 skill/),跳过
@@ -94,6 +96,30 @@ function expandHome(p: string): string {
   if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
   if (p === "~") return os.homedir();
   return p;
+}
+
+/**
+ * 安装/仓库根。两种情形都解析到同一个根:
+ *   - 编译产物: import.meta.url = file://.../dist/cli/rotom.js → dirname → <root>/dist/cli
+ *   - tsx 开发: import.meta.url = file://.../src/cli/rotom.ts   → dirname → <root>/src/cli
+ *   - resolve(here, "..", "..") 始终等于 <root>。
+ * Master / executor 子命令靠这个根找 bin/mesh-master.sh 与 dist/executor/index.js。
+ */
+function installRoot(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  return path.resolve(here, "..", "..");
+}
+
+function runShellScript(scriptRel: string, args: string[]): Promise<number> {
+  const scriptPath = path.join(installRoot(), scriptRel);
+  if (!fs.existsSync(scriptPath)) {
+    fail(`shell script not found: ${scriptPath}`);
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn("bash", [scriptPath, ...args], { stdio: "inherit" });
+    child.on("error", (err) => reject(err));
+    child.on("exit", (code) => resolve(code ?? 1));
+  });
 }
 
 function loadRotomConfig(): RotomConfig {
@@ -394,6 +420,11 @@ E2ED (End-to-End Delivery):
   e2ed metrics <groupId>                               show metrics
   e2ed timeline <groupId>                              show event timeline
 
+Process lifecycle (local daemon control — do not require an agent):
+  master <start|stop|restart|status> [--daemon] [--port N] [--host A] [--data D] [--dev]
+  master:start | master:stop | master:status | master:restart   (alias)
+  executor [--config <path>]      start executor workers (reads ~/.rotom/executor.config.json by default)
+
 Global flags:
   --pretty   format output for humans (tables / indented JSON)
 `;
@@ -418,6 +449,16 @@ async function main(): Promise<void> {
   if (cmd === "config") return cmdConfig(rest, flags);
   if (cmd === "e2ed")   return cmdE2ed(rest, flags);
   if (cmd === "init")   return cmdInit(rest, flags);
+
+  // Master / executor lifecycle — also do not require an agent.
+  // Support both space form (master start) and colon alias (master:start).
+  if (cmd === "master" || cmd === "master:start" || cmd === "master:stop" ||
+      cmd === "master:status" || cmd === "master:restart") {
+    return cmdMaster(colonExpand(cmd, rest), flags);
+  }
+  if (cmd === "executor") {
+    return cmdExecutor(rest, flags);
+  }
 
   const agent = resolveAgent(asFlag);
 
@@ -660,6 +701,100 @@ async function cmdCollab(agent: ResolvedAgent, rest: string[], flags: Record<str
     return;
   }
   fail(`unknown collab subcommand: ${sub || "(none)"}`);
+}
+
+// ── master / executor lifecycle ───────────────────────────────────────────
+//
+// `rotom master {start|stop|restart|status}` 和 `rotom executor` 调度的是本机进程，
+// 不需要 master token —— 跟 `rotom config` / `rotom e2ed` / `rotom init` 一类。
+// Master 走 bin/mesh-master.sh(它处理 PID / 日志 / 端口探测 / launchctl + systemd)；
+// executor 走 dist/executor/index.js(发布包)或 src/executor/index.ts(开发) + tsx。
+
+/**
+ * 接受 `master:start` 这种冒号 alias,把它展开成 [`master`, `start`, ...rest]。
+ * 空格形式 (`master start`) 已经在 main() 里用 `cmd === "master"` 命中,这里只处理冒号。
+ */
+function colonExpand(cmd: string, rest: string[]): string[] {
+  const colon = cmd.indexOf(":");
+  if (colon === -1) return rest;
+  return [cmd.slice(colon + 1), ...rest];
+}
+
+async function cmdMaster(rest: string[], flags: Record<string, string | boolean>): Promise<void> {
+  const sub = rest[0];
+  const args: string[] = [];
+  switch (sub) {
+    case "start":
+    case "stop":
+    case "status":
+    case "restart":
+      args.push(sub); break;
+    default:
+      fail(
+        `usage: rotom master <start|stop|status|restart> [--daemon] [--port N] [--host A] [--data D] [--dev]\n` +
+        `       (also accepts colon form: rotom master:start | master:stop | master:status | master:restart)`,
+      );
+  }
+  if (flags.daemon === true && (sub === "start" || sub === "restart")) args.push("--daemon");
+  if (flags.dev === true && sub === "start") args.push("--dev");
+  const port = flagStr(flags, "port");   if (port && sub === "start") args.push("--port", port);
+  const host = flagStr(flags, "host");   if (host && sub === "start") args.push("--host", host);
+  const data = flagStr(flags, "data");   if (data && sub === "start") args.push("--data", data);
+  let code: number;
+  try { code = await runShellScript("bin/mesh-master.sh", args); }
+  catch (e) { fail(`failed to invoke bin/mesh-master.sh: ${(e as Error).message}`); }
+  // mesh-master.sh status 在未运行时 exit 1,这种情况 rotom 也透传 exit code(让
+  // shell 脚本能链 && / || 判断)。其它子命令的 exit code 同样透传。
+  process.exit(code);
+}
+
+async function cmdExecutor(rest: string[], flags: Record<string, string | boolean>): Promise<void> {
+  const root = installRoot();
+  const distJs = path.join(root, "dist", "executor", "index.js");
+  const srcTs  = path.join(root, "src", "executor", "index.ts");
+
+  // 透传 --config / 额外参数(留给以后扩展)。executor 自己的 argv parser 只识别
+  // --config,所以这里加白名单更安全。
+  const fwd: string[] = [];
+  const cfg = flagStr(flags, "config");
+  if (cfg) fwd.push("--config", cfg);
+  // 透传 rotom 还没识别的尾部位置参数(防御性:目前 rest 由 main() 截断成空,留口子)
+  for (const a of rest) fwd.push(a);
+
+  let useTsx = false;
+  let entry: string;
+  if (fs.existsSync(distJs)) {
+    entry = distJs;
+  } else if (fs.existsSync(srcTs)) {
+    const tsxBin = path.join(root, "node_modules", ".bin", "tsx");
+    if (!fs.existsSync(tsxBin)) {
+      fail(`tsx not found at ${tsxBin} — required for dev mode. Run \`pnpm install\` first.`);
+    }
+    entry = tsxBin;
+    useTsx = true;
+  } else {
+    fail(`cannot find executor entry: tried ${distJs} and ${srcTs}`);
+  }
+
+  const cmdline = useTsx
+    ? [entry, srcTs, ...fwd]
+    : [entry, ...fwd];
+  const bin = useTsx ? entry : process.execPath;
+
+  await new Promise<void>((resolve) => {
+    const child = spawn(bin, cmdline, { stdio: "inherit" });
+    const forward = (sig: NodeJS.Signals) => { try { child.kill(sig); } catch { /* already gone */ } };
+    process.on("SIGINT",  () => forward("SIGINT"));
+    process.on("SIGTERM", () => forward("SIGTERM"));
+    child.on("exit", (code, signal) => {
+      if (code !== null && code !== undefined) { process.exit(code); return; }
+      // 被信号杀 → 按 128+sigNum 退出(常见 shell 期望)
+      const sigNum = signal ? os.constants.signals[signal] : 0;
+      process.exit(typeof sigNum === "number" && sigNum > 0 ? 128 + sigNum : 1);
+      resolve();
+    });
+    child.on("error", (err) => fail(`failed to spawn executor: ${err.message}`));
+  });
 }
 
 // ── init ──────────────────────────────────────────────────────────────────
