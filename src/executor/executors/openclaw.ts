@@ -24,6 +24,7 @@
 
 import { spawn } from "node:child_process";
 import type { CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
+import { emitStatus } from "../reasoning-status.js";
 
 interface OpenclawEvent {
   type?: string;
@@ -113,10 +114,12 @@ export class OpenclawExecutor implements CliExecutor {
             if (event.text) {
               fullOutput += event.text;
               onOutput(event.text);
+              emitStatus(onOutput, "Working");
             }
             return true;
           case "tool_use":
             onOutput(`[tool:exec]${JSON.stringify(event.input ?? {})}[/tool:exec]\n`);
+            emitStatus(onOutput, "Running");
             return true;
           case "tool_result":
             if (event.text) {
@@ -125,12 +128,14 @@ export class OpenclawExecutor implements CliExecutor {
                 : event.text;
               onOutput(`[tool-result:exec]${truncated}[/tool-result:exec]\n`);
             }
+            emitStatus(onOutput, "Done");
             return true;
           case "error": {
             const msg = extractErrorMessage(event);
             console.error(`[openclaw] error event: ${msg}`);
             onOutput(`[error] ${msg}\n`);
             failed = true;
+            emitStatus(onOutput, "Failed");
             return true;
           }
           case "lifecycle": {
@@ -140,11 +145,15 @@ export class OpenclawExecutor implements CliExecutor {
               console.error(`[openclaw] lifecycle ${phase}: ${msg}`);
               onOutput(`[lifecycle:${phase}] ${msg}\n`);
               failed = true;
+              emitStatus(onOutput, "Failed");
             }
             return true;
           }
           case "step_start":
+            emitStatus(onOutput, "Working");
+            return true;
           case "step_finish":
+            emitStatus(onOutput, "Answered");
             return true;
           default:
             return false;

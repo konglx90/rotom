@@ -17,6 +17,10 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import type { CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
+import {
+  createReasoningStatusBuffer,
+  emitStatus,
+} from "../reasoning-status.js";
 
 // ── ACP JSON-RPC types ──────────────────────────────────────────────────
 
@@ -110,6 +114,10 @@ export class HermesCliExecutor implements CliExecutor {
       let sessionId = "";
       let settled = false;
       let inThinking = false;
+      // 从 reasoning 流里抽第一个 **Header**,emit 为 [status:thinking] 标签,
+      // 在 dashboard 顶部以 shimmer pill 形式展示。完全对齐 codex-rs/tui 的
+      // extract_first_bold + set_status_header 模式。
+      const reasoningStatus = createReasoningStatusBuffer((tag) => onOutput(tag));
       // 新版 hermes ACP 在 session/resume 里会同步 replay 整段对话历史
       // （user/assistant/thought chunks，跟 live chunk 类型完全相同）。
       // hermes 是 await 完 replay 才返回 session/resume 的 RPC 响应，所以
@@ -125,6 +133,11 @@ export class HermesCliExecutor implements CliExecutor {
           onOutput(`[/thinking]`);
           inThinking = false;
         }
+        // reasoning section 结束，清掉 reasoningStatus 的 lastEmitted
+        // 记忆。下次再有 thought chunk 且抽出同一个 **Header**，也会
+        // 重新 emit 一次（pill 视觉上保持，因为 dashboard 端只保留最新
+        // 的 [status:thinking] tag）。
+        reasoningStatus.reset();
       }
 
       // ── Helpers ──
@@ -336,6 +349,8 @@ export class HermesCliExecutor implements CliExecutor {
               closeThinkingIfOpen();
               fullOutput += text;
               onOutput(text);
+              // 模型已经从「思考」切到「回答」,状态 pill 切回 "Working"
+              emitStatus(onOutput, "Working");
             }
             break;
           }
@@ -348,6 +363,9 @@ export class HermesCliExecutor implements CliExecutor {
                 inThinking = true;
               }
               onOutput(text);
+              // 把 chunk 累加到 reasoningStatus,首次抽出 **Header** 时自动
+              // emit 一个 [status:thinking] 标签。
+              reasoningStatus.append(text);
             }
             break;
           }

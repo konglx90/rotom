@@ -4,6 +4,7 @@ import {
   createElement,
   isValidElement,
   memo,
+  useEffect,
   useMemo,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -13,6 +14,7 @@ import {
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import styles from './MarkdownContent.module.css'
+import { StreamingStatus } from './StreamingStatus'
 
 interface Props {
   content: string
@@ -97,13 +99,22 @@ type RawPart =
   | { type: 'tool-patch'; content: string }
   | { type: 'tool-ask'; content: string; unclosed?: boolean }
   | { type: 'tool-result-ask'; content: string; unclosed?: boolean }
+  | { type: 'status-thinking'; content: string }
 
 type Part =
   | { type: 'text'; content: string }
   | { type: 'thinking'; content: string }
   | { type: 'tool-call'; command: string; result?: string; streaming?: boolean }
+  | { type: 'tool-call-group'; calls: ToolCall[]; streaming?: boolean }
   | { type: 'tool-patch'; content: string }
   | { type: 'tool-ask'; question: string; answer?: string; streaming?: boolean }
+  | { type: 'status-thinking'; content: string }
+
+interface ToolCall {
+  command: string
+  result?: string
+  streaming?: boolean
+}
 
 const TAGS: Array<{ open: string; close: string; type: RawPart['type'] }> = [
   { open: '[thinking]', close: '[/thinking]', type: 'thinking' },
@@ -112,6 +123,7 @@ const TAGS: Array<{ open: string; close: string; type: RawPart['type'] }> = [
   { open: '[tool:patch]', close: '[/tool:patch]', type: 'tool-patch' },
   { open: '[tool:ask]', close: '[/tool:ask]', type: 'tool-ask' },
   { open: '[tool-result:ask]', close: '[/tool-result:ask]', type: 'tool-result-ask' },
+  { open: '[status:thinking]', close: '[/status:thinking]', type: 'status-thinking' },
 ]
 
 function parseStructuredBlocks(text: string): RawPart[] {
@@ -147,43 +159,68 @@ function parseStructuredBlocks(text: string): RawPart[] {
 }
 
 function pairExecCalls(raw: RawPart[]): Part[] {
+  // Codex v2 can emit two `item/started` (commandExecution) events back-to-back
+  // before either `item/completed` arrives — parallel tool calls run in flight
+  // simultaneously. The previous version of this function broke its forward
+  // scan on the first intervening `tool-exec`, so cmd1 ended up with no result,
+  // cmd2 got paired with r1, and r2 was emitted as an orphan `(unknown)`. To
+  // handle the parallel case, we now use FIFO pairing: each `tool-exec` claims
+  // the first *unconsumed* `tool-result-exec` we see going forward, regardless
+  // of how many other `tool-exec` parts are in between. Same logic for ask.
   const out: Part[] = []
+  const consumedResults = new Set<number>()
+
   for (let i = 0; i < raw.length; i++) {
     const cur = raw[i]
     if (cur.type === 'tool-exec') {
       let result: string | undefined
+      let streaming = cur.unclosed
       let consumed = i
       for (let j = i + 1; j < raw.length; j++) {
         const next = raw[j]
-        if (next.type === 'tool-result-exec') {
+        if (next.type === 'tool-result-exec' && !consumedResults.has(j)) {
           result = next.content
+          streaming = streaming || next.unclosed
+          consumedResults.add(j)
           consumed = j
           break
         }
-        if (next.type === 'tool-exec' || next.type === 'tool-patch' || next.type === 'tool-ask') break
+        // Parallel `tool-exec` chunks don't break the search — that's the bug
+        // we're fixing. But a different tool kind (patch / ask) still ends the
+        // pair, since results from a different tool don't belong here.
+        if (next.type === 'tool-patch' || next.type === 'tool-ask') break
         if (next.type === 'text' && next.content.trim() !== '') break
       }
-      out.push({ type: 'tool-call', command: cur.content, result, streaming: cur.unclosed })
+      out.push({ type: 'tool-call', command: cur.content, result, streaming })
       i = consumed
     } else if (cur.type === 'tool-result-exec') {
-      out.push({ type: 'tool-call', command: '(unknown)', result: cur.content, streaming: cur.unclosed })
+      if (!consumedResults.has(i)) {
+        consumedResults.add(i)
+        out.push({ type: 'tool-call', command: '(unknown)', result: cur.content, streaming: cur.unclosed })
+      }
     } else if (cur.type === 'tool-ask') {
       let answer: string | undefined
+      let streaming = cur.unclosed
       let consumed = i
       for (let j = i + 1; j < raw.length; j++) {
         const next = raw[j]
-        if (next.type === 'tool-result-ask') {
+        if (next.type === 'tool-result-ask' && !consumedResults.has(j)) {
           answer = next.content
+          streaming = streaming || next.unclosed
+          consumedResults.add(j)
           consumed = j
           break
         }
-        if (next.type === 'tool-exec' || next.type === 'tool-patch' || next.type === 'tool-ask') break
+        if (next.type === 'tool-exec' || next.type === 'tool-patch') break
         if (next.type === 'text' && next.content.trim() !== '') break
       }
-      out.push({ type: 'tool-ask', question: cur.content, answer, streaming: cur.unclosed })
+      out.push({ type: 'tool-ask', question: cur.content, answer, streaming })
       i = consumed
     } else if (cur.type === 'tool-result-ask') {
-      out.push({ type: 'tool-ask', question: '', answer: cur.content, streaming: cur.unclosed })
+      if (!consumedResults.has(i)) {
+        consumedResults.add(i)
+        out.push({ type: 'tool-ask', question: '', answer: cur.content, streaming: cur.unclosed })
+      }
     } else if (cur.type === 'tool-patch') {
       out.push({ type: 'tool-patch', content: cur.content })
     } else {
@@ -193,14 +230,123 @@ function pairExecCalls(raw: RawPart[]): Part[] {
   return out
 }
 
+// Collapse every status-thinking part down to the latest one. As the executor
+// streams more content into a single message, the content string accumulates
+// repeated `[status:thinking]…[/status:thinking]` tags (e.g. a "Working" tag
+// at turn start, then a "**Reviewing the test**" extracted from reasoning,
+// then a "Done" tag on tool completion). We want the pill to reflect the
+// most recent value, mirroring codex's `set_status_header` overwriting
+// behavior (codex-rs/tui/src/chatwidget/status_controls.rs:58-65).
+function hoistStatus(parts: Part[]): { status: string | null; rest: Part[] } {
+  let status: string | null = null
+  const rest: Part[] = []
+  for (const p of parts) {
+    if (p.type === 'status-thinking') {
+      status = p.content
+    } else {
+      rest.push(p)
+    }
+  }
+  return { status, rest }
+}
+
+// Fold runs of consecutive tool-call parts into a single tool-call-group,
+// mirroring codex TUI's "Ran N commands" disclosure (instead of letting N
+// stacked <details> blocks eat the whole viewport). Threshold is 2 — a
+// single tool call is already the right shape as-is, and forcing it into a
+// group would just add an extra level of disclosure for no win. Runs are
+// broken by anything that isn't a tool-call (text / thinking / patch / ask).
+//
+// Whitespace-only text parts (e.g. the single `\n` that every executor
+// emits after a [tool-result:exec] tag) do NOT break the run — that's the
+// only way N consecutive tool calls ever stay consecutive in practice.
+// Anything with non-whitespace content (agent narration between commands,
+// an inline summary, etc.) DOES break the run and starts a new group.
+//
+// Only used DURING streaming. After streaming ends, hoistAllToolCallsToTop
+// takes over to lift non-consecutive calls into a single top-of-message
+// group, so the final message reads "all commands" → "narration" top-down
+// instead of interleaving commands with the agent's prose.
+function groupConsecutiveToolCalls(parts: Part[]): Part[] {
+  const out: Part[] = []
+  let buffer: ToolCall[] = []
+  const flush = () => {
+    if (buffer.length === 0) return
+    if (buffer.length === 1) {
+      out.push({ type: 'tool-call', ...buffer[0] })
+    } else {
+      out.push({ type: 'tool-call-group', calls: buffer, streaming: buffer.some(c => c.streaming) })
+    }
+    buffer = []
+  }
+  for (const p of parts) {
+    if (p.type === 'tool-call') {
+      buffer.push({ command: p.command, result: p.result, streaming: p.streaming })
+    } else if (p.type === 'text' && p.content.trim() === '') {
+      // skip — don't flush, don't emit
+    } else {
+      flush()
+      out.push(p)
+    }
+  }
+  flush()
+  return out
+}
+
+// Post-streaming transform: lift every tool-call (regardless of where it
+// appeared in the source order) into a single group at the top, with
+// everything else trailing in original order. Two reasons we don't run
+// this during streaming:
+//   1. Mid-stream re-aggregation would shift the layout under the user
+//      each time a new tool call arrives, which is visually jarring.
+//   2. During streaming, the natural source order (text → tool → text →
+//      tool) carries a "the agent is doing X" signal that's useful for
+//      live progress; the user can read the latest narration as it comes.
+// Once the turn is done, that temporal signal is no longer load-bearing —
+// the message is now a record of what happened, not what's happening — so
+// the concise top-down layout wins. Single tool call stays as a plain
+// tool-call (no group wrapper) to avoid an extra level of disclosure.
+function hoistAllToolCallsToTop(parts: Part[]): Part[] {
+  const calls: ToolCall[] = []
+  const rest: Part[] = []
+  for (const p of parts) {
+    if (p.type === 'tool-call') {
+      calls.push({ command: p.command, result: p.result, streaming: p.streaming })
+    } else {
+      rest.push(p)
+    }
+  }
+  if (calls.length === 0) return parts
+  const out: Part[] = []
+  if (calls.length === 1) {
+    out.push({ type: 'tool-call', ...calls[0] })
+  } else {
+    out.push({ type: 'tool-call-group', calls, streaming: calls.some(c => c.streaming) })
+  }
+  out.push(...rest)
+  return out
+}
+
 export const MarkdownContent = memo(function MarkdownContent({
   content,
   streaming,
   mentionMembers,
   mentionClassName,
 }: Props) {
-  const parts = pairExecCalls(parseStructuredBlocks(content))
-
+  // 这一坨 transform 链在每次 render 都会重跑(长消息 + 流式场景下尤其贵),
+  // 用 content 锁住。streaming 现在也参与依赖:streaming 期间用相邻合并
+  // (保持流式进度可读),结束后切到「全部工具调用提到最上」聚合(让消息在
+  // 历史里更紧凑)。React.memo 也会帮我们屏蔽 content 没变时的 render。
+  const { status, rest } = useMemo(() => {
+    const parts = pairExecCalls(parseStructuredBlocks(content))
+    const { status, rest: hoisted } = hoistStatus(parts)
+    return {
+      status,
+      rest: streaming
+        ? groupConsecutiveToolCalls(hoisted)
+        : hoistAllToolCallsToTop(hoisted),
+    }
+  }, [content, streaming])
   const mentionComponents = useMemo<Components | undefined>(() => {
     if (!mentionMembers || mentionMembers.length === 0) return undefined
     const memberSet = new Set(mentionMembers)
@@ -234,9 +380,10 @@ export const MarkdownContent = memo(function MarkdownContent({
     } as Components
   }, [mentionMembers, mentionClassName])
 
-  if (parts.length === 0 || (parts.length === 1 && parts[0].type === 'text')) {
+  if ((rest.length === 0 && !status) || (rest.length === 1 && rest[0].type === 'text' && !status)) {
     return (
       <div className={styles.md}>
+        {status && <StreamingStatus content={status} done={!streaming} />}
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={mentionComponents}>
           {content}
         </ReactMarkdown>
@@ -247,7 +394,8 @@ export const MarkdownContent = memo(function MarkdownContent({
 
   return (
     <div className={styles.md}>
-      {parts.map((part, i) => {
+      {status && <StreamingStatus content={status} done={!streaming} />}
+      {rest.map((part, i) => {
         switch (part.type) {
           case 'text':
             return (
@@ -256,7 +404,7 @@ export const MarkdownContent = memo(function MarkdownContent({
               </ReactMarkdown>
             )
           case 'thinking':
-            return <ThinkingBlock key={i} content={part.content} />
+            return <ThinkingBlock key={i} content={part.content} streaming={streaming} />
           case 'tool-call':
             return (
               <ToolCallBlock
@@ -266,8 +414,16 @@ export const MarkdownContent = memo(function MarkdownContent({
                 streaming={part.streaming}
               />
             )
+          case 'tool-call-group':
+            return (
+              <ToolCallGroupBlock
+                key={i}
+                calls={part.calls}
+                streaming={part.streaming}
+              />
+            )
           case 'tool-patch':
-            return <PatchBlock key={i} content={part.content} />
+            return <PatchBlock key={i} content={part.content} streaming={streaming} />
           case 'tool-ask':
             return (
               <AskBlock
@@ -277,6 +433,9 @@ export const MarkdownContent = memo(function MarkdownContent({
                 streaming={part.streaming}
               />
             )
+          case 'status-thinking':
+            // Hoisted out by hoistStatus — never reaches here.
+            return null
         }
       })}
       {streaming && <span className={styles.cursor}>|</span>}
@@ -284,8 +443,12 @@ export const MarkdownContent = memo(function MarkdownContent({
   )
 })
 
-function ThinkingBlock({ content }: { content: string }) {
+function ThinkingBlock({ content, streaming }: { content: string; streaming?: boolean }) {
   const [open, setOpen] = useState(false)
+  // 流式结束后强制折叠,让用户回到"看汇总"的视角;用户后续主动展开仍生效。
+  useEffect(() => {
+    if (!streaming) setOpen(false)
+  }, [streaming])
   return (
     <details
       className={styles.thinkingBlock}
@@ -309,6 +472,11 @@ function ToolCallBlock({
   streaming?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  // 流式结束后强制折叠,匹配用户预期(在 streaming 期间可以点开看 result,
+  // 完成后聊天历史保持整洁的折叠态)。用户可以再主动展开。
+  useEffect(() => {
+    if (!streaming) setOpen(false)
+  }, [streaming])
   const resultLines = result ? result.split('\n').length : 0
   const hint = result
     ? ` ↳ output (${resultLines} ${resultLines === 1 ? 'line' : 'lines'})`
@@ -339,8 +507,120 @@ function ToolCallBlock({
   )
 }
 
-function PatchBlock({ content }: { content: string }) {
+function ToolCallGroupBlock({
+  calls,
+  streaming,
+}: {
+  calls: ToolCall[]
+  streaming?: boolean
+}) {
+  // Two-level disclosure: the group is collapsed by default (just shows the
+  // summary with a command-name preview); once expanded, each row is itself
+  // a click target that toggles just that command's result. This keeps the
+  // chat history clean — you only see the verbose output for the commands
+  // you actually care about — while still letting you expand individual
+  // rows to compare results side by side.
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!streaming) setOpen(false)
+  }, [streaming])
+  const totalLines = calls.reduce(
+    (sum, c) => sum + (c.result ? c.result.split('\n').length : 0),
+    0,
+  )
+  const hasStreaming = calls.some(c => c.streaming)
+  const hint = hasStreaming
+    ? ' …'
+    : totalLines > 0
+      ? ` ↳ output (${totalLines} ${totalLines === 1 ? 'line' : 'lines'} total)`
+      : ''
+  // Preview the first few command names in the summary so users can tell at a
+  // glance what's inside without expanding. Long commands are truncated to
+  // keep the summary line single-row; full text remains accessible on expand.
+  const PREVIEW_COUNT = 2
+  const PREVIEW_MAX_LEN = 40
+  const truncate = (cmd: string) => {
+    const trimmed = cmd.trim() || '(empty)'
+    return trimmed.length > PREVIEW_MAX_LEN
+      ? trimmed.slice(0, PREVIEW_MAX_LEN - 1) + '…'
+      : trimmed
+  }
+  const preview = calls.slice(0, PREVIEW_COUNT).map(c => truncate(c.command)).join(', ')
+  const more = calls.length > PREVIEW_COUNT ? ` +${calls.length - PREVIEW_COUNT} more` : ''
+  return (
+    <details
+      className={styles.toolBlock}
+      open={open}
+      onClick={stopBubble}
+      onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
+    >
+      <summary className={styles.toolSummary} onClick={stopBubble}>
+        <span className={styles.toolPrompt}>$</span>
+        <span className={styles.toolCommand}>Ran {calls.length} commands: {preview}{more}</span>
+        {hint && <span className={styles.toolHint}>{hint}</span>}
+      </summary>
+      {open && (
+        <div className={styles.toolContent}>
+          {calls.map((call, idx) => (
+            <GroupedCommandRow
+              key={idx}
+              call={call}
+              isLast={idx === calls.length - 1}
+            />
+          ))}
+        </div>
+      )}
+    </details>
+  )
+}
+
+// A single command row inside an expanded group. Renders as a clickable row
+// (when the command has a result) that toggles the result inline. The
+// per-row expand state is intentionally NOT auto-reset on stream end — once
+// the user has expanded a row to inspect an output, collapsing it on them
+// when the turn completes would be more annoying than helpful.
+function GroupedCommandRow({ call, isLast }: { call: ToolCall; isLast: boolean }) {
+  const [showResult, setShowResult] = useState(false)
+  const hasResult = call.result !== undefined
+  const resultLines = call.result ? call.result.split('\n').length : 0
+  const toggle = () => { if (hasResult) setShowResult(s => !s) }
+  return (
+    <div className={styles.groupedToolItem}>
+      <div
+        className={`${styles.groupedCommandRow} ${hasResult ? styles.expandable : ''} ${showResult ? styles.expanded : ''}`}
+        onClick={hasResult ? (e => { e.stopPropagation(); toggle() }) : undefined}
+        role={hasResult ? 'button' : undefined}
+        aria-expanded={hasResult ? showResult : undefined}
+        tabIndex={hasResult ? 0 : undefined}
+        onKeyDown={hasResult ? (e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            toggle()
+          }
+        }) : undefined}
+      >
+        <span className={styles.groupedCommandPrompt}>$</span>
+        <span className={styles.groupedCommandText}>{call.command.trim() || '(empty command)'}</span>
+        {hasResult && (
+          <span className={styles.toolHint}>
+            {showResult ? '▾' : '▸'} output ({resultLines} {resultLines === 1 ? 'line' : 'lines'})
+          </span>
+        )}
+      </div>
+      {showResult && hasResult && (
+        <pre className={styles.groupedToolResult}>{call.result || '(no output)'}</pre>
+      )}
+      {!isLast && <hr className={styles.groupedToolDivider} />}
+    </div>
+  )
+}
+
+function PatchBlock({ content, streaming }: { content: string; streaming?: boolean }) {
+  const [open, setOpen] = useState(false)
+  // 流式结束后强制折叠(diff body 很长,默认收起更易扫读)。
+  useEffect(() => {
+    if (!streaming) setOpen(false)
+  }, [streaming])
   const lines = content.split('\n')
   // 从 unified diff `+++ /path` 头部行抓取文件名,在折叠态 summary 直接展示,
   // 不用展开就能看到改的是哪个文件。多文件 patch 取第一个,够覆盖 95% 场景。
@@ -425,6 +705,10 @@ function AskBlock({
   streaming?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  // 流式结束后强制折叠,跟 tool-call 保持一致;用户后续点击仍可展开。
+  useEffect(() => {
+    if (!streaming) setOpen(false)
+  }, [streaming])
   const parsedQ = safeParse<{ questions?: AskQuestion[] }>(question)
   const questions = parsedQ?.questions ?? []
   const parsedA = answer ? safeParse<{ answers?: Record<string, string> }>(answer) : null

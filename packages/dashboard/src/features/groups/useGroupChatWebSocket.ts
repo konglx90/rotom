@@ -177,11 +177,25 @@ export function useGroupChatWebSocket({
                 ? hydrated.find(h => h.from === streamMsg.from && h.content === streamMsg.content)
                 : null
 
+              // Build a set of (from, content) keys for hydrated messages so we
+              // can drop local bubbles (id like `dm_<ts>` or `grp_<ts>`) whose
+              // persisted twin already exists. The hydration produces a fresh
+              // `gm_<uuid>` id for the same message, so id-based dedup misses
+              // it and we'd otherwise end up showing both copies.
+              const hydratedKeys = new Set(
+                hydrated.map(h => `${h.from}${h.content}`),
+              )
+
               // 1. 移除流式占位
               let next = prev.filter(m => m.id !== streamId)
               // 2. 移除 hydrated 之外的所有历史 id(防止旧的 deleted 行残留)
+              //    同时把"已经在历史里"的本地乐观写入行也清掉,避免重复显示。
               next = next
-                .filter(m => !m.id.startsWith('gm_') || hydratedIds.has(m.id))
+                .filter(m => {
+                  if (m.id.startsWith('gm_')) return hydratedIds.has(m.id)
+                  const key = `${m.from}${m.content}`
+                  return !hydratedKeys.has(key)
+                })
                 .map(m => m)
               // 3. 如果有真身,合并进去(并去重)
               if (persistedTwin && !next.some(m => m.id === persistedTwin.id)) {
