@@ -31,6 +31,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import type { ApprovalDecision, ApprovalRequestInput, CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
 import { buildPlanModeInstruction } from "../../shared/slash-commands.js";
+import { emitStatus } from "../reasoning-status.js";
 
 // ── JSON-RPC types ──────────────────────────────────────────────────────
 
@@ -86,6 +87,11 @@ export class CodexExecutor implements CliExecutor {
       let turnDoneResolve: ((aborted: boolean) => void) | null = null;
       let notificationProtocol: "unknown" | "legacy" | "raw" = "unknown";
       let turnStarted = false;
+      // 终端状态去重:codex v2 协议下可能从多个路径到达终态(item/completed
+      // agentMessage final_answer / turn/completed / finish()),dashboard
+      // 端 hoistStatus 已经只保留最后一个 tag,但重复 emit 既浪费流量也
+      // 干扰调试日志,这里用同一个 flag 集中拦截。
+      let terminalEmitted = false;
       const completedTurnIds = new Set<string>();
 
       const turnDone = new Promise<boolean>((res) => { turnDoneResolve = res; });
@@ -243,30 +249,40 @@ export class CodexExecutor implements CliExecutor {
         switch (type) {
           case "task_started":
             turnStarted = true;
+            emitStatus(onOutput, "Working");
             return;
           case "agent_message": {
             const text = msg.message as string | undefined;
             if (text) {
               fullOutput += text;
               onOutput(text);
+              // 不要在每个 chunk 都 emit "Working" — turn/started 已经发过了,
+              // 这里再发反而会把 "Running" 状态打回 "Working",导致工具调用期间
+              // pill 在两个状态之间闪烁。
             }
             return;
           }
           case "exec_command_begin": {
             const command = msg.command as string | undefined;
             onOutput(`[tool:exec]${prettyCommand(command ?? "")}[/tool:exec]\n`);
+            emitStatus(onOutput, "Running");
             return;
           }
           case "exec_command_end": {
             const output = (msg.output as string | undefined) ?? "";
             const truncated = output.length > 500 ? `${output.slice(0, 500)}...` : output;
             if (truncated) onOutput(`[tool-result:exec]${truncated}[/tool-result:exec]\n`);
+            // codex 不在工具完成时发 "Done" — tool 完成后模型进入 thinking,
+            // 下一个 event (新 tool call / final_answer) 会自己覆盖 status。
             return;
           }
           case "patch_apply_begin":
             onOutput(`[tool:patch]apply[/tool:patch]\n`);
+            emitStatus(onOutput, "Patching");
             return;
           case "patch_apply_end":
+            // 同上:patch 完成不发 "Patched",让 status 保持上一个状态,等下一个
+            // event 覆盖。
             return;
           case "task_complete":
             signalTurnDone(false);
@@ -286,6 +302,7 @@ export class CodexExecutor implements CliExecutor {
         switch (method) {
           case "turn/started":
             turnStarted = true;
+            emitStatus(onOutput, "Working");
             return;
 
           case "turn/completed": {
@@ -302,11 +319,24 @@ export class CodexExecutor implements CliExecutor {
               const err = (turn.error as Record<string, unknown> | undefined) ?? {};
               setTurnError((err.message as string) || "codex turn failed");
               failed = true;
+              if (!terminalEmitted) {
+                emitStatus(onOutput, "Failed");
+                terminalEmitted = true;
+              }
             }
 
             if (turnId) {
               if (completedTurnIds.has(turnId)) return;
               completedTurnIds.add(turnId);
+            }
+
+            // 兜底:agentMessage final_answer 没拿到 phase / 没下发时,
+            // 仍然需要一个终态 pill,否则 dashboard 一直停在 "Working"。
+            // aborted 留给上一次的 non-terminal 状态(pill 视觉上停在"被打断
+            // 那一刻"),不强行覆盖。
+            if (!terminalEmitted && !aborted && status !== "failed") {
+              emitStatus(onOutput, "Answered");
+              terminalEmitted = true;
             }
 
             signalTurnDone(aborted);
@@ -347,32 +377,92 @@ export class CodexExecutor implements CliExecutor {
         const itemType = item.type as string | undefined;
         const itemId = item.id as string | undefined;
 
-        if (method === "item/started" && itemType === "commandExecution") {
-          const command = (item.command as string | undefined) ?? "";
+        if (process.env.ROTOM_CODEX_DEBUG) {
+          console.log(`[codex DEBUG] handleItemNotification method=${method} itemType=${itemType} itemId=${itemId} phase=${(item as Record<string, unknown>).phase ?? "(none)"} command=${String((item as Record<string, unknown>).command).slice(0, 60)}`);
+        }
+
+        // 用字段存在性判断 item 类型,而不是严格匹配 `type` 字符串 — 不同 codex
+        // 版本对 enum variant 的序列化格式不一样(camelCase / snake_case / 别名),
+        // 而且 codex 还在持续迭代(2026.5 的 v2 协议又引入了新 ThreadItem 变体),
+        // 紧耦合 type 字符串会让这里脆弱。commandExecution 一定有 `command` 字段
+        // (string 或 string[]),fileChange 一定有 `changes` / `patch` 字段。
+        const looksLikeCommandExec = typeof (item as Record<string, unknown>).command !== "undefined";
+        const looksLikeFileChange =
+          (item as Record<string, unknown>).changes !== undefined ||
+          (item as Record<string, unknown>).patch !== undefined;
+
+        if (method === "item/started" && looksLikeCommandExec) {
+          const rawCmd = item.command;
+          const command = Array.isArray(rawCmd)
+            ? rawCmd.map((p) => String(p)).join(" ")
+            : ((rawCmd as string | undefined) ?? "");
           onOutput(`[tool:exec]${prettyCommand(command)}[/tool:exec]\n`);
+          emitStatus(onOutput, "Running");
+          if (process.env.ROTOM_CODEX_DEBUG) {
+            console.log(`[codex DEBUG] emitted [tool:exec] + Running status for command=${command.slice(0, 60)}`);
+          }
           return;
         }
-        if (method === "item/completed" && itemType === "commandExecution") {
-          const output = (item.aggregatedOutput as string | undefined) ?? "";
+        if (method === "item/completed" && looksLikeCommandExec) {
+          const output =
+            ((item as Record<string, unknown>).aggregatedOutput as string | undefined) ??
+            ((item as Record<string, unknown>).output as string | undefined) ??
+            "";
           const truncated = output.length > 500 ? `${output.slice(0, 500)}...` : output;
           if (truncated) onOutput(`[tool-result:exec]${truncated}[/tool-result:exec]\n`);
+          // codex 不在 tool 完成时发 "Done" — 让 status 保持上一个状态,
+          // 等下一个 event (新 tool / final_answer) 自己覆盖。
+          // exitCode != 0 走 turn/completed 的 failed 分支,这里不再发 Failed,
+          // 避免一个失败的 tool 就把整个 turn 标红。
+          void item.exitCode;
           return;
         }
-        if (method === "item/started" && itemType === "fileChange") {
+        if (method === "item/started" && looksLikeFileChange) {
           onOutput(`[tool:patch]apply[/tool:patch]\n`);
+          emitStatus(onOutput, "Patching");
           return;
         }
-        if (method === "item/completed" && itemType === "fileChange") {
+        if (method === "item/completed" && looksLikeFileChange) {
+          // 同上:patch 完成后不发 "Patched"。
           return;
         }
+        // codex v2 协议下 agent message 是流式推送的,文本通过
+        // `item/agentMessage/delta` 增量进来(delta 字段),完整消息在
+        // `item/completed` 时带 phase 标识(Commentary / FinalAnswer)。
+        // 不处理 delta 的话,dashboard 端 streaming 期间看不到 agent 文字,
+        // pill 也永远卡在 "Working"(因为 turn/started 后没有新 status emit)。
+        if (method === "item/agentMessage/delta") {
+          const delta = (params.delta as string | undefined) ?? "";
+          if (delta) {
+            fullOutput += delta;
+            onOutput(delta);
+          }
+          return;
+        }
+
         if (method === "item/completed" && itemType === "agentMessage") {
           const text = (item.text as string | undefined) ?? "";
           if (text) {
-            fullOutput += text;
-            onOutput(text);
+            // 兜底:有些 codex 版本把完整文本塞在 item.completed 的 text 字段,
+            // 而不用 delta 流推。这里只在 fullOutput 还没有这段文本时 push,
+            // 避免和 delta 重复输出。
+            if (!fullOutput.endsWith(text)) {
+              fullOutput += text;
+              onOutput(text);
+            }
           }
           const phase = item.phase as string | undefined;
-          if (phase === "final_answer" && turnStarted) signalTurnDone(false);
+          // codex v2 协议 phase 取值是 PascalCase("FinalAnswer"/"Commentary"),
+          // 见上方注释。大小写都接受,避免某个 minor 版本切回 snake_case 时
+          // 又把 "Answered" 丢掉。
+          if (phase && phase.toLowerCase() === "final_answer") {
+            // "Answered" 是 terminal state,pill 会停在这里。
+            if (!terminalEmitted) {
+              emitStatus(onOutput, "Answered");
+              terminalEmitted = true;
+            }
+            if (turnStarted) signalTurnDone(false);
+          }
           return;
         }
         // itemId is reserved for future per-tool tracking; reference to silence lint.
@@ -426,6 +516,15 @@ export class CodexExecutor implements CliExecutor {
           p.reject(new Error("codex process exited"));
         }
         pending.clear();
+
+        // 最后一道防线:某些 codex 边角场景下进程干净退出但 turn/completed
+        // 路径没走到(或没匹配上),pill 会一直停在 "Working"。这里在 exit
+        // code 0 且没下发过任何终态时,补发 "Answered"。fail / 非零退出
+        // 路径交给 worker 通过 failed flag 标红,不在这里掺合。
+        if (!terminalEmitted && exitCode === 0) {
+          emitStatus(onOutput, "Answered");
+          terminalEmitted = true;
+        }
 
         const reportedSessionId = resolveSessionId(resumeSessionId, threadId, failed || exitCode !== 0);
         const finalCode = failed && exitCode === 0 ? 1 : exitCode;

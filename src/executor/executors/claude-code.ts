@@ -27,6 +27,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ApprovalDecision, ApprovalRequestInput, AskUserQuestionItem, CliExecutor, ExecuteOptions, ExecuteResult, FileEditDiff } from "../cli-executor.js";
+import { emitStatus } from "../reasoning-status.js";
 
 // Resolve the bundled hook script. After `tsc` the .cjs file is copied next
 // to the compiled module (see package.json `build` script). In `tsx` dev
@@ -183,6 +184,7 @@ export class ClaudeCodeExecutor implements CliExecutor {
 
             case "assistant":
               if (parsed.message?.content) {
+                emitStatus(onOutput, "Working");
                 for (const block of parsed.message.content) {
                   if (block.type === "text" && block.text) {
                     fullOutput += block.text;
@@ -197,10 +199,13 @@ export class ClaudeCodeExecutor implements CliExecutor {
                     }
                     if (kind === "patch") {
                       onOutput(`[tool:patch]${label}[/tool:patch]\n`);
+                      emitStatus(onOutput, "Patching");
                     } else if (kind === "ask") {
                       onOutput(`[tool:ask]${label}[/tool:ask]\n`);
+                      emitStatus(onOutput, "Asking");
                     } else {
                       onOutput(`[tool:exec]${label}[/tool:exec]\n`);
+                      emitStatus(onOutput, "Running");
                     }
                   }
                 }
@@ -219,6 +224,7 @@ export class ClaudeCodeExecutor implements CliExecutor {
                   if (kind === "ask") {
                     const text = flattenToolResultContent(block.content);
                     if (text) onOutput(`[tool-result:ask]${text}[/tool-result:ask]\n`);
+                    emitStatus(onOutput, "Answered");
                     continue;
                   }
                   if (kind !== "exec") continue;
@@ -228,6 +234,10 @@ export class ClaudeCodeExecutor implements CliExecutor {
                     ? `${text.slice(0, TOOL_RESULT_MAX_CHARS)}...`
                     : text;
                   onOutput(`[tool-result:exec]${truncated}[/tool-result:exec]\n`);
+                  // claude 的 tool_result block 不携带 exit_code；默认当
+                  // "Done",后续 assistant 块来时会被 "Working" 覆盖。
+                  const isError = block.is_error === true;
+                  emitStatus(onOutput, isError ? "Failed" : "Done");
                 }
               }
               break;
@@ -242,6 +252,9 @@ export class ClaudeCodeExecutor implements CliExecutor {
               }
               if (parsed.is_error) {
                 failed = true;
+                emitStatus(onOutput, "Failed");
+              } else {
+                emitStatus(onOutput, "Answered");
               }
               break;
           }

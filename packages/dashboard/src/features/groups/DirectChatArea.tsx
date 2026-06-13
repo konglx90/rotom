@@ -34,6 +34,11 @@ export function DirectChatArea({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState<string>('')
   const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
+  // 防止 Enter 键 / 发送按钮被短时间多次触发:
+  // 中文 IME 选词和 React keydown 会在同一 Enter 上连发;键盘连按 Enter
+  // 也会触发重复提交。sendingRef 在提交后置 true,等下一帧再放开,确保
+  // 一次"按下"只会真正发出一条消息。
+  const sendingRef = useRef<boolean>(false)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -52,10 +57,16 @@ export function DirectChatArea({
   })
 
   const handleSend = () => {
+    if (sendingRef.current) return
     const trimmed = message.trim()
     if (!trimmed || connectionStatus !== 'connected') return
+    sendingRef.current = true
     onSendMessage(trimmed)
     setMessage('')
+    // 用 microtask + setTimeout 兜底:macro task 里 React 已经把 message 状态清掉,
+    // 但同一 Enter 触发的连续 keydown 还在同一 tick 内排队。下一帧再放开
+    // 锁,既能过滤掉同一 Enter 的二次触发,又不影响用户连发不同消息。
+    setTimeout(() => { sendingRef.current = false }, 250)
   }
 
   return (
@@ -141,6 +152,10 @@ export function DirectChatArea({
           }}
           onKeyDown={e => {
             if (handleHistoryNav(e)) return
+            // 中文 / 日文 IME 选词阶段也走 keydown(Enter 用于 commit 选词),
+            // 不能当成"提交消息"的 Enter。nativeEvent.isComposing 是浏览器的
+            // 真实输入状态,比 React 的 e.isComposing 更可靠。
+            if ((e.nativeEvent as KeyboardEvent).isComposing) return
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               handleSend()

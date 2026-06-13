@@ -1,0 +1,50 @@
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-slate, #4b5563);
+  max-width: 100%;
+}
+
+/* 终态:streaming 停止后 pill 留着,告诉用户最后停在什么状态
+ * ("Answered"/"Failed"/最后一个 reasoning header)。底色变浅、点不再
+ * 脉冲,视觉上明确"活的过程结束了"。 */
+.statusDone {
+  background: rgba(99, 102, 241, 0.04);
+  border-color: rgba(99, 102, 241, 0.15);
+  color: var(--color-slate-dim, #6b7280);
+}
+
+.dot {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent, #6366f1);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.dotDone {
+  animation: none;
+  opacity: 0.5;
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}
