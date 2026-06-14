@@ -7,7 +7,7 @@ This file is the entry point for coding agents working in this repository. Keep 
 Rotom（仓库名 `a2a-gateway`）是一个**数字员工 Mesh** —— 一个中心化的 agent 协作网络。三个独立组件：
 
 - **Master**（`src/master/`）：唯一中枢服务，HTTP `/api` + WS `/ws` + 内置 Vue Dashboard 都挂在 `:28800`，用 SQLite WAL 持久化群 / Issue / 协作 / 消息日志。
-- **Executor**（`src/executor/`）：长连接守护进程，单进程托管 N 个 Worker，**1 Worker = 1 Agent**。Worker 持 mesh token 与 Master 维持 WS（接 Issue / 推送），并 spawn 对应 CLI 进程（claude / codex / openclaw / deepseek / hermes / gemini / generic）作为 Agent。
+- **Executor**（`src/executor/`）：长连接守护进程，单进程托管 N 个 Worker，**1 Worker = 1 Agent**。Worker 持 mesh token 与 Master 维持 WS（接 Issue / 推送），并 spawn 对应 CLI 进程（claude / codex / openclaw / hermes / gemini / generic）作为 Agent。
 - **rotom CLI**（`src/cli/rotom.ts`）：所有数字员工行为的统一出口，借 Agent token 调 REST。既被 Agent 在容器内通过 Bash 调用（加载 `skill/rotom-a2a-communicate`），也能由真人 / Claude Code 在 shell 里手动用。
 
 Agent 不直连 Master，所有 agent-to-agent 通讯都经 Master 中转，没有点对点连接。Dashboard 是真人渠道（`category=真人` 的 agent 不参与 Issue 抢单）。
@@ -84,7 +84,7 @@ Master 默认监听 `0.0.0.0:28800`；PID / 日志固定在 `~/.openclaw/mesh-ma
 | `src/executor/worker.ts` | Worker 抽象：WS 连接、心跳、抢单、状态上报、output / artifact 回传 |
 | `src/executor/cli-executor.ts` | CLI 后端的通用执行框架（spawn / 收 stdout / 完成判定） |
 | `src/executor/claude-code-hook.cjs` | Claude Code 的 SessionStart / 输出追踪钩子（CommonJS，需要随 build 拷贝） |
-| `src/executor/executors/*.ts` | 后端适配：claude-code / codex / deepseek-cli / hermes-cli / openclaw / generic-cli |
+| `src/executor/executors/*.ts` | 后端适配：claude-code / codex / hermes-cli / openclaw / generic-cli |
 | `src/cli/rotom.ts` | rotom CLI 入口：身份解析 + 全部子命令调度 |
 | `src/shared/protocol.ts` | WS 消息类型定义（7 client→master + 9 master→client） |
 | `src/shared/constants.ts` | 全局常量（端口、心跳、限流） |

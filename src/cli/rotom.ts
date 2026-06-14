@@ -809,7 +809,7 @@ async function cmdExecutor(rest: string[], flags: Record<string, string | boolea
 //
 // Non-interactive override flags make the same flow scriptable.
 
-const INIT_KNOWN_TOOLS = ["claude", "codex", "hermes", "deepseek", "openclaw"] as const;
+const INIT_KNOWN_TOOLS = ["claude", "codex", "hermes", "openclaw"] as const;
 
 function detectCliTools(wanted: readonly string[]): { tool: string; path: string }[] {
   const out: { tool: string; path: string }[] = [];
