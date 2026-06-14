@@ -264,6 +264,16 @@ export class HermesCliExecutor implements CliExecutor {
       // only ever inspect this buffer for the regex; the chunks
       // themselves still stream to onOutput.
       let agentTextBuffer = "";
+      // Hermes 的 agent_message_chunk 切得很细(中文甚至逐字),每次 chunk
+      // 后都 emitStatus("Working") 会把正文切成一堆被 [status:thinking] 包围的
+      // 短段,即使前端能合并渲染,持久化进 DB 的 content 仍然会污染。
+      // 用一个本地 lastEmitted 跟踪上一次 emit 的 status,值不变就不再 emit。
+      let lastStatusEmitted = "";
+      function emitStatusDedup(text: string): void {
+        if (text === lastStatusEmitted) return;
+        lastStatusEmitted = text;
+        emitStatus(onOutput, text);
+      }
       // 从 reasoning 流里抽第一个 **Header**,emit 为 [status:thinking] 标签,
       // 在 dashboard 顶部以 shimmer pill 形式展示。完全对齐 codex-rs/tui 的
       // extract_first_bold + set_status_header 模式。
@@ -549,7 +559,7 @@ export class HermesCliExecutor implements CliExecutor {
               // 当 sniffer 已经标记失败时,跳过这条 emit,保留上面 "Failed"
               // 作为最后一个状态,避免 dashboard pill 被覆盖回 "Working"。
               if (!providerError.matched) {
-                emitStatus(onOutput, "Working");
+                emitStatusDedup("Working");
               }
             }
             break;
