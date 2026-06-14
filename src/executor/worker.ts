@@ -89,6 +89,25 @@ class SessionStore {
     this.scheduleFlush();
   }
 
+  has(cliTool: string, groupId: string, sessionId: string): boolean {
+    return this.sessions.get(this.key(cliTool, groupId)) === sessionId;
+  }
+
+  /**
+   * Return every entry in the store, parsed from the `${cliTool}:${groupId}`
+   * keys. Used by the worker's session_snapshot push so master can cache the
+   * full picture without per-group requests.
+   */
+  listAll(): Array<{ cliTool: string; groupId: string; sessionId: string }> {
+    const out: Array<{ cliTool: string; groupId: string; sessionId: string }> = [];
+    for (const [k, sessionId] of this.sessions) {
+      const sep = k.indexOf(":");
+      if (sep === -1) continue;
+      out.push({ cliTool: k.slice(0, sep), groupId: k.slice(sep + 1), sessionId });
+    }
+    return out;
+  }
+
   shutdown(): void {
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
@@ -263,6 +282,7 @@ export class ExecutorWorker {
         token: this.config.token,
         version: 2,
         profile: this.config.profile || {},
+        cliTool: this.cliTool,
         instance: {
           instanceId: `${os.hostname()}-${process.pid}-${randomUUID()}`,
           hostname: os.hostname(),
@@ -294,6 +314,10 @@ export class ExecutorWorker {
   private handleMessage(msg: Record<string, unknown>): void {
     if (msg.type === "auth_ok") {
       console.log(`${this.tag} Authenticated`);
+      // Push initial SessionStore snapshot so master's cache is populated
+      // before any dashboard hits GET /sessions. Master replaces any prior
+      // snapshot for this worker on receipt.
+      this.sendSessionSnapshot();
       this.heartbeatTimer = setInterval(() => {
         if (this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({ type: "heartbeat" }));
@@ -447,6 +471,128 @@ export class ExecutorWorker {
     if (msg.type === "collaboration_concluded") {
       const { title, summary } = msg as any;
       console.log(`${this.tag} Collaboration concluded: "${title}"`);
+    }
+
+    // Session management — master asks for visibility / control over the
+    // Session management — master asks for visibility / control over the
+    // per-(cliTool, groupId) sessions this worker tracks. The list path is
+    // covered by the unsolicited `session_snapshot` push (see
+    // sendSessionSnapshot above), so workers only handle view / delete here.
+    if (msg.type === "session_view_request") {
+      const requestId = (msg as any).requestId as string | undefined;
+      const groupId = (msg as any).groupId as string | undefined;
+      const sessionId = (msg as any).sessionId as string | undefined;
+      const tailLines = typeof (msg as any).tailLines === "number" ? (msg as any).tailLines : undefined;
+      if (!requestId || !groupId || !sessionId) return;
+      void this.handleSessionViewRequest(requestId, groupId, sessionId, tailLines);
+      return;
+    }
+
+    if (msg.type === "session_delete_request") {
+      const requestId = (msg as any).requestId as string | undefined;
+      const groupId = (msg as any).groupId as string | undefined;
+      const sessionId = (msg as any).sessionId as string | undefined;
+      if (!requestId || !groupId || !sessionId) return;
+      const had = this.sessionStore.has(this.cliTool, groupId, sessionId);
+      if (had) {
+        this.sessionStore.delete(this.cliTool, groupId);
+        console.log(`${this.tag} Session deleted via dashboard: ${this.cliTool}:${groupId} → ${sessionId}`);
+        this.sendSessionSnapshot();
+      }
+      this.send({
+        type: "session_delete_response",
+        requestId,
+        groupId,
+        sessionId,
+        ok: had,
+        error: had ? undefined : "session not found in this worker",
+      });
+      return;
+    }
+  }
+
+  /**
+   * Push the worker's owned sessions to master as an unsolicited snapshot.
+   * Called on auth_ok (initial sync) and after every SessionStore.set/delete
+   * so the master's in-memory cache (used by GET /sessions) stays current
+   * without dashboards having to broadcast over WS.
+   *
+   * Filter to entries where the stored cliTool matches `this.cliTool`. The
+   * shared `~/.rotom/sessions.json` may carry entries for cliTools this
+   * worker doesn't own (e.g. a previous run bound to `claude`); pushing them
+   * under the wrong cliTool label would let the dashboard ask this worker
+   * for `readSessionContent` on a sessionId it can't find in its own keys,
+   * returning "session not found in this worker".
+   *
+   * Full-array semantics: master REPLACES its cached entry for this worker on
+   * receipt. Sending the whole array (typically <10 entries) is cheaper than
+   * tracking deltas, and avoids drift on missed messages.
+   */
+  private sendSessionSnapshot(): void {
+    const entries = this.sessionStore
+      .listAll()
+      .filter((e) => e.cliTool === this.cliTool);
+    this.send({ type: "session_snapshot", entries });
+  }
+
+  private async handleSessionViewRequest(
+    requestId: string,
+    groupId: string,
+    sessionId: string,
+    tailLines?: number,
+  ): Promise<void> {
+    if (!this.sessionStore.has(this.cliTool, groupId, sessionId)) {
+      this.send({
+        type: "session_view_response",
+        requestId,
+        groupId,
+        sessionId,
+        format: "raw",
+        content: "",
+        error: "session not found in this worker",
+      });
+      return;
+    }
+    const cwd = this.resolveIssueCwd(groupId);
+    try {
+      const result = await this.executor.readSessionContent?.({
+        sessionId,
+        workingDir: cwd,
+        tailLines: tailLines ?? 200,
+      });
+      if (!result) {
+        // Executor doesn't implement introspection for this backend — surface
+        // a "not introspectable" empty response rather than 500.
+        this.send({
+          type: "session_view_response",
+          requestId,
+          groupId,
+          sessionId,
+          format: "raw",
+          content: "",
+          error: `${this.cliTool} backend does not support session introspection`,
+        });
+        return;
+      }
+      this.send({
+        type: "session_view_response",
+        requestId,
+        groupId,
+        sessionId,
+        format: result.format,
+        content: result.content,
+        ...(result.error ? { error: result.error } : {}),
+      });
+    } catch (err: any) {
+      this.send({
+        type: "session_view_response",
+        requestId,
+        groupId,
+        sessionId,
+        format: "raw",
+        content: "",
+        error: err?.message || String(err),
+      });
     }
   }
 
@@ -763,10 +909,12 @@ export class ExecutorWorker {
       if (groupId && result.invalidateSession) {
         this.sessionStore.delete(this.cliTool, groupId);
         console.warn(`${this.tag} Session invalidated: ${this.cliTool}:${groupId} (poisoned history)`);
+        this.sendSessionSnapshot();
       } else if (groupId && result.sessionId) {
         // Persist sessionId for future messages in this group
         this.sessionStore.set(this.cliTool, groupId, result.sessionId);
         console.log(`${this.tag} Session stored: ${this.cliTool}:${groupId} → ${result.sessionId}`);
+        this.sendSessionSnapshot();
       }
 
       if (!task.aborted) {
@@ -837,8 +985,10 @@ export class ExecutorWorker {
 
       if (groupId && result.invalidateSession) {
         this.sessionStore.delete(this.cliTool, groupId);
+        this.sendSessionSnapshot();
       } else if (groupId && result.sessionId) {
         this.sessionStore.set(this.cliTool, groupId, result.sessionId);
+        this.sendSessionSnapshot();
       }
 
       if (task.aborted) return;

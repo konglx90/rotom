@@ -29,6 +29,9 @@
 
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { ApprovalDecision, ApprovalRequestInput, CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
 import { buildPlanModeInstruction } from "../../shared/slash-commands.js";
 import { emitStatus } from "../reasoning-status.js";
@@ -582,6 +585,73 @@ export class CodexExecutor implements CliExecutor {
       })();
     });
   }
+
+  /**
+   * Read the tail of codex's session transcript from its local JSONL store.
+   * Codex writes one file per session under
+   *   `~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-<ISO>-<sessionId>.jsonl`
+   * with the sessionId as the trailing UUID before the `.jsonl` extension. We
+   * walk the tree (find by suffix is cheaper than maintaining a date index)
+   * and return the last N lines verbatim — the dashboard renders them as a
+   * `<pre>` block.
+   *
+   * Tolerant of missing files (codex may prune its sessions directory) —
+   * returns empty content + an explanatory `error` so the dashboard can
+   * distinguish "file gone" from "session started but no output yet".
+   */
+  async readSessionContent(args: {
+    sessionId: string;
+    workingDir: string;
+    tailLines?: number;
+  }): Promise<{ format: "jsonl" | "text" | "raw"; content: string; error?: string }> {
+    const file = findCodexRolloutFile(args.sessionId);
+    if (!file) {
+      return {
+        format: "jsonl",
+        content: "",
+        error: "codex session 文件不存在（可能已被 codex CLI 清理）",
+      };
+    }
+    const text = fs.readFileSync(file, "utf-8");
+    const lines = text.split("\n");
+    const tail = args.tailLines ?? 200;
+    const sliced = lines.length > tail ? lines.slice(-tail).join("\n") : text;
+    return { format: "jsonl", content: sliced };
+  }
+}
+
+// ── Codex session-file lookup ───────────────────────────────────────────
+
+/**
+ * Walk ~/.codex/sessions/<YYYY>/<MM>/<DD>/ and find the rollout JSONL whose
+ * filename ends with `-<sessionId>.jsonl`. Returns the absolute path or null
+ * if no match. The 3-level date directory is what codex's `~/.codex/sessions`
+ * layout uses in 2026.5+; on older builds the same files live flat under
+ * `~/.codex/sessions/` so we walk two levels deep just in case.
+ */
+function findCodexRolloutFile(sessionId: string): string | null {
+  const root = path.join(os.homedir(), ".codex", "sessions");
+  if (!fs.existsSync(root)) return null;
+  const suffix = `-${sessionId}.jsonl`;
+  const stack: string[] = [root];
+  while (stack.length > 0) {
+    const dir = stack.pop()!;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        stack.push(full);
+      } else if (e.isFile() && e.name.endsWith(suffix)) {
+        return full;
+      }
+    }
+  }
+  return null;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────

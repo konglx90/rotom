@@ -180,17 +180,7 @@ export function GroupChatArea({
           <div key={msg.id} className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''}`}>
             <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={36} className={styles.messageAvatar} />
             <div
-              className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''} ${hasPrompt ? styles.clickablePrompt : ''}`}
-              onClick={hasPrompt ? () => setComposedPromptFor(msg) : undefined}
-              title={hasPrompt ? '点击查看 prompt 组合' : undefined}
-              role={hasPrompt ? 'button' : undefined}
-              tabIndex={hasPrompt ? 0 : undefined}
-              onKeyDown={hasPrompt ? (e: React.KeyboardEvent) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setComposedPromptFor(msg)
-                }
-              } : undefined}
+              className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''}`}
             >
               {msg.isIncoming && (
                 <div className={styles.messageSender}>
@@ -249,6 +239,23 @@ export function GroupChatArea({
                       : msg.status === 'queued' ? '📭 已暂存'
                       : msg.status === 'failed' ? '⚠ 失败'
                       : '⏳ 发送中'}
+                  </span>
+                )}
+                {hasPrompt && (
+                  <span
+                    className={styles.messagePromptButton}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setComposedPromptFor(msg)}
+                    onKeyDown={(e: React.KeyboardEvent) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setComposedPromptFor(msg)
+                      }
+                    }}
+                    title="查看 prompt 组合"
+                  >
+                    🔍 prompt
                   </span>
                 )}
               </div>
