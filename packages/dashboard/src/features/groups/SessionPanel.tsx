@@ -82,7 +82,7 @@ export function SessionPanel({ groupId }: SessionPanelProps) {
     return (
       <div className={styles.hint}>
         暂无 session
-        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
+        <div className={styles.hintSub}>
           触发一次对话后,各后端(claude / codex / hermes / openclaw)会自动登记 sessionId。
         </div>
       </div>
