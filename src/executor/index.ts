@@ -20,7 +20,6 @@ import os from "node:os";
 import path from "node:path";
 import { ClaudeCodeExecutor } from "./executors/claude-code.js";
 import { CodexExecutor } from "./executors/codex.js";
-import { DeepseekCliExecutor } from "./executors/deepseek-cli.js";
 import { HermesCliExecutor } from "./executors/hermes-cli.js";
 import { OpenclawExecutor } from "./executors/openclaw.js";
 import type { CliExecutor } from "./cli-executor.js";
@@ -86,7 +85,7 @@ function loadConfig(): ExecutorConfig {
 
 // ── CLI tool detection ──────────────────────────────────────────────────
 
-const CLI_PRIORITY = ["claude", "deepseek", "openclaw", "codex"];
+const CLI_PRIORITY = ["claude", "openclaw", "codex"];
 
 function detectCliTool(): string {
   for (const tool of CLI_PRIORITY) {
@@ -102,8 +101,6 @@ function createExecutor(tool: string): CliExecutor {
   switch (tool) {
     case "claude":
       return new ClaudeCodeExecutor();
-    case "deepseek":
-      return new DeepseekCliExecutor();
     case "hermes":
       return new HermesCliExecutor();
     case "openclaw":
@@ -112,7 +109,7 @@ function createExecutor(tool: string): CliExecutor {
       return new CodexExecutor();
     default:
       throw new Error(
-        `Unknown cliTool "${tool}". Valid values: claude | codex | hermes | openclaw | deepseek. ` +
+        `Unknown cliTool "${tool}". Valid values: claude | codex | hermes | openclaw. ` +
           `Configure one of these explicitly in executor.config.json (the previous generic passthrough has been removed — set a known tool to avoid silent misconfiguration).`,
       );
   }
