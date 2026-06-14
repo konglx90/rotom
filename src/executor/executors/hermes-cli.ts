@@ -189,7 +189,10 @@ function buildHermesEnv(
   if (optionsEnv) Object.assign(out, optionsEnv);
   out.PATH = mergedPath ?? parentEnv.PATH ?? "";
   out.HERMES_YOLO_MODE = "1";
-  console.log(`[hermes-cli] buildHermesEnv: stripping results in ${Object.keys(out).length} keys; ANTHROPIC_BASE_URL=${out.ANTHROPIC_BASE_URL}; CLAUDECODE=${out.CLAUDECODE}; CCV_PROXY_MODE=${out.CCV_PROXY_MODE}`);
+  console.log(`[hermes-cli] buildHermesEnv: stripping results in ${Object.keys(out).length} keys:`);
+  for (const k of Object.keys(out).sort()) {
+    console.log(`[hermes-cli]   env.${k} = ${(out[k] ?? "").toString().slice(0, 100)}`);
+  }
   return out;
 }
 

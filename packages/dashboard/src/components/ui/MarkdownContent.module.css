@@ -161,24 +161,30 @@
 }
 
 .toolBlock {
-  margin: 6px 0;
-  border: 1px solid var(--border-color-light, #e5e7eb);
-  border-radius: 8px;
+  margin: 3px 0 5px;
+  border-left: 3px solid rgba(0, 0, 0, 0.07);
+  border-radius: 0;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.02);
+  background: transparent;
 }
 
 .toolSummary {
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 2px 8px 2px 6px;
+  font-size: 11px;
   cursor: pointer;
   user-select: none;
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
-  color: var(--color-slate, #374151);
+  color: var(--color-slate-dim, #6b7280);
+  opacity: 0.7;
+}
+
+.toolBlock[open] .toolSummary {
+  opacity: 0.85;
+  padding-bottom: 6px;
 }
 
 .toolSummary::-webkit-details-marker {
@@ -187,10 +193,16 @@
 
 .toolSummary::before {
   content: '▸';
-  font-size: 10px;
-  color: var(--color-slate, #6b7280);
+  font-size: 8px;
+  color: var(--color-slate, #9ca3af);
   width: 10px;
   flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.toolBlock[open] {
+  background: rgba(0, 0, 0, 0.015);
+  border-left-color: rgba(0, 0, 0, 0.1);
 }
 
 .toolBlock[open] .toolSummary::before {
@@ -198,8 +210,9 @@
 }
 
 .toolPrompt {
-  color: #16a34a;
-  font-weight: 600;
+  color: var(--color-slate, #9ca3af);
+  font-weight: 400;
+  opacity: 0.5;
   flex-shrink: 0;
 }
 
@@ -213,38 +226,42 @@
 
 .toolHint {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--color-slate, #9ca3af);
+  opacity: 0.5;
 }
 
 .toolContent {
-  border-top: 1px solid var(--border-color-light, #e5e7eb);
-  background: rgba(0, 0, 0, 0.03);
+  border-top: none;
+  background: transparent;
+  margin-left: 0;
 }
 
 .toolCommandFull {
   margin: 0;
-  padding: 8px 12px;
+  padding: 4px 8px 4px 13px;
   font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
-  font-size: 12px;
-  color: var(--color-slate, #374151);
+  font-size: 11px;
+  color: var(--color-slate-dim, #6b7280);
   white-space: pre-wrap;
   word-break: break-all;
   background: none;
-  border-bottom: 1px solid var(--border-color-light, #e5e7eb);
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+  opacity: 0.65;
 }
 
 .toolResult {
   margin: 0;
-  padding: 8px 12px;
+  padding: 6px 8px 6px 13px;
   font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
-  font-size: 12px;
-  color: var(--color-slate, #4b5563);
+  font-size: 11px;
+  color: var(--color-slate-dim, #6b7280);
   white-space: pre-wrap;
   word-break: break-word;
   background: none;
   max-height: 300px;
   overflow-y: auto;
+  opacity: 0.6;
 }
 
 /* Aggregated tool-call group: N consecutive shell commands folded into a
@@ -258,13 +275,12 @@
 .groupedCommandRow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
   font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
   user-select: none;
-  transition: background-color 0.1s ease;
 }
 
 .groupedCommandRow.expandable {
@@ -272,54 +288,55 @@
 }
 
 .groupedCommandRow.expandable:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(0, 0, 0, 0.015);
 }
 
 /* Subtle tint on the command row while its own result is open, so the
  * "this output belongs to this command" relationship is visually obvious
  * even with 5+ rows. */
 .groupedCommandRow.expanded {
-  background: rgba(0, 0, 0, 0.025);
+  background: rgba(0, 0, 0, 0.008);
+  margin-bottom: 2px;
 }
 
 .groupedCommandPrompt {
-  color: #4ade80;
-  font-weight: 500;
+  color: var(--color-slate, #9ca3af);
+  font-weight: 400;
+  opacity: 0.45;
   flex-shrink: 0;
 }
 
 .groupedCommandText {
-  color: var(--color-slate, #4b5563);
+  color: var(--color-slate-dim, #6b7280);
   flex: 1;
   min-width: 0;
   white-space: pre-wrap;
   word-break: break-all;
+  opacity: 0.65;
 }
 
 .groupedToolResult {
   margin: 0;
-  /* Indent the result under the command text (after the `$ ` marker) so the
-   * relationship reads at a glance; mirrors the codex TUI tree feel. Slight
-   * bottom padding for breathing room above the next row's divider. */
-  padding: 0 12px 6px 26px;
+  padding: 0 8px 4px 22px;
   font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
   font-size: 11px;
-  color: var(--color-slate, #6b7280);
+  color: var(--color-slate, #9ca3af);
   white-space: pre-wrap;
   word-break: break-word;
   background: none;
   max-height: 240px;
   overflow-y: auto;
   line-height: 1.5;
-  border-left: 2px solid rgba(74, 222, 128, 0.35);
-  margin-left: 12px;
+  border-left: none;
+  margin-left: 0;
+  opacity: 0.55;
 }
 
 .groupedToolDivider {
-  margin: 0;
+  margin: 0 8px;
   border: none;
-  border-top: 1px solid var(--border-color-light, #e5e7eb);
-  opacity: 0.6;
+  border-top: 1px solid rgba(0,0,0,0.03);
+  opacity: 0.3;
 }
 
 .patchPill {
