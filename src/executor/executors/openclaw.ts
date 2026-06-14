@@ -23,6 +23,9 @@
  */
 
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
 import { emitStatus } from "../reasoning-status.js";
 
@@ -274,6 +277,72 @@ export class OpenclawExecutor implements CliExecutor {
       });
     });
   }
+
+  /**
+   * Read the tail of openclaw's session transcript. openclaw stores per-agent
+   * transcripts at
+   *   `~/.openclaw/agents/<agentName>/sessions/<sessionId>.jsonl`
+   * (each file is NDJSON; first record is `{type:"session", id:<sessionId>, …}`).
+   *
+   * The executor is constructed without an agentName (rotom's a2a flow uses
+   * the default agent), so we can't pin the path — we glob across every
+   * agent's sessions directory for `<sessionId>.jsonl` and pick the first hit.
+   *
+   * Tolerant of missing files — returns empty content + an explanatory `error`
+   * so the dashboard can distinguish "file gone" from "session started but
+   * no output yet".
+   */
+  async readSessionContent(args: {
+    sessionId: string;
+    workingDir: string;
+    tailLines?: number;
+  }): Promise<{ format: "jsonl" | "text" | "raw"; content: string; error?: string }> {
+    const file = findOpenclawSessionFile(args.sessionId, this.agentName);
+    if (!file) {
+      return {
+        format: "jsonl",
+        content: "",
+        error: "openclaw session 文件不存在（可能已被 openclaw 清理，或 agent 名称不匹配）",
+      };
+    }
+    const text = fs.readFileSync(file, "utf-8");
+    const lines = text.split("\n");
+    const tail = args.tailLines ?? 200;
+    const sliced = lines.length > tail ? lines.slice(-tail).join("\n") : text;
+    return { format: "jsonl", content: sliced };
+  }
+}
+
+// ── Openclaw session-file lookup ────────────────────────────────────────
+
+/**
+ * Resolve `~/.openclaw/agents/[<agentName>/]sessions/<sessionId>.jsonl`.
+ *
+ * When `agentName` is known we look in just that agent's directory; the
+ * executor's instance field carries it when constructed with one. The
+ * rotom-side a2a flow instantiates without a name (default agent), so we
+ * fall back to scanning every agent's sessions directory for `<id>.jsonl`
+ * and return the first match.
+ */
+function findOpenclawSessionFile(sessionId: string, agentName?: string): string | null {
+  const target = `${sessionId}.jsonl`;
+  if (agentName) {
+    const pinned = path.join(os.homedir(), ".openclaw", "agents", agentName, "sessions", target);
+    if (fs.existsSync(pinned)) return pinned;
+  }
+  const agentsRoot = path.join(os.homedir(), ".openclaw", "agents");
+  if (!fs.existsSync(agentsRoot)) return null;
+  let agents: string[];
+  try {
+    agents = fs.readdirSync(agentsRoot);
+  } catch {
+    return null;
+  }
+  for (const a of agents) {
+    const candidate = path.join(agentsRoot, a, "sessions", target);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
 }
 
 function extractErrorMessage(event: OpenclawEvent): string {

@@ -123,4 +123,22 @@ export interface CliExecutor {
     onOutput: (chunk: string) => void,
     options?: ExecuteOptions,
   ): Promise<ExecuteResult>;
+  /**
+   * Read the tail of a session's transcript from the CLI tool's local storage.
+   * Optional — backends without direct file access (codex / hermes / openclaw)
+   * can omit this; the worker will surface a "not introspectable" response
+   * to the dashboard instead of an error.
+   *
+   * Implementations should be tolerant of missing files (the session may have
+   * been pruned by the CLI tool itself) — return empty content + an `error`
+   * string so the dashboard can distinguish "file gone" from "session started
+   * but no output yet". Throwing would surface as a 500 to the dashboard.
+   */
+  readSessionContent?(args: {
+    sessionId: string;
+    /** Cwd the CLI was actually spawned in for this group. */
+    workingDir: string;
+    /** Trailing lines to read. Default 200. */
+    tailLines?: number;
+  }): Promise<{ format: "jsonl" | "text" | "raw"; content: string; error?: string }>;
 }

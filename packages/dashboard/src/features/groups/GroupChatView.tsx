@@ -13,6 +13,7 @@ import { DirectChatArea } from './DirectChatArea'
 import { GroupChatArea } from './GroupChatArea'
 import { IssuePanel } from './IssuePanel'
 import { ArtifactPanel } from './ArtifactPanel'
+import { SessionPanel } from './SessionPanel'
 import { AddMemberModal } from './modals/AddMemberModal'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
@@ -29,6 +30,7 @@ export function GroupChatView() {
     groups,
     myAgentName,
     directTarget,
+    setDirectTarget,
     openConfigModal,
     loadGroups,
     toggleGroupArchived,
@@ -39,7 +41,7 @@ export function GroupChatView() {
 
   const [issues, setIssues] = useState<Issue[]>([])
   const [selectedIssueVersion, setSelectedIssueVersion] = useState(0)
-  const [rightTab, setRightTab] = useState<'issues' | 'artifacts'>('issues')
+  const [rightTab, setRightTab] = useState<'issues' | 'sessions' | 'artifacts'>('issues')
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
 
@@ -286,6 +288,31 @@ export function GroupChatView() {
     }
   }
 
+  /**
+   * Delete the currently active DM. We get the target groupId from
+   * localStorage (set by ChatContext.activateDmGroup whenever a DM thread is
+   * opened) since `selectedGroupId` is the public-group id and DM rows
+   * are filtered out of the sidebar's group list. After deletion, clear
+   * the active DM target and navigate back to the empty group page.
+   */
+  const handleDeleteDm = async () => {
+    const dmGroupId = localStorage.getItem('dm_active_group')
+    if (!dmGroupId) return
+    if (!confirm(`确定删除与 ${directTarget} 的对话吗？该对话的所有消息会被清除。`)) return
+    try {
+      await groupsApi.delete(dmGroupId)
+      localStorage.removeItem('dm_active_group')
+      localStorage.removeItem('dm_active_target')
+      localStorage.removeItem('group_selected_id')
+      setDirectTarget('')
+      navigate('/dashboard/groups')
+      loadGroups()
+    } catch (error) {
+      console.error('Failed to delete DM:', error)
+      window.alert(`删除失败：${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   const handleCreateIssue = async (data: {
     title: string
     description?: string
@@ -350,6 +377,7 @@ export function GroupChatView() {
             }}
             onShowConfig={openConfigModal}
             onReconnect={reconnect}
+            onDeleteConversation={handleDeleteDm}
           />
         ) : selectedGroup ? (
           <>
@@ -414,6 +442,12 @@ export function GroupChatView() {
               Issues
             </button>
             <button
+              className={rightTab === 'sessions' ? styles.activeTab : styles.tabBtn}
+              onClick={() => setRightTab('sessions')}
+            >
+              Sessions
+            </button>
+            <button
               className={rightTab === 'artifacts' ? styles.activeTab : styles.tabBtn}
               onClick={() => setRightTab('artifacts')}
             >
@@ -433,6 +467,8 @@ export function GroupChatView() {
               onCreateIssue={handleCreateIssue}
               onCreateCollaboration={handleCreateCollaboration}
             />
+          ) : rightTab === 'sessions' ? (
+            <SessionPanel groupId={selectedGroupId} />
           ) : (
             <ArtifactPanel groupId={selectedGroupId} />
           )}

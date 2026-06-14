@@ -134,7 +134,10 @@ export type ClientMessage =
   | ClientUpdateInfoMessage
   | ClientDisconnectMessage
   | ClientIssueUpdateMessage
-  | ClientIssueApprovalRequestMessage;
+  | ClientIssueApprovalRequestMessage
+  | ClientSessionViewResponse
+  | ClientSessionDeleteResponse
+  | ClientSessionSnapshot;
 
 export interface ClientAuthMessage {
   type: "auth";
@@ -148,6 +151,12 @@ export interface ClientAuthMessage {
   domain?: string;
   instance?: InstanceInfo;
   profile?: AgentProfile;
+  /**
+   * CLI tool name this executor is bound to (claude | codex | hermes | openclaw).
+   * Master caches it on the WS connection so /sessions endpoints can route
+   * session list/view/delete requests to the right worker.
+   */
+  cliTool?: string;
 }
 
 export interface ClientHeartbeatMessage {
@@ -249,6 +258,66 @@ export interface ClientIssueApprovalRequestMessage {
   }>;
 }
 
+// --- Session management (Agent → Master) ---
+//
+// Workers answer the master's session_list/view/delete_request messages with
+// these. The requestId ties the response back to the pending HTTP request
+// served by /sessions. Each worker reports its own entries (keyed
+// `${cliTool}:${groupId}` in its local SessionStore) — Master aggregates.
+
+/** One session entry as reported by a single worker. */
+export interface SessionEntry {
+  /** CLI tool name (claude | codex | hermes | openclaw). */
+  cliTool: string;
+  /** Group / DM id the session is bound to. */
+  groupId: string;
+  /** Underlying CLI session id (hex/uuid). The actual transcript lives in
+   *  the executor's local FS (e.g. `~/.claude/projects/<cwd>/<id>.jsonl`). */
+  sessionId: string;
+}
+
+export interface ClientSessionViewResponse {
+  type: "session_view_response";
+  requestId: string;
+  groupId: string;
+  sessionId: string;
+  /** "jsonl" for claude-code style line-delimited JSON, "text" or "raw" otherwise. */
+  format: "jsonl" | "text" | "raw";
+  /** Tail of the session content. Empty string if the executor's CLI backend
+   *  cannot introspect its own session (codex/hermes/openclaw — see plan §3). */
+  content: string;
+  /** Set when the executor failed to read (file missing, etc.). */
+  error?: string;
+}
+
+export interface ClientSessionDeleteResponse {
+  type: "session_delete_response";
+  requestId: string;
+  groupId: string;
+  sessionId: string;
+  ok: boolean;
+  /** Human-readable failure reason (e.g. "session not found"). */
+  error?: string;
+}
+
+/**
+ * Unprompted snapshot of every (cliTool, groupId, sessionId) tuple the worker
+ * currently has in its SessionStore. Workers push this:
+ *  1. immediately after a successful `auth` (initial sync), and
+ *  2. after every SessionStore mutation (set / delete) — full-array semantics,
+ *     master replaces its cached entry for this worker on each receipt.
+ *
+ * The master keeps an in-memory Map<workerAgentId, entries[]> so the dashboard
+ * `GET /sessions?groupId=X` can be answered locally without broadcasting.
+ *
+ * Full-array (not diff) chosen deliberately: SessionStore tends to have <100
+ * entries per worker, so the cost is trivial and we avoid sync drift bugs.
+ */
+export interface ClientSessionSnapshot {
+  type: "session_snapshot";
+  entries: SessionEntry[];
+}
+
 // ---------------------------------------------------------------------------
 // Master → Client messages
 // ---------------------------------------------------------------------------
@@ -274,7 +343,9 @@ export type ServerMessage =
   | ServerIssueCancelledMessage
   | ServerIssueChangedMessage
   | ServerIssueContinueMessage
-  | ServerIssueAppendMessage;
+  | ServerIssueAppendMessage
+  | ServerSessionViewRequest
+  | ServerSessionDeleteRequest;
 
 export interface ServerAuthOkMessage {
   type: "auth_ok";
@@ -495,6 +566,33 @@ export interface ServerIssueAppendMessage {
   approvalPolicy?: "r_allow" | "rw_allow";
 }
 
+// --- Session management (Master → Agent) ---
+//
+// session_view_request / session_delete_request are routed to the worker
+// bound to the requested cliTool (auth-time binding, see
+// ClientAuthMessage.cliTool). Workers MUST answer every request they receive;
+// masters time out after a few seconds.
+//
+// The list path is NOT here: workers push `session_snapshot` (ClientMessage)
+// unsolicited after auth and after every SessionStore mutation, so master
+// keeps an always-fresh cache and `GET /sessions` reads it synchronously.
+
+export interface ServerSessionViewRequest {
+  type: "session_view_request";
+  requestId: string;
+  groupId: string;
+  sessionId: string;
+  /** How many trailing lines to read from the session file. Default 200. */
+  tailLines?: number;
+}
+
+export interface ServerSessionDeleteRequest {
+  type: "session_delete_request";
+  requestId: string;
+  groupId: string;
+  sessionId: string;
+}
+
 // ---------------------------------------------------------------------------
 // Type guards (runtime validation for external input)
 // ---------------------------------------------------------------------------
@@ -527,6 +625,19 @@ export function isClientMessage(x: unknown): x is ClientMessage {
         && typeof msg.approvalId === "string"
         && (msg.kind === "exec" || msg.kind === "file_change" || msg.kind === "plan" || msg.kind === "ask")
         && typeof msg.summary === "string";
+    case "session_view_response":
+      return typeof msg.requestId === "string"
+        && typeof msg.groupId === "string"
+        && typeof msg.sessionId === "string"
+        && (msg.format === "jsonl" || msg.format === "text" || msg.format === "raw")
+        && typeof msg.content === "string";
+    case "session_delete_response":
+      return typeof msg.requestId === "string"
+        && typeof msg.groupId === "string"
+        && typeof msg.sessionId === "string"
+        && typeof msg.ok === "boolean";
+    case "session_snapshot":
+      return Array.isArray(msg.entries);
     default:
       return false;
   }

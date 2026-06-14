@@ -583,4 +583,86 @@ export class HermesCliExecutor implements CliExecutor {
       void runLifecycle();
     });
   }
+
+  /**
+   * Read the tail of a hermes session from its on-disk transcript at
+   *   `~/.hermes/sessions/session_<sessionId>.json`
+   * The file is a single JSON document with `{ messages: [{role, content}, …] }`.
+   * We render the last N messages as `role: text` blocks so the dashboard
+   * `<pre>` view stays readable — the raw JSON would be too noisy.
+   *
+   * Tolerant of missing files (hermes may prune its sessions directory) —
+   * returns empty content + an explanatory `error` so the dashboard can
+   * distinguish "file gone" from "session started but no messages yet".
+   */
+  async readSessionContent(args: {
+    sessionId: string;
+    workingDir: string;
+    tailLines?: number;
+  }): Promise<{ format: "jsonl" | "text" | "raw"; content: string; error?: string }> {
+    const file = path.join(
+      os.homedir(),
+      ".hermes",
+      "sessions",
+      `session_${args.sessionId}.json`,
+    );
+    if (!fs.existsSync(file)) {
+      return {
+        format: "text",
+        content: "",
+        error: "hermes session 文件不存在（可能已被 hermes daemon 清理）",
+      };
+    }
+    let parsed: { messages?: Array<{ role?: string; content?: unknown }> };
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, "utf-8"));
+    } catch {
+      return {
+        format: "text",
+        content: "",
+        error: "hermes session 文件存在但 JSON 解析失败",
+      };
+    }
+    const messages = Array.isArray(parsed.messages) ? parsed.messages : [];
+    const tail = args.tailLines ?? 200;
+    const window = messages.length > tail ? messages.slice(-tail) : messages;
+    const rendered = window
+      .map((m) => `[${m.role ?? "?"}] ${stringifyContent(m.content)}`)
+      .join("\n\n");
+    return { format: "text", content: rendered };
+  }
+}
+
+// ── Hermes content rendering ────────────────────────────────────────────
+
+/**
+ * Coerce a hermes message `content` (string | array-of-blocks | object) into
+ * a printable single string. We keep this conservative — anything we don't
+ * recognise falls back to JSON.stringify so nothing is silently dropped.
+ */
+function stringifyContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((b) => {
+        if (b && typeof b === "object") {
+          const rec = b as Record<string, unknown>;
+          if (typeof rec.text === "string") return rec.text;
+        }
+        try {
+          return JSON.stringify(b);
+        } catch {
+          return String(b);
+        }
+      })
+      .join("\n");
+  }
+  if (content && typeof content === "object") {
+    try {
+      return JSON.stringify(content);
+    } catch {
+      return String(content);
+    }
+  }
+  return String(content ?? "");
 }

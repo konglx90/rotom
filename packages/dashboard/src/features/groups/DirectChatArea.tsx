@@ -18,6 +18,8 @@ interface DirectChatAreaProps {
   onNewDmConversation: () => void
   onShowConfig: () => void
   onReconnect: () => void
+  /** Delete the current DM (the underlying `groups` row + its messages). */
+  onDeleteConversation?: () => void
 }
 
 export function DirectChatArea({
@@ -29,6 +31,7 @@ export function DirectChatArea({
   onNewDmConversation,
   onShowConfig,
   onReconnect,
+  onDeleteConversation,
 }: DirectChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -81,6 +84,11 @@ export function DirectChatArea({
         </div>
         <div className={styles.chatHeaderActions}>
           <Button variant="ghost" size="sm" onClick={onNewDmConversation}>新对话</Button>
+          {onDeleteConversation && (
+            <Button variant="ghost" size="sm" onClick={onDeleteConversation} title="删除整个对话">
+              删除
+            </Button>
+          )}
           <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig} title="设置">⚙️</Button>
         </div>
       </div>
@@ -96,17 +104,7 @@ export function DirectChatArea({
           <div key={msg.id} className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing}`}>
             <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={36} className={styles.messageAvatar} />
             <div
-              className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${hasPrompt ? styles.clickablePrompt : ''}`}
-              onClick={hasPrompt ? () => setComposedPromptFor(msg) : undefined}
-              title={hasPrompt ? '点击查看 prompt 组合' : undefined}
-              role={hasPrompt ? 'button' : undefined}
-              tabIndex={hasPrompt ? 0 : undefined}
-              onKeyDown={hasPrompt ? (e: React.KeyboardEvent) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setComposedPromptFor(msg)
-                }
-              } : undefined}
+              className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing}`}
             >
               {msg.isIncoming && <div className={styles.messageSender}>{msg.from}</div>}
               <div className={styles.messageContent}>
@@ -126,6 +124,23 @@ export function DirectChatArea({
                     title={`Agent 实际工作目录：${msg.cwd}`}
                   >
                     📁 {msg.cwd}
+                  </span>
+                )}
+                {hasPrompt && (
+                  <span
+                    className={styles.messagePromptButton}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setComposedPromptFor(msg)}
+                    onKeyDown={(e: React.KeyboardEvent) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setComposedPromptFor(msg)
+                      }
+                    }}
+                    title="查看 prompt 组合"
+                  >
+                    🔍 prompt
                   </span>
                 )}
               </div>

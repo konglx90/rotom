@@ -24,6 +24,9 @@ import type {
   ServerMessage,
   AgentInfo,
   AgentProfile,
+  ClientSessionViewResponse,
+  ClientSessionDeleteResponse,
+  SessionEntry,
 } from "../shared/protocol.js";
 import { isClientMessage } from "../shared/protocol.js";
 import {
@@ -48,6 +51,12 @@ interface ConnectedAgent {
   agentId: string;
   name: string;
   domain?: string;
+  /**
+   * CLI tool name the executor is bound to (claude | codex | hermes | openclaw).
+   * Captured at auth time from ClientAuthMessage.cliTool and used by
+   * routeToExecutor() to pick the right worker for /sessions endpoints.
+   */
+  cliTool?: string;
   lastHeartbeat: number;
   /** Monotonic generation counter — used to prevent stale close events from kicking new connections */
   generation: number;
@@ -69,6 +78,12 @@ interface Logger {
 // WSHub
 // ---------------------------------------------------------------------------
 
+type PendingSession = {
+  resolve: (msg: ClientSessionViewResponse | ClientSessionDeleteResponse) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
 export class WSHub {
   private wss: WebSocketServer;
   private connections = new Map<string, ConnectedAgent>(); // agentId → conn
@@ -76,6 +91,26 @@ export class WSHub {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private generation = 0; // global generation counter
+  /**
+   * In-flight session management requests awaiting a worker response. Keyed
+   * by requestId; each entry holds a resolver + a setTimeout that fires
+   * routeToExecutor's rejection with a timeout error. Cleaned up in the
+   * session response handler (first response wins, except for broadcasts
+   * which collect all responses until timeout).
+   */
+  private pendingSessionRequests = new Map<string, PendingSession>();
+
+  /**
+   * In-memory cache of each worker's SessionStore. Workers push a
+   * `session_snapshot` after auth and after every mutation; we replace the
+   * entry on receipt. This powers the dashboard's `GET /sessions?groupId=X`
+   * without WS round-trips — fast list, no broadcast.
+   *
+   * Key is `ConnectedAgent.id` (workerAgentId). On disconnect we drop the
+   * entry so offline workers don't surface stale sessions; the next reconnect
+   * re-pushes a snapshot.
+   */
+  private sessionSnapshots = new Map<string, SessionEntry[]>();
 
   constructor(
     httpServer: Server,
@@ -274,6 +309,7 @@ export class WSHub {
           agentId,
           name: agent.name as string,
           domain: dbDomain,
+          cliTool: typeof msg.cliTool === "string" && msg.cliTool ? msg.cliTool : undefined,
           lastHeartbeat: Date.now(),
           generation: connGeneration,
           messageTimestamps: [],
@@ -737,6 +773,37 @@ export class WSHub {
         this.logger.info(`[mesh] Approval requested by ${conn.name} on issue ${msg.issueId} (${msg.kind}, id=${msg.approvalId})`);
         return;
       }
+
+      // ── Session management responses (Executor → Master) ─────────────
+      // Workers answer view / delete requests routed via routeToExecutor.
+      // First response wins — late responses (from other workers, if any)
+      // are dropped. List does NOT go through here; it reads
+      // `sessionSnapshots` synchronously instead.
+      if (
+        msg.type === "session_view_response" ||
+        msg.type === "session_delete_response"
+      ) {
+        const requestId = (msg as { requestId: string }).requestId;
+        const pending = this.pendingSessionRequests.get(requestId);
+        if (!pending) {
+          this.logger.warn(`[mesh] session response for unknown requestId ${requestId}`);
+          return;
+        }
+        this.pendingSessionRequests.delete(requestId);
+        clearTimeout(pending.timer);
+        pending.resolve(msg);
+        return;
+      }
+
+      // ── Session snapshot (Executor → Master, unsolicited) ────────────
+      // Worker pushes its full SessionStore after auth and after every
+      // mutation. Replace the cached entry wholesale — full-array semantics.
+      // The dashboard `GET /sessions?groupId=X` reads from this cache.
+      if (msg.type === "session_snapshot") {
+        if (!agentId) return;
+        this.sessionSnapshots.set(agentId, msg.entries);
+        return;
+      }
     });
 
     ws.on("close", () => {
@@ -762,6 +829,10 @@ export class WSHub {
 
     this.connections.delete(agentId);
     this.db.setAgentOffline(agentId);
+    // Drop the worker's session snapshot so the dashboard doesn't surface
+    // stale sessions for an offline executor. The worker re-pushes a fresh
+    // snapshot on next auth.
+    this.sessionSnapshots.delete(agentId);
 
     this.broadcastDirectory("leave", {
       name: conn.name,
@@ -878,6 +949,72 @@ export class WSHub {
       ws.send(JSON.stringify(msg));
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Session management routing (Master → Executor)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Aggregate every connected worker's cached SessionStore snapshot and return
+   * only entries belonging to `groupId`. Deduplicates by `(cliTool, sessionId)`
+   * — in single-worker-per-cliTool deployments this is a no-op, but if two
+   * workers with the same cliTool both claim an entry we keep the first one.
+   *
+   * This is the fast path for `GET /sessions?groupId=X`: no WS broadcast, no
+   * waiting on worker responses. The cache is kept fresh by workers pushing
+   * `session_snapshot` after auth and after every mutation.
+   */
+  listSessionsByGroup(groupId: string): SessionEntry[] {
+    const seen = new Set<string>();
+    const out: SessionEntry[] = [];
+    for (const entries of this.sessionSnapshots.values()) {
+      for (const entry of entries) {
+        if (entry.groupId !== groupId) continue;
+        const key = `${entry.cliTool}:${entry.sessionId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(entry);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Send a request to one or more online workers matching `predicate` and
+   * return the **first** response received within `timeoutMs`. Other responses
+   * (including late ones) are dropped.
+   *
+   * Used by /sessions endpoints:
+   *   - view:   predicate = cliTool match,        timeoutMs = 5s
+   *   - delete: predicate = cliTool match,        timeoutMs = 5s
+   *
+   * Rejects with a TimeoutError if no worker answers in time. The HTTP layer
+   * maps that to a 504.
+   */
+  routeToExecutor(
+    predicate: (conn: ConnectedAgent) => boolean,
+    payload: ServerMessage & { requestId: string },
+    timeoutMs = 5_000,
+  ): Promise<ClientSessionViewResponse | ClientSessionDeleteResponse> {
+    const targets = [...this.connections.values()].filter(
+      (c) => c.ws.readyState === WebSocket.OPEN && predicate(c),
+    );
+    if (targets.length === 0) {
+      return Promise.reject(new Error("no matching executor online"));
+    }
+    return new Promise<ClientSessionViewResponse | ClientSessionDeleteResponse>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingSessionRequests.delete(payload.requestId);
+        reject(new Error(`executor did not respond within ${timeoutMs}ms`));
+      }, timeoutMs);
+      this.pendingSessionRequests.set(payload.requestId, { resolve, reject, timer });
+      for (const conn of targets) {
+        this.send(conn.ws, payload);
+      }
+    });
+  }
+
+
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Directory

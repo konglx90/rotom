@@ -295,6 +295,31 @@ export class ClaudeCodeExecutor implements CliExecutor {
       });
     });
   }
+
+  /**
+   * Read the tail of `~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl`.
+   * Each line is a JSON record (user/assistant/tool messages, system events,
+   * …). We return the last N lines verbatim — the dashboard renders them as
+   * a `<pre>` block. Future enhancement: pretty-print parsed records.
+   *
+   * Tolerant of missing files (returns empty content) so a "view session"
+   * click never 500s on a pruned transcript.
+   */
+  async readSessionContent(args: {
+    sessionId: string;
+    workingDir: string;
+    tailLines?: number;
+  }): Promise<{ format: "jsonl" | "text" | "raw"; content: string }> {
+    const file = path.join(claudeProjectDir(args.workingDir), `${args.sessionId}.jsonl`);
+    if (!fs.existsSync(file)) {
+      return { format: "jsonl", content: "" };
+    }
+    const text = fs.readFileSync(file, "utf-8");
+    const lines = text.split("\n");
+    const tail = args.tailLines ?? 200;
+    const sliced = lines.length > tail ? lines.slice(-tail).join("\n") : text;
+    return { format: "jsonl", content: sliced };
+  }
 }
 
 /**
