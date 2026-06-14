@@ -229,6 +229,20 @@
 
 
 /* ── Sessions panel (right-side tab) ─────────────────────────────────── */
+.hint {
+  padding: 24px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-slate);
+  text-align: center;
+}
+
+.hintSub {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
 .sessionPanel {
   display: flex;
   flex-direction: column;
