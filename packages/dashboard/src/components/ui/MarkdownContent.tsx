@@ -479,7 +479,7 @@ function ToolCallBlock({
   }, [streaming])
   const resultLines = result ? result.split('\n').length : 0
   const hint = result
-    ? ` ↳ output (${resultLines} ${resultLines === 1 ? 'line' : 'lines'})`
+    ? ` ↳ ${resultLines} ${resultLines === 1 ? 'line' : 'lines'}`
     : streaming
       ? ' …'
       : ''
@@ -491,7 +491,6 @@ function ToolCallBlock({
       onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
     >
       <summary className={styles.toolSummary} onClick={stopBubble}>
-        <span className={styles.toolPrompt}>$</span>
         <span className={styles.toolCommand}>{command.trim() || '(empty command)'}</span>
         {hint && <span className={styles.toolHint}>{hint}</span>}
       </summary>
@@ -555,7 +554,6 @@ function ToolCallGroupBlock({
       onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
     >
       <summary className={styles.toolSummary} onClick={stopBubble}>
-        <span className={styles.toolPrompt}>$</span>
         <span className={styles.toolCommand}>Ran {calls.length} commands: {preview}{more}</span>
         {hint && <span className={styles.toolHint}>{hint}</span>}
       </summary>
@@ -590,27 +588,18 @@ function GroupedCommandRow({ call, isLast }: { call: ToolCall; isLast: boolean }
         className={`${styles.groupedCommandRow} ${hasResult ? styles.expandable : ''} ${showResult ? styles.expanded : ''}`}
         onClick={hasResult ? (e => { e.stopPropagation(); toggle() }) : undefined}
         role={hasResult ? 'button' : undefined}
-        aria-expanded={hasResult ? showResult : undefined}
-        tabIndex={hasResult ? 0 : undefined}
-        onKeyDown={hasResult ? (e => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            toggle()
-          }
-        }) : undefined}
       >
-        <span className={styles.groupedCommandPrompt}>$</span>
         <span className={styles.groupedCommandText}>{call.command.trim() || '(empty command)'}</span>
         {hasResult && (
           <span className={styles.toolHint}>
-            {showResult ? '▾' : '▸'} output ({resultLines} {resultLines === 1 ? 'line' : 'lines'})
+            {showResult ? '▾' : '▸'} {resultLines} {resultLines === 1 ? 'line' : 'lines'}
           </span>
         )}
       </div>
       {showResult && hasResult && (
         <pre className={styles.groupedToolResult}>{call.result || '(no output)'}</pre>
       )}
-      {!isLast && <hr className={styles.groupedToolDivider} />}
+
     </div>
   )
 }
