@@ -894,7 +894,17 @@ export class ExecutorWorker {
       //     'tool_calls' must be followed by tool messages…`.
       // File writes here still need a backing in-progress issue (the prompt
       // tells the agent so — see composePrompt group-basic active_issues block).
-      const execOptions: Parameters<typeof this.executor.execute>[3] = { signal: controller.signal, env: this.agentEnv(), kind: "chat" };
+      const execOptions: Parameters<typeof this.executor.execute>[3] = {
+        signal: controller.signal,
+        env: this.agentEnv(),
+        kind: "chat",
+        // 2-minute hard wall-clock cap on chat replies. Without this a
+        // hanging openclaw subprocess can tie up the worker's
+        // activeTasks slot until the user gives up and the daemon
+        // restarts. Executors pass this through to `--timeout` AND set
+        // a defensive SIGKILL after a small grace.
+        timeoutMs: 120_000,
+      };
       if (sessionId) execOptions.sessionId = sessionId;
       // cwd 按 groupId 派生
       const result = await this.executor.execute(composed.final, cwd, (chunk) => {
@@ -904,11 +914,16 @@ export class ExecutorWorker {
       }, execOptions);
 
       // Drop the cached sessionId if the executor reports the conversation
-      // history is poisoned (e.g. dangling tool_calls). Next chat turn will
-      // start fresh instead of trying to resume into a broken transcript.
+      // history is poisoned (e.g. dangling tool_calls, or a terminal
+      // provider error — see HermesCliExecutor's provider error sniffer).
+      // Next chat turn will start fresh instead of trying to resume into
+      // a broken transcript.
       if (groupId && result.invalidateSession) {
         this.sessionStore.delete(this.cliTool, groupId);
-        console.warn(`${this.tag} Session invalidated: ${this.cliTool}:${groupId} (poisoned history)`);
+        console.warn(
+          `${this.tag} Session invalidated: ${this.cliTool}:${groupId}` +
+          (result.failed ? " (provider error)" : " (poisoned history)"),
+        );
         this.sendSessionSnapshot();
       } else if (groupId && result.sessionId) {
         // Persist sessionId for future messages in this group
@@ -918,8 +933,26 @@ export class ExecutorWorker {
       }
 
       if (!task.aborted) {
-        this.sendChatEnd(requestId, fullContent, conversation, cwd, composed);
-        console.log(`${this.tag} Reply sent to ${fromName} (${fullContent.length} chars)`);
+        // Provider-error path: executor detected a terminal model failure
+        // (e.g. hermes's "API call failed after N retries: …" reply, which
+        // is not a legitimate assistant message). Surface it as a clean
+        // [错误] notice instead of streaming the error string as the
+        // agent's "answer". The dashboard's status pill is already on
+        // "Failed" from the executor's [status:Failed] emit.
+        if (result.failed) {
+          const reason = result.errorMessage || "unknown provider error";
+          this.sendChatEnd(
+            requestId,
+            `[错误] 模型调用失败：${reason}\n（已清空会话上下文,下一条消息将重新开始）`,
+            conversation,
+            cwd,
+            composed,
+          );
+          console.error(`${this.tag} Provider error surfaced to ${fromName}: ${reason}`);
+        } else {
+          this.sendChatEnd(requestId, fullContent, conversation, cwd, composed);
+          console.log(`${this.tag} Reply sent to ${fromName} (${fullContent.length} chars)`);
+        }
       }
     } catch (err: any) {
       if (!task.aborted) {

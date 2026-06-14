@@ -61,7 +61,137 @@ interface PendingToolCall {
   emitted: boolean;
 }
 
+// ── Provider error detection ────────────────────────────────────────────
+// Mirrors multica's acpProviderErrorSniffer / acpAgentOutputTerminalRe
+// (server/pkg/agent/hermes.go). Hermes emits its final response
+// (`"API call failed after N retries: ..."`) via
+// acp_adapter/server.py:1634 as a regular `agent_message_chunk`, so without
+// sniffing we'd happily stream "API call failed after 3 retries: Connection
+// error." to the dashboard as if the agent had actually said that.
+//
+// We match in TWO places:
+//   1. stderr lines (hermes logs the same failure there at WARNING level).
+//   2. `agent_message_chunk.text` (the user-visible "reply").
+// First hit flips `providerError.matched`; once set we stop accumulating
+// `fullOutput` for matching chunks and surface a clean error instead.
+
+const PROVIDER_ERROR_PATTERNS: RegExp[] = [
+  // "API call failed after 3 retries: Connection error." (hermes primary)
+  /API call failed after \d+ retr(?:y|ies)/i,
+  // SDK-level error names — backup signal in case the summary line is
+  // truncated or absent.
+  /\bAPIConnectionError\b/,
+  /\bBadRequestError\b/,
+  /\bAuthenticationError\b/,
+  /\bRateLimitError\b/,
+  // "Non-retryable …" prefix hermes logs on unrecoverable failures.
+  /Non-retryable/i,
+  // hermes also prints bracketed ERROR markers via conversation_loop.
+  /\[ERROR\]/,
+  // 4xx/5xx in the same line as an error keyword (covers HTTP 401/429/500/…).
+  /\bHTTP\s+[45]\d{2}\b.*(?:error|fail|denied|forbidden|unauthor)/i,
+];
+
+function matchProviderError(text: string): RegExpMatchArray | null {
+  for (const re of PROVIDER_ERROR_PATTERNS) {
+    const m = text.match(re);
+    if (m) return m;
+  }
+  return null;
+}
+
+// Pull a *clean* error reason out of a hermes stderr line, in priority order:
+//
+//   1. `summary=Connection error.`  →  "Connection error"
+//   2. `❌ API failed after N retries — Connection error.`  →
+//        "API failed after N retries — Connection error"
+//   3. `💀 Final error: Connection error.`  →  "Final error: Connection error"
+//   4. `API call failed after N retries. <Reason>.`  →
+//        "API call failed after N retries: <Reason>"
+//   5. fallback  →  "provider error"
+//
+// The matched line itself is almost always a structured log record (timestamp
+// + level + thread + provider metadata); we don't want to surface that
+// verbatim — see the worker.ts "[错误] 模型调用失败: …" branch.
+const CLEAN_ERROR_PATTERNS: RegExp[] = [
+  // `summary=...` 字段是 hermes 的归一化错误信息,几乎所有 WARNING/ERROR 行都有
+  /\bsummary=([^\s|]+(?:[ ][^\s|]+)*?)(?:\s*\||\s*$)/,
+  // prettier 错误横幅
+  /❌\s*API\s+failed\s+after\s+\d+\s+retries?\s*[—–-]\s*([^\n]+?)\.?\s*$/,
+  /💀\s*Final\s+error:\s*([^\n]+?)\.?\s*$/,
+  // ERROR 行的 "API call failed after N retries. <Reason>."
+  /API\s+call\s+failed\s+after\s+\d+\s+retries?\.?\s*([^|.]*?)\s*\.?\s*$/,
+];
+
+function extractCleanErrorReason(text: string): string {
+  for (const re of CLEAN_ERROR_PATTERNS) {
+    const m = text.match(re);
+    if (m && m[1]) {
+      const reason = m[1].trim().replace(/\s+/g, " ");
+      if (reason && reason.length < 200) return reason;
+    }
+  }
+  return "provider error";
+}
+
 // ── Executor ────────────────────────────────────────────────────────────
+
+/**
+ * Build the env passed to the hermes subprocess.
+ *
+ * Why not just spread `process.env`? The rotom executor daemon is launched
+ * from a shell that may have local-proxy / IDE-vars polluting env
+ * (ANTHROPIC_BASE_URL=http://127.0.0.1:58082, ANTHROPIC_AUTH_TOKEN=sk-cp-...,
+ * CCV_PROXY_MODE=1, plus ANTHROPIC_DEFAULT_*_MODEL overrides). When those
+ * leak into the hermes subprocess they cause ACP `session/resume`'s 2nd
+ * turn to fail with `APIConnectionError` to whatever URL those vars
+ * point at (the connection is alive enough to consume the request but
+ * not enough to deliver a response). Verified 2026-06-14:
+ *
+ *   env with CCV leak + ACP session/new + 2nd session/prompt
+ *     → 2nd turn: "API call failed after 3 retries: Connection error."
+ *   same scenario with CCV vars stripped
+ *     → 2nd turn: normal reply, history replayed correctly
+ *
+ * `hermes-agent` is configured via `~/.hermes/config.yaml` (model +
+ * base_url) and `~/.hermes/.env` (ANTGROUP_API_KEY); it does not read
+ * ANTHROPIC_* from env. The Anthropic SDK inside hermes, however, does
+ * pick up ANTHROPIC_BASE_URL as a transport-level fallback for some
+ * paths, which is enough to misroute the 2nd connection.
+ *
+ * We strip the leaky vars here and let hermes read its own config.
+ */
+function buildHermesEnv(
+  parentEnv: NodeJS.ProcessEnv,
+  optionsEnv: Record<string, string> | undefined,
+  mergedPath: string | undefined,
+): NodeJS.ProcessEnv {
+  // We strip by *prefix* for the Claude Code / Anthropic env family because
+  // the SDK picks up any of `ANTHROPIC_*`, `CLAUDE*`, `CLAUDECODE` and the
+  // exact list grows over time. Anything that smells like Claude Code
+  // session bookkeeping (CLAUDE_CODE_EXECUTABLE, _SSE_PORT, _SUBAGENT_MODEL,
+  // CLAUDECODE, ...) should NOT leak into a hermes subprocess — those are
+  // signals about the rotom daemon's own claude-code execution, not hermes.
+  const STRIPPED_PREFIXES = [
+    "ANTHROPIC_",
+    "CLAUDE_CODE_",
+    "CLAUDECODE",
+  ];
+  const STRIPPED_EXACT = new Set([
+    "CCV_PROXY_MODE",
+  ]);
+  const out: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(parentEnv)) {
+    if (STRIPPED_EXACT.has(k)) continue;
+    if (STRIPPED_PREFIXES.some((p) => k === p || k.startsWith(p))) continue;
+    out[k] = v;
+  }
+  if (optionsEnv) Object.assign(out, optionsEnv);
+  out.PATH = mergedPath ?? parentEnv.PATH ?? "";
+  out.HERMES_YOLO_MODE = "1";
+  console.log(`[hermes-cli] buildHermesEnv: stripping results in ${Object.keys(out).length} keys; ANTHROPIC_BASE_URL=${out.ANTHROPIC_BASE_URL}; CLAUDECODE=${out.CLAUDECODE}; CCV_PROXY_MODE=${out.CCV_PROXY_MODE}`);
+  return out;
+}
 
 export class HermesCliExecutor implements CliExecutor {
   async execute(
@@ -88,12 +218,7 @@ export class HermesCliExecutor implements CliExecutor {
 
       const proc = spawn("hermes", args, {
         cwd: workingDir,
-        env: {
-          ...process.env,
-          ...options?.env,
-          PATH: mergedPath,
-          HERMES_YOLO_MODE: "1",
-        },
+        env: buildHermesEnv(process.env, options?.env, mergedPath),
         stdio: ["pipe", "pipe", "pipe"],
       });
 
@@ -119,6 +244,23 @@ export class HermesCliExecutor implements CliExecutor {
       // from "process died before turn_end ever arrived" (needs a terminal
       // emit to keep the dashboard status pill from sticking on "Working").
       let turnEndSeen = false;
+      // Set when a terminal provider/model error is detected in stderr or
+      // in an agent_message_chunk — see matchProviderError() above. When
+      // set, finish() returns `failed: true` so the worker surfaces a
+      // clean error and drops the cached sessionId (next turn starts
+      // fresh with session/new, which is the only path that currently
+      // works for the session/resume + second-prompt bug).
+      // `message` is the user-facing reason (extracted via
+      // extractCleanErrorReason so we never surface raw log records).
+      let providerError: { matched: boolean; message: string } = {
+        matched: false,
+        message: "",
+      };
+      // Buffer agent_message_chunk text so a split error string
+      // ("API call failed " + "after 3 retries: …") still matches. We
+      // only ever inspect this buffer for the regex; the chunks
+      // themselves still stream to onOutput.
+      let agentTextBuffer = "";
       // 从 reasoning 流里抽第一个 **Header**,emit 为 [status:thinking] 标签,
       // 在 dashboard 顶部以 shimmer pill 形式展示。完全对齐 codex-rs/tui 的
       // extract_first_bold + set_status_header 模式。
@@ -169,11 +311,27 @@ export class HermesCliExecutor implements CliExecutor {
         // emit something so the dashboard's status pill doesn't stay on
         // "Working" forever. Successful turns already emitted "Answered"
         // in the turn_end case, so this is a no-op for the happy path.
-        if (!turnEndSeen) {
+        if (!turnEndSeen && !providerError.matched) {
           emitStatus(onOutput, exitCode === 0 ? "Done" : "Failed");
         }
+        // Provider error path — return failed/invalidateSession so the
+        // worker surfaces a clean error and drops the cached sessionId
+        // (next turn starts fresh with session/new, which is the only
+        // path that currently works for the session/resume bug).
+        if (providerError.matched) {
+          console.warn(
+            `[hermes-cli] Provider error → returning failed. exitCode=${exitCode} message="${providerError.message}"`,
+          );
+        }
         console.log(`[hermes-cli] Exited code=${exitCode}, output=${fullOutput.length} chars, session=${sessionId}`);
-        resolve({ exitCode, fullOutput, sessionId: sessionId || undefined });
+        resolve({
+          exitCode,
+          fullOutput,
+          sessionId: providerError.matched ? undefined : (sessionId || undefined),
+          invalidateSession: providerError.matched || undefined,
+          failed: providerError.matched || undefined,
+          errorMessage: providerError.matched ? providerError.message : undefined,
+        });
       }
 
       // ── Handle agent → client requests (auto-approve permissions) ──
@@ -359,11 +517,37 @@ export class HermesCliExecutor implements CliExecutor {
             const content = (update as Record<string, unknown>).content as Record<string, unknown> | undefined;
             const text = content?.text as string | undefined;
             if (text) {
+              // Buffer-then-check so split chunks ("API call failed " +
+              // "after 3 retries: …") still trigger the sniffer. Cap the
+              // buffer at 1 KiB — anything bigger is clearly not just
+              // an error string and we don't want to grow it forever.
+              agentTextBuffer = (agentTextBuffer + text).slice(-1024);
+              if (!providerError.matched) {
+                const m = matchProviderError(agentTextBuffer);
+                if (m) {
+                  providerError = { matched: true, message: extractCleanErrorReason(agentTextBuffer) };
+                  emitStatus(onOutput, "Failed");
+                  console.error(`[hermes-cli] provider error detected in agent_message_chunk: ${m[0]}`);
+                }
+              }
               closeThinkingIfOpen();
-              fullOutput += text;
+              // If this chunk is part of a provider-error reply, do NOT
+              // accumulate it into fullOutput — the worker uses fullOutput
+              // as the assistant's "answer" and we don't want
+              // "API call failed after 3 retries: …" rendered as such.
+              // We still stream it to onOutput so the dashboard sees the
+              // raw event for debugging, and the live status pill flips
+              // to "Failed" via emitStatus above.
+              if (!providerError.matched) {
+                fullOutput += text;
+              }
               onOutput(text);
-              // 模型已经从「思考」切到「回答」,状态 pill 切回 "Working"
-              emitStatus(onOutput, "Working");
+              // 模型已经从「思考」切到「回答」,状态 pill 切回 "Working"。
+              // 当 sniffer 已经标记失败时,跳过这条 emit,保留上面 "Failed"
+              // 作为最后一个状态,避免 dashboard pill 被覆盖回 "Working"。
+              if (!providerError.matched) {
+                emitStatus(onOutput, "Working");
+              }
             }
             break;
           }
@@ -510,11 +694,21 @@ export class HermesCliExecutor implements CliExecutor {
       const rl = createInterface({ input: proc.stdout! });
       rl.on("line", (line) => handleLine(line.trim()));
 
-      // ── stderr logging ──
+      // ── stderr logging + provider error sniffing ──
 
       proc.stderr!.on("data", (data: Buffer) => {
         const text = data.toString().trim();
         if (text) console.error(`[hermes-cli] stderr: ${text}`);
+        // Sniff for terminal provider/model errors. hermes logs the same
+        // failure at WARNING/ERROR level on stderr (see
+        // agent.conversation_loop), so we can flip the flag from the
+        // first line that matches — usually well before the
+        // agent_message_chunk carrying the user-facing summary arrives.
+        if (!providerError.matched && text && matchProviderError(text)) {
+          providerError = { matched: true, message: extractCleanErrorReason(text) };
+          emitStatus(onOutput, "Failed");
+          console.error(`[hermes-cli] provider error detected in stderr: ${text}`);
+        }
       });
 
       // ── ACP lifecycle ──
