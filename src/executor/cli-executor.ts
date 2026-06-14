@@ -60,6 +60,15 @@ export interface ExecuteOptions {
   sessionId?: string;
   /** Abort signal — when triggered, the spawned CLI process should be killed. */
   signal?: AbortSignal;
+  /**
+   * Hard wall-clock timeout for the spawned CLI process, in milliseconds.
+   * Executors should pass this through to the underlying CLI when supported
+   * (e.g. `openclaw agent --timeout N`) AND set a defensive timer that
+   * SIGKILLs the process after `timeoutMs + graceMs` if the CLI ignores it.
+   * Without this a single hanging subprocess can stall the worker's
+   * maxConcurrent slot indefinitely.
+   */
+  timeoutMs?: number;
   /** Extra environment variables to pass to the spawned CLI process. */
   env?: Record<string, string>;
   /**
@@ -113,6 +122,21 @@ export interface ExecuteResult {
    * which makes every subsequent resume fail with `invalid_request_error`.
    */
   invalidateSession?: boolean;
+  /**
+   * Set when the executor detected a terminal provider/model failure that
+   * is not a legitimate assistant reply — e.g. hermes's
+   * "API call failed after N retries: ..." that acp_adapter/server.py
+   * sends as an `agent_message_chunk` when retries are exhausted.
+   *
+   * Callers (worker.handleChatReply) should:
+   *   • surface `errorMessage` to the dashboard as a system error
+   *     instead of treating `fullOutput` as a successful chat reply,
+   *   • drop any cached sessionId (the next turn should start fresh),
+   *   • not stream the error string as assistant prose.
+   */
+  failed?: boolean;
+  /** Human-readable reason for `failed`. Shown to the user verbatim. */
+  errorMessage?: string;
 }
 
 export interface CliExecutor {
