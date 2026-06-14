@@ -194,6 +194,44 @@ describe("composePrompt", () => {
     assert.ok(g.content.includes("rotom issue create"));
   });
 
+  it("group + fromName: 渲染'发信人是=\"X\"'，让 agent 知道对话方身份", () => {
+    const ctx = baseCtx({
+      group: { id: "g1", name: "1000字科幻小说", activeIssues: [] },
+      fromName: "孔令飞",
+    });
+    const out = composePrompt(ctx);
+    const g = out.layers.find((l) => l.layer === "group-basic")!;
+    assert.ok(g.content.includes("发信人是=\"孔令飞\""), `group-basic should include sender name, got: ${g.content.slice(0, 200)}`);
+    // 同时仍保留 selfName
+    assert.ok(g.content.includes("你自己是=\"Tester\""));
+  });
+
+  it("group + fromName=null: 不渲染发信人(向后兼容)", () => {
+    const ctx = baseCtx({
+      group: { id: "g1", name: "G", activeIssues: [] },
+      fromName: null,
+    });
+    const out = composePrompt(ctx);
+    const g = out.layers.find((l) => l.layer === "group-basic")!;
+    assert.ok(!g.content.includes("发信人"));
+  });
+
+  it("group + fromName 未填(undefined): 不渲染发信人", () => {
+    const ctx = baseCtx({
+      group: { id: "g1", name: "G", activeIssues: [] },
+    });
+    const out = composePrompt(ctx);
+    const g = out.layers.find((l) => l.layer === "group-basic")!;
+    assert.ok(!g.content.includes("发信人"));
+  });
+
+  it("无 group + 有 fromName: group-basic 折叠,发信人也不渲染", () => {
+    const ctx = baseCtx({ group: null, fromName: "孔令飞" });
+    const out = composePrompt(ctx);
+    assert.ok(!out.layers.some((l) => l.layer === "group-basic"));
+    assert.ok(!out.final.includes("发信人"));
+  });
+
   it("cwd 层提示只读语义", () => {
     const ctx = baseCtx({ cwd: "/Users/kong/work" });
     const out = composePrompt(ctx);

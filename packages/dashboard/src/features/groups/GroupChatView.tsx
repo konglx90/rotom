@@ -41,6 +41,7 @@ export function GroupChatView() {
   const [selectedIssueVersion, setSelectedIssueVersion] = useState(0)
   const [rightTab, setRightTab] = useState<'issues' | 'artifacts'>('issues')
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
+  const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
 
   // Routing
   const selectedGroupId = urlGroupId || ''
@@ -168,7 +169,11 @@ export function GroupChatView() {
     // losing the live chunks.
     try {
       await groupsApi.addMembers(selectedGroupId, [myAgentName])
+      if (selfJoinError?.groupId === selectedGroupId) {
+        setSelfJoinError(null)
+      }
     } catch (err) {
+      setSelfJoinError({ groupId: selectedGroupId, message: '入群失败，可能影响实时消息' })
       console.error('Self-join failed; chunks may not stream live:', err)
     }
     await loadGroups()
@@ -245,6 +250,20 @@ export function GroupChatView() {
       console.error('Failed to add members:', error)
     }
   }
+
+  // 重试 self-join。self-join 失败时 banner 上点"重试"会再调 addMembers。
+  // 后端在 PR 1 已加兜底 addMembers,所以即便这里失败也不阻塞消息发送。
+  const retrySelfJoin = useCallback(async () => {
+    if (!selfJoinError) return
+    const gid = selfJoinError.groupId
+    setSelfJoinError(null)
+    try {
+      await groupsApi.addMembers(gid, [myAgentName])
+      await loadGroups()
+    } catch {
+      setSelfJoinError({ groupId: gid, message: '入群仍然失败，请刷新页面' })
+    }
+  }, [selfJoinError, myAgentName, loadGroups])
 
   const handleArchiveGroup = async (archived: boolean) => {
     if (!selectedGroupId) return
@@ -333,26 +352,43 @@ export function GroupChatView() {
             onReconnect={reconnect}
           />
         ) : selectedGroup ? (
-          <GroupChatArea
-            selectedGroup={selectedGroup}
-            agents={agents}
-            myAgentName={myAgentName}
-            messages={messages}
-            connectionStatus={connectionStatus}
-            onSendMessage={handleSendMessage}
-            onShowConfig={openConfigModal}
-            onAddMembers={() => setShowAddMemberModal(true)}
-            onDeleteGroup={handleDeleteGroup}
-            onArchiveGroup={handleArchiveGroup}
-            onReconnect={reconnect}
-            onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
-              if (dir === null) {
-                await clearGroupMemberWorkingDir(gid, agentName)
-              } else {
-                await setGroupMemberWorkingDir(gid, agentName, dir)
-              }
-            }}
-          />
+          <>
+            {selfJoinError && selfJoinError.groupId === selectedGroupId && (
+              <div className={chatStyles.banner} role="alert">
+                <span>{selfJoinError.message}</span>
+                <button onClick={retrySelfJoin} className={chatStyles.bannerButton}>
+                  重试
+                </button>
+                <button
+                  onClick={() => setSelfJoinError(null)}
+                  className={chatStyles.bannerButton}
+                  aria-label="忽略"
+                >
+                  忽略
+                </button>
+              </div>
+            )}
+            <GroupChatArea
+              selectedGroup={selectedGroup}
+              agents={agents}
+              myAgentName={myAgentName}
+              messages={messages}
+              connectionStatus={connectionStatus}
+              onSendMessage={handleSendMessage}
+              onShowConfig={openConfigModal}
+              onAddMembers={() => setShowAddMemberModal(true)}
+              onDeleteGroup={handleDeleteGroup}
+              onArchiveGroup={handleArchiveGroup}
+              onReconnect={reconnect}
+              onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
+                if (dir === null) {
+                  await clearGroupMemberWorkingDir(gid, agentName)
+                } else {
+                  await setGroupMemberWorkingDir(gid, agentName, dir)
+                }
+              }}
+            />
+          </>
         ) : (
           <div className={chatStyles.emptyChat}>
             <div style={{ textAlign: 'center' }}>

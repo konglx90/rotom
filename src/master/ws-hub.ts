@@ -383,17 +383,33 @@ export class WSHub {
           };
           delivered = this.sendToAgent(result.targetAgentId, outMsg);
 
-          // Record group messages in history. No broadcast — only the target agent
-          // receives the message. Other members see it via mesh_group_messages or
-          // dashboard history refresh.
+          // Persist + (for group) broadcast. Group messages are also delivered to
+          // the rest of the group via broadcastToGroup so dashboards/agents can see
+          // the conversation in real-time (mirrors a2a_reply behavior at L462-465).
+          // excludeAgentIds covers both the sender and the targeted agent so the
+          // target does not receive the same a2a_message twice.
           if ((msg.conversation?.type === "group" || msg.conversation?.type === "single") && msg.conversation.groupId) {
+            // 兜底:发信人不在 group_members 时自动 addMembers(防"自激丢消息" +
+            // "多 tab 真人看不到自己的消息")。INSERT OR IGNORE 幂等。
+            const groupMembers = this.db.getGroupMembers(msg.conversation.groupId);
+            if (!groupMembers.some((m) => m.agent_name === fromName)) {
+              this.db.addGroupMembers(msg.conversation.groupId, [fromName]);
+              this.logger.info(`[mesh] a2a_send group: auto-joined sender "${fromName}" as group member`);
+            }
+
             const mentions = msg.payload?.message?.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
             this.db.addGroupMessage(msg.conversation.groupId, fromName, msg.payload?.message || "", mentions);
 
-            // 协作轮次：mesh_group_send 走的也是 a2a_send，需要同样计入贡献，
-            // 否则 firstParticipant 用工具 @ 别人这一步永远不会被算作"已发言"，
-            // 导致整轮永远不完成、轮数不推进、自动总结永远不触发。
             if (msg.conversation.type === "group") {
+              this.broadcastToGroup(
+                msg.conversation.groupId,
+                outMsg,
+                [agentId, result.targetAgentId],
+              );
+
+              // 协作轮次:mesh_group_send 走的也是 a2a_send,需要同样计入贡献,
+              // 否则 firstParticipant 用工具 @ 别人这一步永远不会被算作"已发言",
+              // 导致整轮永远不完成、轮数不推进、自动总结永远不触发。
               this.trackCollaborationTurn(msg.conversation.groupId, fromName, msg.payload?.message || "");
             }
           }
@@ -797,6 +813,19 @@ export class WSHub {
   }
 
   /**
+   * Public entry point for broadcasting a group message from outside the hub
+   * (e.g. REST handlers in api/groups.ts). Thin wrapper over the private
+   * broadcastToGroup — keeps the internal helper encapsulated.
+   */
+  public broadcastToGroupPublic(
+    groupId: string,
+    msg: ServerMessage,
+    excludeAgentIds: string[] = [],
+  ): void {
+    this.broadcastToGroup(groupId, msg, excludeAgentIds);
+  }
+
+  /**
    * 发一条 sender=system 的群消息：入库 + 实时广播给在线群成员。
    * 用于协作流转类消息（启动 / 进入下一轮 / 结束），让群里所有人同步看到状态。
    * - excludeAgentNames：不往这些成员的 WS 推，但消息仍然入库。用于避免 @ 的对象被双触发。
@@ -1047,16 +1076,29 @@ export class WSHub {
     let queued = false;
     if (result.targetAgentId) {
       const enrichedConversation = this.enrichConversationWithCollaboration(conversation);
-      delivered = this.sendToAgent(result.targetAgentId, {
-        type: "a2a_message",
+      const wireMsg = {
+        type: "a2a_message" as const,
         requestId,
-        from: { name: opts.fromName, domain: fromAgent.domain || undefined, status: "online" },
+        from: { name: opts.fromName, domain: fromAgent.domain || undefined, status: "online" as const },
         payload: { message: opts.message },
-        routeType: "exact",
+        routeType: "exact" as const,
         conversation: enrichedConversation,
-      });
+      };
+      delivered = this.sendToAgent(result.targetAgentId, wireMsg);
 
       if (opts.groupId) {
+        // 兜底:发信人不在 group_members 时自动 addMembers(防"自激丢消息" +
+        // "多 tab 真人看不到自己的消息")。INSERT OR IGNORE 幂等。
+        const groupMembers = this.db.getGroupMembers(opts.groupId);
+        if (!groupMembers.some((m) => m.agent_name === opts.fromName)) {
+          this.db.addGroupMembers(opts.groupId, [opts.fromName]);
+          this.logger.info(`[mesh] sendAsAgent group: auto-joined sender "${opts.fromName}" as group member`);
+        }
+
+        // 群消息:除打给 target 外广播给全群(对齐 a2a_reply L462-465)。
+        // 排除列表含 target 防重复推送。
+        this.broadcastToGroup(opts.groupId, wireMsg, [fromAgent.id, result.targetAgentId]);
+
         const mentions = opts.message.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m) => m.slice(1)) || [];
         this.db.addGroupMessage(opts.groupId, opts.fromName, opts.message, mentions);
         this.trackCollaborationTurn(opts.groupId, opts.fromName, opts.message);
