@@ -250,6 +250,25 @@ function hoistStatus(parts: Part[]): { status: string | null; rest: Part[] } {
   return { status, rest }
 }
 
+// Hermes 把 "Working" 状态标签放在每个 agent_message_chunk 之后,被
+// parseStructuredBlocks 切成一堆相邻的 text part(本质就是被 [status:thinking]
+// 打断的同一段正文)。hoistStatus 之后这些 text parts 之间的 status tag 已经被
+// 抽走,需要把相邻的 text 合并回单一 part,否则每个 part 各自被 ReactMarkdown
+// 包成 <p>,几行字会排成几十行"竖排版"——这正是用户反馈的格式问题。
+// tool / ask / patch 等仍然作为独立 part 保留,不被合并。
+function mergeAdjacentTextParts(parts: Part[]): Part[] {
+  const out: Part[] = []
+  for (const p of parts) {
+    const last = out[out.length - 1]
+    if (p.type === 'text' && last && last.type === 'text') {
+      last.content += p.content
+    } else {
+      out.push(p)
+    }
+  }
+  return out
+}
+
 // Fold runs of consecutive tool-call parts into a single tool-call-group,
 // mirroring codex TUI's "Ran N commands" disclosure (instead of letting N
 // stacked <details> blocks eat the whole viewport). Threshold is 2 — a
@@ -340,11 +359,12 @@ export const MarkdownContent = memo(function MarkdownContent({
   const { status, rest } = useMemo(() => {
     const parts = pairExecCalls(parseStructuredBlocks(content))
     const { status, rest: hoisted } = hoistStatus(parts)
+    const collapsed = mergeAdjacentTextParts(hoisted)
     return {
       status,
       rest: streaming
-        ? groupConsecutiveToolCalls(hoisted)
-        : hoistAllToolCallsToTop(hoisted),
+        ? groupConsecutiveToolCalls(collapsed)
+        : hoistAllToolCallsToTop(collapsed),
     }
   }, [content, streaming])
   const mentionComponents = useMemo<Components | undefined>(() => {
@@ -456,7 +476,7 @@ function ThinkingBlock({ content, streaming }: { content: string; streaming?: bo
       onClick={stopBubble}
       onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
     >
-      <summary className={styles.thinkingSummary} onClick={stopBubble}>💭 思考</summary>
+      <summary className={styles.thinkingSummary} onClick={stopBubble}>思考</summary>
       {open && <div className={styles.thinkingContent}>{content}</div>}
     </details>
   )
