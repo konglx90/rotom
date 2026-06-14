@@ -715,6 +715,7 @@ export class ExecutorWorker {
 
     // 拼 prompt:rotom-cli → agent-role → group-basic → cwd → task。
     // group 信息从 conversation 抽出(master 已 enrich 过 activeIssues / groupName)。
+    // fromName 告诉 agent 这条消息是谁发的,避免 agent 不知道对话方身份。
     const composed = composePrompt({
       mode: "chat",
       agentName: this.config.name,
@@ -727,6 +728,7 @@ export class ExecutorWorker {
           }
         : null,
       cwd,
+      fromName: fromName || null,
       body,
     });
 

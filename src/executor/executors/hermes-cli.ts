@@ -114,6 +114,11 @@ export class HermesCliExecutor implements CliExecutor {
       let sessionId = "";
       let settled = false;
       let inThinking = false;
+      // Set when we receive the ACP turn_end notification, so finish() can
+      // distinguish "model finished cleanly" (already emitted "Answered")
+      // from "process died before turn_end ever arrived" (needs a terminal
+      // emit to keep the dashboard status pill from sticking on "Working").
+      let turnEndSeen = false;
       // 从 reasoning 流里抽第一个 **Header**,emit 为 [status:thinking] 标签,
       // 在 dashboard 顶部以 shimmer pill 形式展示。完全对齐 codex-rs/tui 的
       // extract_first_bold + set_status_header 模式。
@@ -159,6 +164,14 @@ export class HermesCliExecutor implements CliExecutor {
         if (settled) return;
         settled = true;
         closeThinkingIfOpen();
+        // Fallback terminal status: if the process died without us ever
+        // seeing a turn_end (e.g. spawn error, model 400, broken pipe),
+        // emit something so the dashboard's status pill doesn't stay on
+        // "Working" forever. Successful turns already emitted "Answered"
+        // in the turn_end case, so this is a no-op for the happy path.
+        if (!turnEndSeen) {
+          emitStatus(onOutput, exitCode === 0 ? "Done" : "Failed");
+        }
         console.log(`[hermes-cli] Exited code=${exitCode}, output=${fullOutput.length} chars, session=${sessionId}`);
         resolve({ exitCode, fullOutput, sessionId: sessionId || undefined });
       }
@@ -430,6 +443,17 @@ export class HermesCliExecutor implements CliExecutor {
             if (output) {
               onOutput(`[tool-result:exec]${output.slice(0, 500)}${output.length > 500 ? "..." : ""}[/tool-result:exec]\n`);
             }
+            break;
+          }
+          case "turn_end": {
+            // ACP turn-end notification — the assistant has finished its
+            // turn. Close any open thinking block and emit a terminal
+            // status so the dashboard's status pill (which hoists the
+            // last `[status:thinking]` tag) settles to a non-Working label
+            // instead of leaving "Working" stuck above the finished reply.
+            closeThinkingIfOpen();
+            turnEndSeen = true;
+            emitStatus(onOutput, "Answered");
             break;
           }
           default: {

@@ -489,3 +489,36 @@
   pointer-events: none;
 }
 
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 10px 20px;
+  background: var(--color-error-bg, #fdecea);
+  color: var(--color-error-text, #b71c1c);
+  border-bottom: 1px solid var(--color-error-border, #f5c6cb);
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 5;
+}
+
+.banner > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.bannerButton {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.bannerButton:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+

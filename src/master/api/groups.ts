@@ -263,13 +263,45 @@ export function registerGroupRoutes(
       res.status(400).json({ error: "sender and content are required" });
       return;
     }
-    db.addGroupMessage(req.params.id, sender, content, Array.isArray(mentions) ? mentions : []);
+    // 解析 mentions:优先用 body 里的,否则从 content 抽(同 ws-hub.ts:390 正则)
+    const resolvedMentions = Array.isArray(mentions) && mentions.length > 0
+      ? mentions
+      : (content.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) ?? []);
+    db.addGroupMessage(req.params.id, sender, content, resolvedMentions);
+
+    // ── 真人发群消息:广播给所有群成员 ─────────────────────────────
+    // 行为对齐 ws-hub.ts:462-465 (a2a_reply 对群消息做的 broadcastToGroup)。
+    if (hub) {
+      const senderAgent = db.getAgentByName(sender);
+      if (!senderAgent) {
+        // 兜底:sender 不是注册 agent,DB 已入库但 WS 不广播,仍 200。
+        log.warn(`POST /groups/:id/messages: sender "${sender}" not registered; skip broadcast`);
+      } else {
+        // 兜底:真人不在 group_members 时补 addMembers(防"自激丢消息" +
+        // "多 tab 真人看不到自己的消息")。INSERT OR IGNORE 幂等。
+        const members = db.getGroupMembers(req.params.id);
+        if (!members.some((m) => m.agent_name === sender)) {
+          db.addGroupMembers(req.params.id, [sender]);
+          log.info(`POST /groups/:id/messages: auto-joined sender "${sender}" as group member`);
+        }
+
+        const wireMsg = {
+          type: "a2a_message" as const,
+          requestId: `grp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+          from: { name: sender, domain: senderAgent.domain || undefined, status: "online" as const },
+          payload: { message: content },
+          routeType: "exact" as const,
+          conversation: { type: "group" as const, groupId: req.params.id, groupName: group.name },
+        };
+        hub.broadcastToGroupPublic(req.params.id, wireMsg, [senderAgent.id]);
+      }
+    }
 
     db.logMessage({
       requestId: `grp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
       fromName: sender,
       direction: "send",
-      payload: JSON.stringify({ message: content, mentions: Array.isArray(mentions) ? mentions : [], groupName: group.name }),
+      payload: JSON.stringify({ message: content, mentions: resolvedMentions, groupName: group.name }),
       status: "group_message",
       groupId: group.id,
       source: "api",

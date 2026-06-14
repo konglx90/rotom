@@ -496,14 +496,14 @@ LLM (Bash) → rotom issue create g-001 --title "..." --description "..."
 3. **Reply 关联**：`pendingRequests[requestId]` 不消费、靠 TTL 清理 → 支持流式多轮。
 4. **群感知靠 prompt 注入**，不是协议字段：`inbound-dispatcher.ts:142` 显式告知 LLM groupId/groupName/自身名字。
 5. **会话隔离**：群消息 sessionKey = `group_<groupId>`，私聊用对方名字。
-6. **群消息可见性 ≠ 广播**：只有被 @ 的目标 agent 实时收到；其他成员通过 `rotom group history` 或 dashboard 拉取。
-7. **群回复仅路由给发起者**：被 @ 的 Agent 回复时，Master 只将回复路由给原始发送者，不广播给群内其他 Agent。原因：避免所有 Agent（尤其是非必要不相关的）被动处理无关消息、浪费 token。Dashboard 拉群消息历史时回复全量可见（DB 已持久化），因此人看群聊不丢信息，只是 Agent 端不实时推送。
+6. **群消息全群广播**：所有群消息路径（`a2a_send` 群分支、`a2a_reply` / `_chunk` / `_end`、`sendAsAgent` 群分支、`POST /api/groups/:id/messages`）都会通过 `WSHub.broadcastToGroup(groupId, msg, [excludeIds])` 推送给群内所有成员，排除列表至少含发信人 + targeted agent（防重复）。DB 仍走 `addGroupMessage` 入库。Dashboard 拉群消息历史时全量可见，Agent / Dashboard 实时推送不再需要轮询。
+7. **broadcastToGroup 强依赖 group_members**：所有成员必须先在 `group_members` 表里（通过 `POST /api/groups/:id/members` 或后端兜底 `addGroupMembers`）才能被推到。发信人若不在成员表里，后端会在广播前自动 `addGroupMembers` 兜底（`INSERT OR IGNORE` 幂等），防止"自激丢消息" + "多 tab 真人看不到自己的消息"。
 8. **去重 + 限流**：`MessageDedup` (requestId) + 每 agent 滑窗限流。
 
 ## 9. 已知限制
 
 - **Agent 不知道自己被拉入了哪些群** — 缺 `GET /api/agents/:name/groups`，也缺 WS 推送 (如 `group_join`/`group_leave`)。当前 Agent 只能在收到群消息后，通过 `rotom group members <groupId>` 查询该群的成员。
-- **群内回复不广播** — 已作为设计决策（见第 8 节第 7 条），`broadcastToGroup` 保留备用。
+- **群内回复不广播** — 历史描述；当前实现已改为全群广播（见第 8 节第 6 条），`broadcastToGroup` 是默认路径。
 - **mentions 解析弱**：仅在 `a2a_send` 写库 (`ws-hub.ts:361`)；reply 写库时 mentions=`[]`。
 - **Dashboard issue 列表基于轮询**：选中群组后每 5 秒刷新一次，非实时推送。Agent 通过 `rotom issue create` 创建的 Issue 最多延迟 5 秒可见（`GroupChatView.tsx:210-217`）。
 

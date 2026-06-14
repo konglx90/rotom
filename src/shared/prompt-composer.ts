@@ -41,6 +41,8 @@ export interface ComposeContext {
   /** 群内调用时填;DM / 单 issue 可空 */
   group?: { id: string; name: string; activeIssues: ActiveIssueRef[] } | null;
   cwd: string | null;
+  /** chat 模式时填,告诉 agent 这条消息是谁发的。issue/collab 模式不需要,留空。 */
+  fromName?: string | null;
   /** chat 模式 = 用户原消息(已剥 @self);issue 模式 = title + "\n\n" + description;collab 模式 = 开场白 */
   body: string;
 }
@@ -78,12 +80,14 @@ function buildAgentRoleLayer(profile: AgentProfile | null): PromptLayer | null {
 function buildGroupBasicLayer(
   group: { id: string; name: string; activeIssues: ActiveIssueRef[] } | null | undefined,
   selfName: string,
+  fromName?: string | null,
 ): PromptLayer | null {
   if (!group) return null;
 
+  const fromClause = fromName ? `, 发信人是="${fromName}"` : "";
   const header =
     `[群消息 context: groupId=${group.id}, groupName="${group.name}", ` +
-    `你自己是="${selfName}"。` +
+    `你自己是="${selfName}"${fromClause}。` +
     `重要：如果 @ 的是你自己（"${selfName}"），那就是在叫你回答，直接回答即可，` +
     `不要再调用发送消息给自己。]\n`;
 
@@ -156,7 +160,7 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
   const role = buildAgentRoleLayer(ctx.agentProfile);
   if (role) layers.push(role);
 
-  const group = buildGroupBasicLayer(ctx.group, ctx.agentName);
+  const group = buildGroupBasicLayer(ctx.group, ctx.agentName, ctx.fromName);
   if (group) layers.push(group);
 
   const cwd = buildCwdLayer(ctx.cwd);
