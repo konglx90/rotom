@@ -171,6 +171,13 @@
   border-bottom-right-radius: 6px;
 }
 
+
+/* Outgoing message selection highlight: darker green to contrast with #9fe870 bubble */
+.messageBubble.outgoing ::selection {
+  background: #7fd85c;
+  color: var(--color-dark-green);
+}
+
 .messageSender {
   font-size: 12px;
   font-weight: 700;
