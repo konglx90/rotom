@@ -600,7 +600,7 @@ function ToolCallGroupBlock({
 // per-row expand state is intentionally NOT auto-reset on stream end — once
 // the user has expanded a row to inspect an output, collapsing it on them
 // when the turn completes would be more annoying than helpful.
-function GroupedCommandRow({ call, isLast }: { call: ToolCall; isLast: boolean }) {
+function GroupedCommandRow({ call }: { call: ToolCall; isLast: boolean }) {
   const [showResult, setShowResult] = useState(false)
   const hasResult = call.result !== undefined
   const resultLines = call.result ? call.result.split('\n').length : 0

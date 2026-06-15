@@ -157,6 +157,71 @@
   flex-shrink: 0;
 }
 
+/* Domain Select — replaces DepartmentTree sidebar */
+.domainSelectWrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.domainSelect {
+  padding: 7px 28px 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  min-width: 160px;
+  max-width: 240px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23697659' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
+}
+
+.domainSelect:hover {
+  border-color: var(--border-color-hover);
+}
+
+.domainSelect:focus {
+  outline: none;
+  border-color: var(--color-dark-green);
+  box-shadow: var(--shadow-inset);
+}
+
+.domainActionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-color);
+  background: var(--color-canvas-elevated);
+  color: var(--color-slate);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--duration-base) var(--ease-out);
+}
+
+.domainActionBtn:hover {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  border-color: var(--color-wise-green);
+}
+
+.domainActionDanger:hover {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
 @media (max-width: 768px) {
   .container {
     flex-direction: column;

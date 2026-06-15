@@ -1,10 +1,10 @@
 .layout {
   display: flex;
-  gap: var(--spacing-lg);
+  gap: 0;
   align-items: flex-start;
   padding: var(--spacing-lg);
-  max-width: 1600px;
-  margin: 0 auto;
+  margin: 0;
+  width: 100%;
 }
 
 .content {
