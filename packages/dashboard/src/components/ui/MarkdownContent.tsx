@@ -23,6 +23,8 @@ interface Props {
   mentionMembers?: readonly string[]
   /** Class applied to the wrapping <span> around a highlighted mention. */
   mentionClassName?: string
+  /** When true, caller renders StreamingStatus externally on the sender line. */
+  hideStatus?: boolean
 }
 
 const MENTION_RE = /@([\w一-鿿][\w.一-鿿-]*)/g
@@ -351,6 +353,7 @@ export const MarkdownContent = memo(function MarkdownContent({
   streaming,
   mentionMembers,
   mentionClassName,
+  hideStatus,
 }: Props) {
   // 这一坨 transform 链在每次 render 都会重跑(长消息 + 流式场景下尤其贵),
   // 用 content 锁住。streaming 现在也参与依赖:streaming 期间用相邻合并
@@ -403,7 +406,7 @@ export const MarkdownContent = memo(function MarkdownContent({
   if ((rest.length === 0 && !status) || (rest.length === 1 && rest[0].type === 'text' && !status)) {
     return (
       <div className={styles.md}>
-        {status && <StreamingStatus content={status} done={!streaming} />}
+        {status && !hideStatus && <StreamingStatus content={status} done={!streaming} />}
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={mentionComponents}>
           {content}
         </ReactMarkdown>
@@ -414,7 +417,7 @@ export const MarkdownContent = memo(function MarkdownContent({
 
   return (
     <div className={styles.md}>
-      {status && <StreamingStatus content={status} done={!streaming} />}
+      {status && !hideStatus && <StreamingStatus content={status} done={!streaming} />}
       {rest.map((part, i) => {
         switch (part.type) {
           case 'text':

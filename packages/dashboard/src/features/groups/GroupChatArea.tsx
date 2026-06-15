@@ -3,6 +3,7 @@ import type { Agent, Group } from '../../api/types'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { StreamingStatus } from '../../components/ui/StreamingStatus'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
@@ -25,6 +26,17 @@ interface GroupChatAreaProps {
   onArchiveGroup: (archived: boolean) => void
   onReconnect: () => void
   onUpdateMemberWorkingDir: (groupId: string, agentName: string, dir: string | null) => Promise<void> | void
+}
+
+// Extract the last [status:thinking]...[/status:thinking] tag from message content.
+function extractMessageStatus(content: string): string | null {
+  let last: string | null = null;
+  const re = /\[status:thinking\]([\s\S]*?)\[\/status:thinking\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    last = m[1];
+  }
+  return last;
 }
 
 export function GroupChatArea({
@@ -197,6 +209,11 @@ export function GroupChatArea({
                       </Badge>
                     )
                   })()}
+                  {(() => {
+                    const st = extractMessageStatus(msg.content);
+                    if (!st) return null;
+                    return <StreamingStatus content={st} done={!msg.streaming} variant="inline" />;
+                  })()}
                 </div>
               )}
               <div className={styles.messageContent}>
@@ -212,6 +229,7 @@ export function GroupChatArea({
                     streaming={msg.streaming}
                     mentionMembers={groupMembers}
                     mentionClassName={styles.mention}
+                    hideStatus={true}
                   />
                 )}
               </div>
