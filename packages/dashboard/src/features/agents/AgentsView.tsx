@@ -10,7 +10,6 @@ import { AgentTable } from './AgentTable'
 import { TopologyView } from './TopologyView'
 import { AddAgentModal } from './AddAgentModal'
 import { AgentProfileModal } from './AgentProfileModal'
-import { DepartmentTree } from './DepartmentTree'
 import { DepartmentFormModal } from './DepartmentFormModal'
 import { CrossDomainRulesPanel } from './CrossDomainRulesPanel'
 import { BrandFooter } from './BrandFooter'
@@ -111,33 +110,29 @@ export function AgentsView() {
 
   return (
     <div className={styles.layout}>
-      <DepartmentTree
-        domains={allDomains}
-        totalAgentCount={allAgents.length}
-        selectedDomain={filters.domainFilter}
-        view={rightView}
-        onSelectAll={handleSelectAll}
-        onSelectDomain={handleSelectDomain}
-        onSelectRules={handleSelectRules}
-        onAddDomain={() => setDeptModal({ open: true, mode: 'create' })}
-        onEditDomain={(domain) => setDeptModal({ open: true, mode: 'edit', domain })}
-        onDeleteDomain={handleDeleteDomain}
-      />
-
       <div className={styles.content}>
+        {/* 过滤栏：状态 / 部门 / 搜索 / 视图切换 / 添加员工 — 部门管理与跨域规则也整合在此 */}
+        <FilterBar
+          filter={filters.filter}
+          onFilterChange={filters.setFilter}
+          searchQuery={filters.searchQuery}
+          onSearchChange={filters.setSearchQuery}
+          domains={allDomains}
+          selectedDomain={filters.domainFilter}
+          onSelectDomain={(name) => name === 'all' ? handleSelectAll() : handleSelectDomain(name)}
+          onAddDomain={() => setDeptModal({ open: true, mode: 'create' })}
+          onEditDomain={(domain) => setDeptModal({ open: true, mode: 'edit', domain })}
+          onDeleteDomain={handleDeleteDomain}
+          onSelectRules={handleSelectRules}
+          isRulesView={rightView === 'rules'}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onAddAgent={() => setShowAddModal(true)}
+        />
+
         {rightView === 'employees' ? (
           <div className={styles.container}>
             <StatsCards agents={allAgents} />
-
-            <FilterBar
-              filter={filters.filter}
-              onFilterChange={filters.setFilter}
-              searchQuery={filters.searchQuery}
-              onSearchChange={filters.setSearchQuery}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              onAddAgent={() => setShowAddModal(true)}
-            />
 
             {viewMode === 'table' ? (
               <>
