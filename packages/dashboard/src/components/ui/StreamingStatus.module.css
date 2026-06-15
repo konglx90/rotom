@@ -39,6 +39,20 @@
   opacity: 0.35;
 }
 
+.inline {
+  margin: 0;
+  padding: 0 6px;
+  border: none;
+  background: none;
+  line-height: inherit;
+  font-size: 11px;
+}
+
+.inlineDot {
+  width: 5px;
+  height: 5px;
+}
+
 .label {
   overflow: hidden;
   text-overflow: ellipsis;

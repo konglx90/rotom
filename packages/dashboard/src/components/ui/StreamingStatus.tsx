@@ -18,14 +18,17 @@ import styles from './StreamingStatus.module.css'
  * settles into a static terminal state (still visible above the message so
  * the user can see the final state of the last tool call / turn — e.g.
  * "Answered", "Failed", or the last reasoning header).
+ *
+ * `variant` controls layout: "default" renders as a block pill above the message,
+ * "inline" renders inline with zero margin/padding/border for use on the sender line.
  */
-export function StreamingStatus({ content, done }: { content: string; done?: boolean }) {
+export function StreamingStatus({ content, done, variant = 'default' }: { content: string; done?: boolean; variant?: 'default' | 'inline' }) {
   return (
     <div
-      className={done ? `${styles.status} ${styles.statusDone}` : styles.status}
+      className={`${styles.status} ${done ? styles.statusDone : ''} ${variant === 'inline' ? styles.inline : ''}`}
       aria-live="polite"
     >
-      <span className={done ? `${styles.dot} ${styles.dotDone}` : styles.dot} />
+      <span className={`${styles.dot} ${done ? styles.dotDone : ''} ${variant === 'inline' ? styles.inlineDot : ''}`} />
       <span className={styles.label}>{content}</span>
     </div>
   )
