@@ -191,13 +191,13 @@
 .rightPanelTabs {
   display: flex;
   border-bottom: 1px solid var(--border-color-light);
-  padding: 0 12px;
+  padding: 0 4px;
   gap: 4px;
 }
 
 .tabBtn {
   flex: 1;
-  padding: 12px 0;
+  padding: 6px 0;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.108px;
@@ -216,7 +216,7 @@
 
 .activeTab {
   flex: 1;
-  padding: 12px 0;
+  padding: 6px 0;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.108px;

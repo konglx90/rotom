@@ -63,6 +63,7 @@ interface ChatContextValue {
   setGroupMemberWorkingDir: (groupId: string, agentName: string, workingDir: string) => Promise<void>
   clearGroupMemberWorkingDir: (groupId: string, agentName: string) => Promise<void>
   toggleGroupPinned: (groupId: string, pinned: boolean) => Promise<void>
+  deleteGroup: (groupId: string) => Promise<void>
   toggleGroupArchived: (groupId: string, archived: boolean) => Promise<void>
 }
 
@@ -331,6 +332,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   )
 
 
+
+  const deleteGroup = useCallback(
+    async (groupId: string) => {
+      if (!window.confirm('确定要删除这个群吗？所有消息将被清除。')) return
+      setGroups((prev) => prev.filter((g) => g.id !== groupId))
+      try {
+        await groupsApi.delete(groupId)
+        await loadGroups()
+      } catch (error) {
+        console.error('Failed to delete group:', error)
+        await loadGroups()
+        const msg = error instanceof Error ? error.message : String(error)
+        window.alert(`删除群失败：${msg}`)
+      }
+    },
+    [loadGroups],
+  )
+
   const handleNewDmConversation = useCallback(
     async (targetName: string) => {
       if (!myAgentName) return
@@ -424,6 +443,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     clearGroupMemberWorkingDir,
     toggleGroupPinned,
     toggleGroupArchived,
+    deleteGroup,
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>

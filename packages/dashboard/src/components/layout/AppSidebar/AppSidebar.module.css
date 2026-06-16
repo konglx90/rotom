@@ -19,12 +19,16 @@
 }
 
 .resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
   width: 6px;
   cursor: col-resize;
   background: transparent;
   border-right: 1px solid transparent;
   transition: background 0.15s, border-color 0.15s;
-  flex-shrink: 0;
+  z-index: 1;
 }
 
 .resizer:hover,
@@ -860,4 +864,91 @@
   overflow-x: auto;
   scrollbar-width: thin;
   padding-bottom: 2px;
+}
+
+/* ── More-actions dropdown (··· menu) ──────────────── */
+.moreWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.moreBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-warm-dark);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-base) var(--ease-out),
+              background var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out);
+}
+
+.groupItem:hover .moreBtn,
+.groupItem:focus-within .moreBtn {
+  opacity: 1;
+}
+
+.moreBtn:hover {
+  background: var(--color-canvas);
+  border-color: var(--border-color-light);
+}
+
+.moreDropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  min-width: 140px;
+  background: var(--color-canvas-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  padding: 4px;
+  z-index: 100;
+}
+
+.moreItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+.moreItem:hover {
+  background: rgba(159, 232, 112, 0.22);
+}
+
+.moreItemDanger {
+  color: var(--color-error);
+}
+
+.moreItemDanger:hover {
+  background: var(--color-error-soft);
+}
+
+.moreDivider {
+  height: 1px;
+  background: var(--border-color-light);
+  margin: 4px 8px;
 }
