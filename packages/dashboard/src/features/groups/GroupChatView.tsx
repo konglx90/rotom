@@ -37,7 +37,7 @@ export function GroupChatView() {
     setGroupMemberWorkingDir,
     clearGroupMemberWorkingDir,
   } = useChatContext()
-  const { status: connectionStatus, send, lastIssueChange, reconnect } = useSocket()
+  const { status: connectionStatus, send, lastIssueChange } = useSocket()
 
   const [issues, setIssues] = useState<Issue[]>([])
   const [selectedIssueVersion, setSelectedIssueVersion] = useState(0)
@@ -47,15 +47,6 @@ export function GroupChatView() {
 
   // Routing
   const selectedGroupId = urlGroupId || ''
-  const setSelectedGroupId = (id: string) => {
-    if (id) {
-      localStorage.setItem('group_selected_id', id)
-      navigate(`/dashboard/groups/${id}`)
-    } else {
-      navigate('/dashboard/groups')
-    }
-  }
-
   const selectedIssueId = urlIssueId || ''
   const setSelectedIssueId = (id: string) => {
     if (!selectedGroupId) return
@@ -276,18 +267,6 @@ export function GroupChatView() {
     }
   }
 
-  const handleDeleteGroup = async () => {
-    if (!selectedGroupId) return
-    if (!confirm('确定要删除这个群吗？')) return
-    try {
-      await groupsApi.delete(selectedGroupId)
-      setSelectedGroupId('')
-      loadGroups()
-    } catch (error) {
-      console.error('Failed to delete group:', error)
-    }
-  }
-
   /**
    * Delete the currently active DM. We get the target groupId from
    * localStorage (set by ChatContext.activateDmGroup whenever a DM thread is
@@ -376,7 +355,7 @@ export function GroupChatView() {
               /* sidebar handles new DM creation now */
             }}
             onShowConfig={openConfigModal}
-            onReconnect={reconnect}
+            
             onDeleteConversation={handleDeleteDm}
           />
         ) : selectedGroup ? (
@@ -405,9 +384,8 @@ export function GroupChatView() {
               onSendMessage={handleSendMessage}
               onShowConfig={openConfigModal}
               onAddMembers={() => setShowAddMemberModal(true)}
-              onDeleteGroup={handleDeleteGroup}
               onArchiveGroup={handleArchiveGroup}
-              onReconnect={reconnect}
+              
               onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
                 if (dir === null) {
                   await clearGroupMemberWorkingDir(gid, agentName)

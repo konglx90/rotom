@@ -9,7 +9,6 @@ import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { MemberListModal } from './modals/MemberListModal'
 import { ComposedPromptModal } from './modals/ComposedPromptModal'
-import { ConnectionBar } from './ConnectionBar'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import styles from './ChatArea.module.css'
 
@@ -22,9 +21,7 @@ interface GroupChatAreaProps {
   onSendMessage: (text: string) => void
   onShowConfig: () => void
   onAddMembers: () => void
-  onDeleteGroup: () => void
   onArchiveGroup: (archived: boolean) => void
-  onReconnect: () => void
   onUpdateMemberWorkingDir: (groupId: string, agentName: string, dir: string | null) => Promise<void> | void
 }
 
@@ -48,8 +45,6 @@ export function GroupChatArea({
   onSendMessage,
   onShowConfig,
   onAddMembers,
-  onDeleteGroup,
-  onReconnect,
   onUpdateMemberWorkingDir,
 }: GroupChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -158,10 +153,20 @@ export function GroupChatArea({
         <div className={styles.chatHeaderActions}>
           <Button variant="ghost" size="sm" onClick={onAddMembers}>+ 拉人</Button>
           <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig} title="设置">⚙️</Button>
-          <Button variant="danger" outline size="sm" onClick={onDeleteGroup}>删除</Button>
+
+        </div>
+        <div className={styles.chatHeaderSub}>
+          <span className={`${styles.connectionDot} ${styles[connectionStatus]}`} />
+          <span className={styles.connectionText}>
+            {connectionStatus === 'connected' ? '已连接' :
+             connectionStatus === 'connecting' ? '连接中...' :
+             connectionStatus === 'conflict' ? '连接冲突' :
+             '未连接'}
+          </span>
+          <span className={styles.connectionSep}>·</span>
+          <span className={styles.connectionIdentity}>{myAgentName}</span>
         </div>
       </div>
-
 
       <MemberListModal
         open={showMemberList}
@@ -173,7 +178,6 @@ export function GroupChatArea({
         onUpdateMemberWorkingDir={onUpdateMemberWorkingDir}
       />
 
-      <ConnectionBar connectionStatus={connectionStatus} myAgentName={myAgentName} onReconnect={onReconnect} />
 
       <ComposedPromptModal
         open={composedPromptFor !== null}

@@ -5,7 +5,6 @@ import { useChatContext } from '../../../context/ChatContext'
 import { useZenMode } from '../../../context/ZenModeContext'
 import { getAvatarColor } from '../../../utils/avatar'
 import styles from './AppSidebar.module.css'
-
 const NAV_TABS = [
   { id: 'agents', label: '员工管理', icon: '👥', path: '/dashboard/agents' },
   { id: 'groups', label: '对话', icon: '💬', path: '/dashboard/groups' },
@@ -13,17 +12,14 @@ const NAV_TABS = [
   { id: 'messages', label: '消息流', icon: '📜', path: '/dashboard/messages' },
   { id: 'terminal', label: '终端', icon: '⌨️', path: '/dashboard/terminal' },
 ] as const
-
 const ZEN_WIDTH = 56
 const NORMAL_DEFAULT = 280
 const NORMAL_MIN = 200
 const MAX_WIDTH = 520
-
 interface AppSidebarProps {
   width: number
   onWidthChange: (w: number) => void
 }
-
 function ArchivedSection({ archivedGroups, selectedGroupId, selectGroup, toggleGroupArchived }: {
   archivedGroups: { id: string; name: string; pinned_at?: string | null; member_count?: number; created_at: string }[]
   selectedGroupId: string
@@ -60,8 +56,7 @@ function ArchivedSection({ archivedGroups, selectedGroupId, selectGroup, toggleG
                   </div>
                   <div className={styles.groupMeta}>已归档</div>
                 </div>
-                <button
-                  type="button"
+                  <button type="button"
                   className={`${styles.archiveBtn} ${styles.archiveBtnActive}`}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -79,7 +74,6 @@ function ArchivedSection({ archivedGroups, selectedGroupId, selectGroup, toggleG
     </div>
   )
 }
-
 export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const { zenMode, toggleZenMode } = useZenMode()
   // AppSidebar is rendered above <Routes>, so useParams() can't see the route
@@ -100,8 +94,8 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     openConfigModal,
     toggleGroupPinned,
     toggleGroupArchived,
+    deleteGroup,
   } = useChatContext()
-
   const [dragging, setDragging] = useState(false)
   const [navCompact, setNavCompact] = useState(() => {
     try {
@@ -116,8 +110,19 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     }
   })
   const [dmExpanded, setDmExpanded] = useState(false)
+  const [moreMenuGroup, setMoreMenuGroup] = useState<string | null>(null)
   const startStateRef = useRef<{ x: number; w: number } | null>(null)
-
+  // Close more-menu dropdown on outside click
+  useEffect(() => {
+    if (!moreMenuGroup) return
+    const handleClick = () => setMoreMenuGroup(null)
+    // Use setTimeout so the trigger button's onClick runs first
+    const id = setTimeout(() => document.addEventListener('mousedown', handleClick), 0)
+    return () => {
+      clearTimeout(id)
+      document.removeEventListener('mousedown', handleClick)
+    }
+  }, [moreMenuGroup])
   const toggleNavCompact = () => {
     setNavCompact((v) => {
       const next = !v
@@ -127,7 +132,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
       return next
     })
   }
-
   const selectedGroupId = urlGroupId || ''
   const isZen = zenMode
   // Pinned groups first (sorted by most recently pinned), then active groups
@@ -146,10 +150,8 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     .slice()
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
   const displayGroups = activeGroups
-
   const getDmGroupsForTarget = (targetName: string) =>
     dmGroups.filter((g) => g.dmTarget === targetName)
-
   useEffect(() => {
     if (!dragging) return
     const min = isZen ? ZEN_WIDTH : NORMAL_MIN
@@ -171,11 +173,9 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
       document.body.style.userSelect = ''
     }
   }, [dragging, isZen, onWidthChange])
-
   const defaultWidth = isZen ? ZEN_WIDTH : NORMAL_DEFAULT
-
   return (
-    <div className={styles.sidebarWrap} style={{ width: `${width + 6}px` }}>
+    <div className={styles.sidebarWrap} style={{ width: `${width}px` }}>
       <aside
         className={`${styles.sidebar} ${isZen ? styles.sidebarZen : ''}`}
         style={{ width: `${width}px` }}
@@ -184,7 +184,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
           <img src="/dashboard/rotom-avatar.png" alt="Rotom" className={styles.logoImg} />
           {!isZen && <span className={styles.logoText}>Rotom</span>}
         </div>
-
         <nav
           className={`${styles.nav} ${!isZen && navCompact ? styles.navCompact : ''}`}
         >
@@ -202,8 +201,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             </NavLink>
           ))}
           {!isZen && (
-            <button
-              type="button"
+              <button type="button"
               className={styles.navToggleBtn}
               onClick={toggleNavCompact}
               title={navCompact ? '展开导航' : '收起导航为一行'}
@@ -212,15 +210,13 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             </button>
           )}
         </nav>
-
         {isZen ? (
           <div className={styles.zenBody}>
             {onlineAgents.length > 0 && (
               <ul className={styles.zenList}>
                 {onlineAgents.map((agent) => (
                   <li key={agent.id}>
-                    <button
-                      type="button"
+                      <button type="button"
                       className={`${styles.zenItem} ${
                         directTarget === agent.name ? styles.zenItemActive : ''
                       }`}
@@ -240,8 +236,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
               <ul className={styles.zenList}>
                 {displayGroups.map((group) => (
                   <li key={group.id}>
-                    <button
-                      type="button"
+                      <button type="button"
                       className={`${styles.zenItem} ${
                         selectedGroupId === group.id ? styles.zenItemActive : ''
                       }`}
@@ -270,8 +265,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                 <ul className={styles.zenList}>
                   {archivedGroups.map((group) => (
                     <li key={group.id}>
-                      <button
-                        type="button"
+                        <button type="button"
                         className={`${styles.zenItem} ${styles.zenItemArchived} ${
                           selectedGroupId === group.id ? styles.zenItemActive : ''
                         }`}
@@ -297,8 +291,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>一对一</h3>
                 {dmExpanded && (
-                  <button
-                    type="button"
+                    <button type="button"
                     className={styles.navToggleBtn}
                     onClick={() => setDmExpanded((v) => !v)}
                     title="收起一对一"
@@ -399,8 +392,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                       )
                     })}
                   </div>
-                  <button
-                    type="button"
+                    <button type="button"
                     className={styles.navToggleBtn}
                     onClick={() => setDmExpanded((v) => !v)}
                     title={dmExpanded ? '收起一对一' : '展开一对一'}
@@ -410,9 +402,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                 </div>
               )}
             </div>
-
             <div className={styles.divider} />
-
             <div className={`${styles.section} ${styles.sectionGroup}`}>
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>群聊</h3>
@@ -447,28 +437,57 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                 {`${group.member_count || 0} 位成员`}
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              className={`${styles.pinBtn} ${isPinned ? styles.pinBtnActive : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                toggleGroupPinned(group.id, !isPinned)
-                              }}
-                              title={isPinned ? '取消置顶' : '置顶'}
-                            >
-                              {isPinned ? '取消置顶' : '置顶'}
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.archiveBtn}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                toggleGroupArchived(group.id, true)
-                              }}
-                              title="归档"
-                            >
-                              归档
-                            </button>
+                            <div className={styles.moreWrap}>
+                              <button
+                                type="button"
+                                className={styles.moreBtn}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setMoreMenuGroup(prev => prev === group.id ? null : group.id)
+                                }}
+                                title="更多操作"
+                              >
+                                ···
+                              </button>
+                              {moreMenuGroup === group.id && (
+                                <div className={styles.moreDropdown} onMouseDown={e => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    className={styles.moreItem}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleGroupPinned(group.id, !isPinned)
+                                      setMoreMenuGroup(null)
+                                    }}
+                                  >
+                                    {isPinned ? '📌 取消置顶' : '📌 置顶'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.moreItem}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleGroupArchived(group.id, true)
+                                      setMoreMenuGroup(null)
+                                    }}
+                                  >
+                                    🗄️ 归档
+                                  </button>
+                                  <div className={styles.moreDivider} />
+                                  <button
+                                    type="button"
+                                    className={`${styles.moreItem} ${styles.moreItemDanger}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setMoreMenuGroup(null)
+                                      deleteGroup(group.id)
+                                    }}
+                                  >
+                                    🗑️ 删除群
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </li>
                         )
                       })}
@@ -487,7 +506,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             </div>
           </>
         )}
-
         <div className={styles.footer}>
           {!isZen && myAgentName && (
             <button

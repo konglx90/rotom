@@ -4,7 +4,6 @@ import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
-import { ConnectionBar } from './ConnectionBar'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import { ComposedPromptModal } from './modals/ComposedPromptModal'
 import styles from './ChatArea.module.css'
@@ -17,7 +16,6 @@ interface DirectChatAreaProps {
   onSendMessage: (text: string) => void
   onNewDmConversation: () => void
   onShowConfig: () => void
-  onReconnect: () => void
   /** Delete the current DM (the underlying `groups` row + its messages). */
   onDeleteConversation?: () => void
 }
@@ -30,7 +28,6 @@ export function DirectChatArea({
   onSendMessage,
   onNewDmConversation,
   onShowConfig,
-  onReconnect,
   onDeleteConversation,
 }: DirectChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -79,8 +76,7 @@ export function DirectChatArea({
           <Avatar name={directTarget} size={40} />
           <div style={{ overflow: 'hidden', minWidth: 0 }}>
             <h3 className={styles.chatTitle}>{directTarget}</h3>
-            <div style={{ fontSize: 12, color: 'var(--color-success)' }}>在线</div>
-          </div>
+                    </div>
         </div>
         <div className={styles.chatHeaderActions}>
           <Button variant="ghost" size="sm" onClick={onNewDmConversation}>新对话</Button>
@@ -91,9 +87,18 @@ export function DirectChatArea({
           )}
           <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig} title="设置">⚙️</Button>
         </div>
+        <div className={styles.chatHeaderSub}>
+          <span className={`${styles.connectionDot} ${styles[connectionStatus]}`} />
+          <span className={styles.connectionText}>
+            {connectionStatus === 'connected' ? '已连接' :
+             connectionStatus === 'connecting' ? '连接中...' :
+             connectionStatus === 'conflict' ? '连接冲突' :
+             '未连接'}
+          </span>
+          <span className={styles.connectionSep}>·</span>
+          <span className={styles.connectionIdentity}>{myAgentName}</span>
+        </div>
       </div>
-
-      <ConnectionBar connectionStatus={connectionStatus} myAgentName={myAgentName} onReconnect={onReconnect} />
 
       <div className={styles.messagesArea}>
         {messages.length === 0 ? (
