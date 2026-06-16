@@ -584,3 +584,49 @@
   color: var(--color-warm-dark);
   font-weight: 600;
 }
+
+/* ── Collapsible header ──────────────────────────────── */
+.chatHeaderCollapsed {
+  padding: 2px 12px !important;
+}
+
+.chatHeaderBar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chatHeaderCollapsed .chatHeaderBar {
+  min-height: 26px;
+}
+
+.chatHeaderCollapsed .chatTitle {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.headerCollapseBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin-left: 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-warm-dark);
+  font-size: 9px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity var(--duration-base) var(--ease-out),
+              background var(--duration-base) var(--ease-out);
+}
+
+.headerCollapseBtn:hover {
+  opacity: 1;
+  background: rgba(14, 15, 12, 0.06);
+}
