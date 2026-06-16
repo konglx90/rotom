@@ -27,6 +27,48 @@ export function useGroupChatWebSocket({
   const directTargetRef = useRef(directTarget)
   const myAgentNameRef = useRef(myAgentName)
 
+  // 流式批处理:每个 token 直接 setState 会让 50-80Hz 的 token 流触发
+  // 整棵 messages 子树协调 N 次/秒,主线程被打爆。这里把同帧到达的多个
+  // delta 攒到 pendingDeltasRef,用 RAF 节流到每帧最多 commit 一次。
+  const rafIdRef = useRef<number | null>(null)
+  const pendingDeltasRef = useRef<Map<string, { from: string; content: string }>>(new Map())
+
+  const flushPendingDeltas = () => {
+    rafIdRef.current = null
+    const pending = pendingDeltasRef.current
+    if (pending.size === 0) return
+    pendingDeltasRef.current = new Map()
+    setMessages(prev => {
+      let next = prev.filter(m => !m.isLoading)
+      let changed = prev.some(m => m.isLoading)
+      for (const [rid, { from, content: delta }] of pending) {
+        const streamId = `stream_${rid}`
+        const idx = next.findIndex(m => m.id === streamId)
+        if (idx >= 0) {
+          next = next.slice()
+          next[idx] = { ...next[idx], content: next[idx].content + delta }
+          changed = true
+        } else {
+          next = [...next, {
+            id: streamId,
+            from,
+            content: delta,
+            timestamp: new Date(),
+            isIncoming: true,
+            streaming: true,
+          }]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }
+
+  const scheduleFlush = () => {
+    if (rafIdRef.current != null) return
+    rafIdRef.current = requestAnimationFrame(flushPendingDeltas)
+  }
+
   useEffect(() => {
     selectedGroupIdRef.current = selectedGroupId
     directTargetRef.current = directTarget
@@ -108,7 +150,6 @@ export function useGroupChatWebSocket({
 
         const handleStreamChunk = () => {
           const rid = msg.requestId || ''
-          const streamId = `stream_${rid}`
           const delta = msg.delta || ''
           const existing = streamContentRef.current.get(rid)
           if (existing) {
@@ -116,23 +157,13 @@ export function useGroupChatWebSocket({
           } else {
             streamContentRef.current.set(rid, { from: msg.from?.name || 'unknown', content: delta })
           }
-          setMessages(prev => {
-            const withoutLoading = prev.filter(m => !m.isLoading)
-            const found = withoutLoading.find(m => m.id === streamId)
-            if (found) {
-              return withoutLoading.map(m =>
-                m.id === streamId ? { ...m, content: m.content + delta } : m,
-              )
-            }
-            return [...withoutLoading, {
-              id: streamId,
-              from: msg.from?.name || 'unknown',
-              content: delta,
-              timestamp: new Date(),
-              isIncoming: true,
-              streaming: true,
-            }]
-          })
+          const pending = pendingDeltasRef.current.get(rid)
+          if (pending) {
+            pending.content += delta
+          } else {
+            pendingDeltasRef.current.set(rid, { from: msg.from?.name || 'unknown', content: delta })
+          }
+          scheduleFlush()
         }
 
         if (msg.conversation?.type === 'group' && msg.conversation.groupId === curGroupId) {
@@ -157,6 +188,14 @@ export function useGroupChatWebSocket({
         const rid = msg.requestId || ''
         const streamId = `stream_${rid}`
         streamContentRef.current.delete(rid)
+
+        // 流结束时同步 flush 当前帧之前攒下的 delta,避免最后一段内容
+        // 在 apply() 拉取历史消息前没合并进 streamMsg.content,导致 (from,
+        // content) 匹配失败留下重复行。
+        if (rafIdRef.current != null) {
+          cancelAnimationFrame(rafIdRef.current)
+        }
+        flushPendingDeltas()
 
         const apply = (targetGroupId: string) => {
           groupsApi.getMessages(targetGroupId).then(historyMsgs => {
@@ -247,6 +286,16 @@ export function useGroupChatWebSocket({
       })))
     }).catch(() => setMessages([]))
   }, [selectedGroupId, myAgentName])
+
+  // 卸载时取消挂起的 RAF,避免 setMessages 打到已卸载组件上。
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current != null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
+    }
+  }, [])
 
   return {
     messages,
