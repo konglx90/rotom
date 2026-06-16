@@ -1,16 +1,19 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { Agent, Group } from '../../api/types'
 import { Avatar } from '../../components/ui/Avatar'
-import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { StreamingStatus } from '../../components/ui/StreamingStatus'
-import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { MemberListModal } from './modals/MemberListModal'
 import { ComposedPromptModal } from './modals/ComposedPromptModal'
+import { MessageRow } from './MessageRow'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import styles from './ChatArea.module.css'
+
+// 默认只渲染最近 N 条消息,避免长会话下 DOM 节点数失控(参考
+// docs/GROUP_CHAT_RENDER_PERF.md)。超过时在顶部提示并提供"查看全部"
+// 按钮(一次性展开全部,可能短时间卡顿)。
+const VISIBLE_LIMIT_DEFAULT = 350
 
 interface GroupChatAreaProps {
   selectedGroup: Group
@@ -25,17 +28,6 @@ interface GroupChatAreaProps {
   onUpdateMemberWorkingDir: (groupId: string, agentName: string, dir: string | null) => Promise<void> | void
 }
 
-// Extract the last [status:thinking]...[/status:thinking] tag from message content.
-function extractMessageStatus(content: string): string | null {
-  let last: string | null = null;
-  const re = /\[status:thinking\]([\s\S]*?)\[\/status:thinking\]/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    last = m[1];
-  }
-  return last;
-}
-
 export function GroupChatArea({
   selectedGroup,
   agents,
@@ -47,7 +39,7 @@ export function GroupChatArea({
   onAddMembers,
   onUpdateMemberWorkingDir,
 }: GroupChatAreaProps) {
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const [message, setMessage] = useState<string>('')
@@ -58,8 +50,27 @@ export function GroupChatArea({
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
   const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
+  const handleShowPrompt = useCallback((msg: ChatMessage) => {
+    setComposedPromptFor(msg)
+  }, [])
 
-  const groupMembers = selectedGroup.members?.map(m => m.agent_name) || []
+  // 限制渲染的消息条数。visibleLimit = VISIBLE_LIMIT_DEFAULT 时只显示最近
+  // 350 条;用户点击"查看全部"后展开成全部。切换群组时不重置(组件不卸载),
+  // 但 visibleMessages 会按新 messages 数组重新派生。
+  const [visibleLimit, setVisibleLimit] = useState(VISIBLE_LIMIT_DEFAULT)
+  const visibleMessages = useMemo(() => {
+    if (messages.length <= visibleLimit) return messages
+    return messages.slice(messages.length - visibleLimit)
+  }, [messages, visibleLimit])
+  const hiddenCount = messages.length - visibleMessages.length
+  // 用户点击"查看全部"时,跳过下一次自动滚动到底部,避免视口从中间历史
+  // 消息被强制拉到最新一条。
+  const skipNextAutoScrollRef = useRef(false)
+
+  const groupMembers = useMemo(
+    () => selectedGroup.members?.map(m => m.agent_name) || [],
+    [selectedGroup.members],
+  )
   const filteredMentionAgents = agents.filter(a =>
     a.name !== myAgentName && groupMembers.includes(a.name) &&
     a.name.toLowerCase().includes(mentionFilter.toLowerCase())
@@ -69,9 +80,32 @@ export function GroupChatArea({
     setMentionSelectedIndex(0)
   }, [mentionFilter])
 
+  // 滚动到底部用 RAF 节流,避免流式高频更新下每次 messages 变都
+  // 触发 layout/paint。用 scrollTop = scrollHeight 比 scrollIntoView 更
+  // 可控(0 高度锚点 + scrollIntoView 在不同浏览器行为不稳)。每次
+  // messages 变化都 cancel 旧的 RAF 重 schedule,确保最新一次状态变更
+  // 一定触发滚动(否则发消息时若上一次 RAF 还在 pending,本次会被吞掉)。
+  const scrollRafRef = useRef<number | null>(null)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false
+      return
+    }
+    if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      const el = messagesAreaRef.current
+      if (el) el.scrollTop = el.scrollHeight
+    })
+  }, [visibleMessages])
+  useEffect(() => () => {
+    if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
+  }, [])
+
+  const handleShowAllMessages = useCallback(() => {
+    skipNextAutoScrollRef.current = true
+    setVisibleLimit(messages.length)
+  }, [messages.length])
 
   useEffect(() => {
     if (!message && inputRef.current) {
@@ -200,106 +234,34 @@ export function GroupChatArea({
         onClose={() => setComposedPromptFor(null)}
       />
 
-      <div className={styles.messagesArea}>
+      {hiddenCount > 0 && (
+        <div className={styles.messagesTruncatedBanner}>
+          <span>
+            已折叠 {hiddenCount} 条较早消息,仅显示最近 {visibleMessages.length} 条(共 {messages.length} 条)
+          </span>
+          <button
+            type="button"
+            className={styles.messagesTruncatedButton}
+            onClick={handleShowAllMessages}
+          >
+            查看全部
+          </button>
+        </div>
+      )}
+
+      <div ref={messagesAreaRef} className={styles.messagesArea}>
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>在群 {selectedGroup.name} 中开始对话吧</div>
-        ) : messages.map(msg => {
-          const isSystem = msg.from === 'system'
-          const hasPrompt = Boolean(msg.composedPrompt)
-          return (
-          <div key={msg.id} className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''}`}>
-            <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={36} className={styles.messageAvatar} />
-            <div
-              className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''}`}
-            >
-              {msg.isIncoming && (
-                <div className={styles.messageSender}>
-                  {msg.from}
-                  {isSystem ? (
-                    <Badge tone="category" value="system">📣 系统</Badge>
-                  ) : (() => {
-                    const agent = agents.find(a => a.name === msg.from)
-                    const cat = agent?.profile?.category
-                    if (!cat) return null
-                    return (
-                      <Badge tone="category" value={cat}>
-                        {cat === '真人' ? '👤' : '🚀'} {cat}
-                      </Badge>
-                    )
-                  })()}
-                  {(() => {
-                    const st = extractMessageStatus(msg.content);
-                    if (!st) return null;
-                    return <StreamingStatus content={st} done={!msg.streaming} variant="inline" />;
-                  })()}
-                </div>
-              )}
-              <div className={styles.messageContent}>
-                {msg.isLoading ? (
-                  <div className={styles.loadingDots}>
-                    <span className={styles.dot}></span>
-                    <span className={styles.dot}></span>
-                    <span className={styles.dot}></span>
-                  </div>
-                ) : (
-                  <MarkdownContent
-                    content={msg.content}
-                    streaming={msg.streaming}
-                    mentionMembers={groupMembers}
-                    mentionClassName={styles.mention}
-                    hideStatus={true}
-                  />
-                )}
-              </div>
-              <div className={styles.messageTimestamp}>
-                {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
-                {msg.isIncoming && msg.cwd && (
-                  <span
-                    className={styles.messageCwd}
-                    title={`Agent 实际工作目录：${msg.cwd}`}
-                  >
-                    📁 {msg.cwd}
-                  </span>
-                )}
-                {!msg.isIncoming && msg.status && (
-                  <span
-                    className={`${styles.messageStatus} ${styles[`status_${msg.status}`] || ''}`}
-                    title={msg.statusError || (
-                      msg.status === 'delivered' ? '已投送'
-                      : msg.status === 'queued' ? '对方离线,已暂存'
-                      : msg.status === 'failed' ? `投送失败${msg.statusError ? ': ' + msg.statusError : ''}`
-                      : '发送中'
-                    )}
-                  >
-                    {msg.status === 'delivered' ? '✓ 已投送'
-                      : msg.status === 'queued' ? '📭 已暂存'
-                      : msg.status === 'failed' ? '⚠ 失败'
-                      : '⏳ 发送中'}
-                  </span>
-                )}
-                {hasPrompt && (
-                  <span
-                    className={styles.messagePromptButton}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setComposedPromptFor(msg)}
-                    onKeyDown={(e: React.KeyboardEvent) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setComposedPromptFor(msg)
-                      }
-                    }}
-                    title="查看 prompt 组合"
-                  >
-                    🔍 prompt
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          )
-        })}
-        <div ref={messagesEndRef} />
+        ) : visibleMessages.map(msg => (
+          <MessageRow
+            key={msg.id}
+            msg={msg}
+            agents={agents}
+            myAgentName={myAgentName}
+            groupMembers={groupMembers}
+            onShowPrompt={handleShowPrompt}
+          />
+        ))}
       </div>
 
       <div className={styles.inputArea}>
