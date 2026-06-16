@@ -55,6 +55,7 @@ export function GroupChatArea({
   const [mentionFilter, setMentionFilter] = useState('')
   const [mentionStartIndex, setMentionStartIndex] = useState(-1)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
   const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
 
@@ -124,47 +125,60 @@ export function GroupChatArea({
           🗄️ 该群已归档，只读模式
         </div>
       )}
-      <div className={styles.chatHeader}>
-        <div className={styles.chatHeaderLeft}>
-          <h3 className={styles.chatTitle}>{selectedGroup.name}</h3>
-          <div className={styles.memberAvatars}>
-            {(selectedGroup.members || []).slice(0, 3).map(m => {
-              const agent = agents.find(a => a.name === m.agent_name)
-              const isOnline = agent?.status === 'online'
-              return (
-                <div key={m.agent_name} className={`${styles.memberAvatar} ${isOnline ? styles.online : ''}`}>
-                  <Avatar name={m.agent_name} size={28} />
-                </div>
-              )
-            })}
-            {(selectedGroup.members?.length || 0) > 3 && (
-              <button
-                type="button"
-                onClick={() => setShowMemberList(true)}
-                className={styles.memberAvatar}
-                style={{ background: 'var(--color-slate)', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-surface)', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', padding: 0 }}
-                title="查看全部成员"
-              >
-                +{(selectedGroup.members?.length || 0) - 3}
-              </button>
+      <div className={`${styles.chatHeader} ${headerCollapsed ? styles.chatHeaderCollapsed : ''}`}>
+        <div className={styles.chatHeaderBar} onClick={() => setHeaderCollapsed(v => !v)}>
+          <div className={styles.chatHeaderLeft}>
+            <h3 className={styles.chatTitle}>{selectedGroup.name}</h3>
+            {!headerCollapsed && (
+              <div className={styles.memberAvatars}>
+                {(selectedGroup.members || []).slice(0, 3).map(m => {
+                  const agent = agents.find(a => a.name === m.agent_name)
+                  const isOnline = agent?.status === 'online'
+                  return (
+                    <div key={m.agent_name} className={`${styles.memberAvatar} ${isOnline ? styles.online : ''}`}>
+                      <Avatar name={m.agent_name} size={28} />
+                    </div>
+                  )
+                })}
+                {(selectedGroup.members?.length || 0) > 3 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowMemberList(true) }}
+                    className={styles.memberAvatar}
+                    style={{ background: 'var(--color-slate)', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-surface)', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', padding: 0 }}
+                    title="查看全部成员"
+                  >
+                    +{(selectedGroup.members?.length || 0) - 3}
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        </div>
-        <div className={styles.chatHeaderActions}>
-          <Button variant="ghost" size="sm" onClick={onAddMembers}>+ 拉人</Button>
-          <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig} title="设置">⚙️</Button>
-
-        </div>
-        <div className={styles.chatHeaderSub}>
-          <span className={`${styles.connectionDot} ${styles[connectionStatus]}`} />
-          <span className={styles.connectionText}>
-            {connectionStatus === 'connected' ? '已连接' :
-             connectionStatus === 'connecting' ? '连接中...' :
-             connectionStatus === 'conflict' ? '连接冲突' :
-             '未连接'}
-          </span>
-          <span className={styles.connectionSep}>·</span>
-          <span className={styles.connectionIdentity}>{myAgentName}</span>
+          {!headerCollapsed && (
+            <div className={styles.chatHeaderActions}>
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onAddMembers() }}>+ 拉人</Button>
+              <Button variant="ghost" size="sm" iconOnly onClick={(e) => { e.stopPropagation(); onShowConfig() }} title="设置">⚙️</Button>
+            </div>
+          )}
+          <div className={styles.chatHeaderSub}>
+            <span className={`${styles.connectionDot} ${styles[connectionStatus]}`} />
+            <span className={styles.connectionText}>
+              {connectionStatus === 'connected' ? '已连接' :
+               connectionStatus === 'connecting' ? '连接中...' :
+               connectionStatus === 'conflict' ? '连接冲突' :
+               '未连接'}
+            </span>
+            <span className={styles.connectionSep}>·</span>
+            <span className={styles.connectionIdentity}>{myAgentName}</span>
+            <button
+              type="button"
+              className={styles.headerCollapseBtn}
+              onClick={(e) => { e.stopPropagation(); setHeaderCollapsed(v => !v) }}
+              title={headerCollapsed ? '展开头部' : '收起头部'}
+            >
+              {headerCollapsed ? '▶' : '▼'}
+            </button>
+          </div>
         </div>
       </div>
 
