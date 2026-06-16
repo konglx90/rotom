@@ -13,7 +13,7 @@ import styles from './ChatArea.module.css'
 // 默认只渲染最近 N 条消息,避免长会话下 DOM 节点数失控(参考
 // docs/GROUP_CHAT_RENDER_PERF.md)。超过时在顶部提示并提供"查看全部"
 // 按钮(一次性展开全部,可能短时间卡顿)。
-const VISIBLE_LIMIT_DEFAULT = 350
+const VISIBLE_LIMIT_DEFAULT = 300
 
 interface GroupChatAreaProps {
   selectedGroup: Group
@@ -55,7 +55,7 @@ export function GroupChatArea({
   }, [])
 
   // 限制渲染的消息条数。visibleLimit = VISIBLE_LIMIT_DEFAULT 时只显示最近
-  // 350 条;用户点击"查看全部"后展开成全部。切换群组时不重置(组件不卸载),
+  // 300 条;用户点击"查看全部"后展开成全部。切换群组时不重置(组件不卸载),
   // 但 visibleMessages 会按新 messages 数组重新派生。
   const [visibleLimit, setVisibleLimit] = useState(VISIBLE_LIMIT_DEFAULT)
   const visibleMessages = useMemo(() => {
