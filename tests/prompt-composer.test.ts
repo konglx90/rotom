@@ -288,14 +288,15 @@ describe("ROTOM_CLI_PROMPT golden string", () => {
 ## 错误解读（看 stderr 第一行就能判断，不要被 echo 兜底误导）
 - \`rotom: command failed: HTTP 4xx ... (this is a command error, master is up — fix the command and retry)\` → 你的命令参数错了（issue 不存在、target 名写错、权限不够），**master 是正常的**，修命令重试。
 - \`rotom: command failed: HTTP 5xx ... (this is a command error, master is up ...)\` → master 端异常，可以重试 1-2 次，仍失败再回报。
-- \`rotom: master unreachable at <url> ... (try \`rotom status\` or \`rotom master start\`)\` → master 真的挂了，先 \`rotom status\` 自检（exit 75 = 不可达，exit 0 = 健康），再考虑重启。
+- \`rotom: network error talking to master at <url>: <reason>\` → 网络层失败（连接被拒、socket reset、DNS 等）。**重要：HTTP/1.1 keep-alive 下 server 可能已经 accept + log + 处理了请求，client 只是没收到响应**。先 \`rotom status\` 自检（exit 75 = 不可达，exit 0 = 健康），再查 master log 看你的请求是否已落库。
+- \`rotom: response from master was interrupted at <url> ... (status ... was received but the body stream was cut off)\` → master 几乎肯定收到了请求（status + headers 都到了），只是 body 读到一半被截断。**不要盲目重试非幂等操作**（POST / 创建资源类），先查 master log 确认。
 - 不确定时，先 \`rotom status\` 再决定下一步，**不要凭 stderr 前缀猜测系统状态**。
 
 ## 反模式：不要给 rotom 命令加 \`|| echo "X failed"\` 兜底
 - ❌ 错误：\`rotom issue delete $id 2>&1 || echo "delete failed (master down)"\`
   - 这种 echo 会**永远**把锅甩给 master，即使真实原因是 issue 不存在（HTTP 404）、权限不够（401）、参数错（400）。exit 1 都会触发 \`||\`，echo 就跑。
   - 你（LLM）看到 echo 文本会照单全收，误报成"rotom 不可用"误导用户。
-- ✅ 正确：直接跑 \`rotom issue delete $id\`，让 rotom CLI 自己的 stderr（已区分 master down / command failed）透传出来；非零 exit 时，**先 \`rotom status\` 自检**再决定下一步。
+- ✅ 正确：直接跑 \`rotom issue delete $id\`，让 rotom CLI 自己的 stderr（已区分 network / partial-response / command failed）透传出来；非零 exit 时，**先 \`rotom status\` 自检**再决定下一步。
 `,
     );
   });
