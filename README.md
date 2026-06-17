@@ -342,6 +342,11 @@ bin/
 - [`docs/GROUP_CHAT_ARCHITECTURE.md`](./docs/GROUP_CHAT_ARCHITECTURE.md) — 群聊架构详解
 - [`docs/QUICK_REF.md`](./docs/QUICK_REF.md) — Issue / 协作 / 群消息 三种场景速查
 
+### 故障排查记录
+
+- [`docs/minimax-connection-error.md`](./docs/minimax-connection-error.md) — hermes provider 连接错(CCV env 污染)
+- [`docs/codex-sandbox-network-blocked.md`](./docs/codex-sandbox-network-blocked.md) — codex 默认沙箱挡 127.0.0.1,rotom CLI 全报 network error
+
 ## License
 
 MIT
