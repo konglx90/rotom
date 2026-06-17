@@ -45,6 +45,16 @@ export const messagesApi = {
   async send(data: SendMessageDto): Promise<{ ok: boolean; requestId: string }> {
     return api.post<{ ok: boolean; requestId: string }>('/messages/send', data)
   },
+
+  /**
+   * Cancel an in-flight streaming chat reply. agentName is the responder
+   * currently generating (i.e. the streaming bubble's `from`), not the
+   * original sender. Returns delivered=false when the responder is offline
+   * or already finished — caller treats that as "no-op".
+   */
+  async cancel(requestId: string, agentName: string, reason?: string): Promise<{ ok: boolean; delivered: boolean }> {
+    return api.post<{ ok: boolean; delivered: boolean }>('/messages/cancel', { requestId, agentName, reason })
+  },
 }
 
 /**

@@ -926,10 +926,22 @@ export class MeshDb {
     return result.changes > 0;
   }
 
-  addGroupMessage(groupId: string, sender: string, content: string, mentions: string[] = []): number {
+  addGroupMessage(
+    groupId: string,
+    sender: string,
+    content: string,
+    mentions: string[] = [],
+    options?: { cancelledAt?: string },
+  ): number {
     const result = this.db.prepare(
-      "INSERT INTO group_messages (group_id, sender, content, mentions) VALUES (?, ?, ?, ?)",
-    ).run(groupId, sender, content, JSON.stringify(mentions));
+      "INSERT INTO group_messages (group_id, sender, content, mentions, cancelled_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(
+      groupId,
+      sender,
+      content,
+      JSON.stringify(mentions),
+      options?.cancelledAt ?? null,
+    );
     return Number(result.lastInsertRowid);
   }
 
@@ -971,6 +983,7 @@ export class MeshDb {
 
   getGroupMessages(groupId: string, limit = 200): {
     id: number; sender: string; content: string; mentions: string; created_at: string;
+    cancelled_at: string | null;
     composed_prompt: {
       layers: { layer: string; content: string; source: string }[];
       final: string;
@@ -979,7 +992,7 @@ export class MeshDb {
     } | null;
   }[] {
     const rows = this.db.prepare(
-      `SELECT m.id, m.sender, m.content, m.mentions, m.created_at,
+      `SELECT m.id, m.sender, m.content, m.mentions, m.created_at, m.cancelled_at,
               p.layers, p.final, p.generated_at, p.prompt_version
        FROM group_messages m
        LEFT JOIN chat_message_prompts p ON p.group_message_id = m.id
@@ -988,6 +1001,7 @@ export class MeshDb {
        LIMIT ?`,
     ).all(groupId, limit) as Array<{
       id: number; sender: string; content: string; mentions: string; created_at: string;
+      cancelled_at: string | null;
       layers: string | null; final: string | null; generated_at: string | null; prompt_version: string | null;
     }>;
     return rows.map((r) => {
@@ -1005,6 +1019,7 @@ export class MeshDb {
       }
       return {
         id: r.id, sender: r.sender, content: r.content, mentions: r.mentions, created_at: r.created_at,
+        cancelled_at: r.cancelled_at,
         composed_prompt,
       };
     });

@@ -577,6 +577,7 @@ export class WSHub {
         if (targetId) {
           const conn = this.connections.get(agentId);
           const fromName = conn?.name || "unknown";
+          const cancelled = msg.cancelled === true;
           const endMsg: Record<string, unknown> = {
             type: "a2a_stream_end" as const,
             requestId: msg.requestId,
@@ -584,10 +585,21 @@ export class WSHub {
             conversation,
           };
           if (msg.cwd) endMsg.cwd = msg.cwd;
-          // Persist to group history BEFORE sending (avoids race with history refresh)
+          if (cancelled) endMsg.cancelled = true;
+          // Persist to group history BEFORE sending (avoids race with history refresh).
+          // Cancelled replies still persist their partial content (the user wants
+          // to keep what was streamed before the interrupt) but stamp cancelled_at
+          // so the dashboard can render the "⏹ 已中断" footer on reload.
           if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
-            const msgId = this.db.addGroupMessage(conversation.groupId, fromName, msg.payload?.message || "", []);
+            const msgId = this.db.addGroupMessage(
+              conversation.groupId,
+              fromName,
+              msg.payload?.message || "",
+              [],
+              cancelled ? { cancelledAt: new Date().toISOString() } : undefined,
+            );
             // 把 worker 回传的 composedPrompt 持久化,前端点击消息可直接读出来渲染分层。
+            // 中断态也保留(用户可能想看 prompt 排查为何中断),只要 worker 带了就存。
             const cp = (msg as any).composedPrompt as
               | { layers: { layer: string; content: string; source: string }[]; final: string; generatedAt: string; promptVersion: string }
               | undefined;
@@ -609,8 +621,11 @@ export class WSHub {
           // Group stream end: broadcast to all members
           if (conversation?.type === "group" && conversation.groupId) {
             this.broadcastToGroup(conversation.groupId, endMsg as unknown as ServerMessage, [agentId]);
-            // 流式结束同样计入协作轮次贡献
-            this.trackCollaborationTurn(conversation.groupId, fromName, msg.payload?.message || "");
+            // 流式结束同样计入协作轮次贡献 —— 但中断的回复不算贡献,
+            // 否则会让协作轮次在 agent 还没真正表达完整观点时误推进。
+            if (!cancelled) {
+              this.trackCollaborationTurn(conversation.groupId, fromName, msg.payload?.message || "");
+            }
           } else {
             this.sendToAgent(targetId, endMsg as unknown as ServerMessage);
           }
@@ -628,11 +643,14 @@ export class WSHub {
             routeType: "reply",
             direction: "reply",
             payload: JSON.stringify(msg.payload),
-            status: "replied",
+            status: cancelled ? "cancelled" : "replied",
             latencyMs,
             groupId: conversation?.groupId,
             source: "ws",
           });
+          if (cancelled) {
+            this.logger.info(`[mesh] Reply ${msg.requestId} from ${fromName} cancelled mid-stream`);
+          }
         } else {
           this.logger.warn(`[mesh] Stream-end target not found for requestId=${msg.requestId}`);
         }
@@ -1104,6 +1122,30 @@ export class WSHub {
       approvalId,
       decision,
       ...(decision === "deny" && feedback ? { feedback } : {}),
+    });
+  }
+
+  /**
+   * Push a chat-stream cancellation to the responder worker. The responder
+   * is the agent currently generating a reply (the dashboard knows its name
+   * from the streaming bubble's `from` field). Returns false when the agent
+   * is unknown or offline — in that case the stream is already broken (WS
+   * disconnect killed the subprocess via existing cleanup paths), so the
+   * HTTP caller can no-op.
+   *
+   * Worker-side: looks up `activeTasks["chat:" + requestId]`, flips aborted,
+   * and calls controller.abort() so the CLI executor kills its subprocess.
+   * If the task already completed naturally before this arrives, the worker
+   * logs "no active task" and returns — idempotent.
+   */
+  pushChatCancel(agentName: string, requestId: string, reason?: string): boolean {
+    const agent = this.db.getAgentByName(agentName);
+    if (!agent) return false;
+    return this.sendToAgent(agent.id, {
+      type: "chat_cancelled",
+      requestId,
+      agentName,
+      ...(reason ? { reason } : {}),
     });
   }
 

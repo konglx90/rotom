@@ -161,6 +161,47 @@
   outline: none;
 }
 
+/* ⏹ 中断按钮:挂在 incoming bubble 的 sender 行(只在 streaming 时渲染)。
+ * 风格与 .messagePromptButton 对齐,但用红色调高视觉优先级 —— 用户主动
+ * 想停的时候要一眼能看到。 */
+.stopBtn {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--color-canvas);
+  color: var(--color-error);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.stopBtn:hover,
+.stopBtn:focus-visible {
+  background: var(--color-error);
+  color: var(--color-canvas);
+  border-color: var(--color-error);
+  outline: none;
+}
+
+/* 中断 footer:气泡底部小字「⏹ 已中断 HH:MM:SS」,跟 .messageTimestamp
+ * 同色但带左侧 ⏹ 图标做视觉锚点。样式轻量,不喧宾夺主。 */
+.messageCancelledFooter {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-error);
+  opacity: 0.85;
+}
+.messageCancelledFooter .cancelledIcon {
+  font-size: 10px;
+}
+
 .messageBubble.incoming {
   background: var(--color-canvas-elevated);
   color: var(--color-ink);

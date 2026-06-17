@@ -193,6 +193,13 @@ export interface ClientA2AReplyEndMessage {
   payload: MessagePayload;
   /** Cwd the agent actually used. Sent once at end-of-turn. */
   cwd?: string;
+  /**
+   * Set when the reply was interrupted mid-stream (user clicked ⏹ or sent a
+   * new message that auto-cancels this one). `payload.message` carries the
+   * partial content streamed before the abort; master still persists it so
+   * the user keeps the context, but skips collaboration-turn tracking.
+   */
+  cancelled?: boolean;
 }
 
 export interface ClientUpdateInfoMessage {
@@ -341,6 +348,7 @@ export type ServerMessage =
   | ServerCollaborationStartedMessage
   | ServerCollaborationConcludedMessage
   | ServerIssueCancelledMessage
+  | ServerChatCancelledMessage
   | ServerIssueChangedMessage
   | ServerIssueContinueMessage
   | ServerIssueAppendMessage
@@ -525,6 +533,26 @@ export interface ServerIssueCancelledMessage {
   type: "issue_cancelled";
   issueId: string;
   groupId?: string;
+  reason?: string;
+}
+
+/**
+ * Master → Agent: a chat reply is being interrupted mid-stream. The worker
+ * should look up `activeTasks["chat:" + requestId]`, flip `aborted = true`,
+ * and call `controller.abort()` so the underlying CLI executor kills its
+ * subprocess (SIGTERM → SIGKILL fallback already wired in all 4 executors).
+ *
+ * Distinct from `issue_cancelled` because chat tasks are keyed by requestId
+ * (not issueId) in the worker's activeTasks map. Master routes this to the
+ * single responder agent (the dashboard knows who's currently replying from
+ * the streaming bubble's `from` field); if that agent is offline or already
+ * finished, the WS send is a no-op on the worker side.
+ */
+export interface ServerChatCancelledMessage {
+  type: "chat_cancelled";
+  requestId: string;
+  /** Echo of the responder agent name — worker uses it only for log clarity. */
+  agentName?: string;
   reason?: string;
 }
 

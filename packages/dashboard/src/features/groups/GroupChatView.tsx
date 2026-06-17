@@ -87,6 +87,8 @@ export function GroupChatView() {
   const {
     messages,
     setMessages,
+    cancelStream,
+    getStreamingRequestIdForAgent,
   } = useGroupChatWebSocket({
     myAgentName,
     selectedGroupId,
@@ -119,6 +121,15 @@ export function GroupChatView() {
     pushHistory(trimmed)
 
     if (isDirectMode && selectedGroupId) {
+      // 自动中断再发送:同一 agent 还在 streaming 时,先把它的在飞流打断,
+      // 否则旧流和新流会乱序到达(worker maxConcurrent 可能允许并发),
+      // 视觉上bubble 也会重叠。等 cancel 完成(master→worker 是同步 WS,
+      // <50ms)再发新 a2a_send。失败不阻塞 —— cancel 失败只意味着响应方
+      // 已经掉线或自然结束,新消息仍可正常发。
+      const inFlight = getStreamingRequestIdForAgent(directTarget)
+      if (inFlight) {
+        await cancelStream(inFlight, directTarget)
+      }
       const requestId = `dm_${Date.now()}`
       const ok = send({
         type: 'a2a_send',
@@ -180,6 +191,16 @@ export function GroupChatView() {
       type: 'group' as const,
       groupId: selectedGroupId,
       groupName: selectedGroup?.name,
+    }
+
+    // 自动中断再发送:每个 @ 的 target,如果它当前正在 streaming(上一轮还没
+    // 回完),先把它的在飞流打断,再发新的 a2a_send。串行 await —— 并发 cancel
+    // 会让 worker 同时收到多个 abort,虽然能处理但日志会乱。
+    for (const target of targets) {
+      const inFlight = getStreamingRequestIdForAgent(target)
+      if (inFlight) {
+        await cancelStream(inFlight, target)
+      }
     }
 
     for (let i = 0; i < targets.length; i++) {
@@ -350,11 +371,12 @@ export function GroupChatView() {
             messages={messages}
             connectionStatus={connectionStatus}
             onSendMessage={handleSendMessage}
+            onCancelStream={cancelStream}
             onNewDmConversation={() => {
               /* sidebar handles new DM creation now */
             }}
             onShowConfig={openConfigModal}
-            
+
             onDeleteConversation={handleDeleteDm}
           />
         ) : selectedGroup ? (
@@ -381,10 +403,11 @@ export function GroupChatView() {
               messages={messages}
               connectionStatus={connectionStatus}
               onSendMessage={handleSendMessage}
+              onCancelStream={cancelStream}
               onShowConfig={openConfigModal}
               onAddMembers={() => setShowAddMemberModal(true)}
               onArchiveGroup={handleArchiveGroup}
-              
+
               onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
                 if (dir === null) {
                   await clearGroupMemberWorkingDir(gid, agentName)
