@@ -24,6 +24,8 @@ export interface GroupMessage {
   created_at: string
   /** 老消息(null)无该字段;新消息(worker 透传了 composedPrompt)有完整分层。 */
   composed_prompt: ComposedPrompt | null
+  /** 老消息(migration 022 之前)无该字段。新消息被用户中途中断时记 ISO 时间戳。 */
+  cancelled_at?: string | null
 }
 
 export const groupsApi = {

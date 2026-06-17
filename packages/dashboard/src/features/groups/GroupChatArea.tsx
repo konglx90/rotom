@@ -22,6 +22,8 @@ interface GroupChatAreaProps {
   messages: ChatMessage[]
   connectionStatus: ConnectionStatus
   onSendMessage: (text: string) => void
+  /** 中断某个 agent 的在飞 chat 流。透传给 MessageRow 的 ⏹ 按钮。 */
+  onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
   onShowConfig: () => void
   onAddMembers: () => void
   onArchiveGroup: (archived: boolean) => void
@@ -35,6 +37,7 @@ export function GroupChatArea({
   messages,
   connectionStatus,
   onSendMessage,
+  onCancelStream,
   onShowConfig,
   onAddMembers,
   onUpdateMemberWorkingDir,
@@ -260,6 +263,7 @@ export function GroupChatArea({
             myAgentName={myAgentName}
             groupMembers={groupMembers}
             onShowPrompt={handleShowPrompt}
+            onCancelStream={onCancelStream}
           />
         ))}
       </div>

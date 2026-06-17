@@ -16,6 +16,10 @@ export interface ChatMessage {
   /** 喂给该 agent 的 prompt 分层组成(从 group_messages JOIN chat_message_prompts 读出)。
    *  非空时气泡可点击 → 弹出 ComposedPromptModal 展示分层。 */
   composedPrompt?: import('../../api/groups').ComposedPrompt | null
+  /** 该响应被用户中途中断(streaming 期间点 ⏹ 或发新消息触发自动中断)。
+   *  bubble 渲染「⏹ 已中断」footer + 状态 pill 切到「已中断」。 */
+  cancelled?: boolean
+  cancelledAt?: Date
 }
 
 export interface ServerMessage {
@@ -37,6 +41,8 @@ export interface ServerMessage {
   agent?: { name: string; domain?: string; status: 'online' | 'offline' }
   /** Cwd the upstream agent reported. Filled in for a2a_message / a2a_stream_end. */
   cwd?: string
+  /** a2a_stream_end 终态:被用户中途中断。partial 内容仍带在 payload 里。 */
+  cancelled?: boolean
 }
 
 export const DM_GROUP_PREFIX = '__dm__:'

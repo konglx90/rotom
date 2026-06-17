@@ -1,0 +1,11 @@
+-- 022: group_messages 加 cancelled_at 列,标记被用户中断的 chat reply。
+--
+-- 用途:agent 流式响应途中,用户主动点 ⏹ 或发新消息触发自动中断时,
+-- worker 把已积累的部分内容通过 a2a_reply_end { cancelled: true } 落库,
+-- 同时记下中断时间戳。dashboard 列表渲染时,带 cancelled_at 的消息
+-- 在气泡底部展示「⏹ 已中断 HH:MM:SS」footer + 状态 pill 切到「已中断」,
+-- 老消息(migration 之前)没有该列时回退为 NULL,行为不变。
+--
+-- 设计选择:放在 group_messages 而不是单独成表,因为这是单条消息的元数据,
+-- 跟 created_at / sender 同性质,JOIN 成本可忽略(单列 TEXT NULL)。
+ALTER TABLE group_messages ADD COLUMN cancelled_at TEXT NULL;

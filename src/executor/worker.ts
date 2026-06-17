@@ -364,6 +364,26 @@ export class ExecutorWorker {
       }
     }
 
+    // Chat reply cancellation — mirror of issue_cancelled for the chat path.
+    // activeTasks key is `chat:${requestId}` (set by handleChatReply at L852).
+    // No pendingApprovals cleanup needed — chat path doesn't wire approval
+    // gating (worker.ts:893 note: conversational tool calls stay auto-accepted).
+    // No-op when the task already finished naturally (race: user clicked ⏹
+    // right as the executor resolved) — log + return.
+    if (msg.type === "chat_cancelled") {
+      const requestId = (msg as any).requestId as string | undefined;
+      if (!requestId) return;
+      const taskKey = `chat:${requestId}`;
+      const task = this.activeTasks.get(taskKey);
+      if (task) {
+        console.log(`${this.tag} Chat cancel requested for ${requestId}, aborting child process`);
+        task.aborted = true;
+        try { task.controller.abort(); } catch { /* noop */ }
+      } else {
+        console.log(`${this.tag} Chat cancel for ${requestId} but no active task (already finished?)`);
+      }
+    }
+
     // Issue continuation — user appended a follow-up prompt on a completed
     // /failed issue; re-spawn the CLI with --resume <sessionId>.
     if (msg.type === "issue_continue") {
@@ -623,7 +643,14 @@ export class ExecutorWorker {
     this.send({ type: "a2a_reply_chunk", requestId, delta });
   }
 
-  private sendChatEnd(requestId: string, fullContent: string, conversation: any, cwd?: string, composedPrompt?: ComposedPrompt): void {
+  private sendChatEnd(
+    requestId: string,
+    fullContent: string,
+    conversation: any,
+    cwd?: string,
+    composedPrompt?: ComposedPrompt,
+    options?: { cancelled?: boolean },
+  ): void {
     const msg: Record<string, unknown> = {
       type: "a2a_reply_end",
       requestId,
@@ -631,7 +658,11 @@ export class ExecutorWorker {
       conversation,
     };
     if (cwd) msg.cwd = cwd;
-    if (composedPrompt) msg.composedPrompt = composedPrompt;
+    // 中断态不带 composedPrompt —— prompt 已无意义,且 dashboard 端
+    // a2a_stream_end 处理对 cancelled 路径会跳过 history 重拉,
+    // 传过去也用不上。partial 内容(已积累的 fullContent)是用户唯一关心。
+    if (composedPrompt && !options?.cancelled) msg.composedPrompt = composedPrompt;
+    if (options?.cancelled) msg.cancelled = true;
     this.send(msg);
   }
 
@@ -888,8 +919,11 @@ export class ExecutorWorker {
     console.log(`${this.tag} Session lookup: cliTool=${this.cliTool}, groupId=${groupId}, sessionId=${sessionId ?? "(none)"}, conversation=${JSON.stringify(conversation)}`);
     console.log(`${this.tag} Replying to ${fromName}: ${composed.final.slice(0, 60)}...`);
 
+    // 提到 try 块外:catch 路径下(子进程被 SIGTERM 后某些 executor 会 throw)
+    // 仍要拿着已积累的 partial content 走 cancelled 终态,否则传空字符串给
+    // master 会把前端已经看到的流式内容覆盖成空。
+    let fullContent = "";
     try {
-      let fullContent = "";
       // Chat replies (DM + @-mention in groups) intentionally do NOT pass
       // onApprovalRequest. Rationale:
       //   • Conversational tool calls should feel snappy — pausing for a
@@ -925,7 +959,11 @@ export class ExecutorWorker {
       // provider error — see HermesCliExecutor's provider error sniffer).
       // Next chat turn will start fresh instead of trying to resume into
       // a broken transcript.
-      if (groupId && result.invalidateSession) {
+      //
+      // 中断态不视为 poison —— codex 的 turn_aborted 走自己的清理路径,
+      // session 可以正常续聊。只有 invalidateSession=true 且非用户主动中断
+      // 时才丢弃 sessionId。
+      if (groupId && result.invalidateSession && !task.aborted) {
         this.sessionStore.delete(this.cliTool, groupId);
         console.warn(
           `${this.tag} Session invalidated: ${this.cliTool}:${groupId}` +
@@ -939,7 +977,13 @@ export class ExecutorWorker {
         this.sendSessionSnapshot();
       }
 
-      if (!task.aborted) {
+      if (task.aborted) {
+        // 用户中断:已积累的 partial content 落库(走 master 的 cancelled_at 路径),
+        // bubble 切到「已中断」状态。不暴露 executor 返回的 aborted 错误文案 ——
+        // 用户自己点的中断,不需要再看"turn was aborted" 之类的内部噪声。
+        this.sendChatEnd(requestId, fullContent, conversation, cwd, undefined, { cancelled: true });
+        console.log(`${this.tag} Reply cancelled mid-stream to ${fromName} (kept ${fullContent.length} chars)`);
+      } else {
         // Provider-error path: executor detected a terminal model failure
         // (e.g. hermes's "API call failed after N retries: …" reply, which
         // is not a legitimate assistant message). Surface it as a clean
@@ -962,7 +1006,12 @@ export class ExecutorWorker {
         }
       }
     } catch (err: any) {
-      if (!task.aborted) {
+      if (task.aborted) {
+        // 子进程被 SIGTERM/SIGKILL 时 executor 可能 throw(SIGNAL error),
+        // 这是用户主动取消的预期结果,走 cancelled 终态而不是 error。
+        this.sendChatEnd(requestId, fullContent, conversation, cwd, undefined, { cancelled: true });
+        console.log(`${this.tag} Reply cancelled (executor threw on abort) to ${fromName} (kept ${fullContent.length} chars)`);
+      } else {
         this.sendChatEnd(requestId, `[错误] ${err.message}`, conversation, cwd, composed);
         console.error(`${this.tag} Reply error:`, err.message);
       }

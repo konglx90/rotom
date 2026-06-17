@@ -14,6 +14,9 @@ interface DirectChatAreaProps {
   messages: ChatMessage[]
   connectionStatus: ConnectionStatus
   onSendMessage: (text: string) => void
+  /** 中断某个 agent 的在飞 chat 流。requestId 是 master/worker 侧的原始 id
+   *  (即 bubble.id 去掉 `stream_` 前缀);agentName 是响应方名字。 */
+  onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
   onNewDmConversation: () => void
   onShowConfig: () => void
   /** Delete the current DM (the underlying `groups` row + its messages). */
@@ -26,6 +29,7 @@ export function DirectChatArea({
   messages,
   connectionStatus,
   onSendMessage,
+  onCancelStream,
   onNewDmConversation,
   onShowConfig,
   onDeleteConversation,
@@ -105,13 +109,36 @@ export function DirectChatArea({
           <div className={styles.emptyChat}>与 {directTarget} 开始一对一对话</div>
         ) : messages.map(msg => {
           const hasPrompt = Boolean(msg.composedPrompt)
+          // ⏹ 按钮条件:agent 正在流式响应中的 incoming 气泡。outgoing(用户自己
+          // 发的)不显示;已完成(cancelled 或正常 end)的也不显示。
+          const canCancel = Boolean(msg.streaming && msg.isIncoming && msg.id.startsWith('stream_') && onCancelStream)
+          const handleCancel = () => {
+            if (!onCancelStream) return
+            const rid = msg.id.startsWith('stream_') ? msg.id.slice('stream_'.length) : msg.id
+            onCancelStream(rid, msg.from)
+          }
           return (
           <div key={msg.id} className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing}`}>
             <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={36} className={styles.messageAvatar} />
             <div
               className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing}`}
             >
-              {msg.isIncoming && <div className={styles.messageSender}>{msg.from}</div>}
+              {msg.isIncoming && (
+                <div className={styles.messageSender}>
+                  {msg.from}
+                  {canCancel && (
+                    <button
+                      type="button"
+                      className={styles.stopBtn}
+                      onClick={handleCancel}
+                      title="中断当前响应"
+                      aria-label="中断当前响应"
+                    >
+                      ⏹ 中断
+                    </button>
+                  )}
+                </div>
+              )}
               <div className={styles.messageContent}>
                 {msg.isLoading ? (
                   <div className={styles.loadingDots}>
@@ -121,6 +148,12 @@ export function DirectChatArea({
                   </div>
                 ) : <MarkdownContent content={msg.content} streaming={msg.streaming} />}
               </div>
+              {msg.cancelled && (
+                <div className={styles.messageCancelledFooter}>
+                  <span className={styles.cancelledIcon}>⏹</span>
+                  <span>已中断 · {msg.cancelledAt?.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}</span>
+                </div>
+              )}
               <div className={styles.messageTimestamp}>
                 {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
                 {msg.isIncoming && msg.cwd && (

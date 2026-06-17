@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { groupsApi } from '../../api/groups'
+import { messagesApi } from '../../api/messages'
 import { useSocket } from '../../context/SocketContext'
 import type { ChatMessage, ServerMessage } from './types'
 import { extractMentions } from './types'
@@ -187,6 +188,7 @@ export function useGroupChatWebSocket({
 
         const rid = msg.requestId || ''
         const streamId = `stream_${rid}`
+        const cancelled = msg.cancelled === true
         streamContentRef.current.delete(rid)
 
         // 流结束时同步 flush 当前帧之前攒下的 delta,避免最后一段内容
@@ -196,6 +198,18 @@ export function useGroupChatWebSocket({
           cancelAnimationFrame(rafIdRef.current)
         }
         flushPendingDeltas()
+
+        // 中断态:partial 内容已经在 bubble 里,不再重拉历史(避免 race ——
+        // 持久化的 twin 可能因为 race 还没出现,或者 (from,content) 匹配
+        // 失败留下重复行)。直接 flip streaming=false + 打 cancelled 标记。
+        if (cancelled) {
+          const cancelledAt = new Date()
+          setMessages(prev => prev.map(m => m.id === streamId
+            ? { ...m, streaming: false, cancelled: true, cancelledAt, cwd: msg.cwd ?? m.cwd }
+            : m,
+          ))
+          return
+        }
 
         const apply = (targetGroupId: string) => {
           groupsApi.getMessages(targetGroupId).then(historyMsgs => {
@@ -209,6 +223,10 @@ export function useGroupChatWebSocket({
                 isIncoming: m.sender !== curMyName,
                 mentions: JSON.parse(m.mentions || '[]'),
                 composedPrompt: m.composed_prompt,
+                ...(m.cancelled_at ? {
+                  cancelled: true,
+                  cancelledAt: new Date(m.cancelled_at + (m.cancelled_at.includes('Z') || m.cancelled_at.includes('+') ? '' : 'Z')),
+                } : {}),
               }))
               const hydratedIds = new Set(hydrated.map(h => h.id))
               // 找持久化后的"真身"消息 —— 用 (from + content) 匹配流式占位
@@ -283,6 +301,10 @@ export function useGroupChatWebSocket({
         isIncoming: m.sender !== myAgentName,
         mentions: JSON.parse(m.mentions || '[]'),
         composedPrompt: m.composed_prompt,
+        ...(m.cancelled_at ? {
+          cancelled: true,
+          cancelledAt: new Date(m.cancelled_at + (m.cancelled_at.includes('Z') || m.cancelled_at.includes('+') ? '' : 'Z')),
+        } : {}),
       })))
     }).catch(() => setMessages([]))
   }, [selectedGroupId, myAgentName])
@@ -297,8 +319,33 @@ export function useGroupChatWebSocket({
     }
   }, [])
 
+  // 主动中断:POST /api/messages/cancel → master → WS chat_cancelled → worker。
+  // 失败只 console.warn,不抛错(响应方可能刚好掉线或已自然结束,UI 自然回落)。
+  const cancelStream = useCallback(async (requestId: string, agentName: string) => {
+    try {
+      await messagesApi.cancel(requestId, agentName)
+    } catch (err) {
+      console.warn('cancelStream failed:', err)
+    }
+  }, [])
+
+  // 找出某个 agent 当前 streaming 中的 requestId(用于"自动中断再发送" ——
+  // 用户给同一 agent 发新消息时,先把它的在飞流打断)。streamId 形如
+  // `stream_msg_xxx`,要去掉前缀还原成 master / worker 那边的 requestId。
+  // 使用 ref 实时读最新 messages,避免 useCallback 依赖 messages 导致
+  // 频繁重建(每来一个 chunk 就 invalidate 一次)。
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
+  const getStreamingRequestIdForAgent = useCallback((agentName: string): string | undefined => {
+    const m = messagesRef.current.find(x => x.streaming && x.isIncoming && x.from === agentName)
+    if (!m) return undefined
+    return m.id.startsWith('stream_') ? m.id.slice('stream_'.length) : m.id
+  }, [])
+
   return {
     messages,
     setMessages,
+    cancelStream,
+    getStreamingRequestIdForAgent,
   }
 }

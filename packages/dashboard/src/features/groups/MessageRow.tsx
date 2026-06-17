@@ -13,6 +13,8 @@ interface MessageRowProps {
   myAgentName: string
   groupMembers: readonly string[]
   onShowPrompt: (msg: ChatMessage) => void
+  /** 中断某个 agent 的在飞 chat 流。仅在 streaming && isIncoming 的气泡上渲染 ⏹ 按钮。 */
+  onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
 }
 
 // Extract the last [status:thinking]...[/status:thinking] tag from message content.
@@ -37,9 +39,21 @@ export const MessageRow = memo(function MessageRow({
   myAgentName,
   groupMembers,
   onShowPrompt,
+  onCancelStream,
 }: MessageRowProps) {
   const isSystem = msg.from === 'system'
   const hasPrompt = Boolean(msg.composedPrompt)
+  // ⏹ 按钮条件:agent 正在流式响应中的 incoming 气泡。outgoing / 已完成的不显示。
+  // 只在 bubble.id 是 stream_ 前缀(占位 id)时才渲染 —— 历史加载的 gm_/grp_/dm_
+  // 前缀 id 不可能是 streaming 中的,跳过额外渲染开销。
+  const canCancel = Boolean(
+    msg.streaming && msg.isIncoming && msg.id.startsWith('stream_') && onCancelStream,
+  )
+  const handleCancel = () => {
+    if (!onCancelStream) return
+    const rid = msg.id.startsWith('stream_') ? msg.id.slice('stream_'.length) : msg.id
+    onCancelStream(rid, msg.from)
+  }
 
   return (
     <div className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''}`}>
@@ -67,6 +81,17 @@ export const MessageRow = memo(function MessageRow({
               if (!st) return null;
               return <StreamingStatus content={st} done={!msg.streaming} variant="inline" />;
             })()}
+            {canCancel && (
+              <button
+                type="button"
+                className={styles.stopBtn}
+                onClick={handleCancel}
+                title="中断当前响应"
+                aria-label="中断当前响应"
+              >
+                ⏹ 中断
+              </button>
+            )}
           </div>
         )}
         <div className={styles.messageContent}>
@@ -86,6 +111,12 @@ export const MessageRow = memo(function MessageRow({
             />
           )}
         </div>
+        {msg.cancelled && (
+          <div className={styles.messageCancelledFooter}>
+            <span className={styles.cancelledIcon}>⏹</span>
+            <span>已中断 · {msg.cancelledAt?.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}</span>
+          </div>
+        )}
         <div className={styles.messageTimestamp}>
           {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
           {msg.isIncoming && msg.cwd && (

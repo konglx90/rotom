@@ -115,6 +115,30 @@ export function registerMessageRoutes(
     });
   });
 
+  // Cancel an in-flight streaming chat reply. Body: { requestId, agentName, reason? }.
+  // agentName is the responder currently generating (the streaming bubble's `from`),
+  // not the original sender — master uses it to route the chat_cancelled WS message
+  // to that specific worker. Returns delivered=false when the responder is offline
+  // or unknown; the caller can treat that as "stream is already broken" and move on.
+  apiRouter.post("/messages/cancel", (req, res) => {
+    const { requestId, agentName, reason } = req.body || {};
+    if (!requestId || typeof requestId !== "string" ||
+        !agentName || typeof agentName !== "string") {
+      res.status(400).json({ error: "requestId and agentName are required" });
+      return;
+    }
+    if (!hub) {
+      res.status(500).json({ error: "WSHub not available" });
+      return;
+    }
+    const delivered = hub.pushChatCancel(
+      agentName,
+      requestId,
+      typeof reason === "string" && reason ? reason : undefined,
+    );
+    res.json({ ok: true, delivered });
+  });
+
   apiRouter.get("/whoami", (req, res) => {
     const agentAuth = (req as any).agentAuth as { name: string; id: string } | undefined;
     if (agentAuth) {
