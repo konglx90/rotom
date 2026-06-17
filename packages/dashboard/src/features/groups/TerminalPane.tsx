@@ -17,9 +17,9 @@ interface TerminalPaneProps {
 export function TerminalPane({ groupId }: TerminalPaneProps) {
   // Bumping this triggers the connect effect inside XTermView (used by "重连").
   const [connectToken, setConnectToken] = useState(0)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
   const [expanded, setExpanded] = useState(false)
-  const [status, setStatus] = useState<TerminalStatus>('connecting')
+  const [status, setStatus] = useState<TerminalStatus>('closed')
 
   const url = useMemo(() => groupTerminalUrl(groupId), [groupId])
 
@@ -64,14 +64,13 @@ export function TerminalPane({ groupId }: TerminalPaneProps) {
           </Button>
         </div>
       </div>
-      <XTermView
-        url={url}
-        connectToken={connectToken}
-        onStatusChange={setStatus}
-        // Hide via display:none rather than unmount so scrollback survives a
-        // collapse/expand cycle.
-        style={collapsed ? { display: 'none' } : undefined}
-      />
+      {!collapsed && (
+        <XTermView
+          url={url}
+          connectToken={connectToken}
+          onStatusChange={setStatus}
+        />
+      )}
     </div>
   )
 }

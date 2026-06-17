@@ -105,7 +105,8 @@ function renderActiveIssues(issues: ActiveIssueRef[] | undefined): string {
     return (
       `[当前群活跃 issue]\n` +
       `无\n` +
-      `提示：本群当前没有进行中的 issue。如需修改文件，请先 \`rotom issue create\` 建任务承载，否则只允许 Read/Grep/Glob。\n`
+      `提示：本群当前没有进行中的 issue。要写文件？直接 \`rotom issue create <groupId> --title T --assignee <self> --run --approval-policy rw_allow\` 一步到位：建任务 + 认领 + 派给 worker + 工作目录可写。\n` +
+      `**占位 / 模板 / 简单示例类任务自己选合理内容直接落，不要反问用户"你想要什么内容"或"走 A 还是 B 方案"。**\n`
     );
   }
   const lines = issues.map((it) => {
@@ -121,16 +122,26 @@ function renderActiveIssues(issues: ActiveIssueRef[] | undefined): string {
   );
 }
 
-function buildCwdLayer(cwd: string | null): PromptLayer | null {
+function buildCwdLayer(cwd: string | null, mode: ComposeContext["mode"]): PromptLayer | null {
   if (!cwd) return null;
+  // chat 模式保持只读契约:对话场景不承载文件改动,需要写盘请走 issue。
+  // issue / collab 模式:本次执行期间工作目录直接可写,无需 dashboard 审批
+  // (worker.ts 强制 effectivePolicy = rw_allow)。仍然提醒"只写本任务相关",
+  // 避免把无关产物塞进同一个工作目录。
+  const writability =
+    mode === "chat"
+      ? `**重要：此目录为只读，agent 仅可 Read/Grep/Glob/Bash（只读命令），不得调用 Write/Edit 等写盘工具。**\n` +
+        `要写文件？直接 \`rotom issue create <groupId> --title T --assignee <self> --run --approval-policy rw_allow\` 一步到位（建任务 + 派 worker + 工作目录可写）。\n` +
+        `**占位 / 模板 / 简单示例类任务自己选合理内容直接落,不要反问用户"你想要什么内容"或"走 A 还是 B 方案"。**\n`
+      : `**本次执行期间此目录可写**：Write/Edit/MultiEdit 以及写 Bash（重定向 \`>\`、\`tee\`、\`cp\`、\`mv\`、\`mkdir\`、\`touch\` 等）会自动放行，无需 dashboard 确认。\n` +
+        `请只写与本次任务直接相关的产出；跨机器同步以 issue 评论 / artifact 为准。\n`;
   return {
     layer: "cwd",
     content:
       `[工作目录] ${cwd}\n` +
       `所有相对路径基于此目录解析；spawn 的子进程 cwd 已设置在这里，` +
       `Read/Grep/Glob 直接用相对路径即可，不要用 \`cd\` 切换到其他目录。\n` +
-      `**重要：此目录为只读，agent 仅可 Read/Grep/Glob/Bash（只读命令），不得调用 Write/Edit 等写盘工具。**\n` +
-      `需要持久化的产出请通过 issue 评论 / artifact 工具回传 master，或用 Bash 写到非 workingDir 的沙箱目录。\n`,
+      writability,
     source: SOURCE_CWD,
   };
 }
@@ -163,7 +174,7 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
   const group = buildGroupBasicLayer(ctx.group, ctx.agentName, ctx.fromName);
   if (group) layers.push(group);
 
-  const cwd = buildCwdLayer(ctx.cwd);
+  const cwd = buildCwdLayer(ctx.cwd, ctx.mode);
   if (cwd) layers.push(cwd);
 
   layers.push(buildTaskLayer(ctx.body, ctx.mode));
