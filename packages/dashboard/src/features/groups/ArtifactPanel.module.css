@@ -128,8 +128,8 @@
 .previewHeader {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: 4px;
+  padding: 6px 12px;
   background: var(--color-background);
   border-bottom: 1px solid var(--border-color-light);
 }
@@ -145,6 +145,7 @@
 .previewHeaderBottom {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   flex-wrap: wrap;
 }
@@ -188,15 +189,27 @@
 
 .diffBaseInput {
   height: 26px;
-  width: 90px;
+  width: 170px;
   padding: 0 8px;
   font-size: 12px;
-  border: 1px solid var(--color-slate);
+  border: 1px solid var(--border-color-light);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-navy);
   font-family: inherit;
   box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.diffBaseInput::placeholder {
+  color: var(--color-slate);
+  opacity: 0.7;
+}
+
+.diffBaseInput:focus {
+  outline: none;
+  border-color: var(--color-wise-green);
+  box-shadow: 0 0 0 2px rgba(159, 232, 112, 0.25);
 }
 
 .diffSection {
