@@ -408,7 +408,7 @@ export class WSHub {
         let queued = false;
 
         if (result.targetAgentId) {
-          const enrichedConversation = this.enrichConversationWithCollaboration(msg.conversation);
+          const enrichedConversation = this.enrichConversationWithCollaboration(msg.conversation, result.targetName);
           const outMsg = {
             type: "a2a_message" as const,
             requestId: msg.requestId,
@@ -495,7 +495,8 @@ export class WSHub {
         if (targetId) {
           const conn = this.connections.get(agentId);
           const fromName = conn?.name || "unknown";
-          const enrichedConversation = this.enrichConversationWithCollaboration(conversation);
+          const targetAgent = this.db.getAgentById(targetId);
+          const enrichedConversation = this.enrichConversationWithCollaboration(conversation, targetAgent?.name);
           const replyMsg: Record<string, unknown> = {
             type: "a2a_message" as const,
             requestId: msg.requestId,
@@ -525,7 +526,6 @@ export class WSHub {
           // Log reply with latency
           const sendTs = this.sendTimestamps.get(msg.requestId);
           const latencyMs = sendTs ? Date.now() - sendTs : undefined;
-          const targetAgent = this.db.getAgentById(targetId);
           this.db.logMessage({
             requestId: msg.requestId,
             fromName,
@@ -1312,16 +1312,24 @@ export class WSHub {
    * If the conversation targets a group with an active collaboration, return a
    * cloned conversation with `collaboration` metadata attached. Returns the
    * original otherwise.
+   *
+   * `targetAgentName` 让 workingDir 走成员级 override 优先:dashboard 在
+   * MemberListModal 里设的 per-(group, agent) working_dir 写到了
+   * group_member_settings,必须在这里查出来才能透传给 executor。
    */
   private enrichConversationWithCollaboration<T extends { type?: string; groupId?: string } | undefined>(
     conversation: T,
+    targetAgentName?: string,
   ): T {
     if (!conversation || !conversation.groupId) return conversation;
 
-    // workingDir: inject group's default cwd so executor.handleChatReply can
-    // use it as fallback when the agent doesn't have a per-issue cwd.
+    // workingDir 优先级:成员级 override > 群级默认。executor.handleChatReply
+    // 把它作为 cwd(若仍未设置则回退到本机派生 <base>/<groupId>)。
+    const memberOverride = targetAgentName
+      ? this.db.getGroupMemberSetting(conversation.groupId, targetAgentName)
+      : null;
     const group = this.db.getGroupById(conversation.groupId);
-    const workingDir = group?.working_dir || undefined;
+    const workingDir = memberOverride || group?.working_dir || undefined;
 
     if (conversation.type !== "group") {
       // DM / single chat — only workingDir enrichment is meaningful.

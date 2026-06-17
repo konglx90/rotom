@@ -798,19 +798,23 @@ export class MeshDb {
     `).all() as { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null; member_count: number }[];
   }
 
-  listGroupsWithMembers(): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null; member_count: number; members: { agent_name: string; joined_at: string }[] }[] {
+  listGroupsWithMembers(): { id: string; name: string; created_by: string | null; created_at: string; working_dir: string | null; pinned_at: string | null; archived_at: string | null; member_count: number; members: { agent_name: string; joined_at: string; working_dir: string | null }[] }[] {
     const groups = this.listGroups();
-    const rows = this.db.prepare(
-      "SELECT group_id, agent_name, joined_at FROM group_members ORDER BY joined_at",
-    ).all() as { group_id: string; agent_name: string; joined_at: string }[];
-    const byGroup = new Map<string, { agent_name: string; joined_at: string }[]>();
+    const rows = this.db.prepare(`
+      SELECT gm.group_id, gm.agent_name, gm.joined_at, gms.working_dir
+      FROM group_members gm
+      LEFT JOIN group_member_settings gms
+        ON gms.group_id = gm.group_id AND gms.agent_name = gm.agent_name
+      ORDER BY gm.joined_at
+    `).all() as { group_id: string; agent_name: string; joined_at: string; working_dir: string | null }[];
+    const byGroup = new Map<string, { agent_name: string; joined_at: string; working_dir: string | null }[]>();
     for (const r of rows) {
       let list = byGroup.get(r.group_id);
       if (!list) {
         list = [];
         byGroup.set(r.group_id, list);
       }
-      list.push({ agent_name: r.agent_name, joined_at: r.joined_at });
+      list.push({ agent_name: r.agent_name, joined_at: r.joined_at, working_dir: r.working_dir });
     }
     return groups.map((g) => ({ ...g, members: byGroup.get(g.id) ?? [] }));
   }
