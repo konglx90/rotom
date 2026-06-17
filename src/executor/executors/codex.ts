@@ -687,7 +687,11 @@ async function startOrResumeThread(
     profile: null,
     cwd,
     approvalPolicy: null,
-    sandbox: null,
+    // codex CLI 默认 read-only 沙箱挡掉所有出站网络,包括 127.0.0.1 回环 ——
+    // rotom CLI 任何子命令都打不到 master,统一报 "fetch failed"。worker 是
+    // 受信进程、cwd 已隔离、命令经 dashboard 审批,沙箱那层防护是冗余的,
+    // 这里拉满。详见 docs/codex-sandbox-network-blocked.md。
+    sandbox: "danger-full-access",
     config: null,
     baseInstructions: null,
     developerInstructions,
