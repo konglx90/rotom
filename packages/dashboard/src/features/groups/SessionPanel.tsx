@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { sessionsApi, type SessionEntry } from '../../api/sessions'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
@@ -6,6 +6,12 @@ import styles from './GroupChatView.module.css'
 
 interface SessionPanelProps {
   groupId: string
+  /** Notified with the latest session count whenever the list changes.
+   *  Parent (e.g. collapsed Debug header) uses this to render a count badge
+   *  without re-fetching. `null` means the count is not currently known.
+   *  Must be stable (wrap in useCallback) — the panel reads it via a ref so
+   *  a fresh function on every render will not refetch. */
+  onChange?: (count: number | null) => void
 }
 
 type LoadState =
@@ -21,19 +27,26 @@ type LoadState =
  *   - 删除: drops the entry from the executor's SessionStore, so the next
  *           chat / issue run starts fresh instead of --resume'ing this one.
  */
-export function SessionPanel({ groupId }: SessionPanelProps) {
+export function SessionPanel({ groupId, onChange }: SessionPanelProps) {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [viewing, setViewing] = useState<SessionEntry | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+
+  // Read onChange via a ref so a fresh function on every render does not
+  // re-trigger reload().
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
 
   const reload = useCallback(async () => {
     setState({ kind: 'loading' })
     try {
       const { sessions } = await sessionsApi.list(groupId)
       setState({ kind: 'ready', sessions })
+      onChangeRef.current?.(sessions.length)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setState({ kind: 'error', message: msg })
+      onChangeRef.current?.(null)
     }
   }, [groupId])
 

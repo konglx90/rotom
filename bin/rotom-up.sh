@@ -251,6 +251,20 @@ do_start() {
   if is_pid_alive "$MASTER_PID"; then
     echo "[rotom-up] master 已在运行 (PID $(cat "$MASTER_PID"))，跳过"
   else
+    # 端口预检:避免 6月 14 那次悄无声息的 EADDRINUSE 崩 master。
+    # 检测到非自己 pid 占着端口时,把占用的 PID/进程报出来,让用户/脚本
+    # 能立刻看出"旧 master 没死干净"vs"别的程序占着端口"。
+    if command -v lsof >/dev/null 2>&1; then
+      local occupier
+      occupier=$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | head -n1 || true)
+      if [ -n "$occupier" ]; then
+        local occupier_cmd
+        occupier_cmd=$(ps -p "$occupier" -o command= 2>/dev/null | head -c 120 || echo "(unknown)")
+        echo "[rotom-up] ❌ 端口 $PORT 已被占用 (PID $occupier: $occupier_cmd)"
+        echo "[rotom-up] 如需强制接管,先 \`lsof -nP -iTCP:$PORT -sTCP:LISTEN\` 找到占用进程并 stop,或 \`rotom-up stop\` 清理旧 master"
+        return 1
+      fi
+    fi
     echo "[rotom-up] 启动 master..."
     nohup node "$MASTER_JS" --port "$PORT" --host "$HOST" --data "$DATA" \
       >> "$MASTER_LOG" 2>&1 &

@@ -284,6 +284,18 @@ describe("ROTOM_CLI_PROMPT golden string", () => {
 - 如需完整命令参考（含判定表、Issue 决策树、兜底话术），\`Read ~/.rotom/SKILL.md\`；不需要就忽略。
 - 涉及写盘（Edit/Write/写 Bash）必须先有 in_progress issue 承载；看上方 [当前群活跃 issue] 段判断。
 - 想直接落代码改动 / 写盘产出：用 \`rotom issue create <groupId> --title T --description D --assignee <self> --run --approval-policy rw_allow\` 一步到位：建任务 + 派给 worker + 工作目录可写 + 写盘自动放行。**占位 / 模板 / 简单示例类任务自己选合理内容直接落，不要反问用户"你想要什么内容"或"走 A 还是 B 方案"。**
+
+## 错误解读（看 stderr 第一行就能判断，不要被 echo 兜底误导）
+- \`rotom: command failed: HTTP 4xx ... (this is a command error, master is up — fix the command and retry)\` → 你的命令参数错了（issue 不存在、target 名写错、权限不够），**master 是正常的**，修命令重试。
+- \`rotom: command failed: HTTP 5xx ... (this is a command error, master is up ...)\` → master 端异常，可以重试 1-2 次，仍失败再回报。
+- \`rotom: master unreachable at <url> ... (try \`rotom status\` or \`rotom master start\`)\` → master 真的挂了，先 \`rotom status\` 自检（exit 75 = 不可达，exit 0 = 健康），再考虑重启。
+- 不确定时，先 \`rotom status\` 再决定下一步，**不要凭 stderr 前缀猜测系统状态**。
+
+## 反模式：不要给 rotom 命令加 \`|| echo "X failed"\` 兜底
+- ❌ 错误：\`rotom issue delete $id 2>&1 || echo "delete failed (master down)"\`
+  - 这种 echo 会**永远**把锅甩给 master，即使真实原因是 issue 不存在（HTTP 404）、权限不够（401）、参数错（400）。exit 1 都会触发 \`||\`，echo 就跑。
+  - 你（LLM）看到 echo 文本会照单全收，误报成"rotom 不可用"误导用户。
+- ✅ 正确：直接跑 \`rotom issue delete $id\`，让 rotom CLI 自己的 stderr（已区分 master down / command failed）透传出来；非零 exit 时，**先 \`rotom status\` 自检**再决定下一步。
 `,
     );
   });

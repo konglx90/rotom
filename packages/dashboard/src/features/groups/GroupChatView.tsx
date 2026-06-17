@@ -13,7 +13,6 @@ import { DirectChatArea } from './DirectChatArea'
 import { GroupChatArea } from './GroupChatArea'
 import { IssuePanel } from './IssuePanel'
 import { ArtifactPanel } from './ArtifactPanel'
-import { SessionPanel } from './SessionPanel'
 import { AddMemberModal } from './modals/AddMemberModal'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
@@ -41,7 +40,7 @@ export function GroupChatView() {
 
   const [issues, setIssues] = useState<Issue[]>([])
   const [selectedIssueVersion, setSelectedIssueVersion] = useState(0)
-  const [rightTab, setRightTab] = useState<'issues' | 'sessions' | 'artifacts'>('issues')
+  const [rightTab, setRightTab] = useState<'issues' | 'artifacts'>('issues')
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
 
@@ -420,12 +419,6 @@ export function GroupChatView() {
               Issues
             </button>
             <button
-              className={rightTab === 'sessions' ? styles.activeTab : styles.tabBtn}
-              onClick={() => setRightTab('sessions')}
-            >
-              Sessions
-            </button>
-            <button
               className={rightTab === 'artifacts' ? styles.activeTab : styles.tabBtn}
               onClick={() => setRightTab('artifacts')}
             >
@@ -445,8 +438,6 @@ export function GroupChatView() {
               onCreateIssue={handleCreateIssue}
               onCreateCollaboration={handleCreateCollaboration}
             />
-          ) : rightTab === 'sessions' ? (
-            <SessionPanel groupId={selectedGroupId} />
           ) : (
             <ArtifactPanel groupId={selectedGroupId} />
           )}

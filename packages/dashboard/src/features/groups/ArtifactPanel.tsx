@@ -3,6 +3,7 @@ import Editor, { DiffEditor } from '@monaco-editor/react'
 import { artifactsApi } from '../../api/artifacts'
 import type { ArtifactFile, ArtifactContent, ArtifactOriginal } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { SessionPanel } from './SessionPanel'
 import { TerminalPane } from './TerminalPane'
 import styles from './ArtifactPanel.module.css'
 
@@ -128,6 +129,8 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
   const [diffBase, setDiffBase] = useState<string>('HEAD')
   const [mode, setMode] = useState<'view' | 'diff'>('view')
   const [expandSignal, setExpandSignal] = useState<ExpandSignal>({ token: 0, mode: null })
+  const [debugExpanded, setDebugExpanded] = useState(false)
+  const [sessionCount, setSessionCount] = useState<number | null>(null)
 
   const loadFiles = useCallback(async () => {
     try {
@@ -198,7 +201,7 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
   return (
     <div className={styles.artifactPanel}>
       <div className={styles.artifactHeader}>
-        <h3 className={styles.artifactTitle}>{'\u{1F4E6}'} 产物</h3>
+        <h3 className={styles.artifactTitle}>{'\u{1F4E6}'} Results</h3>
         <div className={styles.previewActions}>
           <Button
             variant="ghost"
@@ -345,6 +348,28 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
           ) : null}
         </div>
       )}
+
+      <div className={styles.debugSection}>
+        <button
+          className={styles.debugHeader}
+          onClick={() => setDebugExpanded((v) => !v)}
+          aria-expanded={debugExpanded}
+        >
+          <span className={styles.debugChevron}>{debugExpanded ? '▼' : '▶'}</span>
+          <span className={styles.debugTitle}>{'\u{1F527}'} Debug</span>
+          <span className={styles.debugBadge} title="当前群的 backend sessions">
+            Sessions{sessionCount === null ? '' : ` (${sessionCount})`}
+          </span>
+        </button>
+        {debugExpanded && (
+          <div className={styles.debugBody}>
+            <SessionPanel
+              groupId={groupId}
+              onChange={setSessionCount}
+            />
+          </div>
+        )}
+      </div>
 
       <TerminalPane groupId={groupId} />
     </div>
