@@ -249,17 +249,39 @@ async function api(agent: ResolvedAgent, method: string, route: string, body?: u
     },
   };
   if (body !== undefined) (init as any).body = JSON.stringify(body);
-  let resp: Response;
-  try { resp = await fetch(url, init); }
-  catch (e) { failKind("network", url, (e as Error).message); }
-  const text = await resp.text();
-  let data: any;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!resp.ok) {
-    const detail = typeof data === "object" && data?.error ? data.error : text;
-    failKind("http", url, resp.status, method, route, detail);
+
+  // 幂等方法最多重试 1 次(应对 HTTP/1.1 keep-alive socket reset 等瞬时网络错);
+  // POST 等非幂等方法不重试,避免 master 已处理 + client 不知道时双发。
+  const idempotent = method === "GET" || method === "PUT" || method === "DELETE";
+  const maxAttempts = idempotent ? 2 : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let resp: Response | undefined;
+    try {
+      resp = await fetch(url, init);
+      const text = await resp.text();
+      let data: any;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      if (!resp.ok) {
+        const detail = typeof data === "object" && data?.error ? data.error : text;
+        failKind("http", url, resp.status, method, route, detail);
+      }
+      return data;
+    } catch (e) {
+      const reason = (e as Error).message;
+      // resp 未定义 → fetch() 阶段抛,可能是连接失败 / 握手失败 / 响应 headers 解析前被 reset
+      // resp 已定义 → resp.text() 阶段抛,server 大概率已处理请求(headers 都收齐了)
+      const partial = resp !== undefined;
+      if (attempt < maxAttempts && !partial) {
+        // 网络层失败 + 还有重试机会 → 短暂 sleep 后重试一次
+        await new Promise((r) => setTimeout(r, 800));
+        continue;
+      }
+      failKind(partial ? "partial-response" : "network", url, reason, partial ? resp!.status : 0);
+    }
   }
-  return data;
+  // 不可达(循环总是通过 failKind 退出)
+  throw new Error("rotom: api() loop fell through");
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -289,27 +311,52 @@ function fail(msg: string): never {
   process.exit(1);
 }
 
-// 把"网络/master 不可达"和"HTTP 业务错误"分成两类 ——
+// 把 rotom CLI 的失败分成三类 ——
 //
-// 背景:agent 在 shell 里跑 rotom 命令,看到 stderr 一行就回话。原本两类错都
-// 长成 `rotom: <text>`,LLM 倾向把"network error"和"HTTP 404"混在一起,再
+// 背景:agent 在 shell 里跑 rotom 命令,看到 stderr 一行就回话。原本所有错都
+// 长成 `rotom: <text>`,LLM 倾向把"网络层失败"和"HTTP 业务错"混在一起,再
 // 加一条 `|| echo "X failed (master down)"` 兜底就会把任何 rotom 失败都总结成
 // "rotom 没启动"报给用户(参见 plans/twinkly-waddling-creek.md 的诊断)。
 //
-// 这里把两类错误的 stderr 前缀明确分开:
-//   - network: exit 75 (EX_TEMPFAIL) — master 不在,临时状态;shell 脚本可以
-//     `if [ $? -eq 75 ]` 区分"先重试 / 重启"vs"命令本身错"。
-//   - http:    exit 1,前缀写"command failed"+"this is a command error, master is up",
-//     让 LLM 看到后能明确"master 是好的,问题在我这条命令"。
-function failKind(kind: "network" | "http" | "generic", ...args: unknown[]): never {
+// 这里把三类错误的 stderr 前缀明确分开:
+//   - network:           fetch() 抛异常(连接失败 / socket reset / DNS 等)。
+//                        exit 75 (EX_TEMPFAIL)。注意:HTTP/1.1 keep-alive 下
+//                        server 可能已 accept + log + 处理完请求,client 在响应
+//                        headers 解析前就被对端 reset — 这种情况走 network 分支
+//                        但 server 端其实有处理记录。提示里要 LLM 自检。
+//   - partial-response:  fetch() 成功拿到 Response(status + headers 都有了),
+//                        但 resp.text() 抛(body stream 被截断)。这种 case
+//                        server 几乎肯定已处理请求,exit 75 但**不**自动重试,
+//                        提示 LLM 先查 master log 避免 POST 重复落库。
+//   - http:              server 正常返回了 HTTP <s> 响应,且是 4xx/5xx。
+//                        exit 1,前缀写"command failed"+"this is a command error,
+//                        master is up",让 LLM 看到后能明确"master 是好的,
+//                        问题在我这条命令"。
+function failKind(kind: "network" | "partial-response" | "http" | "generic", ...args: unknown[]): never {
   let prefix: string;
   let exit: number;
   switch (kind) {
     case "network": {
       const url = String(args[0] ?? "");
       const reason = String(args[1] ?? "");
-      prefix = `master unreachable at ${url}: ${reason} — is the master running? (try \`rotom status\` or \`rotom master start\`)`;
-      exit = 75; // EX_TEMPFAIL — distinguishes "transient master down" from "command error"
+      prefix =
+        `network error talking to master at ${url}: ${reason}\n` +
+        `  next: run \`rotom status\` to verify reachability.\n` +
+        `  caveat: on HTTP/1.1 keep-alive sockets, the request may have reached master but the\n` +
+        `          response was cut off — check master log to see if your request was processed.`;
+      exit = 75; // EX_TEMPFAIL — distinguishes "transient master unreachable" from "command error"
+      break;
+    }
+    case "partial-response": {
+      const url = String(args[0] ?? "");
+      const reason = String(args[1] ?? "");
+      const status = Number(args[2] ?? 0);
+      prefix =
+        `response from master was interrupted at ${url}: ${reason}\n` +
+        `  status: master sent ${status} (headers received) but the body stream was cut off mid-flight.\n` +
+        `  warning: master very likely received and processed your request. Do NOT blindly retry\n` +
+        `            non-idempotent operations (POST that creates resources) — check master log first.`;
+      exit = 75; // also EX_TEMPFAIL — same "transient" semantics, but distinct prefix for LLM
       break;
     }
     case "http": {
@@ -594,29 +641,39 @@ function resolveMasterUrlForStatus(): string {
 async function cmdStatus(_rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
   const masterWs = resolveMasterUrlForStatus();
   const url = `${masterHttpUrl(masterWs)}/health`;
-  let resp: Response;
-  try {
-    resp = await fetch(url, { method: "GET" });
-  } catch (e) {
-    failKind("network", url, (e as Error).message);
+  // GET 是幂等的,允许 1 次重试以应对 keep-alive socket reset
+  let resp: Response | undefined;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      resp = await fetch(url, { method: "GET" });
+      const text = await resp.text();
+      let data: any = {};
+      try { data = text ? JSON.parse(text) : {}; } catch { /* keep empty */ }
+      if (!resp.ok) {
+        failKind("http", url, resp.status, "GET", "/health", `health endpoint returned ${resp.status}`);
+      }
+      printJson({
+        master: masterWs,
+        reachable: true,
+        status: data.status ?? "ok",
+        agents: {
+          total: data.total ?? null,
+          online: data.online ?? null,
+        },
+        domains: data.domains ?? null,
+        checkedAt: new Date().toISOString(),
+      });
+      return;
+    } catch (e) {
+      const reason = (e as Error).message;
+      const partial = resp !== undefined;
+      if (attempt < 2 && !partial) {
+        await new Promise((r) => setTimeout(r, 800));
+        continue;
+      }
+      failKind(partial ? "partial-response" : "network", url, reason, partial ? resp!.status : 0);
+    }
   }
-  if (!resp.ok) {
-    failKind("http", url, resp.status, "GET", "/health", `health endpoint returned ${resp.status}`);
-  }
-  const text = await resp.text();
-  let data: any = {};
-  try { data = text ? JSON.parse(text) : {}; } catch { /* keep empty */ }
-  printJson({
-    master: masterWs,
-    reachable: true,
-    status: data.status ?? "ok",
-    agents: {
-      total: data.total ?? null,
-      online: data.online ?? null,
-    },
-    domains: data.domains ?? null,
-    checkedAt: new Date().toISOString(),
-  });
 }
 
 // ── directory ──────────────────────────────────────────────────────────────
