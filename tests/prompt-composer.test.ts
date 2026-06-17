@@ -184,7 +184,7 @@ describe("composePrompt", () => {
     assert.ok(g.content.includes("未认领"));
   });
 
-  it("group-basic 活跃 issue 为空: 显式说 '无' + 提示", () => {
+  it("group-basic 活跃 issue 为空: 显式说 '无' + 提示,引导 agent 果断执行", () => {
     const ctx = baseCtx({
       group: { id: "g", name: "G", activeIssues: [] },
     });
@@ -192,6 +192,9 @@ describe("composePrompt", () => {
     const g = out.layers.find((l) => l.layer === "group-basic")!;
     assert.ok(g.content.includes("无"));
     assert.ok(g.content.includes("rotom issue create"));
+    // 关键:告诉 agent 占位任务自己干,不要反问
+    assert.ok(g.content.includes("占位"), `应包含"占位"以引导 agent 果断执行,实际: ${g.content.slice(0, 200)}`);
+    assert.ok(g.content.includes("不要反问"));
   });
 
   it("group + fromName: 渲染'发信人是=\"X\"'，让 agent 知道对话方身份", () => {
@@ -232,13 +235,35 @@ describe("composePrompt", () => {
     assert.ok(!out.final.includes("发信人"));
   });
 
-  it("cwd 层提示只读语义", () => {
-    const ctx = baseCtx({ cwd: "/Users/kong/work" });
+  it("cwd 层 chat 模式提示只读语义,引导 agent 果断走 issue 而不是反问", () => {
+    const ctx = baseCtx({ mode: "chat", cwd: "/Users/kong/work" });
     const out = composePrompt(ctx);
     const c = out.layers.find((l) => l.layer === "cwd")!;
     assert.ok(c.content.includes("/Users/kong/work"));
     assert.ok(c.content.includes("只读"));
     assert.ok(c.content.includes("不得调用 Write/Edit"));
+    assert.ok(!c.content.includes("本次执行期间此目录可写"));
+    // 引导 agent 一步到位
+    assert.ok(c.content.includes("--run --approval-policy rw_allow"));
+    // 引导 agent 不要反问
+    assert.ok(c.content.includes("不要反问"), `应包含"不要反问"以引导 agent 果断执行,实际: ${c.content.slice(0, 300)}`);
+  });
+
+  it("cwd 层 issue 模式提示可写语义", () => {
+    const ctx = baseCtx({ mode: "issue", cwd: "/Users/kong/work" });
+    const out = composePrompt(ctx);
+    const c = out.layers.find((l) => l.layer === "cwd")!;
+    assert.ok(c.content.includes("/Users/kong/work"));
+    assert.ok(c.content.includes("本次执行期间此目录可写"));
+    assert.ok(c.content.includes("无需 dashboard 确认"));
+    assert.ok(!c.content.includes("此目录为只读"));
+  });
+
+  it("cwd 层 collab 模式同样提示可写语义", () => {
+    const ctx = baseCtx({ mode: "collab", cwd: "/Users/kong/work" });
+    const out = composePrompt(ctx);
+    const c = out.layers.find((l) => l.layer === "cwd")!;
+    assert.ok(c.content.includes("本次执行期间此目录可写"));
   });
 
   it("task body 透传", () => {
@@ -258,6 +283,7 @@ describe("ROTOM_CLI_PROMPT golden string", () => {
 - 私聊 / 群消息 / 查历史 / 成员 / 通讯录 / 建 issue / 协作，命令清单见 \`~/.rotom/SKILL.md\`。
 - 如需完整命令参考（含判定表、Issue 决策树、兜底话术），\`Read ~/.rotom/SKILL.md\`；不需要就忽略。
 - 涉及写盘（Edit/Write/写 Bash）必须先有 in_progress issue 承载；看上方 [当前群活跃 issue] 段判断。
+- 想直接落代码改动 / 写盘产出：用 \`rotom issue create <groupId> --title T --description D --assignee <self> --run --approval-policy rw_allow\` 一步到位：建任务 + 派给 worker + 工作目录可写 + 写盘自动放行。**占位 / 模板 / 简单示例类任务自己选合理内容直接落，不要反问用户"你想要什么内容"或"走 A 还是 B 方案"。**
 `,
     );
   });

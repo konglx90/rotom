@@ -723,14 +723,26 @@ export class ExecutorWorker {
     // fall back 到入参 resumeSessionId(本轮没拿到新 session 时,比如 codex 早退)。
     let lastSessionId: string | undefined = resumeSessionId;
 
-    const effectivePolicy: "r_allow" | "rw_allow" = approvalPolicy === "rw_allow" ? "rw_allow" : "r_allow";
-    // 无论 rw_allow 还是 r_allow 都传 onApprovalRequest，确保 PreToolUse hook
-    // 始终挂载，避免 claude 自己的权限提示因 stdin 关闭而卡死。
-    // rw_allow：转发到 Dashboard 做可见性记录，但立即 auto-accept，不等用户确认。
-    // r_allow（默认）：保留 pendingApprovals 阻塞等待 Dashboard 用户审批。
+    // issue / collab 执行流程强制 rw_allow:本次执行期间工作目录直接可写,
+    // agent 调 Write/Edit/MultiEdit/写 Bash 会立即放行,不挂 dashboard 审批
+    // (prompt-composer 的 cwd 层已告诉 agent 同样的语义)。chat 模式根本
+    // 不会进 runIssueExecution,这里不需要为它分支。
+    // 入参 approvalPolicy 字段保留在 schema 上,主要是为了未来 dashboard 提供
+    // "手动严格审批"开关时复用;当前所有执行路径统一走 rw_allow。
+    const effectivePolicy: "r_allow" | "rw_allow" = "rw_allow";
+    // PreToolUse hook 始终挂载:避免 claude 自己的权限提示因 stdin 关闭而卡死。
+    // 由于 effectivePolicy 永远是 rw_allow,所有调用立即 auto-accept,Dashboard
+    // 仍能看到 issue_approval_request 可见性记录但不阻塞用户。
     const onApprovalRequest = (req: ApprovalRequestInput) => {
       const approvalId = randomUUID();
-      // 公用转发：Dashboard 侧能看到请求记录
+      if (effectivePolicy === "rw_allow") {
+        // rw_allow:立即放行,本地 decision=accept。不发 issue_approval_request
+        // 给 master —— 否则 Dashboard 会渲染成"待确认"卡片,误导用户以为
+        // agent 被阻塞,实际底层 claude 已经继续跑。审计/可见性可从 master
+        // 日志 + claude session jsonl 拉(都是 fullOutput 的一部分)。
+        return Promise.resolve({ decision: "accept" } satisfies ApprovalDecision);
+      }
+      // r_allow:Dashboard 侧能看到请求记录,挂起等待用户 Accept/Deny
       this.send({
         type: "issue_approval_request",
         issueId,
@@ -744,11 +756,6 @@ export class ExecutorWorker {
         diff: req.diff,
         questions: req.questions,
       });
-      if (effectivePolicy === "rw_allow") {
-        // 立即放行，不等用户
-        return Promise.resolve({ decision: "accept" } satisfies ApprovalDecision);
-      }
-      // r_allow：挂起等待 Dashboard 用户确认
       return new Promise<ApprovalDecision>((resolve) => {
         this.pendingApprovals.set(approvalId, { issueId, resolve });
       });
