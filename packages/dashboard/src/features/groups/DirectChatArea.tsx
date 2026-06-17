@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { Avatar } from '../../components/ui/Avatar'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
+import { StreamingStatus } from '../../components/ui/StreamingStatus'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
@@ -21,6 +22,21 @@ interface DirectChatAreaProps {
   onShowConfig: () => void
   /** Delete the current DM (the underlying `groups` row + its messages). */
   onDeleteConversation?: () => void
+}
+
+// Extract the last [status:thinking]...[/status:thinking] tag from message
+// content. Mirrors MessageRow.extractMessageStatus — kept local rather than
+// shared because the only other call site is MessageRow, and extracting a
+// one-liner regex helper into a shared module would be more indirection than
+// it saves.
+function extractMessageStatus(content: string): string | null {
+  let last: string | null = null
+  const re = /\[status:thinking\]([\s\S]*?)\[\/status:thinking\]/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(content)) !== null) {
+    last = m[1]
+  }
+  return last
 }
 
 export function DirectChatArea({
@@ -126,6 +142,11 @@ export function DirectChatArea({
               {msg.isIncoming && (
                 <div className={styles.messageSender}>
                   {msg.from}
+                  {(() => {
+                    const st = extractMessageStatus(msg.content)
+                    if (!st) return null
+                    return <StreamingStatus content={st} done={!msg.streaming} variant="inline" />
+                  })()}
                   {canCancel && (
                     <button
                       type="button"
@@ -146,7 +167,7 @@ export function DirectChatArea({
                     <span className={styles.dot}></span>
                     <span className={styles.dot}></span>
                   </div>
-                ) : <MarkdownContent content={msg.content} streaming={msg.streaming} />}
+                ) : <MarkdownContent content={msg.content} streaming={msg.streaming} hideStatus /> }
               </div>
               {msg.cancelled && (
                 <div className={styles.messageCancelledFooter}>
