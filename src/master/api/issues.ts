@@ -92,8 +92,10 @@ export function registerIssueRoutes(
         return;
       }
       issueWorkDir = v.path;
-    } else if (group.working_dir) {
-      issueWorkDir = group.working_dir;
+    } else {
+      // No explicit workingDir: resolve from per-(group, createdBy) override →
+      // group.working_dir → default, mirroring PUT /issues/:id assignment logic.
+      issueWorkDir = resolveGroupAgentWorkingDir(db, req.params.groupId, createdBy);
     }
     let slashCommand: string | undefined;
     const parsed = parseSlashCommand(title);

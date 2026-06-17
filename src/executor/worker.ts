@@ -873,8 +873,13 @@ export class ExecutorWorker {
     const taskKey = `chat:${requestId}`;
     if (this.activeTasks.has(taskKey)) return;
 
+    const groupId: string = conversation?.id ?? conversation?.groupId ?? "";
+    // cwd 优先使用 master 推送的 group working_dir(来自 dashboard 的群/成员设置),
+    // 缺省时回退到本机派生路径 <base>/<groupId>。
+    const resolveChatCwd = (): string => conversation?.workingDir || this.resolveIssueCwd(groupId || undefined);
+
     if (this.activeTasks.size >= this.maxConcurrent) {
-      this.sendChatEnd(requestId, `[系统] 当前任务繁忙，请稍后再试`, conversation, this.resolveIssueCwd(conversation?.id ?? conversation?.groupId));
+      this.sendChatEnd(requestId, `[系统] 当前任务繁忙，请稍后再试`, conversation, resolveChatCwd());
       return;
     }
 
@@ -886,16 +891,14 @@ export class ExecutorWorker {
 
     if (!body) {
       this.activeTasks.delete(taskKey);
-      this.sendChatEnd(requestId, "你好，有什么可以帮你的？", conversation, this.resolveIssueCwd(conversation?.id ?? conversation?.groupId));
+      this.sendChatEnd(requestId, "你好，有什么可以帮你的？", conversation, resolveChatCwd());
       return;
     }
 
     // Resolve session for this group
-    const groupId: string = conversation?.id ?? conversation?.groupId ?? "";
     const sessionId = groupId ? this.sessionStore.get(this.cliTool, groupId) : undefined;
 
-    // cwd 按 groupId 派生(<base>/<groupId>),忽略 conversation.workingDir
-    const cwd = this.resolveIssueCwd(groupId || undefined);
+    const cwd = resolveChatCwd();
 
     // 拼 prompt:rotom-cli → agent-role → group-basic → cwd → task。
     // group 信息从 conversation 抽出(master 已 enrich 过 activeIssues / groupName)。

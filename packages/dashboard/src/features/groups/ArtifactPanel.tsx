@@ -126,7 +126,7 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
   const [contentLoading, setContentLoading] = useState(false)
   const [original, setOriginal] = useState<ArtifactOriginal | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
-  const [diffBase, setDiffBase] = useState<string>('HEAD')
+  const [diffBase, setDiffBase] = useState<string>('')
   const [mode, setMode] = useState<'view' | 'diff'>('view')
   const [expandSignal, setExpandSignal] = useState<ExpandSignal>({ token: 0, mode: null })
   const [debugExpanded, setDebugExpanded] = useState(false)
@@ -279,8 +279,9 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
                     className={styles.diffBaseInput}
                     value={diffBase}
                     onChange={e => setDiffBase(e.target.value)}
-                    placeholder="HEAD"
-                    title="git ref / commit"
+                    onKeyDown={e => { if (e.key === 'Enter') handleDiff() }}
+                    placeholder="默认 HEAD，可填 commit / 分支"
+                    title="对比基准 (git ref / commit / 分支)，回车发起对比"
                   />
                   <Button
                     variant="secondary"
@@ -288,7 +289,7 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
                     onClick={handleDiff}
                     disabled={diffLoading}
                   >
-                    {diffLoading ? '加载中...' : `对比 ${diffBase || 'HEAD'}`}
+                    {diffLoading ? '加载中...' : '对比'}
                   </Button>
                 </>
               )}
