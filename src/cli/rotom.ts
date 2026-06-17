@@ -251,13 +251,13 @@ async function api(agent: ResolvedAgent, method: string, route: string, body?: u
   if (body !== undefined) (init as any).body = JSON.stringify(body);
   let resp: Response;
   try { resp = await fetch(url, init); }
-  catch (e) { fail(`network error calling ${url}: ${(e as Error).message}`); }
+  catch (e) { failKind("network", url, (e as Error).message); }
   const text = await resp.text();
   let data: any;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   if (!resp.ok) {
     const detail = typeof data === "object" && data?.error ? data.error : text;
-    fail(`HTTP ${resp.status} ${method} ${route}: ${detail}`);
+    failKind("http", url, resp.status, method, route, detail);
   }
   return data;
 }
@@ -287,6 +287,47 @@ function printTable(rows: Record<string, unknown>[], columns?: string[]): void {
 function fail(msg: string): never {
   process.stderr.write(`rotom: ${msg}\n`);
   process.exit(1);
+}
+
+// 把"网络/master 不可达"和"HTTP 业务错误"分成两类 ——
+//
+// 背景:agent 在 shell 里跑 rotom 命令,看到 stderr 一行就回话。原本两类错都
+// 长成 `rotom: <text>`,LLM 倾向把"network error"和"HTTP 404"混在一起,再
+// 加一条 `|| echo "X failed (master down)"` 兜底就会把任何 rotom 失败都总结成
+// "rotom 没启动"报给用户(参见 plans/twinkly-waddling-creek.md 的诊断)。
+//
+// 这里把两类错误的 stderr 前缀明确分开:
+//   - network: exit 75 (EX_TEMPFAIL) — master 不在,临时状态;shell 脚本可以
+//     `if [ $? -eq 75 ]` 区分"先重试 / 重启"vs"命令本身错"。
+//   - http:    exit 1,前缀写"command failed"+"this is a command error, master is up",
+//     让 LLM 看到后能明确"master 是好的,问题在我这条命令"。
+function failKind(kind: "network" | "http" | "generic", ...args: unknown[]): never {
+  let prefix: string;
+  let exit: number;
+  switch (kind) {
+    case "network": {
+      const url = String(args[0] ?? "");
+      const reason = String(args[1] ?? "");
+      prefix = `master unreachable at ${url}: ${reason} — is the master running? (try \`rotom status\` or \`rotom master start\`)`;
+      exit = 75; // EX_TEMPFAIL — distinguishes "transient master down" from "command error"
+      break;
+    }
+    case "http": {
+      const url = String(args[0] ?? "");
+      const status = String(args[1] ?? "");
+      const method = String(args[2] ?? "");
+      const route = String(args[3] ?? "");
+      const detail = String(args[4] ?? "");
+      prefix = `command failed: HTTP ${status} ${method} ${route} (url=${url}): ${detail} (this is a command error, master is up — fix the command and retry)`;
+      exit = 1;
+      break;
+    }
+    default:
+      prefix = String(args[0] ?? "");
+      exit = 1;
+  }
+  process.stderr.write(`rotom: ${prefix}\n`);
+  process.exit(exit);
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -381,6 +422,7 @@ Bootstrap (first-time setup):
 
 Identity:
   whoami
+  status                                        master health check (no agent needed)
 
 Read:
   directory [--online] [--domain D]
@@ -406,6 +448,10 @@ Issue / collaboration:
     --approval-policy r_allow（默认,写类工具人工审批) / rw_allow（读写都默认通过)。
     --run 创建+指派后立即派发执行；必须同时给 --assignee，且 agent 必须在线。
           append 的 prompt 优先用 --description，缺省 fallback 到 --title。
+  issue update <issueId> [--title T] [--description D] [--priority low|medium|high|critical]
+                         [--assignee <agent> | --unassign] [--approval-policy r_allow|rw_allow]
+    局部更新 issue 字段。至少给一个 flag。
+    --assignee / --unassign 互斥。
   issue cancel <issueId>
   issue delete <issueId>
   collab create <groupId> --title T --goal G --participants a,b[,c] [--max-rounds 3] [--owner X]
@@ -458,6 +504,9 @@ async function main(): Promise<void> {
   }
   if (cmd === "executor") {
     return cmdExecutor(rest, flags);
+  }
+  if (cmd === "status") {
+    return cmdStatus(rest, flags);
   }
 
   const agent = resolveAgent(asFlag);
@@ -523,6 +572,51 @@ async function cmdConfig(rest: string[], _flags: Record<string, string | boolean
 async function cmdWhoami(agent: ResolvedAgent): Promise<void> {
   const remote = await api(agent, "GET", "/whoami");
   printJson({ local: { name: agent.name, kind: agent.kind, master: agent.master, configPath: agent.configPath }, remote });
+}
+
+// ── status (master health, no agent required) ─────────────────────────────
+//
+// LLM agent 自检:看到 rotom 命令失败时,先跑 `rotom status` 确认 master 是否
+// 可达,再决定是修命令还是修 master。这里走 /health(无鉴权,master server.ts:139),
+// 失败时复用 failKind('network', ...) 让 LLM 看到统一前缀 + exit 75。
+function resolveMasterUrlForStatus(): string {
+  if (process.env.ROTOM_MASTER) return process.env.ROTOM_MASTER;
+  // ~/.rotom/executor.config.json 顶层 master 字段(worker 共享)
+  try {
+    if (fs.existsSync(DEFAULT_EXECUTOR_CONFIG)) {
+      const raw = JSON.parse(fs.readFileSync(DEFAULT_EXECUTOR_CONFIG, "utf-8"));
+      if (typeof raw?.master === "string" && raw.master) return raw.master;
+    }
+  } catch { /* fall through */ }
+  return "ws://127.0.0.1:28800";
+}
+
+async function cmdStatus(_rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
+  const masterWs = resolveMasterUrlForStatus();
+  const url = `${masterHttpUrl(masterWs)}/health`;
+  let resp: Response;
+  try {
+    resp = await fetch(url, { method: "GET" });
+  } catch (e) {
+    failKind("network", url, (e as Error).message);
+  }
+  if (!resp.ok) {
+    failKind("http", url, resp.status, "GET", "/health", `health endpoint returned ${resp.status}`);
+  }
+  const text = await resp.text();
+  let data: any = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { /* keep empty */ }
+  printJson({
+    master: masterWs,
+    reachable: true,
+    status: data.status ?? "ok",
+    agents: {
+      total: data.total ?? null,
+      online: data.online ?? null,
+    },
+    domains: data.domains ?? null,
+    checkedAt: new Date().toISOString(),
+  });
 }
 
 // ── directory ──────────────────────────────────────────────────────────────
@@ -657,6 +751,41 @@ async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Record<stri
       });
     }
     printJson({ ...created, assignedTo: assigned ? assignee : null, run: runPushed });
+    return;
+  }
+  if (sub === "update") {
+    const id = rest[1]; if (!id) fail("usage: rotom issue update <issueId> [--title T] [--description D] [--priority low|medium|high|critical] [--assignee A | --unassign] [--approval-policy r_allow|rw_allow]");
+    const title = flagStr(flags, "title");
+    const description = flagStr(flags, "description");
+    const priority = flagStr(flags, "priority");
+    const assignee = flagStr(flags, "assignee");
+    const unassign = flags.unassign === true;
+    const approvalPolicyRaw = flagStr(flags, "approval-policy");
+
+    if (assignee !== undefined && unassign) {
+      fail(`--assignee and --unassign are mutually exclusive`);
+    }
+    if (priority !== undefined && !["low", "medium", "high", "critical"].includes(priority)) {
+      fail(`--priority must be one of low|medium|high|critical (got: ${priority})`);
+    }
+    if (approvalPolicyRaw !== undefined && approvalPolicyRaw !== "r_allow" && approvalPolicyRaw !== "rw_allow") {
+      fail(`--approval-policy must be "r_allow" or "rw_allow" (got: ${approvalPolicyRaw})`);
+    }
+
+    const body: Record<string, unknown> = {};
+    if (title !== undefined) body.title = title;
+    if (description !== undefined) body.description = description;
+    if (priority !== undefined) body.priority = priority;
+    if (assignee !== undefined) body.assignedTo = assignee;
+    else if (unassign) body.assignedTo = null;
+    if (approvalPolicyRaw !== undefined) body.approvalPolicy = approvalPolicyRaw;
+
+    if (Object.keys(body).length === 0) {
+      fail(`no fields to update — pass at least one of --title, --description, --priority, --assignee, --unassign, --approval-policy`);
+    }
+
+    const data = await api(agent, "PUT", `/issues/${encodeURIComponent(id)}`, body);
+    printJson(data);
     return;
   }
   if (sub === "cancel") {

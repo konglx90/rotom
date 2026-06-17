@@ -148,6 +148,15 @@ rotom issue create <groupId> --title "..." --description "..." \
 rotom issue list <groupId> --pretty
 rotom issue show <issueId>
 rotom issue events <issueId> --pretty
+
+# 局部更新：调整标题/描述/优先级/指派人/审批策略（至少给一个 flag）
+rotom issue update <issueId> --title "新标题"
+rotom issue update <issueId> --description "新描述"
+rotom issue update <issueId> --priority high
+rotom issue update <issueId> --assignee 西花-claude
+rotom issue update <issueId> --unassign
+rotom issue update <issueId> --approval-policy rw_allow
+
 rotom issue cancel <issueId>
 rotom issue delete <issueId>
 ```

@@ -11,16 +11,17 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border-color-light);
+  flex-shrink: 0;
 }
 
 .artifactTitle {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--color-ink);
   display: flex;
   align-items: center;
@@ -102,7 +103,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 200px;
+  flex: 1;
+  min-height: 140px;
   color: var(--color-slate);
   font-size: 13px;
   text-align: center;
@@ -268,4 +270,64 @@
   color: var(--color-warm-dark);
   background: rgba(14, 15, 12, 0.04);
   font-weight: 600;
+}
+
+/* ── Debug (collapsible session inspector) ─────────────────────────── */
+.debugSection {
+  border-top: 1px dashed var(--border-color-light);
+  background: var(--color-background);
+  flex-shrink: 0;
+}
+
+.debugHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-slate);
+  text-align: left;
+  font-family: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.debugHeader:hover {
+  color: var(--color-navy);
+}
+
+.debugChevron {
+  display: inline-block;
+  width: 10px;
+  font-size: 9px;
+  color: var(--color-slate);
+  flex-shrink: 0;
+}
+
+.debugTitle {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--color-slate);
+}
+
+.debugBadge {
+  margin-left: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--color-slate);
+  opacity: 0.75;
+  font-weight: 500;
+}
+
+.debugBody {
+  max-height: 220px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-color-light);
+  padding: 8px 12px;
+  background: var(--color-canvas-elevated);
 }
