@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { issuesApi } from '../../../api/issues'
 import type { Agent, Issue } from '../../../api/types'
 import { Badge } from '../../../components/ui/Badge'
@@ -17,6 +17,9 @@ interface IssueDetailHeaderProps {
   onComplete: () => void
   onCancel: () => void
   onDelete: () => void
+  /** 中断成功后触发(IssueDetail 用来清空 pendingQueue —— worker abort 时
+   *  finally 块会消费队列,chip 对应的消息已被 worker 吃掉)。 */
+  onInterrupted?: () => void
 }
 
 type ApprovalPolicy = NonNullable<Issue['approval_policy']>
@@ -26,16 +29,57 @@ const APPROVAL_POLICY_OPTIONS: Array<{ value: ApprovalPolicy; label: string }> =
   { value: 'rw_allow', label: '读写默认通过' },
 ]
 
-export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete }: IssueDetailHeaderProps) {
+export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete, onInterrupted }: IssueDetailHeaderProps) {
   const [pendingAssignee, setPendingAssignee] = useState<string | null>(null)
   const [assigning, setAssigning] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [savingPolicy, setSavingPolicy] = useState(false)
   const [copiedId, setCopiedId] = useState(false)
+  const [interrupting, setInterrupting] = useState(false)
 
   const isFinalState = issue.status === 'completed' || issue.status === 'failed' || issue.status === 'cancelled'
   const isActiveState = issue.status === 'open' || issue.status === 'in_progress'
+  const isInProgress = issue.status === 'in_progress'
   const showAssign = issue.type !== 'collaboration'
+
+  // 中断当前步骤(对齐 codex CLI 的 ESC):POST /issues/:id/interrupt →
+  // worker abort 当前 CLI → runIssueExecution finally 块消费 pendingAppends
+  // 用 --resume 续跑(队列非空)或保持 idle in_progress(队列空)。
+  const handleInterrupt = async () => {
+    if (interrupting) return
+    setInterrupting(true)
+    try {
+      await issuesApi.interrupt(issue.id, issue.created_by)
+      onInterrupted?.()
+      await reload()
+    } catch (err) {
+      console.error('Failed to interrupt issue:', err)
+    } finally {
+      setInterrupting(false)
+    }
+  }
+
+  // 全局 ESC 监听:in_progress 时触发中断(对齐 codex interaction.rs:117)。
+  // 输入框 / textarea 聚焦时不拦截 —— 让用户正常 ESC 退出编辑。中断进行中
+  // 不重复触发。open / 终态 ESC 无效(无活跃步骤可中断)。
+  useEffect(() => {
+    if (!isInProgress) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const t = e.target as HTMLElement | null
+      const tag = t?.tagName
+      // 输入框聚焦时 ESC 让用户退出编辑,不触发中断。
+      if (tag === 'TEXTAREA' || tag === 'INPUT' || t?.isContentEditable) return
+      e.preventDefault()
+      void handleInterrupt()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // handleInterrupt 依赖 issue.id / created_by / interrupting,但中断进行中
+    // 的去重由 setInterrupting + 早 return 保证,这里不把 handleInterrupt 放
+    // 依赖避免每次 render 重绑监听。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInProgress, issue.id])
 
   // 候选指派对象 = 群成员 ∩ 非真人 agent（真人不参与抢单执行）。
   const memberSet = new Set(groupMembers)
@@ -99,6 +143,18 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
         )}
         <div className={styles.headerPrimaryMeta}>
           <Badge tone="status" value={issue.status} />
+          {isInProgress && (
+            <Button
+              variant="danger"
+              outline
+              size="xs"
+              onClick={handleInterrupt}
+              disabled={interrupting}
+              title="中断当前步骤(快捷键:ESC)。保留 session,队列消息会自动续跑。"
+            >
+              {interrupting ? '中断中…' : '■ 中断'}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="xs"

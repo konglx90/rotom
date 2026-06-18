@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { issuesApi } from '../../../api/issues'
-import type { Agent } from '../../../api/types'
+import type { Agent, Issue } from '../../../api/types'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
 import shared from './_shared.module.css'
 import styles from './IssueDetail.module.css'
 import { CollaborationMessages } from './CollaborationMessages'
 import { ContinueInputBar } from './ContinueInputBar'
+import { FooterHint } from './FooterHint'
 import { IssueDetailHeader } from './IssueDetailHeader'
 import { IssueEditForm } from './IssueEditForm'
 import { IssueEventsTimeline } from './IssueEventsTimeline'
@@ -30,6 +31,29 @@ interface IssueDetailProps {
 export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false }: IssueDetailProps) {
   const { issue, events, messages, loading, reload } = useIssueData(issueId, refreshSignal)
   const edit = useIssueEdit(issue, reload)
+
+  // in_progress 期间用户已发送但 worker 还没消费的追加指令(chip 列表)。
+  // 提升到 IssueDetail 层,让 ContinueInputBar(push)和 IssueDetailHeader
+  // (中断时 clear)都能访问。issue 翻终态时也清空(自然结束 / 取消)。
+  const [pendingQueue, setPendingQueue] = useState<string[]>([])
+  const prevStatusRef = useRef<Issue['status'] | undefined>(undefined)
+  useEffect(() => {
+    const prev = prevStatusRef.current
+    prevStatusRef.current = issue?.status
+    if (!issue) return
+    // 离开 in_progress(翻终态 / 回 open)时清空 chip —— 队列语义只对 in_progress 有意义。
+    if (prev === 'in_progress' && issue.status !== 'in_progress') {
+      setPendingQueue([])
+    }
+  }, [issue?.status])
+
+  const pushPending = useCallback((text: string) => {
+    setPendingQueue(q => [...q, text])
+  }, [])
+  const removePending = useCallback((idx: number) => {
+    setPendingQueue(q => q.filter((_, i) => i !== idx))
+  }, [])
+  const clearPending = useCallback(() => setPendingQueue([]), [])
 
   // 把所有 status='pending' 的 approval_request 提取出来,渲染成悬浮在底部
   // 按钮上方的快捷确认条。信息流里的 ApprovalCard 同步保留,既能看到上下文
@@ -152,6 +176,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
         onComplete={handleComplete}
         onCancel={handleCancel}
         onDelete={handleDelete}
+        onInterrupted={clearPending}
       />
 
       <div
@@ -175,6 +200,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
             issueId={issueId}
             inProgress={issue.status === 'in_progress'}
             onApprovalResolved={reload}
+            userAgentName={issue.created_by}
           />
 
           {issue.type === 'collaboration' && (
@@ -219,6 +245,11 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
           ref={dockRef}
           className={`${styles.bottomDock} ${standalone ? styles.bottomDockFixed : ''}`}
         >
+          <FooterHint
+            status={issue.status}
+            assignedTo={issue.assigned_to}
+            pendingCount={pendingQueue.length}
+          />
           <ContinueInputBar
             issueId={issueId}
             continuedBy={issue.created_by}
@@ -226,6 +257,9 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
             assignedTo={issue.assigned_to}
             initialPrompt={issue.description || issue.title}
             onSubmitted={handleSubmitted}
+            pendingQueue={pendingQueue}
+            onPushPending={pushPending}
+            onRemovePending={removePending}
           />
         </div>
       ) : null}

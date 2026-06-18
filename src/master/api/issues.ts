@@ -255,6 +255,52 @@ export function registerIssueRoutes(
     res.json({ ok: true });
   });
 
+  // 中断当前步骤但保留 issue in_progress(对齐 codex CLI 的 ESC 行为)。
+  // 与 /cancel 的区别:不翻转 status,session_id 保留,worker abort 后由
+  // runIssueExecution 的 finally 块决定是否 --resume 续跑(pendingAppends
+  // 非空时合并队列续跑,空则保持 idle 等用户下一次 append)。
+  apiRouter.post("/issues/:id/interrupt", (req, res) => {
+    const issue = db.getIssueById(req.params.id);
+    if (!issue) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+    if (issue.status !== "in_progress") {
+      res.status(400).json({ error: `Cannot interrupt an issue in status "${issue.status}" (expected in_progress)` });
+      return;
+    }
+    if (!issue.assigned_to) {
+      res.status(400).json({ error: "Issue has no assignee — cannot interrupt" });
+      return;
+    }
+    const agent = db.getAgentByName(issue.assigned_to);
+    if (!agent) {
+      res.status(400).json({ error: `Assignee "${issue.assigned_to}" is not a registered agent` });
+      return;
+    }
+    if (agent.status !== "online") {
+      res.status(409).json({ error: `Assignee "${issue.assigned_to}" is offline — nothing to interrupt` });
+      return;
+    }
+    const interruptedBy = typeof req.body?.interruptedBy === "string" && req.body.interruptedBy
+      ? req.body.interruptedBy
+      : "dashboard-user";
+    db.addIssueEvent({
+      issueId: req.params.id,
+      eventType: "interrupted",
+      agentName: interruptedBy,
+      content: `Interrupted by ${interruptedBy}`,
+    });
+    const delivered = hub ? hub.sendToAgent(agent.id, {
+      type: "issue_interrupt",
+      issueId: req.params.id,
+      groupId: issue.group_id,
+    }) : false;
+    log.info(`Issue ${req.params.id} interrupt → ${issue.assigned_to}: sent=${delivered}`);
+    if (hub) hub.notifyIssueChanged(req.params.id, issue.group_id, "updated");
+    res.json({ ok: true, delivered });
+  });
+
   apiRouter.post("/issues/:id/continue", (req, res) => {
     const issue = db.getIssueById(req.params.id);
     if (!issue) { res.status(404).json({ error: "Issue not found" }); return; }

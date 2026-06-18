@@ -1,14 +1,32 @@
 import type { IssueEvent } from '../../../api/types'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
+import { StreamingStatus } from '../../../components/ui/StreamingStatus'
 import shared from './_shared.module.css'
 import styles from './IssueEventsTimeline.module.css'
 import { ApprovalCard } from './ApprovalCard'
+
+// 提取 content 里最后一个 [status:thinking]...[/status:thinking] 标签的内容。
+// 与 MessageRow.extractMessageStatus 同语义,issue 链路里 executor 也会喷这种
+// tag,放在 bubbleMeta 行(agent 名 + 时间)inline 展示,对齐群聊 MessageRow。
+function extractMessageStatus(content: string): string | null {
+  let last: string | null = null
+  const re = /\[status:thinking\]([\s\S]*?)\[\/status:thinking\]/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(content)) !== null) {
+    last = m[1]
+  }
+  return last
+}
 
 interface IssueEventsTimelineProps {
   events: IssueEvent[]
   issueId: string
   inProgress: boolean
   onApprovalResolved: () => Promise<void> | void
+  /** 真人用户名(通常是 issue.created_by)。agent_name 等于此值的视为真人消息,
+   *  渲染为右对齐气泡;其他(agent)渲染为左对齐气泡。issue 执行链路里只会
+   *  有这两类发言者,用背景色区分即可,不需要每个字段独占一行。 */
+  userAgentName?: string
 }
 
 type TimelineItem =
@@ -19,6 +37,12 @@ type TimelineItem =
 // codex 把 [tool:exec]/[tool-result:exec] 拆成多个 chunk(一个 chunk = 一个 progress 事件),
 // 单事件渲染没法把命令和输出配对。这里按 agent 把连续的 progress 合并成一个块,
 // 交给 MarkdownContent 解析标记。终态事件(completed/failed/cancelled)单独显示。
+//
+// 去重:worker 完成时会发 sendUpdate(completed, result.fullOutput),fullOutput 是
+// 整轮累积输出,和前面流式 progress chunks 内容重叠。如果 completed/failed 事件
+// 前面已有同 agent 的 progress bubble,把终态事件的 content 置空(只留系统 chip),
+// 避免内容渲染两遍。没有 progress 兜底场景(executor 不流式、只在最后发 fullOutput)
+// 保留 content 作为唯一来源。
 function groupEvents(events: IssueEvent[]): TimelineItem[] {
   const out: TimelineItem[] = []
   let bucket: { agent: string; firstAt: string; parts: string[]; events: IssueEvent[] } | null = null
@@ -44,7 +68,16 @@ function groupEvents(events: IssueEvent[]): TimelineItem[] {
     const mergeable = ev.event_type === 'progress' || ev.event_type === 'output'
     if (!mergeable) {
       flush()
-      out.push({ kind: 'single', event: ev })
+      // completed/failed 终态事件:如果前一个 progress bucket 是同一个 agent,
+      // 说明流式 chunks 已经把内容展示过了,这里 suppress content 只留系统 chip。
+      const prev = out[out.length - 1]
+      const suppressContent =
+        (ev.event_type === 'completed' || ev.event_type === 'failed') &&
+        !!prev && prev.kind === 'progress' && prev.agent === ev.agent_name
+      out.push({
+        kind: 'single',
+        event: suppressContent ? { ...ev, content: '' } : ev,
+      })
       continue
     }
     if (bucket && bucket.agent === ev.agent_name) {
@@ -73,13 +106,24 @@ function formatTime(raw: string): string {
   })
 }
 
-export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalResolved }: IssueEventsTimelineProps) {
+export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalResolved, userAgentName }: IssueEventsTimelineProps) {
   const items = groupEvents(events)
+  const isUser = (agent: string) => !!userAgentName && agent === userAgentName
+  // 最后一条 progress/单内容气泡是否还在 streaming(用来给 StreamingStatus 传 done)。
+  // inProgress 时最后一条 agent 气泡视为正在流式。
+  const lastContentIdx = (() => {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i]
+      if (it.kind === 'progress' || (it.kind === 'single' && it.event.content)) return i
+    }
+    return -1
+  })()
 
   return (
     <div className={styles.issueEvents}>
       {items.map((item, idx) => {
         if (item.kind === 'approval') {
+          // 审批卡保持原结构(需要完整宽度展示按钮),不走气泡布局
           return (
             <div key={item.event.id} className={shared.issueEventItem}>
               <span className={shared.issueEventTime}>{formatTime(item.event.created_at)}</span>
@@ -98,13 +142,24 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
         if (item.kind === 'progress') {
           const trimmed = item.content.trim()
           if (!trimmed) return null
+          const user = isUser(item.agent)
+          const status = extractMessageStatus(item.content)
+          const streaming = inProgress && idx === lastContentIdx
           return (
-            <div key={`prog-${item.events[0].id}-${idx}`} className={shared.issueEventItem}>
-              <span className={shared.issueEventTime}>{formatTime(item.firstAt)}</span>
-              <div className={styles.progressBody}>
-                <span className={shared.issueEventAgent}>{item.agent}</span>
-                <div className={styles.progressContent}>
-                  <MarkdownContent content={item.content} />
+            <div
+              key={`prog-${item.events[0].id}-${idx}`}
+              className={`${styles.bubbleRow} ${user ? styles.bubbleRowUser : styles.bubbleRowAgent}`}
+            >
+              <div className={styles.bubble}>
+                <div className={styles.bubbleMeta}>
+                  <span className={styles.bubbleAgent}>{item.agent}</span>
+                  <span className={styles.bubbleTime}>{formatTime(item.firstAt)}</span>
+                  {status && (
+                    <StreamingStatus content={status} done={!streaming} variant="inline" />
+                  )}
+                </div>
+                <div className={styles.bubbleContent}>
+                  <MarkdownContent content={item.content} hideStatus />
                 </div>
               </div>
             </div>
@@ -112,27 +167,48 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
         }
 
         const ev = item.event
+        const user = isUser(ev.agent_name)
+        // 系统事件(assigned/started/completed/failed/cancelled/interrupted 等)
+        // 没有显著发言人对比,渲染成居中 chip 而不是气泡,避免和对话气泡混淆。
+        const isSystem = !ev.content
+        if (isSystem) {
+          return (
+            <div key={ev.id} className={styles.systemChip}>
+              <span className={styles.systemChipTag}>{ev.event_type}</span>
+              <span className={styles.bubbleTime}>{formatTime(ev.created_at)}</span>
+            </div>
+          )
+        }
+        const status = extractMessageStatus(ev.content)
+        const streaming = inProgress && idx === lastContentIdx
         return (
-          <div key={ev.id} className={shared.issueEventItem}>
-            <span className={shared.issueEventTime}>{formatTime(ev.created_at)}</span>
-            <div className={styles.progressBody}>
-              <span className={shared.issueEventAgent}>{ev.agent_name}</span>
-              {ev.content ? (
-                <div className={styles.progressContent}>
-                  <MarkdownContent content={ev.content} />
-                </div>
-              ) : null}
+          <div
+            key={ev.id}
+            className={`${styles.bubbleRow} ${user ? styles.bubbleRowUser : styles.bubbleRowAgent}`}
+          >
+            <div className={styles.bubble}>
+              <div className={styles.bubbleMeta}>
+                <span className={styles.bubbleAgent}>{ev.agent_name}</span>
+                <span className={styles.bubbleTime}>{formatTime(ev.created_at)}</span>
+                {status && (
+                  <StreamingStatus content={status} done={!streaming} variant="inline" />
+                )}
+              </div>
+              <div className={styles.bubbleContent}>
+                <MarkdownContent content={ev.content} hideStatus />
+              </div>
             </div>
           </div>
         )
       })}
       {inProgress && (
-        <div className={shared.issueEventItem}>
-          <span className={shared.issueEventTime}>...</span>
-          <div className={styles.loadingDots}>
-            <span className={styles.dot}></span>
-            <span className={styles.dot}></span>
-            <span className={styles.dot}></span>
+        <div className={`${styles.bubbleRow} ${styles.bubbleRowAgent}`}>
+          <div className={styles.bubble}>
+            <div className={styles.loadingDots}>
+              <span className={styles.dot}></span>
+              <span className={styles.dot}></span>
+              <span className={styles.dot}></span>
+            </div>
           </div>
         </div>
       )}

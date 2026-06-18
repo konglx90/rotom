@@ -352,6 +352,7 @@ export type ServerMessage =
   | ServerIssueChangedMessage
   | ServerIssueContinueMessage
   | ServerIssueAppendMessage
+  | ServerIssueInterruptMessage
   | ServerSessionViewRequest
   | ServerSessionDeleteRequest;
 
@@ -534,6 +535,28 @@ export interface ServerIssueCancelledMessage {
   issueId: string;
   groupId?: string;
   reason?: string;
+}
+
+/**
+ * Master → Agent: user requested an interrupt of the current step (button
+ * click or ESC shortcut) while the issue is still in_progress. Unlike
+ * `issue_cancelled`, the issue stays in_progress — the agent should abort
+ * the in-flight CLI process and let `runIssueExecution`'s finally block
+ * decide what's next:
+ *   • if `pendingAppends[issueId]` has queued messages → merge them and
+ *     `--resume` the CLI with the last sessionId (queue flush, codex-style
+ *     "interrupt + process queued steer")
+ *   • if queue is empty → no respawn, leave the issue idle in_progress so
+ *     the user can keep typing; next append triggers a fresh `--resume` run
+ *
+ * Distinct from `issue_cancelled` (which flips status to cancelled) and
+ * `issue_continue` (which only fires after completed/failed). Interrupt
+ * keeps the session alive for immediate resume.
+ */
+export interface ServerIssueInterruptMessage {
+  type: "issue_interrupt";
+  issueId: string;
+  groupId?: string;
 }
 
 /**
