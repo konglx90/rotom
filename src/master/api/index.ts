@@ -17,6 +17,7 @@ import { registerDomainRoutes } from "./domains.js";
 import { registerMessageRoutes } from "./messages.js";
 import { registerGroupRoutes } from "./groups.js";
 import { registerIssueRoutes } from "./issues.js";
+import { registerNoteRoutes } from "./notes.js";
 import { registerArtifactRoutes } from "./artifacts.js";
 import { registerE2edRoutes } from "./e2ed.js";
 import { registerSessionRoutes } from "./sessions.js";
@@ -70,6 +71,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
   registerMessageRoutes(apiRouter, db, auth, hub, router);
   registerGroupRoutes(apiRouter, db, auth, hub);
   registerIssueRoutes(apiRouter, db, auth, hub);
+  registerNoteRoutes(apiRouter, db);
   registerArtifactRoutes(apiRouter, db);
   registerE2edRoutes(apiRouter, db);
   registerSessionRoutes(apiRouter, db, auth, hub);
