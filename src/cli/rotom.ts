@@ -482,6 +482,7 @@ Read:
   issue show <issueId>
   issue events <issueId>
   issue messages <issueId>
+  issue comment <issueId> --message M [--reply-to <eventId>]
 
 Send:
   group send <groupId> <target> <message...>
@@ -762,6 +763,32 @@ async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Record<stri
   if (sub === "messages") {
     const id = rest[1]; if (!id) fail("usage: rotom issue messages <issueId>");
     const data = await api(agent, "GET", `/issues/${encodeURIComponent(id)}/messages`);
+    if (pretty) {
+      printTable(data.map((m: any) => {
+        const quoted = m.quoted
+          ? `> ${(m.quoted.agent_name || "").slice(0, 10)}: ${(m.quoted.content || "").slice(0, 30)}`
+          : "";
+        return {
+          id: m.id,
+          type: m.event_type,
+          agent: m.agent_name,
+          content: (m.content || "").slice(0, 60),
+          quoted: quoted,
+          created_at: m.created_at,
+        };
+      }), ["id", "type", "agent", "content", "quoted", "created_at"]);
+    } else {
+      printJson(data);
+    }
+    return;
+  }
+  if (sub === "comment") {
+    const id = rest[1]; if (!id) fail("usage: rotom issue comment <issueId> --message M [--reply-to <eventId>]");
+    const message = requireFlag(flags, "message");
+    const replyTo = flagInt(flags, "reply-to");
+    const data = await api(agent, "POST", `/issues/${encodeURIComponent(id)}/comments`, {
+      agentName: agent.name, content: message, replyTo: replyTo ?? undefined,
+    });
     printJson(data);
     return;
   }

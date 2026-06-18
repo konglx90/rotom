@@ -439,20 +439,40 @@ export function registerIssueRoutes(
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    const events = db.getIssueEvents(req.params.id)
-      .filter((e) => e.event_type === "collaboration_turn");
-    const messages = events.map((e) => {
-      let round = 0;
-      try { round = (JSON.parse(e.metadata || "{}").round as number) ?? 0; } catch { /* ignore */ }
-      return {
-        id: e.id,
-        round,
-        agentName: e.agent_name,
-        content: e.content,
-        createdAt: e.created_at,
-      };
-    });
+    const messages = db.getIssueMessages(req.params.id);
     res.json(messages);
+  });
+
+  apiRouter.post("/issues/:id/comments", (req, res) => {
+    const issue = db.getIssueById(req.params.id);
+    if (!issue) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+    const { agentName, content, replyTo } = req.body;
+    if (!agentName || !content) {
+      res.status(400).json({ error: "agentName and content are required" });
+      return;
+    }
+    const agent = db.getAgentByName(agentName);
+    if (!agent) {
+      res.status(400).json({ error: `Agent \"${agentName}\" not found` });
+      return;
+    }
+    // Validate replyTo if provided: must be an existing event on this issue
+    if (replyTo !== undefined && replyTo !== null) {
+      const target = db.getIssueEventById(replyTo);
+      if (!target || target.issue_id !== req.params.id) {
+        res.status(400).json({ error: `replyTo event ${replyTo} not found on this issue` });
+        return;
+      }
+    }
+    const eventId = db.addIssueComment(req.params.id, agentName, content, replyTo ?? undefined);
+    if (hub) {
+      hub.notifyIssueChanged(req.params.id, issue.group_id, "event_appended");
+    }
+    log.info(`Comment added to issue ${req.params.id} by ${agentName} (event=${eventId}, replyTo=${replyTo ?? "none"})`);
+    res.status(201).json({ id: eventId, ok: true });
   });
 
   apiRouter.delete("/issues/:id", (req, res) => {

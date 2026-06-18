@@ -138,6 +138,8 @@ export interface IssueEventRow {
   content: string;
   metadata: string;
   created_at: string;
+  /** ID of the event/comment this is replying to (for message quoting) */
+  reply_to_id: number | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1158,10 +1160,73 @@ export class MeshDb {
     );
   }
 
+  /**
+   * Post a comment/message on an issue, optionally replying to a specific
+   * event (message quoting). Returns the new event ID.
+   */
+  addIssueComment(issueId: string, agentName: string, content: string, replyToId?: number): number {
+    const result = this.db.prepare(`
+      INSERT INTO issue_events (issue_id, event_type, agent_name, content, metadata, reply_to_id, created_at)
+      VALUES (?, 'comment', ?, ?, '{}', ?, ?)
+    `).run(
+      issueId, agentName, content, replyToId ?? null,
+      new Date().toISOString(),
+    );
+    return Number(result.lastInsertRowid);
+  }
+
+  /**
+   * Get all comment/collaboration messages for an issue, with reply-to
+   * resolution (quoted message content + author embedded in the result).
+   */
+  getIssueMessages(issueId: string): Array<{
+    id: number;
+    event_type: string;
+    agent_name: string;
+    content: string;
+    created_at: string;
+    metadata: string;
+    reply_to_id: number | null;
+    /** Resolved quoted message, present when reply_to_id is set */
+    quoted?: { id: number; agent_name: string; content: string; created_at: string } | null;
+  }> {
+    const rows = this.db.prepare(`
+      SELECT * FROM issue_events
+      WHERE issue_id = ? AND event_type IN ('comment', 'collaboration_turn')
+      ORDER BY created_at ASC
+    `).all(issueId) as IssueEventRow[];
+
+    return rows.map((r) => {
+      const msg: any = {
+        id: r.id,
+        event_type: r.event_type,
+        agent_name: r.agent_name,
+        content: r.content,
+        created_at: r.created_at,
+        metadata: r.metadata,
+        reply_to_id: r.reply_to_id,
+      };
+      if (r.reply_to_id != null) {
+        const quoted = this.db.prepare(
+          "SELECT id, agent_name, content, created_at FROM issue_events WHERE id = ?",
+        ).get(r.reply_to_id) as { id: number; agent_name: string; content: string; created_at: string } | undefined;
+        msg.quoted = quoted ?? null;
+      }
+      return msg;
+    });
+  }
+
   getIssueEvents(issueId: string, limit = 200): IssueEventRow[] {
     return this.db.prepare(
       "SELECT * FROM issue_events WHERE issue_id = ? ORDER BY created_at ASC LIMIT ?",
     ).all(issueId, limit) as IssueEventRow[];
+  }
+
+  /** Get a single issue event by its ID. */
+  getIssueEventById(eventId: number): IssueEventRow | undefined {
+    return this.db.prepare(
+      "SELECT * FROM issue_events WHERE id = ?",
+    ).get(eventId) as IssueEventRow | undefined;
   }
 
   /** Get all issue events for a group (across all issues in that group) */
