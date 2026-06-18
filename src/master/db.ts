@@ -1068,8 +1068,8 @@ export class MeshDb {
     );
     this.db.prepare(`
       INSERT INTO issue_events (issue_id, event_type, agent_name, content, created_at)
-      VALUES (?, 'created', ?, ?, ?)
-    `).run(issue.id, issue.createdBy, issue.title, now);
+      VALUES (?, 'created', ?, '', ?)
+    `).run(issue.id, issue.createdBy, now);
   }
 
   getIssueById(id: string): IssueRow | undefined {

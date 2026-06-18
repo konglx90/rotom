@@ -829,15 +829,18 @@ export class ExecutorWorker {
         onApprovalRequest,
       });
 
+      // 不管后续走 abort / completed / failed 哪条分支,先把本轮 sessionId
+      // 抓回来 —— finally 的队列续跑要用它做 --resume,丢了就起新会话丢上下文。
+      // 之前的 bug:interrupt 走 `if (task.aborted) return` 早返回,这行被跳过,
+      // 队列续跑 lastSessionId=undefined → claude 起新会话,前一轮工作全丢。
+      if (result?.sessionId) lastSessionId = result.sessionId;
+
       if (task.aborted) {
-        // 中断 vs 取消:interrupt 保持 in_progress 等待队列续跑 / 用户下次输入;
-        // cancel 翻 cancelled。两者都已通过 controller.abort() 让 executor 退出,
-        // 这里只是把状态语义对齐发给 master。
-        if (task.interrupted) {
-          this.sendUpdate(issueId, "in_progress", "[interrupted] 当前步骤已中断,等待新指令", undefined, cwd);
-        } else {
-          this.sendUpdate(issueId, "cancelled", "Execution cancelled by user", undefined, cwd);
-        }
+        // 中断/取消事件已由 /interrupt 或 /cancel API 在落 issue_event 的同时
+        // 推 WS 给 worker,worker 不再二次 sendUpdate —— 否则 master 会再落一条
+        // progress 事件,把 "[interrupted] 当前步骤已中断..." 这种系统话塞进
+        // agent 的对话气泡(被 groupEvents 当成 mergeable progress 合并)。
+        // sessionId 已在上面抓回,finally 块会用它做 --resume 续跑队列。
         return;
       }
 
@@ -856,8 +859,6 @@ export class ExecutorWorker {
       }
       sessionMeta.cliTool = this.cliTool;
 
-      if (result.sessionId) lastSessionId = result.sessionId;
-
       if (result.exitCode === 0) {
         this.sendUpdate(issueId, "completed", result.fullOutput, sessionMeta, cwd, composedPrompt);
         console.log(`${this.tag} Issue done: ${issueId} (exit=0, session=${result.sessionId ?? "none"})`);
@@ -866,14 +867,10 @@ export class ExecutorWorker {
         console.log(`${this.tag} Issue failed: ${issueId} (exit=${result.exitCode})`);
       }
     } catch (err: any) {
-      if (task.aborted && task.interrupted) {
-        // 中断(ESC / 中断按钮):不翻 status,保持 in_progress,让 dashboard
-        // 知道「当前步骤已停,等待新指令或队列续跑」。finally 块会消费
-        // pendingAppends 用 --resume 续跑(若有)。
-        this.sendUpdate(issueId, "in_progress", "[interrupted] 当前步骤已中断,等待新指令", undefined, cwd);
-        console.log(`${this.tag} Issue interrupted: ${issueId} (session=${lastSessionId ?? "none"})`);
-      } else if (task.aborted) {
-        this.sendUpdate(issueId, "cancelled", "Execution cancelled by user", undefined, cwd);
+      if (task.aborted) {
+        // 走异常路径的中断/取消(理论上 executor 都走 resolve,catch 是兜底)。
+        // 同 try 块,事件已由 API 落库,worker 不再二次 sendUpdate。
+        console.log(`${this.tag} Issue aborted via exception: ${issueId} (interrupted=${!!task.interrupted})`);
       } else {
         this.sendUpdate(issueId, "failed", err.message, undefined, cwd);
         console.error(`${this.tag} Issue error: ${issueId}`, err.message);

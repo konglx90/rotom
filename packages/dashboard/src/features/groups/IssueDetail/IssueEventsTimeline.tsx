@@ -172,9 +172,15 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
         // 没有显著发言人对比,渲染成居中 chip 而不是气泡,避免和对话气泡混淆。
         const isSystem = !ev.content
         if (isSystem) {
+          // chip 显示 event_type + agent_name(如 "assigned 西花-claude"),
+          // 否则中断/取消/分配只看到事件名,看不到对象。agent_name 缺失时跳过。
+          const showAgent = !!ev.agent_name && ev.agent_name !== 'system'
           return (
             <div key={ev.id} className={styles.systemChip}>
               <span className={styles.systemChipTag}>{ev.event_type}</span>
+              {showAgent && (
+                <span className={styles.systemChipAgent}>{ev.agent_name}</span>
+              )}
               <span className={styles.bubbleTime}>{formatTime(ev.created_at)}</span>
             </div>
           )

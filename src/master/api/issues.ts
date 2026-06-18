@@ -6,6 +6,7 @@ import fs from "node:fs";
 import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import { parseSlashCommand } from "../../shared/slash-commands.js";
+import { ISSUE_STATUSES } from "../../shared/constants.js";
 import { resolveGroupAgentWorkingDir } from "../group-paths.js";
 import { createLogger } from "../../shared/logger.js";
 
@@ -135,14 +136,15 @@ export function registerIssueRoutes(
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    const { assignedTo, priority, title, description, approvalPolicy } = req.body;
+    const { assignedTo, priority, title, description, approvalPolicy, status } = req.body;
     if (assignedTo !== undefined) {
       const normalized = (assignedTo === null || assignedTo === "") ? null : String(assignedTo);
       db.updateIssueStatus(req.params.id, issue.status, { assignedTo: normalized });
       db.addIssueEvent({
         issueId: req.params.id, eventType: "assigned",
+        // agent_name 即被指派的 agent(dashboard chip 会显示);content 留空 →
+        // 走 system chip 渲染,不再伪装成 agent 自己说"Assigned to me"。
         agentName: normalized || "system",
-        content: normalized ? `Assigned to ${normalized}` : `Unassigned`,
       });
       // Re-resolve working_dir from per-(group, agent) override → group.working_dir → default.
       if (normalized && (issue.status === "open" || issue.status === "in_progress")) {
@@ -207,6 +209,21 @@ export function registerIssueRoutes(
           issueId: req.params.id, eventType: "edited",
           agentName: "system",
           content: `审批策略改为 ${approvalPolicy === "rw_allow" ? "读写默认通过" : "读默认通过"}`,
+        });
+      }
+    }
+    if (status !== undefined) {
+      if (!ISSUE_STATUSES.includes(status)) {
+        res.status(400).json({ error: `status must be one of ${ISSUE_STATUSES.join("|")}` });
+        return;
+      }
+      if (status !== issue.status) {
+        db.updateIssueStatus(req.params.id, status);
+        db.addIssueEvent({
+          issueId: req.params.id, eventType: "status_changed",
+          agentName: "system",
+          content: `${issue.status} → ${status}`,
+          metadata: { from: issue.status, to: status },
         });
       }
     }
@@ -288,8 +305,9 @@ export function registerIssueRoutes(
     db.addIssueEvent({
       issueId: req.params.id,
       eventType: "interrupted",
+      // agent_name 即谁触发中断(dashboard chip 显示);content 留空 →
+      // 走 system chip,不再伪装成 agent 自己说"Interrupted by X"。
       agentName: interruptedBy,
-      content: `Interrupted by ${interruptedBy}`,
     });
     const delivered = hub ? hub.sendToAgent(agent.id, {
       type: "issue_interrupt",
@@ -423,7 +441,9 @@ export function registerIssueRoutes(
     }
     db.addIssueEvent({
       issueId: issue.id, eventType: "started",
-      agentName, content: `Claimed and started by ${agentName}`,
+      // agent_name 即 claim 的 worker;content 留空 → system chip,
+      // 不再伪装成 agent 自己说"Claimed and started by me"。
+      agentName,
     });
     if (hub) hub.notifyIssueChanged(issue.id, issue.group_id, "updated");
     res.json(issue);
