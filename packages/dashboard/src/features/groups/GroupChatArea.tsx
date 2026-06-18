@@ -7,6 +7,7 @@ import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { MemberListModal } from './modals/MemberListModal'
 import { ComposedPromptModal } from './modals/ComposedPromptModal'
 import { MessageRow } from './MessageRow'
+import { MessageContextMenu } from './MessageContextMenu'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import styles from './ChatArea.module.css'
 
@@ -55,6 +56,73 @@ export function GroupChatArea({
   const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
   const handleShowPrompt = useCallback((msg: ChatMessage) => {
     setComposedPromptFor(msg)
+  }, [])
+
+  // 右键气泡弹自定义菜单。null = 不显示。每次右键覆盖 state,旧菜单自然卸载。
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; msg: ChatMessage } | null>(null)
+  const handleMessageContextMenu = useCallback((e: React.MouseEvent, msg: ChatMessage) => {
+    // loading dots / streaming 占位消息没有可引用内容,跳过。
+    if (msg.isLoading) return
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY, msg })
+  }, [])
+
+  // 把消息构造成 markdown 引用块:首行带 sender+时间,后续每行加 `> ` 前缀。
+  // 消息原文里已有的 `>` 引用会自然形成嵌套 blockquote。
+  //
+  // 引用消息本质是「回应对方说的话」,作为对话上下文回传给对方 agent。工具调用
+  // ([tool:exec] / [tool-result:exec] / [tool:patch] / [tool:ask]) 和思考过程
+  // ([thinking] / [status:thinking]) 是 agent 的内部操作日志和内心独白,不是它的
+  // 「发言」,留在引用里有三个问题:
+  //   1. 噪声 —— 接收方看到的是一堆 `[tool:exec]rm -rf ...[/tool:exec]` 这种内部
+  //      标记,反而干扰;对方要的是「你之前说了什么」,不是「你之前做了什么」。
+  //   2. 体积 —— 一条消息 90% 可能是工具输出,原样引用会把 textarea 撑满,真正要
+  //      回应的文本被淹掉。
+  //   3. 语义错位 —— 接收方 agent 看到 blockquote 里嵌着工具块标记,可能误以为这是
+  //      新一轮要执行的工具指令,造成指令混淆。
+  // 因此这里把 MarkdownContent 解析的全部结构化块标记整体剔除(同步
+  // MarkdownContent.tsx 的 TAGS 列表,新增标签时两处一起改)。流式中未闭合的标签
+  // 也兜底:正则末尾的 `(?:\[/tag\]|$)` 让它吃到字符串尾。
+  const STRUCT_BLOCK_RE = /\[(?:thinking|status:thinking|tool:exec|tool-result:exec|tool:patch|tool:ask|tool-result:ask)\][\s\S]*?(?:\[\/(?:thinking|status:thinking|tool:exec|tool-result:exec|tool:patch|tool:ask|tool-result:ask)\]|$)/g
+  const buildQuote = useCallback((msg: ChatMessage): string => {
+    const time = msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })
+    const header = `> **@${msg.from}** · ${time}`
+    const stripped = (msg.content || '')
+      .replace(STRUCT_BLOCK_RE, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+    if (!stripped) return ''
+    const body = stripped.split('\n').map(l => `> ${l}`).join('\n')
+    return `${header}\n${body}`
+  }, [])
+
+  // 追加到输入框末尾,空输入时不带前导空行。然后用 rAF 等 React commit 完成,
+  // 再 focus + 把光标移到末尾 + 重新测 textarea 高度(沿用现有 auto-resize)。
+  // 若剔除工具/思考块后没有可引用内容,静默跳过(避免插入一段只有 header 的空引用)。
+  const handleQuote = useCallback((msg: ChatMessage) => {
+    const quote = buildQuote(msg)
+    if (!quote) {
+      setContextMenu(null)
+      return
+    }
+    setMessage(prev => (prev.trim() ? `${prev}\n\n${quote}\n\n` : `${quote}\n\n`))
+    setContextMenu(null)
+    requestAnimationFrame(() => {
+      const ta = inputRef.current
+      if (!ta) return
+      ta.focus()
+      ta.selectionStart = ta.selectionEnd = ta.value.length
+      ta.style.height = 'auto'
+      ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'
+    })
+  }, [buildQuote])
+
+  const handleCopy = useCallback(async (msg: ChatMessage, plain: boolean) => {
+    const text = plain
+      ? msg.content.replace(/[*_`>~\-\[\]!]/g, '')
+      : msg.content
+    try { await navigator.clipboard.writeText(text) } catch { /* ignore */ }
+    setContextMenu(null)
   }, [])
 
   // 限制渲染的消息条数。visibleLimit = VISIBLE_LIMIT_DEFAULT 时只显示最近
@@ -264,6 +332,7 @@ export function GroupChatArea({
             groupMembers={groupMembers}
             onShowPrompt={handleShowPrompt}
             onCancelStream={onCancelStream}
+            onContextMenu={handleMessageContextMenu}
           />
         ))}
       </div>
@@ -334,6 +403,18 @@ export function GroupChatArea({
           </div>
         )}
       </div>
+
+      {contextMenu && (
+        <MessageContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          msg={contextMenu.msg}
+          onQuote={handleQuote}
+          onCopy={handleCopy}
+          onShowPrompt={handleShowPrompt}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </>
   )
 }
