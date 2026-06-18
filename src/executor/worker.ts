@@ -874,9 +874,11 @@ export class ExecutorWorker {
     if (this.activeTasks.has(taskKey)) return;
 
     const groupId: string = conversation?.id ?? conversation?.groupId ?? "";
-    // cwd 优先使用 master 推送的 group working_dir(来自 dashboard 的群/成员设置),
-    // 缺省时回退到本机派生路径 <base>/<groupId>。
-    const resolveChatCwd = (): string => conversation?.workingDir || this.resolveIssueCwd(groupId || undefined);
+    // cwd 走本机派生:<workingDirMap[groupId]> 或 <base>/<groupId>。
+    // 故意忽略 conversation.workingDir —— 那是 master DB 里存的绝对路径,
+    // 多机部署下推到非 master executor 时目录不存在,会导致 spawn 失败。
+    // 详见 resolveIssueCwd 上方"跨机器部署安全"注释。
+    const resolveChatCwd = (): string => this.resolveIssueCwd(groupId || undefined);
 
     if (this.activeTasks.size >= this.maxConcurrent) {
       this.sendChatEnd(requestId, `[系统] 当前任务繁忙，请稍后再试`, conversation, resolveChatCwd());

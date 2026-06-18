@@ -1315,7 +1315,11 @@ export class WSHub {
    *
    * `targetAgentName` 让 workingDir 走成员级 override 优先:dashboard 在
    * MemberListModal 里设的 per-(group, agent) working_dir 写到了
-   * group_member_settings,必须在这里查出来才能透传给 executor。
+   * group_member_settings,必须在这里查出来才能透传给前端展示。
+   *
+   * 注意:`workingDir` 仅用于 dashboard 展示/解析,**不会**被 executor 当作
+   * spawn cwd —— 后者必须走本机 `resolveIssueCwd` 派生(见 worker.ts
+   * "跨机器部署安全"注释),否则多机部署下会把 master 本地路径推给别的机器。
    */
   private enrichConversationWithCollaboration<T extends { type?: string; groupId?: string } | undefined>(
     conversation: T,
@@ -1323,8 +1327,8 @@ export class WSHub {
   ): T {
     if (!conversation || !conversation.groupId) return conversation;
 
-    // workingDir 优先级:成员级 override > 群级默认。executor.handleChatReply
-    // 把它作为 cwd(若仍未设置则回退到本机派生 <base>/<groupId>)。
+    // workingDir 优先级:成员级 override > 群级默认。仅作为元数据透传给前端,
+    // executor 不会消费(避免跨机器把 master 本地路径推到非 master executor)。
     const memberOverride = targetAgentName
       ? this.db.getGroupMemberSetting(conversation.groupId, targetAgentName)
       : null;
