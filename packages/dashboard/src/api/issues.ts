@@ -54,6 +54,14 @@ export const issuesApi = {
     return api.post<{ ok: boolean }>(`/issues/${id}/cancel`, { cancelledBy })
   },
 
+  /** 中断当前步骤但保留 issue in_progress(对齐 codex CLI 的 ESC)。
+   *  与 cancel 的区别:不翻转 status,session_id 保留,worker abort 后由
+   *  runIssueExecution 的 finally 块决定是否 --resume 续跑(pendingAppends
+   *  非空时合并队列续跑,空则保持 idle 等用户下一次 append)。 */
+  async interrupt(id: string, interruptedBy: string): Promise<{ ok: boolean; delivered: boolean }> {
+    return api.post<{ ok: boolean; delivered: boolean }>(`/issues/${id}/interrupt`, { interruptedBy })
+  },
+
   /** Resolve a pending approval the executor raised mid-issue.
    *  `feedback` is only meaningful on `deny` — it's the free-text rejection
    *  reason that gets forwarded to the executor as a meaningful denial

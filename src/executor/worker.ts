@@ -163,7 +163,7 @@ export interface WorkerConfig {
 export class ExecutorWorker {
   private ws!: WebSocket;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private activeTasks = new Map<string, { aborted: boolean; controller: AbortController }>();
+  private activeTasks = new Map<string, { aborted: boolean; interrupted?: boolean; controller: AbortController }>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
   private sessionStore!: SessionStore;
@@ -361,6 +361,29 @@ export class ExecutorWorker {
         try { task.controller.abort(); } catch { /* noop */ }
       } else {
         console.log(`${this.tag} Cancel requested for ${issueId} but no active task here`);
+      }
+    }
+
+    // Issue interrupt — 对齐 codex CLI 的 ESC:abort 当前 CLI 进程但不翻转
+    // issue status(保持 in_progress)。runIssueExecution 的 finally 块会接管:
+    //   • pendingAppends[issueId] 非空 → 合并队列 + `--resume <lastSessionId>`
+    //     起新一轮(等同于 codex 的 "interrupt + flush queued steers")
+    //   • 队列空 → 不重启,issue 留在 idle in_progress,用户下次 append 时
+    //     走 issue_append 的 idle 分支用 sessionId resume
+    // 与 issue_cancelled 的关键差异:不 resolve pendingApprovals(中断不
+    // 终结 issue,审批 gate 状态保留供下一轮继承)、不改 status。
+    if (msg.type === "issue_interrupt") {
+      const issueId = (msg as any).issueId as string | undefined;
+      if (!issueId) return;
+      const task = this.activeTasks.get(issueId);
+      if (task) {
+        console.log(`${this.tag} Interrupt requested for ${issueId}, aborting current CLI turn`);
+        task.aborted = true;
+        // 标记 interrupted 让 finally 块区分 cancel(丢队列)vs interrupt(消费队列续跑)。
+        task.interrupted = true;
+        try { task.controller.abort(); } catch { /* noop */ }
+      } else {
+        console.log(`${this.tag} Interrupt requested for ${issueId} but no active task here`);
       }
     }
 
@@ -744,7 +767,7 @@ export class ExecutorWorker {
     if (this.activeTasks.has(issueId)) return;
 
     const controller = new AbortController();
-    const task = { aborted: false, controller };
+    const task: { aborted: boolean; interrupted?: boolean; controller: AbortController } = { aborted: false, controller };
     this.activeTasks.set(issueId, task);
 
     const cliName = this.config.cliTool || "cli";
@@ -807,7 +830,14 @@ export class ExecutorWorker {
       });
 
       if (task.aborted) {
-        this.sendUpdate(issueId, "cancelled", "Execution cancelled by user", undefined, cwd);
+        // 中断 vs 取消:interrupt 保持 in_progress 等待队列续跑 / 用户下次输入;
+        // cancel 翻 cancelled。两者都已通过 controller.abort() 让 executor 退出,
+        // 这里只是把状态语义对齐发给 master。
+        if (task.interrupted) {
+          this.sendUpdate(issueId, "in_progress", "[interrupted] 当前步骤已中断,等待新指令", undefined, cwd);
+        } else {
+          this.sendUpdate(issueId, "cancelled", "Execution cancelled by user", undefined, cwd);
+        }
         return;
       }
 
@@ -836,7 +866,13 @@ export class ExecutorWorker {
         console.log(`${this.tag} Issue failed: ${issueId} (exit=${result.exitCode})`);
       }
     } catch (err: any) {
-      if (task.aborted) {
+      if (task.aborted && task.interrupted) {
+        // 中断(ESC / 中断按钮):不翻 status,保持 in_progress,让 dashboard
+        // 知道「当前步骤已停,等待新指令或队列续跑」。finally 块会消费
+        // pendingAppends 用 --resume 续跑(若有)。
+        this.sendUpdate(issueId, "in_progress", "[interrupted] 当前步骤已中断,等待新指令", undefined, cwd);
+        console.log(`${this.tag} Issue interrupted: ${issueId} (session=${lastSessionId ?? "none"})`);
+      } else if (task.aborted) {
         this.sendUpdate(issueId, "cancelled", "Execution cancelled by user", undefined, cwd);
       } else {
         this.sendUpdate(issueId, "failed", err.message, undefined, cwd);
@@ -850,12 +886,15 @@ export class ExecutorWorker {
         p.resolve({ decision: "deny" });
       }
       // 取消的任务丢弃排队 append(用户主动放弃,不该再触发续跑);
-      // 正常 / 失败结束才消费队列起新一轮。
+      // 正常 / 失败 / 中断才消费队列起新一轮。中断(interrupted)与取消的
+      // 区别:中断保留 session 并消费队列(对齐 codex ESC + flush steers),
+      // 取消则整体作废。
       const queued = this.pendingAppends.get(issueId);
       this.pendingAppends.delete(issueId);
-      if (queued && queued.length > 0 && !task.aborted) {
+      const shouldConsumeQueue = !task.aborted || !!task.interrupted;
+      if (queued && queued.length > 0 && shouldConsumeQueue) {
         const merged = queued.join("\n\n");
-        console.log(`${this.tag} Issue append consuming queue: ${issueId} (count=${queued.length}, session=${lastSessionId ?? "(none)"})`);
+        console.log(`${this.tag} Issue append consuming queue: ${issueId} (count=${queued.length}, session=${lastSessionId ?? "(none)"}, interrupted=${!!task.interrupted})`);
         // setImmediate 避免在 finally 同步链上递归调起新一轮。
         // 队列消费继承本轮的 effectivePolicy；append 自己的 ws 消息此时已经在
         // 队列里被吃掉，没机会再传策略，沿用本轮是正确做法（用户切换策略后

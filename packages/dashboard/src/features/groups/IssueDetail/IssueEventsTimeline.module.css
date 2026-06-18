@@ -1,40 +1,125 @@
 .issueEvents {
   padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
+/* 气泡行:左对齐 = agent,右对齐 = 真人。issue 执行链路只有这两类发言者,
+ * 用背景色 + 对齐方向区分,agent 名 + 时间内联到气泡顶部一行,不各占一行。 */
+.bubbleRow {
+  display: flex;
+  width: 100%;
+}
+
+.bubbleRowAgent {
+  justify-content: flex-start;
+}
+
+.bubbleRowUser {
+  justify-content: flex-end;
+}
+
+.bubble {
+  max-width: 85%;
+  min-width: 0;
+  border-radius: 10px;
+  padding: 5px 10px;
+  word-break: break-word;
+}
+
+.bubbleRowAgent .bubble {
+  background: #f1f3f5;
+  border-top-left-radius: 3px;
+  color: var(--color-navy, #1f2a44);
+}
+
+.bubbleRowUser .bubble {
+  background: #e3f0ff;
+  border-top-right-radius: 3px;
+  color: var(--color-navy, #1f2a44);
+}
+
+.bubbleMeta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 1px;
+}
+
+.bubbleRowUser .bubbleMeta {
+  /* 真人消息的 agent 名其实是自己,弱化展示,重点让时间靠右 */
+  flex-direction: row-reverse;
+}
+
+.bubbleAgent {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-warm-dark, #6b6256);
+}
+
+.bubbleTime {
+  font-size: 10px;
+  color: var(--color-gray, #999);
+  font-family: var(--font-mono, 'SF Mono', monospace);
+}
+
+.bubbleContent {
+  color: var(--color-navy, #1f2a44);
+}
+
+/* MarkdownContent 默认 14px,在气泡里偏大,缩到 13px 对齐时间/agent meta。 */
+.bubbleContent > div {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.bubbleContent > div > p:first-child {
+  margin-top: 0;
+}
+.bubbleContent > div > p:last-child {
+  margin-bottom: 0;
+}
+
+/* 系统事件(assigned/started/completed/failed/interrupted 等):无 content,
+ * 渲染成居中 chip,和对话气泡区分开。 */
+.systemChip {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 10px;
+  font-size: 10px;
+  color: var(--color-slate, #888);
+}
+
+.systemChipTag {
+  font-family: var(--font-mono, 'SF Mono', monospace);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* 审批卡保留旧布局(完整宽度),不走气泡 */
 .progressBody {
   flex: 1;
   min-width: 0;
-}
-
-.progressContent {
-  margin-top: 4px;
-  color: var(--color-navy);
-  word-break: break-word;
-  padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.03);
-  border-left: 2px solid var(--border-color-light, #e5e7eb);
-  border-radius: 0 6px 6px 0;
-}
-
-/* Shrink MarkdownContent (default 14px) so it doesn't tower over the
-   12px time / 11px agent meta. */
-.progressContent > div {
-  font-size: 13px;
 }
 
 .loadingDots {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-slate);
+  background: var(--color-slate, #888);
   animation: dotBounce 1.4s infinite ease-in-out both;
 }
 

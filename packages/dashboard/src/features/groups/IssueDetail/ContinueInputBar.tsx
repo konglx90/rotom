@@ -3,12 +3,15 @@ import { issuesApi } from '../../../api/issues'
 import type { Issue } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
 import styles from './ContinueInputBar.module.css'
+import { PendingQueuePreview } from './PendingQueuePreview'
 
 // ContinueInputBar — 常驻在 IssueDetail 底部的输入栏。根据 issue.status +
 // assigned_to 切换提交通道与文案:
 //   - open  + 未指派 → disabled,提示先指派 Agent
 //   - open  + 已指派 → 预填 description 供编辑,按钮「开始任务」,提交走 /append
-//   - in_progress    → 追加指令,按钮「追加」,提交走 /append
+//   - in_progress    → 追加指令(队列续跑),按钮「加入队列」,提交走 /append
+//                       + 上方展示 PendingQueuePreview chip 列表(对齐 codex
+//                       PendingInputPreview,让用户看到「待处理」消息)
 //   - completed/failed → 续聊,按钮「继续执行」,提交走 /continue
 //   - cancelled      → 父组件不渲染本组件
 interface ContinueInputBarProps {
@@ -20,10 +23,16 @@ interface ContinueInputBarProps {
   /** open + 已指派且输入框为空时,预填此文本(通常是 issue.description)。 */
   initialPrompt?: string
   onSubmitted: () => Promise<void> | void
+  /** in_progress 期间已发送但 worker 还没消费的追加指令(chip 列表)。
+   *  由 IssueDetail 持有,中断 / 翻终态时清空。 */
+  pendingQueue?: string[]
+  onPushPending?: (text: string) => void
+  onRemovePending?: (idx: number) => void
 }
 
 export function ContinueInputBar({
   issueId, continuedBy, status, assignedTo, initialPrompt, onSubmitted,
+  pendingQueue, onPushPending, onRemovePending,
 }: ContinueInputBarProps) {
   const [prompt, setPrompt] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -59,6 +68,10 @@ export function ContinueInputBar({
     try {
       if (status === 'open' || status === 'in_progress') {
         await issuesApi.append(issueId, trimmed, continuedBy)
+        // in_progress 时把消息也 push 到本地 pendingQueue(对齐 codex 的
+        // 「待处理消息」视觉)。open 状态提交 = 开始任务,worker 立刻起一轮,
+        // 不需要 chip。终态走 continue 同理。
+        if (isInProgress) onPushPending?.(trimmed)
       } else if (status === 'completed' || status === 'failed') {
         await issuesApi.continue(issueId, trimmed, continuedBy)
       } else {
@@ -76,7 +89,7 @@ export function ContinueInputBar({
   const placeholder = (() => {
     if (disabled) return '请先在上方指派 Agent，再发送指令'
     if (isStartMode) return `确认或编辑给 ${assignedTo} 的 prompt，点下方「开始任务」`
-    if (isInProgress) return '追加指令给 Agent（执行中也可发送，本轮结束后自动起新一轮）…'
+    if (isInProgress) return '输入追加指令(本轮结束后自动合并进下一轮)…'
     if (status === 'completed') return '执行完成。补充新指令继续对话(基于上次 session)…'
     if (status === 'failed') return '上次执行失败。在这里告诉 Agent 怎么修后继续…'
     return ''
@@ -85,19 +98,23 @@ export function ContinueInputBar({
   const submitLabel = (() => {
     if (submitting) return '提交中…'
     if (isStartMode) return '开始任务'
-    if (isInProgress) return '追加'
+    if (isInProgress) return '加入队列'
     return '继续执行'
   })()
 
   return (
     <div className={styles.continueInputBar}>
+      {isInProgress && pendingQueue && pendingQueue.length > 0 && (
+        <PendingQueuePreview items={pendingQueue} onRemove={idx => onRemovePending?.(idx)} />
+      )}
       <textarea
         className={styles.continueInputTextarea}
         value={prompt}
         onChange={e => setPrompt(e.target.value)}
         onKeyDown={e => {
-          // Cmd/Ctrl + Enter 提交,与本仓库其他输入框一致。
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          // Enter 提交,Shift+Enter 换行(聊天式交互,对齐 codex/ChatGPT)。
+          // 输入法组合中(keyCode 229)不拦截,避免打断中文输入。
+          if (e.key === 'Enter' && !e.shiftKey && e.keyCode !== 229) {
             e.preventDefault()
             void submit()
           }
