@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import { execSync, spawn } from "node:child_process";
 import * as readline from "node:readline";
 import { cmdE2ed } from "./e2ed.js";
+import { ISSUE_STATUSES, type IssueStatus } from "../shared/constants.js";
 
 const ROTOM_HOME = process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom");
 const ROTOM_CONFIG = path.join(ROTOM_HOME, "config.json");
@@ -498,8 +499,10 @@ Issue / collaboration:
           append 的 prompt 优先用 --description，缺省 fallback 到 --title。
   issue update <issueId> [--title T] [--description D] [--priority low|medium|high|critical]
                          [--assignee <agent> | --unassign] [--approval-policy r_allow|rw_allow]
+                         [--status open|in_progress|completed|failed|cancelled]
     局部更新 issue 字段。至少给一个 flag。
     --assignee / --unassign 互斥。
+    --status 低层 setter,可任意切换(含 reopen cancelled→open),无状态机限制。
   issue cancel <issueId>
   issue delete <issueId>
   collab create <groupId> --title T --goal G --participants a,b[,c] [--max-rounds 3] [--owner X]
@@ -846,13 +849,14 @@ async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Record<stri
     return;
   }
   if (sub === "update") {
-    const id = rest[1]; if (!id) fail("usage: rotom issue update <issueId> [--title T] [--description D] [--priority low|medium|high|critical] [--assignee A | --unassign] [--approval-policy r_allow|rw_allow]");
+    const id = rest[1]; if (!id) fail("usage: rotom issue update <issueId> [--title T] [--description D] [--priority low|medium|high|critical] [--assignee A | --unassign] [--approval-policy r_allow|rw_allow] [--status open|in_progress|completed|failed|cancelled]");
     const title = flagStr(flags, "title");
     const description = flagStr(flags, "description");
     const priority = flagStr(flags, "priority");
     const assignee = flagStr(flags, "assignee");
     const unassign = flags.unassign === true;
     const approvalPolicyRaw = flagStr(flags, "approval-policy");
+    const statusRaw = flagStr(flags, "status");
 
     if (assignee !== undefined && unassign) {
       fail(`--assignee and --unassign are mutually exclusive`);
@@ -863,6 +867,9 @@ async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Record<stri
     if (approvalPolicyRaw !== undefined && approvalPolicyRaw !== "r_allow" && approvalPolicyRaw !== "rw_allow") {
       fail(`--approval-policy must be "r_allow" or "rw_allow" (got: ${approvalPolicyRaw})`);
     }
+    if (statusRaw !== undefined && !ISSUE_STATUSES.includes(statusRaw as IssueStatus)) {
+      fail(`--status must be one of ${ISSUE_STATUSES.join("|")} (got: ${statusRaw})`);
+    }
 
     const body: Record<string, unknown> = {};
     if (title !== undefined) body.title = title;
@@ -871,9 +878,10 @@ async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Record<stri
     if (assignee !== undefined) body.assignedTo = assignee;
     else if (unassign) body.assignedTo = null;
     if (approvalPolicyRaw !== undefined) body.approvalPolicy = approvalPolicyRaw;
+    if (statusRaw !== undefined) body.status = statusRaw;
 
     if (Object.keys(body).length === 0) {
-      fail(`no fields to update — pass at least one of --title, --description, --priority, --assignee, --unassign, --approval-policy`);
+      fail(`no fields to update — pass at least one of --title, --description, --priority, --assignee, --unassign, --approval-policy, --status`);
     }
 
     const data = await api(agent, "PUT", `/issues/${encodeURIComponent(id)}`, body);

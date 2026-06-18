@@ -73,3 +73,7 @@ export const WS_CLOSE = {
   NOT_AUTHENTICATED: 4401,
   RATE_LIMITED: 4429,
 } as const;
+
+/** 合法的 issue 状态(对应 issues.status 列,见 migrations/008-issues.sql) */
+export const ISSUE_STATUSES = ["open", "in_progress", "completed", "failed", "cancelled"] as const;
+export type IssueStatus = (typeof ISSUE_STATUSES)[number];

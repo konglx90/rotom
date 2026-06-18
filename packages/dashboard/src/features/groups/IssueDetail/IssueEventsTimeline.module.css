@@ -102,6 +102,11 @@
   letter-spacing: 0.5px;
 }
 
+.systemChipAgent {
+  font-weight: 500;
+  color: var(--color-slate-dark, #555);
+}
+
 /* 审批卡保留旧布局(完整宽度),不走气泡 */
 .progressBody {
   flex: 1;
