@@ -701,3 +701,45 @@
   opacity: 1;
   background: rgba(14, 15, 12, 0.06);
 }
+
+/* 右键消息气泡弹出的浮动菜单。视觉对齐 .mentionDropdown,但用 fixed
+ * 定位贴在右键坐标,且 z-index 更高以盖过 mention dropdown(理论上两者
+ * 不会同时出现)。 */
+.contextMenu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 180px;
+  background: var(--color-canvas-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  padding: 6px;
+}
+
+.contextMenuItem {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.contextMenuItem:hover,
+.contextMenuItem:focus-visible {
+  background: rgba(159, 232, 112, 0.22);
+  color: var(--color-dark-green);
+  outline: none;
+}
+
+.contextMenuSeparator {
+  height: 1px;
+  background: var(--border-color-light);
+  margin: 4px 0;
+}
+

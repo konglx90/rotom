@@ -15,6 +15,8 @@ interface MessageRowProps {
   onShowPrompt: (msg: ChatMessage) => void
   /** 中断某个 agent 的在飞 chat 流。仅在 streaming && isIncoming 的气泡上渲染 ⏹ 按钮。 */
   onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
+  /** 右键气泡时触发,父组件负责弹自定义菜单。isLoading 消息父组件应自行过滤。 */
+  onContextMenu?: (e: React.MouseEvent, msg: ChatMessage) => void
 }
 
 // Extract the last [status:thinking]...[/status:thinking] tag from message content.
@@ -40,6 +42,7 @@ export const MessageRow = memo(function MessageRow({
   groupMembers,
   onShowPrompt,
   onCancelStream,
+  onContextMenu,
 }: MessageRowProps) {
   const isSystem = msg.from === 'system'
   const hasPrompt = Boolean(msg.composedPrompt)
@@ -60,6 +63,7 @@ export const MessageRow = memo(function MessageRow({
       <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={36} className={styles.messageAvatar} />
       <div
         className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''}`}
+        onContextMenu={onContextMenu ? (e) => onContextMenu(e, msg) : undefined}
       >
         {msg.isIncoming && (
           <div className={styles.messageSender}>
