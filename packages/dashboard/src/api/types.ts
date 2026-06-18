@@ -241,6 +241,23 @@ export interface CreateIssueDto {
   workingDir?: string
 }
 
+// Note Types (极简文字记录,无执行流程)
+export interface Note {
+  id: string
+  group_id: string
+  title: string
+  description: string
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateNoteDto {
+  title: string
+  description?: string
+  createdBy: string
+}
+
 export interface CreateCollaborationDto {
   title: string
   collaborationGoal: string

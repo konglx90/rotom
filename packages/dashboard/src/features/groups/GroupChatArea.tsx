@@ -16,6 +16,10 @@ import styles from './ChatArea.module.css'
 // 按钮(一次性展开全部,可能短时间卡顿)。
 const VISIBLE_LIMIT_DEFAULT = 300
 
+// 距底部小于该值视为"贴底",允许小幅滚动/渲染抖动仍触发自动滚动。
+// 量级取一个普通气泡的高度,避免鼠标轻微抖动就脱离贴底状态。
+const STICK_TO_BOTTOM_THRESHOLD = 120
+
 interface GroupChatAreaProps {
   selectedGroup: Group
   agents: Agent[]
@@ -45,6 +49,10 @@ export function GroupChatArea({
 }: GroupChatAreaProps) {
   const messagesAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // 用户是否贴在底部。向上滚查看历史时为 false,流式新 token 不再抢焦点;
+  // 用户主动发消息或回到底部时回到 true。ref 而非 state,避免每次滚动
+  // 触发整棵子树协调。
+  const isAtBottomRef = useRef(true)
 
   const [message, setMessage] = useState<string>('')
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
@@ -156,6 +164,10 @@ export function GroupChatArea({
   // 可控(0 高度锚点 + scrollIntoView 在不同浏览器行为不稳)。每次
   // messages 变化都 cancel 旧的 RAF 重 schedule,确保最新一次状态变更
   // 一定触发滚动(否则发消息时若上一次 RAF 还在 pending,本次会被吞掉)。
+  //
+  // 贴底判断:用户向上滚查看历史时 isAtBottomRef 为 false,流式新 token
+  // 不再抢焦点。先 cancel pending RAF 防止上一帧已 schedule 的滚动把
+  // 用户拉回;RAF 回调内再检查一次,避免 pending 期间用户刚好上滚。
   const scrollRafRef = useRef<number | null>(null)
   useEffect(() => {
     if (skipNextAutoScrollRef.current) {
@@ -163,8 +175,10 @@ export function GroupChatArea({
       return
     }
     if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
+    if (!isAtBottomRef.current) return
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null
+      if (!isAtBottomRef.current) return
       const el = messagesAreaRef.current
       if (el) el.scrollTop = el.scrollHeight
     })
@@ -172,6 +186,20 @@ export function GroupChatArea({
   useEffect(() => () => {
     if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
   }, [])
+
+  // 监听用户主动滚动:更新 isAtBottomRef。不参与 render,纯副作用。
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesAreaRef.current
+    if (!el) return
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    isAtBottomRef.current = distance < STICK_TO_BOTTOM_THRESHOLD
+  }, [])
+
+  // 切换群组时重置贴底状态:新会话首屏应该贴底,不能继承上一个会话中
+  // 用户向上滚动的状态。
+  useEffect(() => {
+    isAtBottomRef.current = true
+  }, [selectedGroup.id])
 
   const handleShowAllMessages = useCallback(() => {
     skipNextAutoScrollRef.current = true
@@ -219,6 +247,8 @@ export function GroupChatArea({
     if (!trimmed || connectionStatus !== 'connected') return
     onSendMessage(trimmed)
     setMessage('')
+    // 用户主动发消息意味着想看回复,强制回到贴底状态,后续 token 自动滚动
+    isAtBottomRef.current = true
   }
 
   const isArchived = Boolean(selectedGroup.archived_at)
@@ -320,7 +350,7 @@ export function GroupChatArea({
         </div>
       )}
 
-      <div ref={messagesAreaRef} className={styles.messagesArea}>
+      <div ref={messagesAreaRef} className={styles.messagesArea} onScroll={handleMessagesScroll}>
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>在群 {selectedGroup.name} 中开始对话吧</div>
         ) : visibleMessages.map(msg => (

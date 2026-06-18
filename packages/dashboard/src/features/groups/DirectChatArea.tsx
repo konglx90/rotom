@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import { Avatar } from '../../components/ui/Avatar'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
@@ -51,6 +51,7 @@ export function DirectChatArea({
   onDeleteConversation,
 }: DirectChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState<string>('')
   const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
@@ -59,10 +60,32 @@ export function DirectChatArea({
   // 也会触发重复提交。sendingRef 在提交后置 true,等下一帧再放开,确保
   // 一次"按下"只会真正发出一条消息。
   const sendingRef = useRef<boolean>(false)
+  // 用户是否贴在底部。向上滚查看历史时为 false,流式新 token 不再抢焦点;
+  // 用户主动发消息或回到底部时回到 true。ref 而非 state,避免每次滚动
+  // 触发整棵子树协调。
+  const isAtBottomRef = useRef(true)
+
+  // 距底部小于该值视为"贴底",允许小幅滚动/渲染抖动仍触发自动滚动。
+  // 量级取一个普通气泡的高度,避免鼠标轻微抖动就脱离贴底状态。
+  const STICK_TO_BOTTOM_THRESHOLD = 120
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    isAtBottomRef.current = distance < STICK_TO_BOTTOM_THRESHOLD
+  }, [])
 
   useEffect(() => {
+    if (!isAtBottomRef.current) return
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // 切换对话目标时重置贴底状态:新会话首屏应该贴底,不能继承上一个会话
+  // 中用户向上滚动的状态。
+  useEffect(() => {
+    isAtBottomRef.current = true
+  }, [directTarget])
 
   useEffect(() => {
     if (!message && textareaRef.current) {
@@ -83,6 +106,8 @@ export function DirectChatArea({
     sendingRef.current = true
     onSendMessage(trimmed)
     setMessage('')
+    // 用户主动发消息意味着想看回复,强制回到贴底状态,后续 token 自动滚动
+    isAtBottomRef.current = true
     // 用 microtask + setTimeout 兜底:macro task 里 React 已经把 message 状态清掉,
     // 但同一 Enter 触发的连续 keydown 还在同一 tick 内排队。下一帧再放开
     // 锁,既能过滤掉同一 Enter 的二次触发,又不影响用户连发不同消息。
@@ -120,7 +145,7 @@ export function DirectChatArea({
         </div>
       </div>
 
-      <div className={styles.messagesArea}>
+      <div ref={scrollContainerRef} className={styles.messagesArea} onScroll={handleMessagesScroll}>
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>与 {directTarget} 开始一对一对话</div>
         ) : messages.map(msg => {
