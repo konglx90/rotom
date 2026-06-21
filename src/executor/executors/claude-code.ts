@@ -26,7 +26,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ApprovalDecision, ApprovalRequestInput, AskUserQuestionItem, CliExecutor, ExecuteOptions, ExecuteResult, FileEditDiff } from "../cli-executor.js";
+import type { ApprovalDecision, ApprovalRequestInput, AskUserQuestionItem, CliExecutor, ExecuteOptions, ExecuteResult, FileEditDiff, TokenUsage } from "../cli-executor.js";
 import { emitStatus } from "../reasoning-status.js";
 
 // Resolve the bundled hook script. After `tsc` the .cjs file is copied next
@@ -158,6 +158,8 @@ export class ClaudeCodeExecutor implements CliExecutor {
       let fullOutput = "";
       let sessionId = "";
       let failed = false;
+      let capturedUsage: TokenUsage | undefined;
+      let capturedModel: string | undefined;
       // tool_use_id → tag bucket。assistant 阶段记下每个工具属于 exec 还是
       // patch 类，user 阶段拿 tool_result 时按同一 id 决定是否要推
       // [tool-result:exec]（patch 类没有配对的 result tag，直接吞掉）。
@@ -246,6 +248,20 @@ export class ClaudeCodeExecutor implements CliExecutor {
               if (parsed.session_id) {
                 sessionId = parsed.session_id;
               }
+              if (typeof parsed.model === "string" && parsed.model) {
+                capturedModel = parsed.model;
+              }
+              const usageRaw = parsed.usage;
+              if (usageRaw && typeof usageRaw === "object") {
+                const u = usageRaw as Record<string, unknown>;
+                capturedUsage = {
+                  inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
+                  outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
+                  cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
+                  cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
+                  totalCostUsd: typeof parsed.total_cost_usd === "number" ? parsed.total_cost_usd : undefined,
+                };
+              }
               const text = parsed.result || "";
               if (text) {
                 fullOutput = text;
@@ -285,13 +301,15 @@ export class ClaudeCodeExecutor implements CliExecutor {
           exitCode: code ?? 1,
           fullOutput,
           sessionId: reportedSessionId || undefined,
+          usage: capturedUsage,
+          model: capturedModel,
         });
       });
 
       proc.on("error", (err) => {
         console.error(`[claude-code] Spawn error: ${err.message}`);
         if (approvalGate) approvalGate.cleanup();
-        resolve({ exitCode: 1, fullOutput, sessionId: sessionId || undefined });
+        resolve({ exitCode: 1, fullOutput, sessionId: sessionId || undefined, usage: capturedUsage, model: capturedModel });
       });
     });
   }

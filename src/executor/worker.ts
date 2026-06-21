@@ -893,6 +893,8 @@ ${prompt}`;
         sessionMeta.sessionId = null;
       }
       sessionMeta.cliTool = this.cliTool;
+      if (result.usage) sessionMeta.usage = result.usage;
+      if (result.model) sessionMeta.model = result.model;
 
       if (result.exitCode === 0) {
         this.sendUpdate(issueId, "completed", result.fullOutput, sessionMeta, cwd, composedPrompt);
@@ -934,6 +936,15 @@ ${prompt}`;
         setImmediate(() => {
           this.runIssueExecution(issueId, merged, cwd, lastSessionId, slashCommand, effectivePolicy);
         });
+      } else if (task.aborted && task.interrupted) {
+        // 中断 + 队列空:issue 没有新一轮要跑,转 paused(待继续)状态。
+        // 否则 master 上 issue.status 会一直停在 in_progress,Dashboard
+        // loading 转不停。session_id 已在 issue 表里,用户下次 append 时
+        // worker 走 idle 分支用 --resume 续跑。
+        // 不传 content:避免把状态变更伪装成 agent 对话气泡(参考上面
+        // task.aborted 早返回路径的同款注释)。
+        console.log(`${this.tag} Issue interrupted idle → paused: ${issueId} (session=${lastSessionId ?? "(none)"})`);
+        this.sendUpdate(issueId, "paused", undefined, undefined, cwd);
       }
     }
   }

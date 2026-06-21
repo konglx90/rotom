@@ -12,6 +12,8 @@ import { PendingQueuePreview } from './PendingQueuePreview'
 //   - in_progress    → 追加指令(队列续跑),按钮「加入队列」,提交走 /append
 //                       + 上方展示 PendingQueuePreview chip 列表(对齐 codex
 //                       PendingInputPreview,让用户看到「待处理」消息)
+//   - paused         → 中断后待继续,按钮「继续执行」,提交走 /append(worker
+//                       走 idle 分支用 --resume 续跑)。无队列预览。
 //   - completed/failed → 续聊,按钮「继续执行」,提交走 /continue
 //   - cancelled      → 父组件不渲染本组件
 interface ContinueInputBarProps {
@@ -40,6 +42,7 @@ export function ContinueInputBar({
 
   const isOpen = status === 'open'
   const isInProgress = status === 'in_progress'
+  const isPaused = status === 'paused'
   const hasAssignee = !!assignedTo
   const disabled = isOpen && !hasAssignee
   // open + 已指派 = 等待用户「开始任务」(worker 因 assigned_to 非空被 auto-claim
@@ -66,11 +69,11 @@ export function ContinueInputBar({
     setSubmitting(true)
     setError(null)
     try {
-      if (status === 'open' || status === 'in_progress') {
+      if (status === 'open' || status === 'in_progress' || status === 'paused') {
         await issuesApi.append(issueId, trimmed, continuedBy)
         // in_progress 时把消息也 push 到本地 pendingQueue(对齐 codex 的
-        // 「待处理消息」视觉)。open 状态提交 = 开始任务,worker 立刻起一轮,
-        // 不需要 chip。终态走 continue 同理。
+        // 「待处理消息」视觉)。open / paused 都是「立即执行」分支 —— worker 收到
+        // issue_append 时 activeTasks 里没这条,走 else 直接起一轮,不需要 chip。
         if (isInProgress) onPushPending?.(trimmed)
       } else if (status === 'completed' || status === 'failed') {
         await issuesApi.continue(issueId, trimmed, continuedBy)
@@ -90,6 +93,7 @@ export function ContinueInputBar({
     if (disabled) return '请先在上方指派 Agent，再发送指令'
     if (isStartMode) return `确认或编辑给 ${assignedTo} 的 prompt，点下方「开始任务」`
     if (isInProgress) return '输入追加指令(本轮结束后自动合并进下一轮)…'
+    if (isPaused) return '中断后待继续。输入指令后 worker 会用上一轮 session 续跑…'
     if (status === 'completed') return '执行完成。补充新指令继续对话(基于上次 session)…'
     if (status === 'failed') return '上次执行失败。在这里告诉 Agent 怎么修后继续…'
     return ''
@@ -99,6 +103,7 @@ export function ContinueInputBar({
     if (submitting) return '提交中…'
     if (isStartMode) return '开始任务'
     if (isInProgress) return '加入队列'
+    if (isPaused) return '继续执行'
     return '继续执行'
   })()
 

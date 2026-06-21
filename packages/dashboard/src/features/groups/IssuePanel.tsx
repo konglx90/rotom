@@ -97,6 +97,7 @@ export function IssuePanel({
                   <Badge tone="status" value={issue.status}>
                     {issue.status === 'open' ? '待处理' :
                      issue.status === 'in_progress' ? (issue.type === 'collaboration' ? '协作中' : '执行中') :
+                     issue.status === 'paused' ? '待继续' :
                      issue.status === 'completed' ? '已完成' :
                      issue.status === 'failed' ? '失败' : '已取消'}
                   </Badge>

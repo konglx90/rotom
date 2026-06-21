@@ -6,6 +6,7 @@
  *   open + 已指派        → Cmd+Enter 开始任务
  *   in_progress(空闲)   → Esc 中断当前步骤 · Cmd+Enter 加入队列
  *   in_progress + 有队列 → Esc 立即处理队列 · N 条待处理
+ *   paused              → 中断后待继续,Enter 续跑上一轮 session
  *   completed/failed     → Cmd+Enter 继续执行
  *   cancelled / open 未指派 → 不渲染
  */
@@ -27,6 +28,8 @@ export function FooterHint({ status, assignedTo, pendingCount }: FooterHintProps
     } else {
       hint = 'Esc 中断当前步骤 · Enter 加入队列 · Shift+Enter 换行'
     }
+  } else if (status === 'paused') {
+    hint = '中断后待继续 · Enter 用上一轮 session 续跑 · Shift+Enter 换行'
   } else if (status === 'completed' || status === 'failed') {
     hint = 'Enter 继续执行(基于上次 session) · Shift+Enter 换行'
   }

@@ -23,6 +23,7 @@ const STATUS_COLORS: Record<string, string> = {
   // Issue 维度
   open: 'blue',
   in_progress: 'amber',
+  paused: 'orange',
   completed: 'green',
   failed: 'red',
   cancelled: 'slate',
@@ -38,6 +39,7 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   open: '待处理',
   in_progress: '执行中',
+  paused: '待继续',
   completed: '已完成',
   failed: '失败',
   cancelled: '已取消',

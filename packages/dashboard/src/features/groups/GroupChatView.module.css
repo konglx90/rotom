@@ -260,7 +260,7 @@
 
 .sessionRow {
   display: grid;
-  grid-template-columns: 64px 1fr auto;
+  grid-template-columns: 64px 1fr auto auto;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -295,6 +295,58 @@
 .sessionActions {
   display: flex;
   gap: 4px;
+}
+
+.sessionUsage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-slate, #555);
+  background: rgba(159, 232, 112, 0.16);
+  border: 1px solid rgba(159, 232, 112, 0.4);
+  border-radius: 9999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-height: 20px;
+}
+
+.sessionUsageEmpty {
+  background: transparent;
+  border: 1px dashed var(--color-border, rgba(0, 0, 0, 0.12));
+  color: var(--color-slate, #888);
+  opacity: 0.6;
+}
+
+.sessionUsageModel {
+  font-weight: 600;
+  color: #163300;
+}
+
+.sessionUsageSep {
+  color: var(--color-slate, #888);
+  font-weight: 400;
+}
+
+.sessionUsageTokenIn {
+  color: #054d28;
+}
+
+.sessionUsageTokenOut {
+  color: #b15a00;
+}
+
+.sessionUsageCost {
+  color: #054d28;
+  font-weight: 600;
+}
+
+.sessionUsageArrow {
+  font-size: 10px;
+  opacity: 0.8;
 }
 
 .sessionContent {

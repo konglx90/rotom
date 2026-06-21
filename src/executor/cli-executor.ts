@@ -108,11 +108,29 @@ export interface ExecuteOptions {
   approvalPolicy?: "r_allow" | "rw_allow";
 }
 
+/**
+ * Per-session token / cost usage reported by the underlying CLI. All fields
+ * optional — backends surface whatever they have. Codex/Hermes/Claude emit
+ * different subsets; the dashboard degrades gracefully on missing fields.
+ */
+export interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  /** Total session cost in USD, if the backend reports it (claude does). */
+  totalCostUsd?: number;
+}
+
 export interface ExecuteResult {
   exitCode: number;
   fullOutput: string;
   /** Session ID for future resumption (empty if not supported). */
   sessionId?: string;
+  /** Token usage captured from the backend's final session summary. */
+  usage?: TokenUsage;
+  /** Model name the backend actually used (e.g. `gpt-5`, `claude-sonnet-4-6`). */
+  model?: string;
   /**
    * When true, the caller should drop any cached sessionId for this
    * conversation (e.g. delete its sessionStore entry). Set by executors

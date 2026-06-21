@@ -12,6 +12,7 @@ import { displayTitle } from './createIssueTitle'
 const STATUS_LABEL: Record<Issue['status'], string> = {
   open: '待处理',
   in_progress: '执行中',
+  paused: '待继续',
   completed: '已完成',
   failed: '失败',
   cancelled: '已取消',

@@ -13,7 +13,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVER_JS="$SCRIPT_DIR/dist/master/server.js"
 OPENCLAW_DIR="$HOME/.openclaw"
 PID_FILE="$OPENCLAW_DIR/mesh-master.pid"
-LOG_FILE="$OPENCLAW_DIR/mesh-master.log"
 SVC="com.openclaw.mesh-master"
 
 PORT="${MESH_MASTER_PORT:-28800}"
@@ -206,13 +205,13 @@ do_start() {
   ensure_built
   mkdir -p "$OPENCLAW_DIR" "$DATA"
   if [ "$DAEMON" = true ]; then
-    nohup node "$SERVER_JS" --port "$PORT" --host "$HOST" --data "$DATA" >> "$LOG_FILE" 2>&1 &
+    nohup node "$SERVER_JS" --port "$PORT" --host "$HOST" --data "$DATA" >/dev/null 2>&1 &
     echo "$!" > "$PID_FILE"
     sleep 1
     if kill -0 "$!" 2>/dev/null; then
       echo "[mesh-master] 启动成功 (PID $!, port $PORT)"
     else
-      rm -f "$PID_FILE"; echo "[mesh-master] 启动失败，查看 $LOG_FILE"; return 1
+      rm -f "$PID_FILE"; echo "[mesh-master] 启动失败，查看 ~/.rotom/logs/ 下的日志文件"; return 1
     fi
   else
     echo "$$" > "$PID_FILE"
@@ -258,7 +257,7 @@ do_restart() {
     if wait_for_port 10; then
       echo "[mesh-master] 重启成功"
     else
-      echo "[mesh-master] 重启失败，查看 $LOG_FILE"; return 1
+      echo "[mesh-master] 重启失败，查看 ~/.rotom/logs/ 下的日志文件"; return 1
     fi
   else
     do_start
@@ -320,8 +319,8 @@ ${data_args}
     </dict>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><true/>
-    <key>StandardOutPath</key><string>${LOG_FILE}</string>
-    <key>StandardErrorPath</key><string>${LOG_FILE}</string>
+    <key>StandardOutPath</key><string>/dev/null</string>
+    <key>StandardErrorPath</key><string>/dev/null</string>
     <key>WorkingDirectory</key><string>${SCRIPT_DIR}</string>
 </dict>
 </plist>
@@ -350,8 +349,8 @@ RestartSec=5
 Environment=PATH=${PATH}
 Environment=HOME=${HOME}
 Environment=LANG=${LANG:-en_US.UTF-8}
-StandardOutput=append:${LOG_FILE}
-StandardError=append:${LOG_FILE}
+StandardOutput=null
+StandardError=null
 WorkingDirectory=${SCRIPT_DIR}
 [Install]
 WantedBy=default.target
@@ -365,9 +364,9 @@ SERVICE
     echo "[mesh-master] 系统服务已安装并启动 ✅"
     echo "  升级: git pull → $0 restart"
     echo "  卸载: $0 uninstall-service"
-    echo "  日志: $LOG_FILE"
+    echo "  日志:   JS logger → ~/.rotom/logs/mesh-master-YYYY-MM-DD.log"
   else
-    echo "[mesh-master] 启动失败，查看 $LOG_FILE"; return 1
+    echo "[mesh-master] 启动失败，查看 ~/.rotom/logs/ 下的日志文件"; return 1
   fi
 }
 

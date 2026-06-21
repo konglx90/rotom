@@ -703,13 +703,15 @@ export class WSHub {
         const issue = this.db.getIssueById(issueId);
         if (!issue) return;
 
-        if (status === "in_progress" || status === "completed" || status === "failed" || status === "cancelled") {
+        if (status === "in_progress" || status === "completed" || status === "failed" || status === "paused") {
           const extra: {
             result?: string;
             errorMessage?: string;
             artifacts?: string[];
             sessionId?: string | null;
             cliTool?: string | null;
+            usage?: string | null;
+            model?: string | null;
           } = {};
           if (status === "completed" && content) extra.result = content;
           if (status === "failed" && content) extra.errorMessage = content;
@@ -722,6 +724,16 @@ export class WSHub {
           }
           if (typeof metadata?.cliTool === "string" && metadata.cliTool) {
             extra.cliTool = metadata.cliTool;
+          }
+          // Token usage / model (claude result / codex turn/completed /
+          // hermes usage_update)。usage 序列化为 JSON 字符串入库,前端按需解析。
+          if (metadata?.usage !== undefined) {
+            extra.usage = typeof metadata.usage === "string"
+              ? metadata.usage
+              : JSON.stringify(metadata.usage);
+          }
+          if (typeof metadata?.model === "string" && metadata.model) {
+            extra.model = metadata.model;
           }
           // Don't downgrade a cancelled issue back to anything else — but if it
           // arrived after cancellation, still record the event below.
@@ -745,7 +757,7 @@ export class WSHub {
           eventType: status === "in_progress" ? "progress" :
                      status === "completed" ? "completed" :
                      status === "failed" ? "failed" :
-                     status === "cancelled" ? "cancelled" : "output",
+                     status === "paused" ? "paused" : "output",
           agentName: conn.name,
           content: content || "",
           metadata: Object.keys(eventMeta).length > 0 ? eventMeta : undefined,

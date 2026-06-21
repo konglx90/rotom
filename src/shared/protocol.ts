@@ -219,7 +219,7 @@ export interface ClientDisconnectMessage {
 export interface ClientIssueUpdateMessage {
   type: "issue_update";
   issueId: string;
-  status: "in_progress" | "completed" | "failed";
+  status: "in_progress" | "completed" | "failed" | "paused";
   content?: string;
   metadata?: { artifacts?: string[]; [key: string]: unknown };
   /** Cwd the agent used while executing this issue. */

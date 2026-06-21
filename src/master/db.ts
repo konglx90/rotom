@@ -128,6 +128,10 @@ export interface IssueRow {
   //   'r_allow'  (默认) → 写类工具调用走人工审批，读类放行
   //   'rw_allow'         → claude 不挂 PreToolUse hook；codex 不传 onApprovalRequest
   approval_policy: string;
+  // Session usage / model (added in migration 025)。usage 是 TokenUsage 的
+  // JSON 字符串(见 src/executor/cli-executor.ts),由 worker 透传过来。
+  usage: string | null;
+  model: string | null;
 }
 
 export interface IssueEventRow {
@@ -1102,6 +1106,10 @@ export class MeshDb {
     sessionId?: string | null;
     /** Update cli_tool (added in migration 013). `null` clears it. */
     cliTool?: string | null;
+    /** Token usage JSON string (added in migration 025). `null` clears it. */
+    usage?: string | null;
+    /** Model name the backend reported (added in migration 025). */
+    model?: string | null;
   }): void {
     const now = new Date().toISOString();
     const sets: string[] = ["status = ?", "updated_at = ?"];
@@ -1112,6 +1120,8 @@ export class MeshDb {
     if (extra?.artifacts !== undefined) { sets.push("artifacts = ?"); values.push(JSON.stringify(extra.artifacts)); }
     if (extra?.sessionId !== undefined) { sets.push("session_id = ?"); values.push(extra.sessionId); }
     if (extra?.cliTool !== undefined) { sets.push("cli_tool = ?"); values.push(extra.cliTool); }
+    if (extra?.usage !== undefined) { sets.push("usage = ?"); values.push(extra.usage); }
+    if (extra?.model !== undefined) { sets.push("model = ?"); values.push(extra.model); }
     if (status === "in_progress") { sets.push("started_at = ?"); values.push(now); }
     if (status === "completed" || status === "failed" || status === "cancelled") { sets.push("completed_at = ?"); values.push(now); }
     values.push(id);
@@ -1128,6 +1138,29 @@ export class MeshDb {
     this.db.prepare(
       "UPDATE issues SET working_dir = ?, updated_at = ? WHERE id = ?",
     ).run(workingDir, new Date().toISOString(), id);
+  }
+
+  /**
+   * 反查最新绑定到某个 sessionId 的 issue。
+   * session_id 由 migration 013 加入,无 session_id 列的旧 DB 走不到这里。
+   */
+  getLatestIssueBySessionId(sessionId: string): IssueRow | undefined {
+    return this.db.prepare(
+      "SELECT * FROM issues WHERE session_id = ? ORDER BY updated_at DESC LIMIT 1",
+    ).get(sessionId) as IssueRow | undefined;
+  }
+
+  /**
+   * 查该 (cliTool, groupId) 下最新的 issue。Debug Sessions 视图用:
+   * worker SessionStore 跟 issues.session_id 是两条独立路径(SessionStore
+   * 只在 chat/collab 路径更新,issue 执行不写 SessionStore),所以反查
+   * session_id 经常落空。改用 (cliTool, groupId) 取最新一条 issue,展示
+   * 「上次 claude/codex 在这个群里跑了多少 token」更贴近用户预期。
+   */
+  getLatestIssueByCliTool(cliTool: string, groupId: string): IssueRow | undefined {
+    return this.db.prepare(
+      "SELECT * FROM issues WHERE cli_tool = ? AND group_id = ? ORDER BY updated_at DESC LIMIT 1",
+    ).get(cliTool, groupId) as IssueRow | undefined;
   }
 
   /** Atomically claim the next unassigned issue for an executor agent. */

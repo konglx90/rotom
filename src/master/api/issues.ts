@@ -392,7 +392,7 @@ export function registerIssueRoutes(
     if (!issue) { res.status(404).json({ error: "Issue not found" }); return; }
     const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
     if (!prompt) { res.status(400).json({ error: "prompt is required" }); return; }
-    if (issue.status !== "open" && issue.status !== "in_progress") {
+    if (issue.status !== "open" && issue.status !== "in_progress" && issue.status !== "paused") {
       res.status(400).json({ error: `Cannot append to an issue in status "${issue.status}"` });
       return;
     }
