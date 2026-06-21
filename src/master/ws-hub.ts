@@ -730,6 +730,16 @@ export class WSHub {
           }
         }
 
+        // 提取 composedPrompt 并嵌入 issue_event 的 metadata,前端可像消息气泡一样
+        // 点击 🔍 prompt 看分层。
+        const cp = (msg as any).composedPrompt as
+          | { layers: { layer: string; content: string; source: string }[]; final: string; generatedAt: string; promptVersion: string }
+          | undefined;
+        const eventMeta: Record<string, unknown> = metadata ? { ...metadata } : {};
+        if (msg.cwd) eventMeta.cwd = msg.cwd;
+        if (cp && cp.layers && cp.final) {
+          eventMeta.composed_prompt = cp;
+        }
         this.db.addIssueEvent({
           issueId,
           eventType: status === "in_progress" ? "progress" :
@@ -738,7 +748,7 @@ export class WSHub {
                      status === "cancelled" ? "cancelled" : "output",
           agentName: conn.name,
           content: content || "",
-          metadata: msg.cwd ? { ...(metadata || {}), cwd: msg.cwd } : metadata,
+          metadata: Object.keys(eventMeta).length > 0 ? eventMeta : undefined,
         });
 
         // Notify group when issue is completed or failed

@@ -166,7 +166,11 @@ function buildTaskLayer(body: string, mode: ComposeContext["mode"]): PromptLayer
 
 export function composePrompt(ctx: ComposeContext): ComposedPrompt {
   const layers: PromptLayer[] = [];
-  layers.push(buildRotomCliLayer());
+  // Issue 模式的 prompt 不含 rotom CLI 使用规则:agent 直接执行任务描述,
+  // 不需要 rotom CLI 语法心智负担。该规则对群聊(chat)和协作(collab)仍保留。
+  if (ctx.mode !== "issue") {
+    layers.push(buildRotomCliLayer());
+  }
 
   const role = buildAgentRoleLayer(ctx.agentProfile);
   if (role) layers.push(role);

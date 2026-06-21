@@ -11,6 +11,7 @@ import { useSocket } from "../../context/SocketContext";
 import { E2edIssueDrawer } from "./E2edIssueDrawer";
 import s from "./E2edPipelineView.module.css";
 import shared from "./E2edShared.module.css";
+import { displayTitle } from "../groups/createIssueTitle";
 
 const FETCH_DEBOUNCE_MS = 2000;
 
@@ -337,7 +338,7 @@ export function E2edPipelineView() {
                     {typeLabel[issue.type] || issue.type}
                   </span>
                 )}
-                <span className={s.issueTitle}>{issue.title}</span>
+                <span className={s.issueTitle}>{displayTitle(issue)}</span>
                 <span className={s.issueMeta}>{issue.assigned_to || "-"}</span>
                 <span className={s.issueMeta}>
                   {new Date(issue.created_at).toLocaleString("zh-CN", {

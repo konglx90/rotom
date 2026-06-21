@@ -489,18 +489,20 @@ Send:
   group send <groupId> <target> <message...>
 
 Issue / collaboration:
-  issue create <groupId> --title T [--description D] [--priority low|medium|high|critical]
+  issue create <groupId> --description D [--title T] [--priority low|medium|high|critical]
                          [--assignee <agent>] [--approval-policy r_allow|rw_allow] [--run]
-    title 以已注册的 slash command 开头时（如 "/plan ..."）将以对应模式执行。
+    description 是主输入;title 可选,未传时由后端从前 40 字符自动截断生成。
+    description 以已注册的 slash command 开头时（如 "/plan ..."）将以对应模式执行。
     /plan：Claude 走 --permission-mode plan；Codex 注入 developerInstructions。
     --assignee 创建后立即把 issue 指派给指定 agent（不会自动起跑）。
     --approval-policy r_allow（默认,写类工具人工审批) / rw_allow（读写都默认通过)。
     --run 创建+指派后立即派发执行；必须同时给 --assignee，且 agent 必须在线。
-          append 的 prompt 优先用 --description，缺省 fallback 到 --title。
+          --run 的 prompt 直接用 --description;若只传 --title 则 fallback 到 title。
   issue update <issueId> [--title T] [--description D] [--priority low|medium|high|critical]
                          [--assignee <agent> | --unassign] [--approval-policy r_allow|rw_allow]
                          [--status open|in_progress|completed|failed|cancelled]
     局部更新 issue 字段。至少给一个 flag。
+    只传 --description 不传 --title 时,后端会重新截断 title 并重解析 slash command。
     --assignee / --unassign 互斥。
     --status 低层 setter,可任意切换(含 reopen cancelled→open),无状态机限制。
   issue cancel <issueId>
@@ -804,13 +806,16 @@ async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Record<stri
     return;
   }
   if (sub === "create") {
-    const groupId = rest[1]; if (!groupId) fail("usage: rotom issue create <groupId> --title T [--description D] [--priority P] [--assignee A] [--approval-policy r_allow|rw_allow] [--run]");
-    const title = requireFlag(flags, "title");
+    const groupId = rest[1]; if (!groupId) fail("usage: rotom issue create <groupId> --description D [--title T] [--priority P] [--assignee A] [--approval-policy r_allow|rw_allow] [--run]");
+    const title = flagStr(flags, "title");
     const description = flagStr(flags, "description") || "";
     const priority = flagStr(flags, "priority") || "medium";
     const assignee = flagStr(flags, "assignee");
     const approvalPolicyRaw = flagStr(flags, "approval-policy");
     const run = flags.run === true;
+    if (!description && !title) {
+      fail(`--description (or --title) is required`);
+    }
     if (approvalPolicyRaw && approvalPolicyRaw !== "r_allow" && approvalPolicyRaw !== "rw_allow") {
       fail(`--approval-policy must be "r_allow" or "rw_allow"`);
     }
@@ -818,11 +823,11 @@ async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Record<stri
       fail(`--run requires --assignee (cannot start an unassigned issue)`);
     }
     const body: Record<string, unknown> = {
-      title,
       description,
       priority,
       createdBy: agent.name,
     };
+    if (title) body.title = title;
     if (approvalPolicyRaw) body.approvalPolicy = approvalPolicyRaw;
     const created = await api(agent, "POST", `/groups/${encodeURIComponent(groupId)}/issues`, body);
     const issueId = created?.id as string | undefined;
@@ -837,9 +842,8 @@ async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Record<stri
       assigned = true;
     }
     if (run) {
-      // append 的 prompt 优先用 description,缺省 fallback 到 title——后端要求
-      // 非空 prompt 才会派给 worker。
-      const prompt = description.trim() || title.trim();
+      // --run 的 prompt 直接用 description;若只传 --title 则 fallback 到 title。
+      const prompt = description.trim() || (title || "").trim();
       runPushed = await api(agent, "POST", `/issues/${encodeURIComponent(issueId)}/append`, {
         prompt,
         appendedBy: agent.name,

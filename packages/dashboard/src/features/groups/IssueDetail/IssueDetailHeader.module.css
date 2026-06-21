@@ -35,35 +35,33 @@
   white-space: nowrap;
 }
 
-.issueEditTitleInput {
+.headerTitlePreview {
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-navy);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  box-sizing: border-box;
-}
-
-.issueEditTitleInput:focus {
-  outline: none;
-  border-color: var(--color-info);
-}
-
-.editPlanRow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: 12px;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
   color: var(--color-slate);
+  background: var(--color-background);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
-.editPlanTag {
+.headerTitlePreviewLabel {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.headerTitlePreviewText {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-weight: 500;
+  color: var(--color-navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 折叠区根容器：纵向两段（元信息簇 / 设置+操作簇） */

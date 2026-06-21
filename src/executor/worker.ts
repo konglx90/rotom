@@ -730,8 +730,8 @@ export class ExecutorWorker {
   // ── Issue execution ───────────────────────────────────────────────────
 
   private async executeIssue(issueId: string, title: string, description: string, cwd: string, slashCommand?: string, approvalPolicy?: "r_allow" | "rw_allow"): Promise<void> {
-    // 若 title 带已注册的 slash 前缀，剥掉字面量再喂给 CLI——避免在非交互模式
-    // 下被模型按文本理解。master 端已经识别并下发了 slashCommand，这里做双保险。
+    // title 现在是 description 的截断,不再拼进 body——否则会重复用户输入。
+    // body 直接用 description,仅在 /plan 模式剥掉前缀。cleanTitle 仅用于 header 展示。
     let cleanTitle = title;
     if (slashCommand) {
       const parsed = parseSlashCommand(title);
@@ -739,7 +739,20 @@ export class ExecutorWorker {
         cleanTitle = parsed.stripped || title;
       }
     }
-    const body = description ? `${cleanTitle}\n\n${description}` : cleanTitle;
+    let body = (description || "").trim();
+    if (slashCommand && body) {
+      const parsed = parseSlashCommand(body);
+      if (parsed?.known && parsed.command === slashCommand) {
+        body = parsed.stripped || body;
+      }
+    }
+    // 注入 issue 执行上下文,让 agent 知道自己已在 issue 中,避免重复建 issue。
+    const issueHeader =
+      `[当前群活跃 issue]\n` +
+      `- #${issueId.slice(0, 8)}  in_progress  "${cleanTitle}" by ${this.config.name}\n` +
+      `提示：你正在执行此 issue，工作目录 **可写**，直接按任务描述动手即可。` +
+      `**不要为此任务再创建新 issue。**\n`;
+    const bodyWithContext = `${issueHeader}\n${body}`;
     // issue 模式没有 conversation(group_basic 层无法渲染,因为 worker 这边没有
     // activeIssues 数据);只拼 rotom-cli + agent-role + cwd + task 四层。
     const composed = composePrompt({
@@ -748,7 +761,7 @@ export class ExecutorWorker {
       agentProfile: this.agentProfile,
       group: null,
       cwd,
-      body,
+      body: bodyWithContext,
     });
     this.runIssueExecution(issueId, composed.final, cwd, undefined, slashCommand, approvalPolicy, composed);
   }
