@@ -338,7 +338,7 @@ export class HermesCliExecutor implements CliExecutor {
             `[hermes-cli] Provider error → returning failed. exitCode=${exitCode} message="${providerError.message}"`,
           );
         }
-        console.log(`[hermes-cli] Exited code=${exitCode}, output=${fullOutput.length} chars, session=${sessionId}`);
+        console.log(`[hermes-cli] Exited code=${exitCode}, output=${fullOutput.length} chars, session=${sessionId}, model=${capturedModel ?? "(none)"}, usage=${capturedUsage ? JSON.stringify(capturedUsage) : "(none)"}`);
         resolve({
           exitCode,
           fullOutput,
@@ -663,20 +663,12 @@ export class HermesCliExecutor implements CliExecutor {
             emitStatus(onOutput, "Answered");
             break;
           }
-          case "usage_update": {
-            const u = (update.usage ?? {}) as Record<string, unknown>;
-            capturedUsage = {
-              inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
-              outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
-              cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
-              cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
-              totalCostUsd: typeof u.total_cost_usd === "number" ? u.total_cost_usd : undefined,
-            };
-            if (typeof update.model === "string" && update.model) {
-              capturedModel = update.model;
-            }
-            break;
-          }
+          // usage_update 通知 hermes 实际会发,但 payload 只有 {size, used,
+          // sessionUpdate} —— 只有累计 token 和 context window size,没有
+          // input/output 拆分。usage 的来源走 stderr parser(see below):
+          //   agent.conversation_loop: API call #N: in=X out=Y total=Z
+          // 那行有 input/output 拆分,信息更全。不要在这里再写 capturedUsage,
+          // 否则会覆盖 stderr parser 累积的好数据。
           default: {
             // 新版 hermes 可能引入了我们还没适配的 update 类型；如果它包含
             // 文本内容（content.text），直接当成 message chunk 透传，避免
@@ -733,15 +725,21 @@ export class HermesCliExecutor implements CliExecutor {
 
       // ── stderr logging + provider error sniffing ──
 
-      proc.stderr!.on("data", (data: Buffer) => {
-        const text = data.toString().trim();
-        if (text) console.error(`[hermes-cli] stderr: ${text}`);
+      // ── stderr logging + provider error sniffing + usage extraction ──
+      // 用 readline 按行 buffer(stderr 的 data 事件按 chunk 来,一条日志
+      // 被劈成两半时正则匹配不上)。
+
+      const stderrRl = createInterface({ input: proc.stderr! });
+      stderrRl.on("line", (line: string) => {
+        const text = line.trim();
+        if (!text) return;
+        console.error(`[hermes-cli] stderr: ${text}`);
         // Sniff for terminal provider/model errors. hermes logs the same
         // failure at WARNING/ERROR level on stderr (see
         // agent.conversation_loop), so we can flip the flag from the
         // first line that matches — usually well before the
         // agent_message_chunk carrying the user-facing summary arrives.
-        if (!providerError.matched && text && matchProviderError(text)) {
+        if (!providerError.matched && matchProviderError(text)) {
           providerError = { matched: true, message: extractCleanErrorReason(text) };
           emitStatus(onOutput, "Failed");
           console.error(`[hermes-cli] provider error detected in stderr: ${text}`);
@@ -750,23 +748,20 @@ export class HermesCliExecutor implements CliExecutor {
         // 不发 usage_update 通知,这些只在 adapter 的日志里)。两行关键:
         //   agent.turn_context: ... model=deepseek-v4-flash provider=custom ...
         //   agent.conversation_loop: API call #1: model=... in=18059 out=321 total=18380 ...
-        // 每个 API call 累加进 capturedUsage,最后一次 turn 结束后总用量就是
-        // 整个 issue 执行的累计。
-        if (text) {
-          const turnMatch = text.match(/agent\.turn_context:.*\bmodel=(\S+)/);
-          if (turnMatch && !capturedModel) capturedModel = turnMatch[1];
-          const apiMatch = text.match(/agent\.conversation_loop:\s*API call #\d+:\s*model=(\S+).*?\bin=(\d+)\s+out=(\d+)\s+total=(\d+)/);
-          if (apiMatch) {
-            if (!capturedModel) capturedModel = apiMatch[1];
-            const inN = parseInt(apiMatch[2], 10);
-            const outN = parseInt(apiMatch[3], 10);
-            // hermes 的 in= 是 input tokens,out= 是 output tokens,total= 是
-            // input+output。累加,因为一个 turn 可能多次 API call。
-            capturedUsage = {
-              inputTokens: (capturedUsage?.inputTokens ?? 0) + inN,
-              outputTokens: (capturedUsage?.outputTokens ?? 0) + outN,
-            };
-          }
+        // 每个 API call 累加进 capturedUsage,最终值就是整个 issue 执行的累计。
+        const turnMatch = text.match(/agent\.turn_context:.*\bmodel=(\S+)/);
+        if (turnMatch && !capturedModel) capturedModel = turnMatch[1];
+        const apiMatch = text.match(/agent\.conversation_loop:\s*API call #\d+:\s*model=(\S+).*?\bin=(\d+)\s+out=(\d+)\s+total=(\d+)/);
+        if (apiMatch) {
+          if (!capturedModel) capturedModel = apiMatch[1];
+          const inN = parseInt(apiMatch[2], 10);
+          const outN = parseInt(apiMatch[3], 10);
+          // hermes 的 in= 是 input tokens,out= 是 output tokens,total= 是
+          // input+output。累加,因为一个 turn 可能多次 API call。
+          capturedUsage = {
+            inputTokens: (capturedUsage?.inputTokens ?? 0) + inN,
+            outputTokens: (capturedUsage?.outputTokens ?? 0) + outN,
+          };
         }
       });
 
