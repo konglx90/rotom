@@ -6,6 +6,7 @@ import fs from "node:fs";
 import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import { parseSlashCommand } from "../../shared/slash-commands.js";
+import { truncateTitle } from "../../shared/title.js";
 import { ISSUE_STATUSES } from "../../shared/constants.js";
 import { resolveGroupAgentWorkingDir } from "../group-paths.js";
 import { createLogger } from "../../shared/logger.js";
@@ -73,9 +74,20 @@ export function registerIssueRoutes(
     }
     if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot create issues" }); return; }
     const { title, description, priority, createdBy, workingDir, approvalPolicy } = req.body;
-    if (!title || !createdBy) {
-      res.status(400).json({ error: "title and createdBy are required" });
+    if (!createdBy) {
+      res.status(400).json({ error: "createdBy is required" });
       return;
+    }
+    // 合并 title/description 后,title 可选:缺失时从 description 截断生成。
+    // 这样前端/CLI 只需传一个内容字段,体验对齐 Claude Code 终端开箱即用。
+    let finalTitle = (typeof title === "string" ? title : "").trim();
+    const desc = (typeof description === "string" ? description : "").trim();
+    if (!finalTitle) {
+      if (!desc) {
+        res.status(400).json({ error: "title or description is required" });
+        return;
+      }
+      finalTitle = truncateTitle(desc);
     }
     let normalizedApprovalPolicy: "r_allow" | "rw_allow" | undefined;
     if (approvalPolicy !== undefined) {
@@ -99,7 +111,7 @@ export function registerIssueRoutes(
       issueWorkDir = resolveGroupAgentWorkingDir(db, req.params.groupId, createdBy);
     }
     let slashCommand: string | undefined;
-    const parsed = parseSlashCommand(title);
+    const parsed = parseSlashCommand(finalTitle);
     if (parsed?.known) {
       if (!parsed.stripped) {
         res.status(400).json({ error: `Slash command "${parsed.command}" 后必须跟任务正文` });
@@ -109,15 +121,15 @@ export function registerIssueRoutes(
     }
     const id = randomUUID();
     db.createIssue({
-      id, groupId: req.params.groupId, title, description,
+      id, groupId: req.params.groupId, title: finalTitle, description: desc,
       priority, createdBy, workingDir: issueWorkDir, slashCommand,
       approvalPolicy: normalizedApprovalPolicy,
     });
-    log.info(`Issue created: "${title}" (${id}) in group ${req.params.groupId}`);
+    log.info(`Issue created: "${finalTitle}" (${id}) in group ${req.params.groupId}`);
     if (hub) {
       hub.notifyIssueChanged(id, req.params.groupId, "created");
     }
-    res.status(201).json({ id, title, status: "open" });
+    res.status(201).json({ id, title: finalTitle, status: "open" });
   });
 
   apiRouter.get("/issues/:id", (req, res) => {
@@ -166,6 +178,7 @@ export function registerIssueRoutes(
     }
     if (title !== undefined || description !== undefined) {
       const fields: { title?: string; description?: string; slashCommand?: string | null } = {};
+      const hasExplicitTitle = title !== undefined;
       if (title !== undefined) {
         const t = String(title).trim();
         if (!t) {
@@ -186,6 +199,16 @@ export function registerIssueRoutes(
       }
       if (description !== undefined) {
         fields.description = description === null ? "" : String(description);
+      }
+      // 合并 title/description 后:若未显式传 title 但传了 description,
+      // title 从新 description 重新截断,保持二者同步。slash_command 也跟着重解析。
+      if (!hasExplicitTitle && fields.description !== undefined) {
+        const newTitle = truncateTitle(fields.description);
+        if (newTitle && newTitle !== issue.title) {
+          fields.title = newTitle;
+          const parsed = parseSlashCommand(newTitle);
+          fields.slashCommand = parsed?.known ? parsed.command : null;
+        }
       }
       db.updateIssueContent(req.params.id, fields);
       const changedLabels = [

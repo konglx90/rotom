@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import type { IssueEvent } from '../../../api/types'
+import type { ComposedPrompt } from '../../../api/groups'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
 import { StreamingStatus } from '../../../components/ui/StreamingStatus'
+import { ComposedPromptModal } from '../modals/ComposedPromptModal'
 import shared from './_shared.module.css'
 import styles from './IssueEventsTimeline.module.css'
 import { ApprovalCard } from './ApprovalCard'
@@ -97,6 +100,23 @@ function groupEvents(events: IssueEvent[]): TimelineItem[] {
   return out
 }
 
+function parseComposedPrompt(metadataStr: string): ComposedPrompt | null {
+  if (!metadataStr) return null
+  try {
+    const parsed = JSON.parse(metadataStr)
+    if (parsed?.composed_prompt?.layers && parsed.composed_prompt?.final) {
+      const cp = parsed.composed_prompt
+      return {
+        layers: cp.layers,
+        final: cp.final,
+        generated_at: cp.generatedAt ?? cp.generated_at ?? '',
+        prompt_version: cp.promptVersion ?? cp.prompt_version ?? 'unknown',
+      }
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
 function formatTime(raw: string): string {
   const iso = raw + (raw.includes('Z') || raw.includes('+') ? '' : 'Z')
   return new Date(iso).toLocaleTimeString('zh-CN', {
@@ -118,6 +138,8 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
     }
     return -1
   })()
+
+  const [promptData, setPromptData] = useState<{ prompt: ComposedPrompt; label: string } | null>(null)
 
   return (
     <div className={styles.issueEvents}>
@@ -157,6 +179,19 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
                   {status && (
                     <StreamingStatus content={status} done={!streaming} variant="inline" />
                   )}
+                  {/* 取最后事件的 metadata 看有无 composed_prompt */}
+                  {(item.events.length > 0 && parseComposedPrompt(item.events[item.events.length - 1].metadata)) && (
+                    <span
+                      className={styles.promptButton}
+                      onClick={() => {
+                        const cp = parseComposedPrompt(item.events[item.events.length - 1].metadata)
+                        if (cp) setPromptData({ prompt: cp, label: `${item.agent} @ ${formatTime(item.firstAt)}` })
+                      }}
+                      title="查看 prompt 组合"
+                    >
+                      🔍 prompt
+                    </span>
+                  )}
                 </div>
                 <div className={styles.bubbleContent}>
                   <MarkdownContent content={item.content} hideStatus />
@@ -172,6 +207,7 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
         // 没有显著发言人对比,渲染成居中 chip 而不是气泡,避免和对话气泡混淆。
         const isSystem = !ev.content
         if (isSystem) {
+          const hasCp = parseComposedPrompt(ev.metadata)
           // chip 显示 event_type + agent_name(如 "assigned 西花-claude"),
           // 否则中断/取消/分配只看到事件名,看不到对象。agent_name 缺失时跳过。
           const showAgent = !!ev.agent_name && ev.agent_name !== 'system'
@@ -182,6 +218,18 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
                 <span className={styles.systemChipAgent}>{ev.agent_name}</span>
               )}
               <span className={styles.bubbleTime}>{formatTime(ev.created_at)}</span>
+              {hasCp && (
+                <span
+                  className={styles.promptButton}
+                  onClick={() => setPromptData({
+                    prompt: hasCp,
+                    label: `${ev.agent_name} @ ${formatTime(ev.created_at)}`,
+                  })}
+                  title="查看 prompt 组合"
+                >
+                  🔍
+                </span>
+              )}
             </div>
           )
         }
@@ -198,6 +246,18 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
                 <span className={styles.bubbleTime}>{formatTime(ev.created_at)}</span>
                 {status && (
                   <StreamingStatus content={status} done={!streaming} variant="inline" />
+                )}
+                {parseComposedPrompt(ev.metadata) && (
+                  <span
+                    className={styles.promptButton}
+                    onClick={() => {
+                      const cp = parseComposedPrompt(ev.metadata)
+                      if (cp) setPromptData({ prompt: cp, label: `${ev.agent_name} @ ${formatTime(ev.created_at)}` })
+                    }}
+                    title="查看 prompt 组合"
+                  >
+                    🔍 prompt
+                  </span>
                 )}
               </div>
               <div className={styles.bubbleContent}>
@@ -218,6 +278,12 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
           </div>
         </div>
       )}
+      <ComposedPromptModal
+        open={promptData !== null}
+        messageLabel={promptData?.label}
+        composedPrompt={promptData?.prompt ?? { layers: [], final: '', generated_at: '', prompt_version: '' }}
+        onClose={() => setPromptData(null)}
+      />
     </div>
   )
 }

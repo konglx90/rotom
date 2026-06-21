@@ -314,16 +314,16 @@ export function GroupChatView() {
   }
 
   const handleCreateIssue = async (data: {
-    title: string
-    description?: string
+    description: string
+    title?: string
     priority?: string
     assignedTo?: string
   }) => {
     if (!selectedGroupId) return
     try {
       const result = await issuesApi.create(selectedGroupId, {
-        title: data.title,
         description: data.description,
+        title: data.title,
         priority: data.priority as any,
         createdBy: myAgentName,
       })

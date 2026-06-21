@@ -6,6 +6,7 @@ import { Button } from '../../../components/ui/Button'
 import { Select } from '../../../components/ui/Select'
 import styles from './IssueDetailHeader.module.css'
 import type { IssueEditState } from './useIssueEdit'
+import { displayTitle } from '../createIssueTitle'
 
 interface IssueDetailHeaderProps {
   issue: Issue
@@ -129,17 +130,12 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
           <Button variant="ghost" size="xs" onClick={onBack}>← 返回</Button>
         )}
         {edit.editing ? (
-          <input
-            type="text"
-            className={styles.issueEditTitleInput}
-            value={edit.editTitle}
-            onChange={e => edit.setEditTitle(e.target.value)}
-            disabled={edit.savingEdit}
-            autoFocus
-            placeholder='标题，或以 "/plan ..." 开头进入计划模式'
-          />
+          <div className={styles.headerTitlePreview} title="标题由内容前 40 字符自动生成,保存时后端会更新">
+            <span className={styles.headerTitlePreviewLabel}>标题预览:</span>
+            <span className={styles.headerTitlePreviewText}>{edit.editTitlePreview}</span>
+          </div>
         ) : (
-          <h4 className={styles.headerTitle} title={issue.title}>{issue.title}</h4>
+          <h4 className={styles.headerTitle} title={displayTitle(issue)}>{displayTitle(issue)}</h4>
         )}
         <div className={styles.headerPrimaryMeta}>
           <Badge tone="status" value={issue.status} />
@@ -166,19 +162,6 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
           </Button>
         </div>
       </div>
-
-      {edit.editing && (
-        <label className={styles.editPlanRow}>
-          <input
-            type="checkbox"
-            checked={edit.editPlanMode}
-            onChange={e => edit.setEditPlanMode(e.target.checked)}
-            disabled={edit.savingEdit}
-          />
-          <span className={styles.editPlanTag}>/plan</span>
-          <span>计划模式（先输出方案，等待审批后再落盘；勾选会自动同步标题 /plan 前缀）</span>
-        </label>
-      )}
 
       {detailsVisible && (
         <div className={styles.headerSecondary}>

@@ -7,6 +7,7 @@ import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
 import { IssueDetail } from '../groups/IssueDetail'
 import styles from './KanbanView.module.css'
+import { displayTitle } from '../groups/createIssueTitle'
 
 type IssueStatus = Issue['status']
 
@@ -163,7 +164,7 @@ export function KanbanView() {
                           )}
                           <Badge tone="priority" value={issue.priority}>{issue.priority}</Badge>
                         </div>
-                        <div className={styles.cardTitle}>{issue.title}</div>
+                        <div className={styles.cardTitle}>{displayTitle(issue)}</div>
                         <div className={styles.cardMeta}>
                           <span className={styles.groupName} title={`群: ${groupName}`}>
                             # {groupName}

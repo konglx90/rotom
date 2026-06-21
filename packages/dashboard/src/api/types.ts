@@ -234,8 +234,9 @@ export interface IssueEvent {
 }
 
 export interface CreateIssueDto {
-  title: string
-  description?: string
+  /** title 可选:未传时由后端从 description 截断生成 */
+  title?: string
+  description: string
   priority?: 'low' | 'medium' | 'high' | 'critical'
   createdBy: string
   workingDir?: string

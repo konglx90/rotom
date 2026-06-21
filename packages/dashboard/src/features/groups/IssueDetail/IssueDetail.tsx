@@ -13,6 +13,7 @@ import { IssueEventsTimeline } from './IssueEventsTimeline'
 import { PendingApprovalsBar } from './PendingApprovalsBar'
 import { useIssueData } from './useIssueData'
 import { useIssueEdit } from './useIssueEdit'
+import { displayDescription } from '../createIssueTitle'
 
 interface IssueDetailProps {
   issueId: string
@@ -190,7 +191,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
           ) : (
             issue.description && (
               <div className={styles.issueDescription}>
-                <MarkdownContent content={issue.description} />
+                <MarkdownContent content={displayDescription(issue)} />
               </div>
             )
           )}
@@ -255,7 +256,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
             continuedBy={issue.created_by}
             status={issue.status}
             assignedTo={issue.assigned_to}
-            initialPrompt={issue.description || issue.title}
+            initialPrompt={displayDescription(issue) || issue.title}
             onSubmitted={handleSubmitted}
             pendingQueue={pendingQueue}
             onPushPending={pushPending}

@@ -7,6 +7,7 @@ import { Badge } from '../../components/ui/Badge'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
 import styles from './IssuePanel.module.css'
+import { displayTitle } from './createIssueTitle'
 
 const STATUS_LABEL: Record<Issue['status'], string> = {
   open: '待处理',
@@ -112,7 +113,7 @@ export function IssuesListPage() {
                       {issue.slash_command}
                     </span>
                   )}
-                  <span className={styles.issueTitle}>{issue.title}</span>
+                  <span className={styles.issueTitle}>{displayTitle(issue)}</span>
                 </div>
                 <div className={styles.issueMeta}>
                   <Badge tone="status" value={issue.status}>

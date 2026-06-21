@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button'
 import { IssueDetail } from './IssueDetail'
 import { CreateIssueDialog } from './CreateIssueDialog'
 import styles from './IssuePanel.module.css'
+import { displayTitle } from './createIssueTitle'
 
 interface IssuePanelProps {
   selectedGroupId: string
@@ -16,8 +17,8 @@ interface IssuePanelProps {
   myAgentName: string
   setSelectedIssueId: (id: string) => void
   onCreateIssue: (data: {
-    title: string
-    description?: string
+    description: string
+    title?: string
     priority?: string
     assignedTo?: string
   }) => void
@@ -90,7 +91,7 @@ export function IssuePanel({
                       {issue.slash_command}
                     </span>
                   )}
-                  <span className={styles.issueTitle}>{issue.title}</span>
+                  <span className={styles.issueTitle}>{displayTitle(issue)}</span>
                 </div>
                 <div className={styles.issueMeta}>
                   <Badge tone="status" value={issue.status}>

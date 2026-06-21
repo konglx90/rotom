@@ -6,6 +6,7 @@ import { MarkdownEditor } from '../../components/ui/MarkdownEditor'
 import { Modal } from '../../components/ui/Modal'
 import styles from './GroupChatView.module.css'
 import dialogStyles from './CreateIssueDialog.module.css'
+import { truncateTitle } from './createIssueTitle'
 
 interface CreateIssueDialogProps {
   open: boolean
@@ -14,8 +15,8 @@ interface CreateIssueDialogProps {
   myAgentName: string
   onClose: () => void
   onCreateIssue: (data: {
-    title: string
-    description?: string
+    description: string
+    title?: string
     priority?: string
     assignedTo?: string
   }) => void
@@ -42,14 +43,14 @@ export function CreateIssueDialog({
 }: CreateIssueDialogProps) {
   const [tab, setTab] = useState<TabType>('task')
 
-  // task form state
-  const [title, setTitle] = useState('')
+  // task form state —— 合并 title/description 后,用户只填一个内容字段。
+  // title 由后端从 description 截断生成,这里只做实时预览。
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('medium')
   const [assignedTo, setAssignedTo] = useState('')
-  const [usePlanMode, setUsePlanMode] = useState(false)
 
   // collaboration form state
+  const [collabTitle, setCollabTitle] = useState('')
   const [collabGoal, setCollabGoal] = useState('')
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([])
   const [firstSpeaker, setFirstSpeaker] = useState<string>('')
@@ -75,11 +76,10 @@ export function CreateIssueDialog({
   }, [selectedParticipants, firstSpeaker])
 
   const resetAll = () => {
-    setTitle('')
     setDescription('')
     setPriority('medium')
     setAssignedTo('')
-    setUsePlanMode(false)
+    setCollabTitle('')
     setCollabGoal('')
     setSelectedParticipants([])
     setFirstSpeaker('')
@@ -96,14 +96,13 @@ export function CreateIssueDialog({
     setTab(t)
   }
 
-  // task submit
+  // task submit —— 只发 description,title 由后端从 description 截断生成。
+  // 若用户在内容里以 /plan 开头,后端 parseSlashCommand 会识别并进入计划模式。
   const handleTaskSubmit = () => {
-    const trimmed = title.trim()
+    const trimmed = description.trim()
     if (!trimmed) return
-    const finalTitle = usePlanMode && !trimmed.startsWith('/plan') ? `/plan ${trimmed}` : trimmed
     onCreateIssue({
-      title: finalTitle,
-      description: description.trim() || undefined,
+      description: trimmed,
       priority: priority !== 'medium' ? priority : undefined,
       assignedTo: assignedTo || undefined,
     })
@@ -118,13 +117,13 @@ export function CreateIssueDialog({
   }
 
   const handleCollabSubmit = () => {
-    if (!title.trim() || !collabGoal.trim() || selectedParticipants.length < 2) return
+    if (!collabTitle.trim() || !collabGoal.trim() || selectedParticipants.length < 2) return
     const speaker = firstSpeaker && selectedParticipants.includes(firstSpeaker)
       ? firstSpeaker
       : selectedParticipants[0]
     const participants = [speaker, ...selectedParticipants.filter(p => p !== speaker)]
     onCreateCollaboration({
-      title: title.trim(),
+      title: collabTitle.trim(),
       collaborationGoal: collabGoal.trim(),
       participants,
       maxRounds,
@@ -134,8 +133,9 @@ export function CreateIssueDialog({
     handleClose()
   }
 
-  const isTaskValid = !!title.trim()
-  const isCollabValid = !!title.trim() && !!collabGoal.trim() && selectedParticipants.length >= 2 && !!firstSpeaker
+  const isTaskValid = !!description.trim()
+  const isCollabValid = !!collabTitle.trim() && !!collabGoal.trim() && selectedParticipants.length >= 2 && !!firstSpeaker
+  const titlePreview = truncateTitle(description)
 
   return (
     <Modal
@@ -171,25 +171,17 @@ export function CreateIssueDialog({
       {tab === 'task' ? (
         <>
           <div className={styles.formField}>
-            <label className={styles.formLabel}>标题:</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)}
-              placeholder='描述任务，或以 "/plan ..." 开头进入计划模式' className={styles.formInput} />
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginTop: 10, fontSize: 13, color: 'var(--text-2, #666)', padding: '8px 10px', background: 'var(--color-background)', borderRadius: 'var(--radius-sm)' }}>
-              <input type="checkbox" checked={usePlanMode} onChange={e => setUsePlanMode(e.target.checked)}
-                style={{ marginTop: 2, accentColor: 'var(--color-info)' }} />
-              <span style={{ flex: 1, lineHeight: 1.4 }}>
-                <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 600, color: 'var(--color-info)' }}>/plan</span>
-                <span style={{ marginLeft: 6 }}>计划模式（先输出方案，等待审批后再落盘；勾选自动添加 /plan 前缀）</span>
-              </span>
-            </label>
-          </div>
-          <div className={styles.formField}>
             <MarkdownEditor
               value={description}
               onChange={setDescription}
-              label="详细描述"
-              placeholder="任务的详细说明、预期结果等"
+              label="任务内容"
+              placeholder='描述任务,或以 "/plan ..." 开头进入计划模式(标题会自动从内容前 40 字符生成)'
               rows={8} />
+            {description.trim() && (
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--color-slate, #888)', padding: '4px 8px', background: 'var(--color-background, #f6f6f6)', borderRadius: 'var(--radius-sm, 4px)' }}>
+                生成标题预览:<span style={{ fontFamily: 'var(--font-mono, monospace)', marginLeft: 6, color: 'var(--text-1, #333)' }}>{titlePreview}</span>
+              </div>
+            )}
           </div>
           <div className={styles.formField}>
             <label className={styles.formLabel}>优先级:</label>
@@ -216,7 +208,7 @@ export function CreateIssueDialog({
         <>
           <div className={styles.formField}>
             <label className={styles.formLabel}>标题:</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)}
+            <input type="text" value={collabTitle} onChange={e => setCollabTitle(e.target.value)}
               placeholder="协作任务标题" className={styles.formInput} />
           </div>
           <div className={styles.formField}>

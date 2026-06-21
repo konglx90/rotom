@@ -135,3 +135,23 @@
   0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
   40% { transform: scale(1); opacity: 1; }
 }
+
+
+/* 🔍 prompt 按钮:与 ChatArea 的 .messagePromptButton 风格统一,
+ * 挂在 bubbleMeta 行内。 */
+.promptButton {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+.promptButton:hover,
+.promptButton:focus-visible {
+  opacity: 1;
+  background-color: rgba(14, 15, 12, 0.06);
+  outline: none;
+}
