@@ -411,22 +411,33 @@ export class ExecutorWorker {
     // /failed issue; re-spawn the CLI with --resume <sessionId>.
     if (msg.type === "issue_continue") {
       const issueId = (msg as any).issueId as string | undefined;
+      const title = (msg as any).title as string | undefined;
       const prompt = (msg as any).prompt as string | undefined;
       const sessionId = (msg as any).sessionId as string | undefined;
       const groupId = (msg as any).groupId as string | undefined;
       const slashCommand = (msg as any).slashCommand as string | undefined;
       const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
       if (!issueId || !prompt) return;
-      console.log(`${this.tag} Issue continue: ${issueId} (session=${sessionId ?? "(none)"}${slashCommand ? `, slash=${slashCommand}` : ""}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
+      console.log(`${this.tag} Issue continue: "${title ?? "(no title)"}" (${issueId}, session=${sessionId ?? "(none)"}${slashCommand ? `, slash=${slashCommand}` : ""}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
       // cwd 按 groupId 派生
       const cwd = this.resolveIssueCwd(groupId);
+      const issueHeader =
+        `[当前群活跃 issue]
+` +
+        `- #${issueId.slice(0, 8)}  in_progress  "${title ?? "(unnamed)"}" by ${this.config.name}
+` +
+        `提示：你正在执行此 issue，工作目录 **可写**，直接按任务描述动手即可。` +
+        `**不要为此任务再创建新 issue。**
+`;
+      const body = `${issueHeader}
+${prompt}`;
       const composed = composePrompt({
         mode: "issue",
         agentName: this.config.name,
         agentProfile: this.agentProfile,
         group: null,
         cwd,
-        body: prompt,
+        body,
       });
       this.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed);
     }
@@ -438,15 +449,26 @@ export class ExecutorWorker {
     // whatever reason) we start one immediately, mirroring issue_continue.
     if (msg.type === "issue_append") {
       const issueId = (msg as any).issueId as string | undefined;
+      const title = (msg as any).title as string | undefined;
       const prompt = (msg as any).prompt as string | undefined;
       const sessionId = (msg as any).sessionId as string | undefined;
       const groupId = (msg as any).groupId as string | undefined;
       const slashCommand = (msg as any).slashCommand as string | undefined;
       const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
       if (!issueId || !prompt) return;
+      const issueHeader =
+        `[当前群活跃 issue]
+` +
+        `- #${issueId.slice(0, 8)}  in_progress  "${title ?? "(unnamed)"}" by ${this.config.name}
+` +
+        `提示：你正在执行此 issue，工作目录 **可写**，直接按任务描述动手即可。` +
+        `**不要为此任务再创建新 issue。**
+`;
+      const body = `${issueHeader}
+${prompt}`;
       if (this.activeTasks.has(issueId)) {
         const queue = this.pendingAppends.get(issueId) ?? [];
-        queue.push(prompt);
+        queue.push(body);
         this.pendingAppends.set(issueId, queue);
         console.log(`${this.tag} Issue append queued: ${issueId} (queue=${queue.length})`);
       } else {
@@ -459,7 +481,7 @@ export class ExecutorWorker {
           agentProfile: this.agentProfile,
           group: null,
           cwd,
-          body: prompt,
+          body,
         });
         this.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed);
       }
