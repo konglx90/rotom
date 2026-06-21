@@ -588,6 +588,7 @@ export interface ServerChatCancelledMessage {
 export interface ServerIssueContinueMessage {
   type: "issue_continue";
   issueId: string;
+  title?: string;
   groupId?: string;
   prompt: string;
   sessionId?: string;
@@ -608,6 +609,7 @@ export interface ServerIssueContinueMessage {
 export interface ServerIssueAppendMessage {
   type: "issue_append";
   issueId: string;
+  title?: string;
   groupId?: string;
   prompt: string;
   sessionId?: string;
