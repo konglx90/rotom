@@ -7,6 +7,7 @@ import { Select } from '../../../components/ui/Select'
 import styles from './IssueDetailHeader.module.css'
 import type { IssueEditState } from './useIssueEdit'
 import { displayTitle } from '../createIssueTitle'
+import { UsageBadge } from './UsageBadge'
 
 interface IssueDetailHeaderProps {
   issue: Issue
@@ -39,7 +40,11 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
   const [interrupting, setInterrupting] = useState(false)
 
   const isFinalState = issue.status === 'completed' || issue.status === 'failed' || issue.status === 'cancelled'
-  const isActiveState = issue.status === 'open' || issue.status === 'in_progress'
+  // active = 还能继续操作的(issue 执行 / append 续跑 / 取消 / 完成)。paused(待继续)
+  // 也算 active —— session 还在,用户 append 后 worker --resume 续跑。
+  const isActiveState = issue.status === 'open' || issue.status === 'in_progress' || issue.status === 'paused'
+  // isInProgress 严格 = 当前正在跑 CLI。paused 不算(没在跑),所以 ESC 中断
+  // 快捷键和「中断」按钮在 paused 下都不显示 —— 没有活跃步骤可中断。
   const isInProgress = issue.status === 'in_progress'
   const showAssign = issue.type !== 'collaboration'
 
@@ -139,6 +144,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
         )}
         <div className={styles.headerPrimaryMeta}>
           <Badge tone="status" value={issue.status} />
+          <UsageBadge issue={issue} />
           {isInProgress && (
             <Button
               variant="danger"

@@ -16,7 +16,7 @@ import { createInterface, type Interface as ReadlineInterface } from "node:readl
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
-import type { CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
+import type { CliExecutor, ExecuteOptions, ExecuteResult, TokenUsage } from "../cli-executor.js";
 import {
   createReasoningStatusBuffer,
   emitStatus,
@@ -284,6 +284,8 @@ export class HermesCliExecutor implements CliExecutor {
       // 我们用这一段时间窗口作为屏蔽：replayActive=true 时所有 session_update
       // 全部静默吞掉，避免把历史重复推给前端。
       let replayActive = false;
+      let capturedUsage: TokenUsage | undefined;
+      let capturedModel: string | undefined;
 
       // 新版 hermes 把思考内容拆成很多小 chunk 流式下发，必须把连续的
       // thought chunk 合并到同一个 [thinking]...[/thinking] 块里，否则
@@ -344,6 +346,8 @@ export class HermesCliExecutor implements CliExecutor {
           invalidateSession: providerError.matched || undefined,
           failed: providerError.matched || undefined,
           errorMessage: providerError.matched ? providerError.message : undefined,
+          usage: capturedUsage,
+          model: capturedModel,
         });
       }
 
@@ -525,6 +529,12 @@ export class HermesCliExecutor implements CliExecutor {
 
         const updateType = normalizeUpdateType(update);
 
+        if (process.env.ROTOM_HERMES_DEBUG) {
+          const obj = update as Record<string, unknown>;
+          const rawKey = (obj.sessionUpdate as string) ?? (obj.type as string) ?? Object.keys(obj)[0] ?? "(none)";
+          console.log(`[hermes DEBUG] session/update updateType=${updateType || "(unhandled)"} rawKey=${rawKey} keys=${Object.keys(obj).slice(0, 8).join(",")}`);
+        }
+
         switch (updateType) {
           case "agent_message_chunk": {
             const content = (update as Record<string, unknown>).content as Record<string, unknown> | undefined;
@@ -653,6 +663,20 @@ export class HermesCliExecutor implements CliExecutor {
             emitStatus(onOutput, "Answered");
             break;
           }
+          case "usage_update": {
+            const u = (update.usage ?? {}) as Record<string, unknown>;
+            capturedUsage = {
+              inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
+              outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
+              cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
+              cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
+              totalCostUsd: typeof u.total_cost_usd === "number" ? u.total_cost_usd : undefined,
+            };
+            if (typeof update.model === "string" && update.model) {
+              capturedModel = update.model;
+            }
+            break;
+          }
           default: {
             // 新版 hermes 可能引入了我们还没适配的 update 类型；如果它包含
             // 文本内容（content.text），直接当成 message chunk 透传，避免
@@ -721,6 +745,28 @@ export class HermesCliExecutor implements CliExecutor {
           providerError = { matched: true, message: extractCleanErrorReason(text) };
           emitStatus(onOutput, "Failed");
           console.error(`[hermes-cli] provider error detected in stderr: ${text}`);
+        }
+        // 从 hermes adapter 自己的 stderr 日志抽 model + usage(ACP 协议
+        // 不发 usage_update 通知,这些只在 adapter 的日志里)。两行关键:
+        //   agent.turn_context: ... model=deepseek-v4-flash provider=custom ...
+        //   agent.conversation_loop: API call #1: model=... in=18059 out=321 total=18380 ...
+        // 每个 API call 累加进 capturedUsage,最后一次 turn 结束后总用量就是
+        // 整个 issue 执行的累计。
+        if (text) {
+          const turnMatch = text.match(/agent\.turn_context:.*\bmodel=(\S+)/);
+          if (turnMatch && !capturedModel) capturedModel = turnMatch[1];
+          const apiMatch = text.match(/agent\.conversation_loop:\s*API call #\d+:\s*model=(\S+).*?\bin=(\d+)\s+out=(\d+)\s+total=(\d+)/);
+          if (apiMatch) {
+            if (!capturedModel) capturedModel = apiMatch[1];
+            const inN = parseInt(apiMatch[2], 10);
+            const outN = parseInt(apiMatch[3], 10);
+            // hermes 的 in= 是 input tokens,out= 是 output tokens,total= 是
+            // input+output。累加,因为一个 turn 可能多次 API call。
+            capturedUsage = {
+              inputTokens: (capturedUsage?.inputTokens ?? 0) + inN,
+              outputTokens: (capturedUsage?.outputTokens ?? 0) + outN,
+            };
+          }
         }
       });
 

@@ -14,6 +14,7 @@ type IssueStatus = Issue['status']
 const COLUMNS: { status: IssueStatus; label: string }[] = [
   { status: 'open', label: '待处理' },
   { status: 'in_progress', label: '执行中' },
+  { status: 'paused', label: '待继续' },
   { status: 'completed', label: '已完成' },
   { status: 'failed', label: '失败' },
   { status: 'cancelled', label: '已取消' },
@@ -111,7 +112,7 @@ export function KanbanView() {
 
   const grouped = useMemo(() => {
     const buckets: Record<IssueStatus, Issue[]> = {
-      open: [], in_progress: [], completed: [], failed: [], cancelled: [],
+      open: [], in_progress: [], paused: [], completed: [], failed: [], cancelled: [],
     }
     for (const issue of issues) {
       const bucket = buckets[issue.status]

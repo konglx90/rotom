@@ -152,7 +152,7 @@ MESH_MASTER_HOST=0.0.0.0         # 默认 0.0.0.0
 MESH_MASTER_DATA=./mesh-data     # SQLite 数据目录
 ```
 
-PID / 日志：`~/.openclaw/mesh-master.{pid,log}`。
+PID 文件：`~/.openclaw/mesh-master.pid`。日志：`{dataDir}/logs/mesh-master-YYYY-MM-DD.log`（JS logger，按日轮转）。
 
 ### rotom CLI 身份解析
 

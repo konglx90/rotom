@@ -41,7 +41,7 @@ rotom group list --pretty
 rotom issue create <groupId> --title "..." --description "..."
 ```
 
-Master 默认监听 `0.0.0.0:28800`；PID / 日志固定在 `~/.openclaw/mesh-master.{pid,log}`。SQLite 数据目录默认 `./mesh-data/`。
+Master 默认监听 `0.0.0.0:28800`；PID 文件固定在 `~/.openclaw/mesh-master.pid`。SQLite 数据目录默认 `./mesh-data/`。
 
 ## Read These Docs
 
@@ -106,7 +106,7 @@ Master 默认监听 `0.0.0.0:28800`；PID / 日志固定在 `~/.openclaw/mesh-ma
 - 仓库使用 **pnpm workspace**（`pnpm-workspace.yaml` 声明 `packages/*`）。不要用 `npm install` / `yarn install`，会破坏 workspace symlink 和 onlyBuiltDependencies 白名单。
 - 顶层 `tsconfig.json` 显式 `exclude: ["packages"]`：根 `pnpm build` 不会编译 dashboard，dashboard 由 `pnpm dashboard:build` 独立走 vite。要打全量产物用 `pnpm build:master`。
 - `src/executor/claude-code-hook.cjs` 是 **CommonJS**（与项目 `"type": "module"` 相反），必须保留 `.cjs` 后缀；build script 显式 `cp` 到 `dist/executor/`，不能改成全自动 tsc 输出。
-- Master 端口范围固定 `:28800`（`MESH_MASTER_PORT` 可覆盖）；PID / 日志固定写 `~/.openclaw/mesh-master.{pid,log}` —— 不要改路径，`bin/mesh-master.sh` 和外部监控脚本依赖这个约定。
+- Master 端口范围固定 `:28800`（`MESH_MASTER_PORT` 可覆盖）；PID 文件固定写 `~/.openclaw/mesh-master.pid`（日志由 JS logger 写入 `dataDir/logs/mesh-master-YYYY-MM-DD.log`，不要改路径，`bin/mesh-master.sh` 和外部监控脚本依赖这个约定。
 - Agent token 是 `mesh_` 前缀的明文（migration 016 把它从 hash-only 改回 plaintext，方便 Dashboard 取回展示）；存储层留意不要再退回成 hash-only。
 - **rotom CLI 永远不接受 `--from`**：身份由 token 推断（`ROTOM_AGENT` env > `--as` > 默认 agent），不要新增 CLI flag 覆盖发送者身份，避免身份伪造。
 - 系统通知必须走 `ws-hub.postSystemToGroup()`，sender 固定 `"system"`；Agent 之间正常对话走 `sendAsAgent()`。两条链路不要混用 —— `docs/AGENT_COLLABORATION_GUIDE.md` 有完整规范。

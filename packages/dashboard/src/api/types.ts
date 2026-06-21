@@ -195,7 +195,7 @@ export interface Issue {
   group_id: string
   title: string
   description: string
-  status: 'open' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+  status: 'open' | 'in_progress' | 'completed' | 'failed' | 'cancelled' | 'paused'
   priority: 'low' | 'medium' | 'high' | 'critical'
   created_by: string
   assigned_to: string | null
@@ -221,6 +221,21 @@ export interface Issue {
    *  'rw_allow' 时 worker 不传审批回调，写类工具也自动通过。
    *  老接口可能返回 undefined（迁移前的列），UI 读取处用 'r_allow' 兜底。 */
   approval_policy?: 'r_allow' | 'rw_allow'
+  /** Token usage JSON 字符串（migration 025）。解析为 TokenUsage 用于徽章展示。
+   *  老接口可能返回 undefined（迁移前的列）。 */
+  usage?: string | null
+  /** Backend 报告的模型名（migration 025），如 `gpt-5` / `claude-sonnet-4-6`。 */
+  model?: string | null
+}
+
+/** Token 用量信息。后端 TokenUsage interface 的前端镜像（见 src/executor/cli-executor.ts）。
+ *  所有字段可选 —— 不同 backend（claude/codex/hermes）发射的字段子集不一样。 */
+export interface TokenUsage {
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
+  totalCostUsd?: number
 }
 
 export interface IssueEvent {

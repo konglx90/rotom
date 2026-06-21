@@ -32,7 +32,7 @@ import { createInterface } from "node:readline";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ApprovalDecision, ApprovalRequestInput, CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
+import type { ApprovalDecision, ApprovalRequestInput, CliExecutor, ExecuteOptions, ExecuteResult, TokenUsage } from "../cli-executor.js";
 import { buildPlanModeInstruction } from "../../shared/slash-commands.js";
 import { emitStatus } from "../reasoning-status.js";
 
@@ -96,6 +96,8 @@ export class CodexExecutor implements CliExecutor {
       // 干扰调试日志,这里用同一个 flag 集中拦截。
       let terminalEmitted = false;
       const completedTurnIds = new Set<string>();
+      let capturedUsage: TokenUsage | undefined;
+      let capturedModel: string | undefined;
 
       const turnDone = new Promise<boolean>((res) => { turnDoneResolve = res; });
       function signalTurnDone(aborted: boolean): void {
@@ -225,11 +227,18 @@ export class CodexExecutor implements CliExecutor {
         const method = raw.method as string;
         const params = (raw.params ?? {}) as Record<string, unknown>;
 
+        if (process.env.ROTOM_CODEX_DEBUG) {
+          console.log(`[codex DEBUG] notification method=${method} params=${JSON.stringify(params).slice(0, 600)}`);
+        }
+
         // Legacy: codex/event
         if (method === "codex/event" || method.startsWith("codex/event/")) {
           notificationProtocol = "legacy";
-          const msg = params.msg as Record<string, unknown> | undefined;
-          if (msg) handleLegacyEvent(msg);
+          // 新版 codex 可能把 event_msg payload 直接放在 params 顶层(无 msg 包装),
+          // 旧版放在 params.msg。两种都接受,避免 token_count / session_meta 这类
+          // 事件被静默丢弃。
+          const msg = (params.msg ?? params) as Record<string, unknown> | undefined;
+          if (msg && typeof msg === "object" && "type" in msg) handleLegacyEvent(msg);
           return;
         }
 
@@ -303,10 +312,40 @@ export class CodexExecutor implements CliExecutor {
         if (eventThreadId && threadId && eventThreadId !== threadId) return;
 
         switch (method) {
+          case "thread/started": {
+            // thread/started 的 params.thread.modelProvider 是后端 provider 名
+            // (e.g. "deepseek" / "openai"),用作 model 展示。codex 实际模型名
+            // (e.g. "deepseek-v4-flash")只在某些 warning 文本里出现,不稳。
+            const threadObj = (params.thread ?? {}) as Record<string, unknown>;
+            const provider = threadObj.modelProvider as string | undefined;
+            if (provider && !capturedModel) capturedModel = provider;
+            // 落到下方 turn/started 之外的处理:thread/started 不算 turn 开始,
+            // 不发 Working 状态。直接 return,不要触发 turn/started 的逻辑。
+            return;
+          }
+
           case "turn/started":
             turnStarted = true;
             emitStatus(onOutput, "Working");
             return;
+
+          case "thread/tokenUsage/updated": {
+            // codex v2 真正的 usage 通知。params.tokenUsage.total 是该 thread
+            // 累计用量(input + 历史 turns),last 是本轮。我们存 total —— 一个
+            // issue 可能多次 turn,最终值就是整个 issue 执行的总量。
+            // 字段是 camelCase: inputTokens / outputTokens / cachedInputTokens /
+            // reasoningOutputTokens(注意不是 cache_read_input_tokens)。
+            const tokenUsage = (params.tokenUsage ?? {}) as Record<string, unknown>;
+            const total = (tokenUsage.total ?? {}) as Record<string, unknown>;
+            capturedUsage = {
+              inputTokens: typeof total.inputTokens === "number" ? total.inputTokens : undefined,
+              outputTokens: typeof total.outputTokens === "number" ? total.outputTokens : undefined,
+              cacheReadTokens: typeof total.cachedInputTokens === "number" ? total.cachedInputTokens : undefined,
+              cacheCreationTokens: undefined,
+              totalCostUsd: undefined,
+            };
+            return;
+          }
 
           case "turn/completed": {
             const turn = (params.turn ?? {}) as Record<string, unknown>;
@@ -317,6 +356,10 @@ export class CodexExecutor implements CliExecutor {
               status === "canceled" ||
               status === "aborted" ||
               status === "interrupted";
+
+            if (process.env.ROTOM_CODEX_DEBUG) {
+              console.log(`[codex DEBUG] turn/completed params=${JSON.stringify(params).slice(0, 800)}`);
+            }
 
             if (status === "failed") {
               const err = (turn.error as Record<string, unknown> | undefined) ?? {};
@@ -537,6 +580,8 @@ export class CodexExecutor implements CliExecutor {
           fullOutput,
           sessionId: sessionPoisoned ? undefined : (reportedSessionId || undefined),
           invalidateSession: sessionPoisoned || undefined,
+          usage: capturedUsage,
+          model: capturedModel,
         });
       }
 

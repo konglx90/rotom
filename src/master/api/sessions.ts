@@ -26,7 +26,7 @@ const SAFE_CLI = /^(claude|codex|hermes|openclaw)$/;
 
 export function registerSessionRoutes(
   apiRouter: ExpressRouter,
-  _db: MeshDb,
+  db: MeshDb,
   _auth: unknown,
   hub?: WSHub,
 ): void {
@@ -55,6 +55,43 @@ export function registerSessionRoutes(
     }
     const sessions = hub.listSessionsByGroup(groupId);
     res.json({ sessions });
+  });
+
+  // ── Session usage / model (latest issue for this cliTool+group) ──────────
+  // Debug 视图 SessionPanel 用它把每个 session 的 token 用量 / 模型名从最近一次
+  // 执行该 cliTool 的 issue 上拉出来。无需 worker 配合,纯查 DB。
+  //
+  // 不按 session_id 反查的原因:worker SessionStore 跟 issues.session_id 是两条
+  // 独立路径(SessionStore 只在 chat/collab 路径更新,issue 执行不写),session_id
+  // 经常对不上。改按 (cliTool, groupId) 取最新一条 issue 的 usage/model,展示
+  // 「上次 claude/codex 在这个群里跑了多少 token」更贴近用户预期。
+  apiRouter.get("/sessions/:cliTool/:groupId/:sessionId/usage", (req, res) => {
+    const { cliTool, groupId, sessionId } = req.params;
+    if (!SAFE_CLI.test(cliTool)) {
+      res.status(400).json({ error: `invalid cliTool: ${cliTool}` });
+      return;
+    }
+    if (!SAFE_ID.test(groupId) || !SAFE_ID.test(sessionId)) {
+      res.status(400).json({ error: "invalid groupId or sessionId" });
+      return;
+    }
+    void sessionId; // 校验通过即可,反查用 (cliTool, groupId) 不依赖 session_id
+    const issue = db.getLatestIssueByCliTool(cliTool, groupId);
+    if (!issue) {
+      res.json({ cliTool, sessionId, usage: null, model: null, issueId: null });
+      return;
+    }
+    let parsedUsage: unknown = null;
+    if (issue.usage) {
+      try { parsedUsage = JSON.parse(issue.usage); } catch { /* corrupted JSON, leave null */ }
+    }
+    res.json({
+      cliTool,
+      sessionId,
+      usage: parsedUsage,
+      model: issue.model ?? null,
+      issueId: issue.id,
+    });
   });
 
   // ── View session content ───────────────────────────────────────────────

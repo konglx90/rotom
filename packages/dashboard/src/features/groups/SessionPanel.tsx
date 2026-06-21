@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { sessionsApi, type SessionEntry } from '../../api/sessions'
+import { sessionsApi, type SessionEntry, type SessionUsage } from '../../api/sessions'
+import type { TokenUsage } from '../../api/types'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import styles from './GroupChatView.module.css'
@@ -117,6 +118,7 @@ export function SessionPanel({ groupId, onChange }: SessionPanelProps) {
                 ? `${entry.sessionId.slice(0, 6)}…${entry.sessionId.slice(-4)}`
                 : entry.sessionId}
             </div>
+            <SessionUsageLine entry={entry} />
             <div className={styles.sessionActions}>
               <Button
                 variant="ghost"
@@ -144,6 +146,98 @@ export function SessionPanel({ groupId, onChange }: SessionPanelProps) {
       />
     </div>
   )
+}
+
+/** 每个 session 行尾的反查 usage 小药丸。
+ *  列表渲染后异步并发拉取,不阻塞首屏。 */
+function SessionUsageLine({ entry }: { entry: SessionEntry }) {
+  const [usage, setUsage] = useState<SessionUsage | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    sessionsApi
+      .usage(entry.cliTool, entry.groupId, entry.sessionId)
+      .then((u) => { if (!cancelled) setUsage(u) })
+      .catch(() => { if (!cancelled) setUsage(null) })
+    return () => { cancelled = true }
+  }, [entry.cliTool, entry.groupId, entry.sessionId])
+
+  if (!usage || (!usage.usage && !usage.model)) {
+    return <span className={`${styles.sessionUsage} ${styles.sessionUsageEmpty}`}>—</span>
+  }
+
+  const u: TokenUsage | null = usage.usage
+  const hasUsage = !!u && (
+    u.inputTokens != null
+    || u.outputTokens != null
+    || u.cacheReadTokens != null
+    || u.cacheCreationTokens != null
+    || u.totalCostUsd != null
+  )
+
+  return (
+    <span className={styles.sessionUsage} title={buildSessionTooltip(usage)}>
+      {usage.model && (
+        <span className={styles.sessionUsageModel}>{shortModel(usage.model)}</span>
+      )}
+      {hasUsage && u && (
+        <>
+          {usage.model && <span className={styles.sessionUsageSep}>·</span>}
+          {u.inputTokens != null && (
+            <span className={styles.sessionUsageTokenIn} title="输入 tokens">
+              <span className={styles.sessionUsageArrow}>↑</span>{formatTokens(u.inputTokens)}
+            </span>
+          )}
+          {u.outputTokens != null && (
+            <span className={styles.sessionUsageTokenOut} title="输出 tokens">
+              <span className={styles.sessionUsageArrow}>↓</span>{formatTokens(u.outputTokens)}
+            </span>
+          )}
+          {u.totalCostUsd != null && u.totalCostUsd > 0 && (
+            <>
+              <span className={styles.sessionUsageSep}>·</span>
+              <span className={styles.sessionUsageCost} title="总成本 (USD)">
+                ${formatCost(u.totalCostUsd)}
+              </span>
+            </>
+          )}
+        </>
+      )}
+    </span>
+  )
+}
+
+function buildSessionTooltip(usage: SessionUsage): string {
+  const parts: string[] = []
+  if (usage.model) parts.push(`模型: ${usage.model}`)
+  if (usage.issueId) parts.push(`来源 issue: ${usage.issueId}`)
+  const u = usage.usage
+  if (u) {
+    if (u.inputTokens != null) parts.push(`输入: ${u.inputTokens.toLocaleString()}`)
+    if (u.outputTokens != null) parts.push(`输出: ${u.outputTokens.toLocaleString()}`)
+    if (u.cacheReadTokens != null) parts.push(`缓存读: ${u.cacheReadTokens.toLocaleString()}`)
+    if (u.cacheCreationTokens != null) parts.push(`缓存写: ${u.cacheCreationTokens.toLocaleString()}`)
+    if (u.totalCostUsd != null) parts.push(`成本: $${u.totalCostUsd.toFixed(6)}`)
+  }
+  return parts.join(' · ') || '无 usage 数据'
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
+function formatCost(usd: number): string {
+  if (usd >= 0.01) return usd.toFixed(2)
+  if (usd >= 0.0001) return usd.toFixed(4)
+  return usd.toFixed(6)
+}
+
+function shortModel(model: string): string {
+  const stripped = model.replace(/^(claude|anthropic|openai|gpt|gemini)-/i, '')
+  if (stripped.length <= 22) return stripped
+  return stripped.slice(0, 21) + '…'
 }
 
 interface SessionViewModalProps {

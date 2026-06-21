@@ -31,7 +31,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { CliExecutor, ExecuteOptions, ExecuteResult } from "../cli-executor.js";
+import type { CliExecutor, ExecuteOptions, ExecuteResult, TokenUsage } from "../cli-executor.js";
 import { emitStatus } from "../reasoning-status.js";
 
 interface OpenclawEvent {
@@ -126,6 +126,8 @@ export class OpenclawExecutor implements CliExecutor {
       let emittedSessionId = "";
       let failed = false;
       let gotEvents = false;
+      let capturedUsage: TokenUsage | undefined;
+      let capturedModel: string | undefined;
       // Per-stream line buffers. openclaw 2026.5.5+ writes its result blob
       // to stdout; older builds write to stderr. The rest of each stream is
       // plugin-init / heartbeat log noise (non-JSON). We MUST keep them
@@ -188,6 +190,16 @@ export class OpenclawExecutor implements CliExecutor {
             emitStatus(onOutput, "Working");
             return true;
           case "step_finish":
+            if (event.usage) {
+              const u = event.usage;
+              capturedUsage = {
+                inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
+                outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
+                cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
+                cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
+                totalCostUsd: typeof u.total_cost_usd === "number" ? u.total_cost_usd : undefined,
+              };
+            }
             emitStatus(onOutput, "Answered");
             return true;
           default:
@@ -213,6 +225,21 @@ export class OpenclawExecutor implements CliExecutor {
         const agentMeta = meta?.agentMeta;
         if (agentMeta && typeof agentMeta.sessionId === "string") {
           emittedSessionId = agentMeta.sessionId;
+        }
+        if (agentMeta) {
+          if (typeof agentMeta.model === "string" && agentMeta.model) {
+            capturedModel = agentMeta.model;
+          }
+          const u = agentMeta.usage as Record<string, unknown> | undefined;
+          if (u) {
+            capturedUsage = {
+              inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
+              outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
+              cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
+              cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
+              totalCostUsd: typeof u.total_cost_usd === "number" ? u.total_cost_usd : undefined,
+            };
+          }
         }
         return true;
       }
@@ -320,6 +347,8 @@ export class OpenclawExecutor implements CliExecutor {
           exitCode,
           fullOutput,
           sessionId: reportedSessionId || undefined,
+          usage: capturedUsage,
+          model: capturedModel,
         });
       }
 

@@ -8,7 +8,7 @@
  *   const log = createLogger("mesh-master");
  *   log.info("started");                         // → stdout only
  *
- *   enableFileLogging("~/.openclaw/logs");        // enable file output
+ *   enableFileLogging("~/.rotom/logs");        // enable file output
  *   log.info("with file");                        // → stdout + logs/mesh-master-2026-03-23.log
  */
 

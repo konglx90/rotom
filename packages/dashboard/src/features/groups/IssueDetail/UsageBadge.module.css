@@ -1,0 +1,57 @@
+.usageBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--color-navy);
+  background: rgba(159, 232, 112, 0.16);
+  border: 1px solid rgba(159, 232, 112, 0.5);
+  border-radius: 9999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.model {
+  font-weight: 600;
+  color: #163300;
+}
+
+.sep {
+  color: var(--color-slate);
+  font-weight: 400;
+}
+
+.tokens {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tokenIn,
+.tokenOut {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.tokenIn {
+  color: #054d28;
+}
+
+.tokenOut {
+  color: #b15a00;
+}
+
+.arrow {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.cost {
+  color: #054d28;
+  font-weight: 600;
+}
