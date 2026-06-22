@@ -148,7 +148,7 @@ ensure_built() {
   [ "$need" = false ] && {
     local newer
     # shellcheck disable=SC2086
-    newer=$(find $watch_dirs \( -name '*.ts' -o -name '*.html' \) -newer "$SERVER_JS" -print -quit 2>/dev/null)
+    newer=$(find $watch_dirs \( -name '*.ts' -o -name '*.tsx' -o -name '*.html' -o -name '*.css' \) -newer "$SERVER_JS" -print -quit 2>/dev/null)
     [ -n "$newer" ] && need=true
   }
   if [ "$need" = true ]; then
