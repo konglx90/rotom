@@ -37,6 +37,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [savingPolicy, setSavingPolicy] = useState(false)
   const [copiedId, setCopiedId] = useState(false)
+  const [copiedSession, setCopiedSession] = useState(false)
   const [interrupting, setInterrupting] = useState(false)
 
   const isFinalState = issue.status === 'completed' || issue.status === 'failed' || issue.status === 'cancelled'
@@ -171,7 +172,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
 
       {detailsVisible && (
         <div className={styles.headerSecondary}>
-          {/* 元信息簇：只读 priority + id + 工作目录 */}
+          {/* 元信息簇：只读 priority + id + 工作目录 + session */}
           <div className={styles.metaCluster}>
             <Badge tone="priority" value={issue.priority} />
             <Badge
@@ -189,6 +190,24 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
               <div className={styles.issueWorkingDir} title={issue.working_dir}>
                 <span className={styles.fieldLabel}>工作目录</span>
                 <code className={styles.issueWorkingDirPath}>{issue.working_dir}</code>
+              </div>
+            )}
+            {issue.session_id && (
+              <div
+                className={styles.issueWorkingDir}
+                title={`该 issue 跑在 ${issue.cli_tool ?? '?'} session:\n${issue.session_id}\n与 Debug Sessions 视图里的 session id 对应。点击复制。`}
+                style={{ cursor: 'pointer' }}
+                onClick={() => {
+                  navigator.clipboard.writeText(issue.session_id).then(() => {
+                    setCopiedSession(true)
+                    setTimeout(() => setCopiedSession(false), 1500)
+                  }).catch(() => { /* ignore */ })
+                }}
+              >
+                <span className={styles.fieldLabel}>{issue.cli_tool ?? 'session'}</span>
+                <code className={styles.issueWorkingDirPath}>
+                  {copiedSession ? '✓ 已复制' : issue.session_id}
+                </code>
               </div>
             )}
           </div>

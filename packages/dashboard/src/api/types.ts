@@ -226,6 +226,12 @@ export interface Issue {
   usage?: string | null
   /** Backend 报告的模型名（migration 025），如 `gpt-5` / `claude-sonnet-4-6`。 */
   model?: string | null
+  /** 该 issue 执行时绑定的 CLI session_id（migration 013）。Debug Sessions
+   *  视图里的 session 就是靠这个字段反查到对应 issue 的 usage。null 表示
+   *  issue 还没开始执行 / 老数据 / 被 clear 掉。 */
+  session_id?: string | null
+  /** 该 issue 执行用的 CLI 后端(claude | codex | hermes | openclaw,migration 013)。 */
+  cli_tool?: string | null
 }
 
 /** Token 用量信息。后端 TokenUsage interface 的前端镜像（见 src/executor/cli-executor.ts）。
