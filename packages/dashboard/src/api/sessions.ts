@@ -32,6 +32,11 @@ export interface SessionUsage {
   model: string | null
   /** usage/model 来源 issue 的 id。 */
   issueId: string | null
+  /** 来源 issue 自己的 session_id。前端用来判断 usage 是真的属于当前
+   *  session(issueSessionId === sessionId)还是兜底来的(不一致时不能
+   *  把 token 数字当成当前 session 的消耗展示)。null 表示 issue 没有
+   *  session_id 列(老数据 / migration 013 之前)。 */
+  issueSessionId: string | null
 }
 
 export const sessionsApi = {

@@ -63,11 +63,14 @@ export function registerSessionRoutes(
   //
   // 先按 session_id 精确反查最近一条 issue —— issue 执行会把 sessionId 写到
   // issues.session_id(worker.ts runIssueExecution → ws-hub issue_update),
-  // 这条路径能精确匹配到该 session 自己跑过的 issue。
+  // 这条路径能精确匹配到该 session 自己跑过的 issue。命中时返回的 usage
+  // 一定属于当前 session,前端可以放心展示。
   //
   // 精确命中失败时(典型场景:纯 chat/collab 产生的 session,SessionStore
   // 更新但 issues.session_id 没写过),退化到 (cliTool, groupId) 取最新一条
-  // issue,展示「上次 claude/codex 在这个群里跑了多少 token」作为兜底。
+  // issue。这条兜底 issue 的 session_id 大概率不是当前 session —— 返回
+  // issueSessionId 让前端自行判断,不一致时不展示 token 数字(避免把别的
+  // session 的用量误显示成当前 session 的)。
   apiRouter.get("/sessions/:cliTool/:groupId/:sessionId/usage", (req, res) => {
     const { cliTool, groupId, sessionId } = req.params;
     if (!SAFE_CLI.test(cliTool)) {
@@ -82,7 +85,14 @@ export function registerSessionRoutes(
       db.getLatestIssueBySessionId(sessionId) ??
       db.getLatestIssueByCliTool(cliTool, groupId);
     if (!issue) {
-      res.json({ cliTool, sessionId, usage: null, model: null, issueId: null });
+      res.json({
+        cliTool,
+        sessionId,
+        usage: null,
+        model: null,
+        issueId: null,
+        issueSessionId: null,
+      });
       return;
     }
     let parsedUsage: unknown = null;
@@ -95,6 +105,7 @@ export function registerSessionRoutes(
       usage: parsedUsage,
       model: issue.model ?? null,
       issueId: issue.id,
+      issueSessionId: issue.session_id ?? null,
     });
   });
 
