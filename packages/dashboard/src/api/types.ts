@@ -280,6 +280,29 @@ export interface CreateNoteDto {
   createdBy: string
 }
 
+// Scheduled Task Types (群内定时任务,后端 INTEGER ms 时间戳)
+export interface Schedule {
+  id: number
+  name: string
+  group_id: string
+  mode: 'agent' | 'message'
+  agent_name: string | null
+  schedule_kind: 'once' | 'interval'
+  interval_sec: number | null
+  run_at: number | null
+  prompt: string
+  enabled: number
+  next_run_at: number
+  last_run_at: number | null
+  last_status: 'ok' | 'error' | 'skipped' | null
+  last_error: string | null
+  last_issue_id: string | null
+  repeat_times: number | null
+  repeat_count: number
+  created_at: number
+  updated_at: number
+}
+
 export interface CreateCollaborationDto {
   title: string
   collaborationGoal: string
