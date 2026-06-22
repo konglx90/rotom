@@ -21,6 +21,7 @@ import { registerNoteRoutes } from "./notes.js";
 import { registerArtifactRoutes } from "./artifacts.js";
 import { registerE2edRoutes } from "./e2ed.js";
 import { registerSessionRoutes } from "./sessions.js";
+import { registerScheduleRoutes } from "./schedules.js";
 
 const log = createLogger("mesh-api");
 
@@ -75,6 +76,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
   registerArtifactRoutes(apiRouter, db);
   registerE2edRoutes(apiRouter, db);
   registerSessionRoutes(apiRouter, db, auth, hub);
+  registerScheduleRoutes(apiRouter, db);
 
   return apiRouter;
 }

@@ -21,6 +21,7 @@ import { Router } from "./router.js";
 import { OfflineQueue } from "./offline-queue.js";
 import { createApi } from "./api/index.js";
 import { TerminalHub } from "./terminal-hub.js";
+import { Scheduler } from "./scheduler.js";
 import { DEFAULT_MASTER_PORT, DEFAULT_MASTER_HOST } from "../shared/constants.js";
 import os from "node:os";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
@@ -152,6 +153,11 @@ async function main(): Promise<void> {
   const terminalHub = new TerminalHub(httpServer, db, log);
   await terminalHub.start();
 
+  // Scheduled-task scheduler — 30s tick interval, drives scheduled_tasks rows
+  // that trigger pushIssueAssignment (agent mode) or postSystemToGroup (message mode).
+  const scheduler = new Scheduler(db, hub);
+  scheduler.start();
+
   // REST API — shares auth service and hub with WSHub
   app.use("/api", createApi(db, auth, hub, router, config.port));
 
@@ -171,6 +177,7 @@ async function main(): Promise<void> {
   // Graceful shutdown
   const shutdown = () => {
     log.info("Shutting down...");
+    scheduler.stop();
     hub.stop();
     terminalHub.stop();
     router.stop();

@@ -14,6 +14,7 @@ import { GroupChatArea } from './GroupChatArea'
 import { IssuePanel } from './IssuePanel'
 import { ArtifactPanel } from './ArtifactPanel'
 import { NotePanel } from './NotePanel'
+import { SchedulePanel } from './SchedulePanel'
 import { AddMemberModal } from './modals/AddMemberModal'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
@@ -41,7 +42,7 @@ export function GroupChatView() {
 
   const [issues, setIssues] = useState<Issue[]>([])
   const [selectedIssueVersion, setSelectedIssueVersion] = useState(0)
-  const [rightTab, setRightTab] = useState<'issues' | 'artifacts' | 'notes'>('issues')
+  const [rightTab, setRightTab] = useState<'issues' | 'artifacts' | 'notes' | 'schedules'>('issues')
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
 
@@ -456,6 +457,12 @@ export function GroupChatView() {
             >
               Notes
             </button>
+            <button
+              className={rightTab === 'schedules' ? styles.activeTab : styles.tabBtn}
+              onClick={() => setRightTab('schedules')}
+            >
+              Schedules
+            </button>
           </div>
           {rightTab === 'issues' ? (
             <IssuePanel
@@ -475,6 +482,8 @@ export function GroupChatView() {
               selectedGroupId={selectedGroupId}
               myAgentName={myAgentName}
             />
+          ) : rightTab === 'schedules' ? (
+            <SchedulePanel selectedGroupId={selectedGroupId} />
           ) : (
             <ArtifactPanel groupId={selectedGroupId} />
           )}
