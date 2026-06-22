@@ -281,6 +281,11 @@ export interface SessionEntry {
   /** Underlying CLI session id (hex/uuid). The actual transcript lives in
    *  the executor's local FS (e.g. `~/.claude/projects/<cwd>/<id>.jsonl`). */
   sessionId: string;
+  /** Name of the agent that owns this session. Populated by master when
+   *  aggregating snapshots (the sessionSnapshots Map is keyed by agentId),
+   *  so the dashboard can show "which agent" rather than just the cliTool.
+   *  Not sent by workers — they don't know their own agent name. */
+  agentName?: string;
 }
 
 export interface ClientSessionViewResponse {

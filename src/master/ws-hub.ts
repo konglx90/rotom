@@ -434,13 +434,28 @@ export class WSHub {
             }
 
             const mentions = msg.payload?.message?.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
-            this.db.addGroupMessage(msg.conversation.groupId, fromName, msg.payload?.message || "", mentions);
+            // Skip db.addGroupMessage for group messages: the Dashboard /
+            // CLI REST endpoint already persists via POST /groups/:id/messages.
+            // Without this skip, sending one a2a_send per @mentioned agent
+            // (N sends) would store the same message N times.
+            if (msg.conversation.type !== "group") {
+              this.db.addGroupMessage(msg.conversation.groupId, fromName, msg.payload?.message || "", mentions);
+            }
 
             if (msg.conversation.type === "group") {
+              // Exclude ALL @mentioned agents from broadcast — not just the
+              // current result.targetAgentId. When the Dashboard sends one
+              // a2a_send per @mentioned target (e.g. @A @B @C -> 3 sends),
+              // each send's broadcast only excludes its own target, causing
+              // other mentioned agents to receive duplicate copies via
+              // broadcast on top of their own direct delivery.
+              const mentionAgentIds = mentions
+                .map((name: string) => this.db.getAgentByName(name)?.id)
+                .filter((id: string | undefined): id is string => !!id);
               this.broadcastToGroup(
                 msg.conversation.groupId,
                 outMsg,
-                [agentId, result.targetAgentId],
+                [agentId, result.targetAgentId, ...mentionAgentIds],
               );
 
               // 协作轮次:mesh_group_send 走的也是 a2a_send,需要同样计入贡献,
@@ -1007,13 +1022,14 @@ export class WSHub {
   listSessionsByGroup(groupId: string): SessionEntry[] {
     const seen = new Set<string>();
     const out: SessionEntry[] = [];
-    for (const entries of this.sessionSnapshots.values()) {
+    for (const [agentId, entries] of this.sessionSnapshots) {
+      const agentName = this.connections.get(agentId)?.name;
       for (const entry of entries) {
         if (entry.groupId !== groupId) continue;
-        const key = `${entry.cliTool}:${entry.sessionId}`;
+        const key = `${agentId}:${entry.cliTool}:${entry.sessionId}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push(entry);
+        out.push(agentName ? { ...entry, agentName } : entry);
       }
     }
     return out;
@@ -1299,10 +1315,15 @@ export class WSHub {
         }
 
         // 群消息:除打给 target 外广播给全群(对齐 a2a_reply L462-465)。
-        // 排除列表含 target 防重复推送。
-        this.broadcastToGroup(opts.groupId, wireMsg, [fromAgent.id, result.targetAgentId]);
+        // 排除列表含 target 防重复推送。同时排除所有 @mentioned agent 防
+        // Dashboard 多次发送 a2a_send 导致的广播重复投递。
+        const sendAsMentions = opts.message.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+        const sendAsMentionAgentIds = sendAsMentions
+          .map((name: string) => this.db.getAgentByName(name)?.id)
+          .filter((id: string | undefined): id is string => !!id);
+        this.broadcastToGroup(opts.groupId, wireMsg, [fromAgent.id, result.targetAgentId, ...sendAsMentionAgentIds]);
 
-        const mentions = opts.message.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m) => m.slice(1)) || [];
+        const mentions = sendAsMentions;
         this.db.addGroupMessage(opts.groupId, opts.fromName, opts.message, mentions);
         this.trackCollaborationTurn(opts.groupId, opts.fromName, opts.message);
       }

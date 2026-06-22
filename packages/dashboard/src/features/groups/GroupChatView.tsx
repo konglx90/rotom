@@ -204,6 +204,14 @@ export function GroupChatView() {
       }
     }
 
+    // Always persist group messages via REST API (single DB insert per
+    // message). Without this, when @mentioning multiple agents the Dashboard
+    // sends one a2a_send per target, and each a2a_send handler in ws-hub
+    // would store the same message N times.
+    groupsApi.sendMessage(selectedGroupId, myAgentName, trimmed, mentions).catch((err) => {
+      console.error('Failed to persist group message:', err)
+    })
+
     for (let i = 0; i < targets.length; i++) {
       send({
         type: 'a2a_send',
@@ -234,12 +242,6 @@ export function GroupChatView() {
         isLoading: true,
       })),
     ])
-
-    if (targets.length === 0) {
-      groupsApi.sendMessage(selectedGroupId, myAgentName, trimmed, mentions).catch((err) => {
-        console.error('Failed to persist group message:', err)
-      })
-    }
   }
 
   // Reset messages on conversation change. The WebSocket hook also loads

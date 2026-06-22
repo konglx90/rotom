@@ -283,6 +283,19 @@
   color: #fff;
 }
 
+.sessionCliSubTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+  border-radius: 3px;
+  background: var(--color-slate-light, #eef0f3);
+  color: var(--color-slate, #555);
+}
+
 .sessionId {
   font-family: var(--font-mono, monospace);
   font-size: 12px;

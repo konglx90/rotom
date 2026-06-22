@@ -57,8 +57,9 @@ export function SessionPanel({ groupId, onChange }: SessionPanelProps) {
 
   const handleDelete = useCallback(
     async (entry: SessionEntry) => {
+      const who = entry.agentName ?? entry.cliTool
       const ok = window.confirm(
-        `确定删除 ${entry.cliTool} 在该群的 session?\n${entry.sessionId}\n\n下次对话将重新开始。`,
+        `确定删除 ${who} 在该群的 session?\n${entry.cliTool} · ${entry.sessionId}\n\n下次对话将重新开始。`,
       )
       if (!ok) return
       setDeleting(`${entry.cliTool}:${entry.sessionId}`)
@@ -110,9 +111,17 @@ export function SessionPanel({ groupId, onChange }: SessionPanelProps) {
         const isDeleting = deleting === key
         return (
           <div key={key} className={styles.sessionRow}>
-            <div className={styles.sessionCliTag} title={entry.cliTool}>
-              {entry.cliTool}
+            <div
+              className={styles.sessionCliTag}
+              title={entry.agentName ? `${entry.agentName} · ${entry.cliTool}` : entry.cliTool}
+            >
+              {entry.agentName ?? entry.cliTool}
             </div>
+            {entry.agentName && (
+              <div className={styles.sessionCliSubTag} title={entry.cliTool}>
+                {entry.cliTool}
+              </div>
+            )}
             <div className={styles.sessionId} title={entry.sessionId}>
               {entry.sessionId.length > 14
                 ? `${entry.sessionId.slice(0, 6)}…${entry.sessionId.slice(-4)}`
@@ -276,7 +285,7 @@ function SessionViewModal({ entry, onClose }: SessionViewModalProps) {
   return (
     <Modal
       open={!!entry}
-      title={`${entry.cliTool} · ${entry.sessionId.slice(0, 8)}…`}
+      title={`${entry.agentName ?? entry.cliTool} · ${entry.sessionId.slice(0, 8)}…`}
       onClose={onClose}
       footer={
         <>
