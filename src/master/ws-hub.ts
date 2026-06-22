@@ -1036,6 +1036,21 @@ export class WSHub {
   }
 
   /**
+   * Look up a single session's cached usage/model by sessionId. Used by
+   * `GET /sessions/:cliTool/:groupId/:sessionId/usage` — reads straight from
+   * the in-memory snapshot cache (workers push usage/model after every chat
+   * turn), no DB lookup. Returns undefined when no connected worker has
+   * reported this sessionId yet.
+   */
+  findSessionEntry(sessionId: string): SessionEntry | undefined {
+    for (const entries of this.sessionSnapshots.values()) {
+      const hit = entries.find((e) => e.sessionId === sessionId);
+      if (hit) return hit;
+    }
+    return undefined;
+  }
+
+  /**
    * Send a request to one or more online workers matching `predicate` and
    * return the **first** response received within `timeoutMs`. Other responses
    * (including late ones) are dropped.

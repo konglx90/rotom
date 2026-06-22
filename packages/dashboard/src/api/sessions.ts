@@ -3,12 +3,15 @@ import type { TokenUsage } from './types'
 
 /** One session entry — one (cliTool, groupId, sessionId) tuple as reported
  *  by a single executor worker. `agentName` is filled in by master when
- *  aggregating snapshots (not sent by workers). */
+ *  aggregating snapshots (not sent by workers). `usage`/`model` are pushed
+ *  by the worker after every chat turn. */
 export interface SessionEntry {
   cliTool: string
   groupId: string
   sessionId: string
   agentName?: string
+  usage?: TokenUsage | null
+  model?: string | null
 }
 
 /** View content response. `error` is non-empty when the executor's CLI
@@ -23,20 +26,16 @@ export interface SessionView {
   error?: string
 }
 
-/** Session usage / model —— Debug 视图反查最新绑定该 session 的 issue。 */
+/** Session usage / model —— Debug 视图反查该 chat session 自己的 token 消耗。
+ *  数据源是 worker 推送的 session_snapshot(worker.handleChatReply 写入)。 */
 export interface SessionUsage {
   cliTool: string
   sessionId: string
-  /** Parsed TokenUsage,null 表示该 session 还没有完成过 issue。 */
+  /** 该 chat session 最近一次 turn 的 token 用量。null 表示 worker 还没
+   *  报告过(第一轮还没结束 / backend 不发 usage)。 */
   usage: TokenUsage | null
+  /** 该 chat session 最近一次 turn 的模型名。 */
   model: string | null
-  /** usage/model 来源 issue 的 id。 */
-  issueId: string | null
-  /** 来源 issue 自己的 session_id。前端用来判断 usage 是真的属于当前
-   *  session(issueSessionId === sessionId)还是兜底来的(不一致时不能
-   *  把 token 数字当成当前 session 的消耗展示)。null 表示 issue 没有
-   *  session_id 列(老数据 / migration 013 之前)。 */
-  issueSessionId: string | null
 }
 
 export const sessionsApi = {

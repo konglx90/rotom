@@ -195,7 +195,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
             {issue.session_id && (
               <div
                 className={styles.issueWorkingDir}
-                title={`该 issue 跑在 ${issue.cli_tool ?? '?'} session:\n${issue.session_id}\n与 Debug Sessions 视图里的 session id 对应。点击复制。`}
+                title={`该 issue 执行时绑定的 ${issue.cli_tool ?? '?'} session:\n${issue.session_id}\n注意:issue session 与 Debug Sessions 视图里的 chat session 是两个独立 session。点击复制。`}
                 style={{ cursor: 'pointer' }}
                 onClick={() => {
                   navigator.clipboard.writeText(issue.session_id).then(() => {

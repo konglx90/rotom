@@ -57,20 +57,14 @@ export function registerSessionRoutes(
     res.json({ sessions });
   });
 
-  // ── Session usage / model (layered lookup) ──────────────────────────────
-  // Debug 视图 SessionPanel 用它把每个 session 的 token 用量 / 模型名从对应
-  // issue 上拉出来。无需 worker 配合,纯查 DB。
+  // ── Session usage / model (from worker snapshot cache) ─────────────────
+  // Debug 视图 SessionPanel 用它把每个 chat session 自己的 token 用量 / 模型名
+  // 拉出来展示。数据源是 worker 在每次 chat turn 结束后推送的 session_snapshot
+  // —— worker.handleChatReply 把 result.usage / result.model 写进 SessionStore,
+  // 然后 sendSessionSnapshot 推给 master,master 缓存在 sessionSnapshots 里。
   //
-  // 先按 session_id 精确反查最近一条 issue —— issue 执行会把 sessionId 写到
-  // issues.session_id(worker.ts runIssueExecution → ws-hub issue_update),
-  // 这条路径能精确匹配到该 session 自己跑过的 issue。命中时返回的 usage
-  // 一定属于当前 session,前端可以放心展示。
-  //
-  // 精确命中失败时(典型场景:纯 chat/collab 产生的 session,SessionStore
-  // 更新但 issues.session_id 没写过),退化到 (cliTool, groupId) 取最新一条
-  // issue。这条兜底 issue 的 session_id 大概率不是当前 session —— 返回
-  // issueSessionId 让前端自行判断,不一致时不展示 token 数字(避免把别的
-  // session 的用量误显示成当前 session 的)。
+  // 这条路径返回的就是该 chat session 自己的消耗,跟 issue 执行的 session 是
+  // 两个独立 session(issue 有自己的 session_id,不共享)。不再反查 issues 表。
   apiRouter.get("/sessions/:cliTool/:groupId/:sessionId/usage", (req, res) => {
     const { cliTool, groupId, sessionId } = req.params;
     if (!SAFE_CLI.test(cliTool)) {
@@ -81,31 +75,17 @@ export function registerSessionRoutes(
       res.status(400).json({ error: "invalid groupId or sessionId" });
       return;
     }
-    const issue =
-      db.getLatestIssueBySessionId(sessionId) ??
-      db.getLatestIssueByCliTool(cliTool, groupId);
-    if (!issue) {
-      res.json({
-        cliTool,
-        sessionId,
-        usage: null,
-        model: null,
-        issueId: null,
-        issueSessionId: null,
-      });
+    void db; // retained for future DB-backed enrichment; cache is the source of truth now
+    const entry = hub.findSessionEntry(sessionId);
+    if (!entry) {
+      res.json({ cliTool, sessionId, usage: null, model: null });
       return;
-    }
-    let parsedUsage: unknown = null;
-    if (issue.usage) {
-      try { parsedUsage = JSON.parse(issue.usage); } catch { /* corrupted JSON, leave null */ }
     }
     res.json({
       cliTool,
       sessionId,
-      usage: parsedUsage,
-      model: issue.model ?? null,
-      issueId: issue.id,
-      issueSessionId: issue.session_id ?? null,
+      usage: entry.usage ?? null,
+      model: entry.model ?? null,
     });
   });
 

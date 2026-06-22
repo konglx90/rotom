@@ -272,6 +272,24 @@ export interface ClientIssueApprovalRequestMessage {
 // served by /sessions. Each worker reports its own entries (keyed
 // `${cliTool}:${groupId}` in its local SessionStore) — Master aggregates.
 
+/**
+ * Per-session token / cost usage reported by the underlying CLI. All fields
+ * optional — backends surface whatever they have. Codex/Hermes/Claude emit
+ * different subsets; the dashboard degrades gracefully on missing fields.
+ *
+ * Canonical home is here (shared protocol) so both master and executor can
+ * use it without cross-module imports. `cli-executor.ts` re-exports it for
+ * backward compatibility with executor implementations.
+ */
+export interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  /** Total session cost in USD, if the backend reports it (claude does). */
+  totalCostUsd?: number;
+}
+
 /** One session entry as reported by a single worker. */
 export interface SessionEntry {
   /** CLI tool name (claude | codex | hermes | openclaw). */
@@ -286,6 +304,15 @@ export interface SessionEntry {
    *  so the dashboard can show "which agent" rather than just the cliTool.
    *  Not sent by workers — they don't know their own agent name. */
   agentName?: string;
+  /** Latest token/cost usage captured from the CLI backend for this chat
+   *  session. Updated by the worker after each chat turn (handleChatReply
+   *  reads result.usage). Master just caches what the worker pushes —
+   *  no DB lookup. Null/undefined means the worker hasn't reported yet
+   *  (first turn still running, or backend doesn't emit usage). */
+  usage?: TokenUsage | null;
+  /** Backend-reported model name for the latest chat turn in this session
+   *  (e.g. `claude-sonnet-4-6`, `gpt-5`). Same lifecycle as `usage`. */
+  model?: string | null;
 }
 
 export interface ClientSessionViewResponse {

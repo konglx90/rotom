@@ -6,6 +6,14 @@
  * streams output back via the onOutput callback.
  */
 
+import type { TokenUsage } from "../shared/protocol.js";
+
+// Re-export TokenUsage from the shared protocol so executor implementations
+// can keep importing it from "../cli-executor.js". The canonical definition
+// lives in protocol.ts so master-side code can use it without depending on
+// the executor module.
+export type { TokenUsage } from "../shared/protocol.js";
+
 /**
  * What a CLI executor reports up to the worker when the underlying tool wants
  * permission for a side-effecting action. The worker is responsible for
@@ -106,20 +114,6 @@ export interface ExecuteOptions {
    * 内部仅用于日志/将来可能扩展更细的 hook 行为。
    */
   approvalPolicy?: "r_allow" | "rw_allow";
-}
-
-/**
- * Per-session token / cost usage reported by the underlying CLI. All fields
- * optional — backends surface whatever they have. Codex/Hermes/Claude emit
- * different subsets; the dashboard degrades gracefully on missing fields.
- */
-export interface TokenUsage {
-  inputTokens?: number;
-  outputTokens?: number;
-  cacheReadTokens?: number;
-  cacheCreationTokens?: number;
-  /** Total session cost in USD, if the backend reports it (claude does). */
-  totalCostUsd?: number;
 }
 
 export interface ExecuteResult {
