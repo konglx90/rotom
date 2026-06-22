@@ -293,7 +293,12 @@ export function registerGroupRoutes(
           routeType: "exact" as const,
           conversation: { type: "group" as const, groupId: req.params.id, groupName: group.name },
         };
-        hub.broadcastToGroupPublic(req.params.id, wireMsg, [senderAgent.id]);
+        // 排除 @mentioned agent:这些目标会由 Dashboard 后续 a2a_send 直投,
+        // 这里再广播一次会导致目标 agent 重复处理(同 ws-hub.ts:445 行为)。
+        const mentionAgentIds = resolvedMentions
+          .map((name: string) => db.getAgentByName(name)?.id)
+          .filter((id: string | undefined): id is string => !!id);
+        hub.broadcastToGroupPublic(req.params.id, wireMsg, [senderAgent.id, ...mentionAgentIds]);
       }
     }
 
