@@ -157,12 +157,13 @@ export function SessionPanel({ groupId, onChange }: SessionPanelProps) {
   )
 }
 
-/** 每个 session 行尾的反查 usage 小药丸。
+/** 每个 session 行尾的 usage 小药丸。
  *  列表渲染后异步并发拉取,不阻塞首屏。
  *
- *  只有当 issueSessionId === entry.sessionId(来源 issue 真的跑在这个 session
- *  上)时才展示 token 数字。否则只展示模型名 + tooltip 说明,避免把别的
- *  session 的用量误显示成当前 session 的。 */
+ *  数据源是 worker 在每次 chat turn 结束后推送的 session_snapshot ——
+ *  worker.handleChatReply 把 result.usage / result.model 写进 SessionStore,
+ *  master 缓存在 sessionSnapshots 里。所以这里展示的就是该 chat session
+ *  自己最近一次回复的 token 消耗,跟 issue 执行的 session 互相独立。 */
 function SessionUsageLine({ entry }: { entry: SessionEntry }) {
   const [usage, setUsage] = useState<SessionUsage | null>(null)
 
@@ -187,23 +188,9 @@ function SessionUsageLine({ entry }: { entry: SessionEntry }) {
     || u.cacheCreationTokens != null
     || u.totalCostUsd != null
   )
-  // 来源 issue 的 session_id 跟当前行 session 一致 → usage 确实属于这个 session。
-  // 不一致(兜底来的)或 issue 没记录 session_id(老数据)→ 不展示 token 数字。
-  const sessionMatched = !!usage.issueSessionId && usage.issueSessionId === entry.sessionId
-
-  if (!sessionMatched) {
-    return (
-      <span
-        className={`${styles.sessionUsage} ${styles.sessionUsageEmpty}`}
-        title={buildSessionTooltip(usage, entry.sessionId, false)}
-      >
-        —
-      </span>
-    )
-  }
 
   return (
-    <span className={styles.sessionUsage} title={buildSessionTooltip(usage, entry.sessionId, true)}>
+    <span className={styles.sessionUsage} title={buildSessionTooltip(usage)}>
       {usage.model && (
         <span className={styles.sessionUsageModel}>{shortModel(usage.model)}</span>
       )}
@@ -234,33 +221,16 @@ function SessionUsageLine({ entry }: { entry: SessionEntry }) {
   )
 }
 
-function buildSessionTooltip(
-  usage: SessionUsage,
-  currentSessionId: string,
-  matched: boolean,
-): string {
+function buildSessionTooltip(usage: SessionUsage): string {
   const parts: string[] = []
   if (usage.model) parts.push(`模型: ${usage.model}`)
-  if (usage.issueId) parts.push(`来源 issue: ${usage.issueId}`)
-  if (usage.issueSessionId) {
-    parts.push(
-      `issue session: ${usage.issueSessionId.slice(0, 8)}…${
-        matched ? ' (与当前 session 一致)' : ' (与当前 session 不一致,仅供参考)'
-      }`,
-    )
-  } else if (usage.issueId) {
-    parts.push('issue 未记录 session_id')
-  }
   const u = usage.usage
-  if (u && matched) {
+  if (u) {
     if (u.inputTokens != null) parts.push(`输入: ${u.inputTokens.toLocaleString()}`)
     if (u.outputTokens != null) parts.push(`输出: ${u.outputTokens.toLocaleString()}`)
     if (u.cacheReadTokens != null) parts.push(`缓存读: ${u.cacheReadTokens.toLocaleString()}`)
     if (u.cacheCreationTokens != null) parts.push(`缓存写: ${u.cacheCreationTokens.toLocaleString()}`)
     if (u.totalCostUsd != null) parts.push(`成本: $${u.totalCostUsd.toFixed(6)}`)
-  }
-  if (!matched) {
-    parts.push(`当前 session ${currentSessionId.slice(0, 8)}… 暂无自己的 usage 数据`)
   }
   return parts.join(' · ') || '无 usage 数据'
 }

@@ -14,16 +14,27 @@ import type { ApprovalDecision, ApprovalRequestInput, CliExecutor } from "./cli-
 import { composePrompt, type ComposedPrompt } from "../shared/prompt-composer.js";
 import { parseAgentProfile, type AgentProfile } from "../shared/agent-profile.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
+import type { TokenUsage } from "../shared/protocol.js";
 
 // ── Session store ──────────────────────────────────────────────────────
+
+/** Shape persisted to ~/.rotom/sessions.json and surfaced via listAll(). */
+interface StoredSession {
+  sessionId: string;
+  /** Latest usage captured from the CLI backend. undefined until the first
+   *  chat turn completes and the executor reports usage. */
+  usage?: TokenUsage;
+  /** Backend-reported model name. Same lifecycle as usage. */
+  model?: string;
+}
 
 /**
  * Manages conversation sessions per group per CLI.
  * Persisted to ~/.rotom/sessions.json so sessions survive restarts.
- * Key format: `${cliTool}:${groupId}` → sessionId
+ * Key format: `${cliTool}:${groupId}` → StoredSession
  */
 class SessionStore {
-  private sessions = new Map<string, string>();
+  private sessions = new Map<string, StoredSession>();
   private filePath: string;
   private dirty = false;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -36,9 +47,15 @@ class SessionStore {
   private load(): void {
     try {
       if (fs.existsSync(this.filePath)) {
-        const data = JSON.parse(fs.readFileSync(this.filePath, "utf-8")) as Record<string, string>;
+        const data = JSON.parse(fs.readFileSync(this.filePath, "utf-8")) as Record<string, unknown>;
         for (const [k, v] of Object.entries(data)) {
-          this.sessions.set(k, v);
+          // Backward compat: old format was Record<string, string> (just sessionId).
+          // New format is Record<string, StoredSession>. Accept both.
+          if (typeof v === "string") {
+            this.sessions.set(k, { sessionId: v });
+          } else if (v && typeof v === "object" && typeof (v as any).sessionId === "string") {
+            this.sessions.set(k, v as StoredSession);
+          }
         }
         console.log(`[session-store] Loaded ${this.sessions.size} session(s) from ${this.filePath}`);
       }
@@ -58,7 +75,7 @@ class SessionStore {
   private flush(): void {
     if (!this.dirty) return;
     try {
-      const obj: Record<string, string> = {};
+      const obj: Record<string, StoredSession> = {};
       for (const [k, v] of this.sessions) {
         obj[k] = v;
       }
@@ -74,11 +91,38 @@ class SessionStore {
   }
 
   get(cliTool: string, groupId: string): string | undefined {
-    return this.sessions.get(this.key(cliTool, groupId));
+    return this.sessions.get(this.key(cliTool, groupId))?.sessionId;
   }
 
   set(cliTool: string, groupId: string, sessionId: string): void {
-    this.sessions.set(this.key(cliTool, groupId), sessionId);
+    // Preserve existing usage/model when the sessionId is being refreshed
+    // (e.g. a new chat turn returned the same sessionId). If the sessionId
+    // actually changed, clear stale usage — the new session has no turns yet.
+    const k = this.key(cliTool, groupId);
+    const existing = this.sessions.get(k);
+    if (existing && existing.sessionId === sessionId) {
+      this.sessions.set(k, { ...existing, sessionId });
+    } else {
+      this.sessions.set(k, { sessionId });
+    }
+    this.dirty = true;
+    this.scheduleFlush();
+  }
+
+  /** Record the latest usage/model captured from the CLI backend for this
+   *  session. No-op if no session exists for (cliTool, groupId). */
+  recordUsage(cliTool: string, groupId: string, usage: TokenUsage | undefined, model: string | undefined): void {
+    const k = this.key(cliTool, groupId);
+    const existing = this.sessions.get(k);
+    if (!existing) return;
+    // Only update if there's something to record — avoids bumping dirty
+    // (and triggering a disk flush) on every chat turn that reports nothing.
+    if (!usage && !model) return;
+    this.sessions.set(k, {
+      ...existing,
+      ...(usage ? { usage } : {}),
+      ...(model ? { model } : {}),
+    });
     this.dirty = true;
     this.scheduleFlush();
   }
@@ -90,7 +134,7 @@ class SessionStore {
   }
 
   has(cliTool: string, groupId: string, sessionId: string): boolean {
-    return this.sessions.get(this.key(cliTool, groupId)) === sessionId;
+    return this.sessions.get(this.key(cliTool, groupId))?.sessionId === sessionId;
   }
 
   /**
@@ -98,12 +142,18 @@ class SessionStore {
    * keys. Used by the worker's session_snapshot push so master can cache the
    * full picture without per-group requests.
    */
-  listAll(): Array<{ cliTool: string; groupId: string; sessionId: string }> {
-    const out: Array<{ cliTool: string; groupId: string; sessionId: string }> = [];
-    for (const [k, sessionId] of this.sessions) {
+  listAll(): Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string }> {
+    const out: Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string }> = [];
+    for (const [k, stored] of this.sessions) {
       const sep = k.indexOf(":");
       if (sep === -1) continue;
-      out.push({ cliTool: k.slice(0, sep), groupId: k.slice(sep + 1), sessionId });
+      out.push({
+        cliTool: k.slice(0, sep),
+        groupId: k.slice(sep + 1),
+        sessionId: stored.sessionId,
+        ...(stored.usage ? { usage: stored.usage } : {}),
+        ...(stored.model ? { model: stored.model } : {}),
+      });
     }
     return out;
   }
@@ -1057,11 +1107,24 @@ ${prompt}`;
           (result.failed ? " (provider error)" : " (poisoned history)"),
         );
         this.sendSessionSnapshot();
-      } else if (groupId && result.sessionId) {
-        // Persist sessionId for future messages in this group
-        this.sessionStore.set(this.cliTool, groupId, result.sessionId);
-        console.log(`${this.tag} Session stored: ${this.cliTool}:${groupId} → ${result.sessionId}`);
-        this.sendSessionSnapshot();
+      } else {
+        // Persist sessionId for future messages in this group. Even when
+        // result.sessionId is absent (some backends only return it on the
+        // first turn), the existing session is still valid — record usage
+        // so the Debug view can show this chat session's own token cost.
+        if (groupId && result.sessionId) {
+          this.sessionStore.set(this.cliTool, groupId, result.sessionId);
+          console.log(`${this.tag} Session stored: ${this.cliTool}:${groupId} → ${result.sessionId}`);
+        }
+        if (groupId && (result.usage || result.model)) {
+          this.sessionStore.recordUsage(this.cliTool, groupId, result.usage, result.model);
+          // Snapshot push is needed so master picks up the new usage/model.
+          // Coalesce with the set() push above by always sending here when
+          // we recorded anything.
+          this.sendSessionSnapshot();
+        } else if (groupId && result.sessionId) {
+          this.sendSessionSnapshot();
+        }
       }
 
       if (task.aborted) {
@@ -1162,9 +1225,16 @@ ${prompt}`;
       if (groupId && result.invalidateSession) {
         this.sessionStore.delete(this.cliTool, groupId);
         this.sendSessionSnapshot();
-      } else if (groupId && result.sessionId) {
-        this.sessionStore.set(this.cliTool, groupId, result.sessionId);
-        this.sendSessionSnapshot();
+      } else {
+        if (groupId && result.sessionId) {
+          this.sessionStore.set(this.cliTool, groupId, result.sessionId);
+        }
+        if (groupId && (result.usage || result.model)) {
+          this.sessionStore.recordUsage(this.cliTool, groupId, result.usage, result.model);
+          this.sendSessionSnapshot();
+        } else if (groupId && result.sessionId) {
+          this.sendSessionSnapshot();
+        }
       }
 
       if (task.aborted) return;
