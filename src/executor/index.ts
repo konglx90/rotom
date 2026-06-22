@@ -24,6 +24,7 @@ import { HermesCliExecutor } from "./executors/hermes-cli.js";
 import { OpenclawExecutor } from "./executors/openclaw.js";
 import type { CliExecutor } from "./cli-executor.js";
 import { ExecutorWorker, type WorkerConfig } from "./worker.js";
+import { ensureRotomSkillMd } from "../shared/skill-md.js";
 
 // ── Config ──────────────────────────────────────────────────────────────
 
@@ -188,6 +189,9 @@ for (const w of workers) {
 }
 
 console.log(`[executor] Starting ${workerInstances.length} worker(s) (fallback cli: ${fallbackCli})`);
+
+// 启动时把 SKILL.md 落到 ~/.rotom/。幂等(内容相同则跳过),best-effort。
+ensureRotomSkillMd();
 
 for (const worker of workerInstances) {
   worker.start();
