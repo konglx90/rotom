@@ -2,11 +2,13 @@ import { api } from './client'
 import type { TokenUsage } from './types'
 
 /** One session entry — one (cliTool, groupId, sessionId) tuple as reported
- *  by a single executor worker. */
+ *  by a single executor worker. `agentName` is filled in by master when
+ *  aggregating snapshots (not sent by workers). */
 export interface SessionEntry {
   cliTool: string
   groupId: string
   sessionId: string
+  agentName?: string
 }
 
 /** View content response. `error` is non-empty when the executor's CLI

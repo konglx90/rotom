@@ -57,14 +57,17 @@ export function registerSessionRoutes(
     res.json({ sessions });
   });
 
-  // ── Session usage / model (latest issue for this cliTool+group) ──────────
-  // Debug 视图 SessionPanel 用它把每个 session 的 token 用量 / 模型名从最近一次
-  // 执行该 cliTool 的 issue 上拉出来。无需 worker 配合,纯查 DB。
+  // ── Session usage / model (layered lookup) ──────────────────────────────
+  // Debug 视图 SessionPanel 用它把每个 session 的 token 用量 / 模型名从对应
+  // issue 上拉出来。无需 worker 配合,纯查 DB。
   //
-  // 不按 session_id 反查的原因:worker SessionStore 跟 issues.session_id 是两条
-  // 独立路径(SessionStore 只在 chat/collab 路径更新,issue 执行不写),session_id
-  // 经常对不上。改按 (cliTool, groupId) 取最新一条 issue 的 usage/model,展示
-  // 「上次 claude/codex 在这个群里跑了多少 token」更贴近用户预期。
+  // 先按 session_id 精确反查最近一条 issue —— issue 执行会把 sessionId 写到
+  // issues.session_id(worker.ts runIssueExecution → ws-hub issue_update),
+  // 这条路径能精确匹配到该 session 自己跑过的 issue。
+  //
+  // 精确命中失败时(典型场景:纯 chat/collab 产生的 session,SessionStore
+  // 更新但 issues.session_id 没写过),退化到 (cliTool, groupId) 取最新一条
+  // issue,展示「上次 claude/codex 在这个群里跑了多少 token」作为兜底。
   apiRouter.get("/sessions/:cliTool/:groupId/:sessionId/usage", (req, res) => {
     const { cliTool, groupId, sessionId } = req.params;
     if (!SAFE_CLI.test(cliTool)) {
@@ -75,8 +78,9 @@ export function registerSessionRoutes(
       res.status(400).json({ error: "invalid groupId or sessionId" });
       return;
     }
-    void sessionId; // 校验通过即可,反查用 (cliTool, groupId) 不依赖 session_id
-    const issue = db.getLatestIssueByCliTool(cliTool, groupId);
+    const issue =
+      db.getLatestIssueBySessionId(sessionId) ??
+      db.getLatestIssueByCliTool(cliTool, groupId);
     if (!issue) {
       res.json({ cliTool, sessionId, usage: null, model: null, issueId: null });
       return;
