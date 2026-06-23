@@ -138,7 +138,7 @@ function buildCwdLayer(cwd: string | null, mode: ComposeContext["mode"]): Prompt
   return {
     layer: "cwd",
     content:
-      `[工作目录] ${cwd}\n` +
+      `[artifacts目录] ${cwd}\n` +
       `所有相对路径基于此目录解析；spawn 的子进程 cwd 已设置在这里，` +
       `Read/Grep/Glob 直接用相对路径即可，不要用 \`cd\` 切换到其他目录。\n` +
       writability,

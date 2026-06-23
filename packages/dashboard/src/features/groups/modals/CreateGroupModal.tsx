@@ -80,7 +80,7 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
         <input type="text" value={workingDir} onChange={e => setWorkingDir(e.target.value)}
           placeholder="例如: /Users/me/code/my-repo 或 ~/code/my-repo" className={styles.formInput} />
         <p style={{ fontSize: 11, color: 'var(--color-slate)', margin: '6px 2px 0' }}>
-          支持 ~/ 自动展开。必须是已存在的目录；不填则默认使用 ~/.rotom/results/&lt;群id&gt;（自动创建）。
+          支持 ~/ 自动展开。必须是已存在的目录；不填则默认使用 ~/.rotom/artifacts/&lt;群id&gt;（自动创建）。
         </p>
       </div>
       <div className={styles.formField}>

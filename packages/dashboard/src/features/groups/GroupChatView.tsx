@@ -493,7 +493,7 @@ export function GroupChatView() {
               className={rightTab === 'artifacts' ? styles.activeTab : styles.tabBtn}
               onClick={() => setRightTab('artifacts')}
             >
-              Results
+              Artifacts
             </button>
             <button
               className={rightTab === 'notes' ? styles.activeTab : styles.tabBtn}

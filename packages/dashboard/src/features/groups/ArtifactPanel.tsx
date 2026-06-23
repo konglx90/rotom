@@ -201,7 +201,7 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
   return (
     <div className={styles.artifactPanel}>
       <div className={styles.artifactHeader}>
-        <h3 className={styles.artifactTitle}>{'\u{1F4E6}'} Results</h3>
+        <h3 className={styles.artifactTitle}>{'\u{1F4E6}'} Artifacts</h3>
         <div className={styles.previewActions}>
           <Button
             variant="ghost"
@@ -235,7 +235,7 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
           <div>
             <p>暂无产物文件</p>
             <p style={{ fontSize: 12, marginTop: 4 }}>
-              {root || '~/.rotom/results/'}
+              {root || '~/.rotom/artifacts/'}
             </p>
           </div>
         </div>
