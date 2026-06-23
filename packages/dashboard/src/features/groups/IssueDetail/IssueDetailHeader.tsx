@@ -4,6 +4,8 @@ import type { Agent, Issue } from '../../../api/types'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Select } from '../../../components/ui/Select'
+import { useIssueElapsed } from '../../../hooks/useIssueElapsed'
+import { formatDuration } from '../../../utils/formatDuration'
 import styles from './IssueDetailHeader.module.css'
 import type { IssueEditState } from './useIssueEdit'
 import { displayTitle } from '../createIssueTitle'
@@ -49,6 +51,22 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
   // isInProgress 严格 = 当前正在跑 CLI。paused 不算(没在跑),所以 ESC 中断
   // 快捷键和「中断」按钮在 paused 下都不显示 —— 没有活跃步骤可中断。
   const isInProgress = issue.status === 'in_progress'
+
+  // 耗时:running 状态 1s tick,终态/未开始 静态。详情页只有一个 header,放
+  // 这里直接 setInterval 安全;放子组件会造成每张详情卡都挂 timer。
+  const elapsedMs = useIssueElapsed(issue.started_at, issue.completed_at)
+  const elapsedLabel = elapsedMs == null ? '—' : formatDuration(elapsedMs)
+  const elapsedIcon = isFinalState ? '✓' : isInProgress ? '⏱' : '—'
+  const elapsedClass = isFinalState
+    ? styles.elapsedDone
+    : isInProgress
+      ? styles.elapsedRunning
+      : styles.elapsedIdle
+  const elapsedTitle = elapsedMs == null
+    ? '尚未开始(等待 worker 认领)'
+    : isFinalState
+      ? '总耗时'
+      : '当前区间耗时(实时刷新)'
   const showAssign = issue.type !== 'collaboration'
 
   // 中断当前步骤(对齐 codex CLI 的 ESC):POST /issues/:id/interrupt →
@@ -176,7 +194,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
 
       {detailsVisible && (
         <div className={styles.headerSecondary}>
-          {/* 元信息簇：只读 priority + id + 工作目录 + session */}
+          {/* 元信息簇：只读 priority + id + 耗时 + 工作目录 + session */}
           <div className={styles.metaCluster}>
             <Badge tone="priority" value={issue.priority} />
             <Badge
@@ -190,6 +208,13 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
               }}
               title={copiedId ? '已复制' : `点击复制: ${issue.id}`}
             >{copiedId ? '✓ 已复制' : `#${issue.id.slice(0, 8)}`}</Badge>
+            <div
+              className={`${styles.issueElapsed} ${elapsedClass}`}
+              title={elapsedTitle}
+            >
+              <span className={styles.elapsedLabel}>耗时</span>
+              <code className={styles.elapsedValue}>{elapsedIcon} {elapsedLabel}</code>
+            </div>
             {issue.working_dir && (
               <div className={styles.issueWorkingDir} title={issue.working_dir}>
                 <span className={styles.fieldLabel}>工作目录</span>

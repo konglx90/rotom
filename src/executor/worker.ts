@@ -488,6 +488,7 @@ ${prompt}`;
         group: null,
         cwd,
         body,
+        approvalPolicy,
       });
       this.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed);
     }
@@ -532,6 +533,7 @@ ${prompt}`;
           group: null,
           cwd,
           body,
+          approvalPolicy,
         });
         this.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed);
       }
@@ -834,6 +836,7 @@ ${prompt}`;
       group: null,
       cwd,
       body: bodyWithContext,
+      approvalPolicy,
     });
     this.runIssueExecution(issueId, composed.final, cwd, undefined, slashCommand, approvalPolicy, composed);
   }
@@ -862,16 +865,12 @@ ${prompt}`;
     // fall back 到入参 resumeSessionId(本轮没拿到新 session 时,比如 codex 早退)。
     let lastSessionId: string | undefined = resumeSessionId;
 
-    // issue / collab 执行流程强制 rw_allow:本次执行期间工作目录直接可写,
-    // agent 调 Write/Edit/MultiEdit/写 Bash 会立即放行,不挂 dashboard 审批
-    // (prompt-composer 的 cwd 层已告诉 agent 同样的语义)。chat 模式根本
-    // 不会进 runIssueExecution,这里不需要为它分支。
-    // 入参 approvalPolicy 字段保留在 schema 上,主要是为了未来 dashboard 提供
-    // "手动严格审批"开关时复用;当前所有执行路径统一走 rw_allow。
-    const effectivePolicy: "r_allow" | "rw_allow" = "rw_allow";
-    // PreToolUse hook 始终挂载:避免 claude 自己的权限提示因 stdin 关闭而卡死。
-    // 由于 effectivePolicy 永远是 rw_allow,所有调用立即 auto-accept,Dashboard
-    // 仍能看到 issue_approval_request 可见性记录但不阻塞用户。
+    // 写策略跟随 issue.approval_policy 入参;master 端 normalizeApprovalPolicy
+    // 已把 undefined / 脏值收敛成 'r_allow',这里再兜一次底:undefined 当 r_allow
+    // 走(写需审批),符合 protocol 默认。PreToolUse hook 始终挂载:避免 claude
+    // 自己的权限提示因 stdin 关闭而卡死。r_allow 下 hook 走 issue_approval_request
+    // 挂起等用户决策,rw_allow 下本地立即 accept 不阻塞 CLI。
+    const effectivePolicy: "r_allow" | "rw_allow" = approvalPolicy ?? "r_allow";
     const onApprovalRequest = (req: ApprovalRequestInput) => {
       const approvalId = randomUUID();
       if (effectivePolicy === "rw_allow") {
