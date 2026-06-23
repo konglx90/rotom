@@ -5,7 +5,10 @@
  *   - 5 layer order: rotom-cli → agent-role → group-basic → cwd → task
  *   - 无 group: group-basic 折叠
  *   - 无 cwd: cwd 折叠
- *   - 无 profile: role 层仍存在,标 "agents.profile = null"
+ *   - 无 profile / profile 全空: role 层折叠(null),不再占位
+ *   - profile 部分字段缺失: 只输出非空字段
+ *   - chat 模式 + fromName: 注入到 task 层头部一行([from=xxx])
+ *   - issue/collab 模式 + fromName: 不注入(只有 chat 才有 fromName 语义)
  *   - 三种 mode 的 task.source 不同
  *   - ROTOM_CLI_PROMPT 文本 golden string 锁定(防止以后被改)
  *   - final 顺序与 layers 顺序一致(layers.join("\n"))
@@ -63,7 +66,9 @@ describe("composePrompt", () => {
   });
 
   it("无 group: group-basic 折叠", () => {
-    const ctx = baseCtx({ group: null });
+    // 补一个非空 profile,确保 agent-role 层在(默认 agentProfile=null 时该层也折叠,
+    // 这条测试只验证 group-basic 折叠行为,需要排除 agent-role 折叠的干扰)。
+    const ctx = baseCtx({ group: null, agentProfile: { category: "AI" } });
     const out = composePrompt(ctx);
     assert.deepStrictEqual(layerNames(out.layers), ["rotom-cli", "agent-role", "task"]);
     assert.ok(!out.layers.some((l) => l.layer === "group-basic"));
@@ -75,16 +80,19 @@ describe("composePrompt", () => {
     assert.ok(!out.layers.some((l) => l.layer === "cwd"));
   });
 
-  it("无 profile: role 层仍存在,标 agents.profile = null", () => {
+  it("无 profile: role 层折叠(null),不占位", () => {
     const ctx = baseCtx({ agentProfile: null });
     const out = composePrompt(ctx);
-    const role = out.layers.find((l) => l.layer === "agent-role");
-    assert.ok(role, "role layer should still exist");
-    assert.strictEqual(role!.source, "agents.profile = null");
-    assert.ok(role!.content.includes("无 profile"), "should mention no profile");
+    assert.ok(!out.layers.some((l) => l.layer === "agent-role"));
   });
 
-  it("有 profile: 每行一个字段", () => {
+  it("profile 全空字段: role 层折叠(null),不输出 (未填) 占位", () => {
+    const ctx = baseCtx({ agentProfile: {} });
+    const out = composePrompt(ctx);
+    assert.ok(!out.layers.some((l) => l.layer === "agent-role"));
+  });
+
+  it("有 profile: 只输出非空字段,不带 (未填) 占位", () => {
     const ctx = baseCtx({
       agentProfile: {
         category: "AI",
@@ -100,15 +108,17 @@ describe("composePrompt", () => {
     assert.ok(role.content.includes("position: Backend"));
     assert.ok(role.content.includes("responsibilities: API"));
     assert.ok(role.content.includes("tech_stack: Node"));
+    assert.ok(!role.content.includes("(未填)"), "应不输出 (未填) 占位");
   });
 
-  it("profile 字段缺失: 标 (未填) 但层仍存在", () => {
+  it("profile 部分字段缺失: 只输出非空字段", () => {
     const ctx = baseCtx({ agentProfile: { category: "AI" } });
     const out = composePrompt(ctx);
     const role = out.layers.find((l) => l.layer === "agent-role")!;
-    assert.ok(role.content.includes("position: (未填)"));
-    assert.ok(role.content.includes("responsibilities: (未填)"));
-    assert.ok(role.content.includes("tech_stack: (未填)"));
+    assert.ok(role.content.includes("category: AI"));
+    assert.ok(!role.content.includes("position"));
+    assert.ok(!role.content.includes("responsibilities"));
+    assert.ok(!role.content.includes("tech_stack"));
   });
 
   it("三种 mode 的 task.source 不同", () => {
@@ -163,7 +173,7 @@ describe("composePrompt", () => {
     assert.ok(g.content.includes("Tester"));
   });
 
-  it("group-basic 活跃 issue 列表正确渲染", () => {
+  it("group-basic 活跃 issue 数量: 非空时显示 N 个进行中", () => {
     const ctx = baseCtx({
       group: {
         id: "g",
@@ -176,94 +186,136 @@ describe("composePrompt", () => {
     });
     const out = composePrompt(ctx);
     const g = out.layers.find((l) => l.layer === "group-basic")!;
-    assert.ok(g.content.includes("#12345678"));
-    assert.ok(g.content.includes("Fix bug"));
-    assert.ok(g.content.includes("by Alice"));
-    assert.ok(g.content.includes("[P1]"));
-    assert.ok(g.content.includes("#87654321"));
-    assert.ok(g.content.includes("未认领"));
+    assert.ok(g.content.includes("[当前群活跃 issue] 2 个进行中"));
+    // 不再渲染单条 issue 详情(ID / title / owner / priority 都不出现)
+    assert.ok(!g.content.includes("#12345678"));
+    assert.ok(!g.content.includes("Fix bug"));
+    assert.ok(!g.content.includes("by Alice"));
+    assert.ok(!g.content.includes("[P1]"));
   });
 
-  it("group-basic 活跃 issue 为空: 显式说 '无' + 提示,引导 agent 果断执行", () => {
+  it("group-basic 活跃 issue 数量: 1 个时显示 1 个进行中", () => {
+    const ctx = baseCtx({
+      group: {
+        id: "g",
+        name: "G",
+        activeIssues: [
+          { id: "abc12345-aaaa", title: "X", assignedTo: "B", status: "in_progress", priority: null },
+        ],
+      },
+    });
+    const out = composePrompt(ctx);
+    const g = out.layers.find((l) => l.layer === "group-basic")!;
+    assert.ok(g.content.includes("1 个进行中"));
+  });
+
+  it("group-basic 活跃 issue 为空: 显式说 '无'", () => {
     const ctx = baseCtx({
       group: { id: "g", name: "G", activeIssues: [] },
     });
     const out = composePrompt(ctx);
     const g = out.layers.find((l) => l.layer === "group-basic")!;
-    assert.ok(g.content.includes("无"));
-    assert.ok(g.content.includes("rotom issue create"));
-    // 关键:告诉 agent 占位任务自己干,不要反问
-    assert.ok(g.content.includes("占位"), `应包含"占位"以引导 agent 果断执行,实际: ${g.content.slice(0, 200)}`);
-    assert.ok(g.content.includes("不要反问"));
+    assert.ok(g.content.includes("[当前群活跃 issue] 无"));
   });
 
-  it("group + fromName: 渲染'发信人是=\"X\"'，让 agent 知道对话方身份", () => {
+  it("chat 模式 + group + fromName: fromName 注入到 task 层头部一行", () => {
     const ctx = baseCtx({
+      mode: "chat",
       group: { id: "g1", name: "1000字科幻小说", activeIssues: [] },
       fromName: "孔令飞",
+      body: "帮我看一下 X",
     });
     const out = composePrompt(ctx);
+    const t = out.layers.find((l) => l.layer === "task")!;
+    assert.ok(t.content.startsWith("[from=孔令飞]\n"), `task 应以 [from=孔令飞] 开头,实际: ${t.content.slice(0, 100)}`);
+    assert.ok(t.content.includes("帮我看一下 X"));
+    // 同时 group-basic 不再含 fromName
     const g = out.layers.find((l) => l.layer === "group-basic")!;
-    assert.ok(g.content.includes("发信人是=\"孔令飞\""), `group-basic should include sender name, got: ${g.content.slice(0, 200)}`);
-    // 同时仍保留 selfName
-    assert.ok(g.content.includes("你自己是=\"Tester\""));
+    assert.ok(!g.content.includes("发信人"));
+    assert.ok(!g.content.includes("孔令飞"));
   });
 
-  it("group + fromName=null: 不渲染发信人(向后兼容)", () => {
+  it("chat 模式 + group + fromName=null: task 层无 [from=xxx] 前缀", () => {
     const ctx = baseCtx({
+      mode: "chat",
       group: { id: "g1", name: "G", activeIssues: [] },
       fromName: null,
+      body: "hi",
     });
     const out = composePrompt(ctx);
-    const g = out.layers.find((l) => l.layer === "group-basic")!;
-    assert.ok(!g.content.includes("发信人"));
+    const t = out.layers.find((l) => l.layer === "task")!;
+    assert.strictEqual(t.content, "hi");
   });
 
-  it("group + fromName 未填(undefined): 不渲染发信人", () => {
+  it("chat 模式 + group + fromName 未填: task 层无 [from=xxx] 前缀", () => {
     const ctx = baseCtx({
+      mode: "chat",
       group: { id: "g1", name: "G", activeIssues: [] },
+      body: "hi",
+    });
+    const out = composePrompt(ctx);
+    const t = out.layers.find((l) => l.layer === "task")!;
+    assert.strictEqual(t.content, "hi");
+  });
+
+  it("issue/collab 模式 + fromName: fromName 不注入(只有 chat 才有 fromName 语义)", () => {
+    const issueOut = composePrompt(baseCtx({ mode: "issue", fromName: "X", body: "任务" }));
+    const collabOut = composePrompt(baseCtx({ mode: "collab", fromName: "X", body: "开场白" }));
+    const issueTask = issueOut.layers.find((l) => l.layer === "task")!;
+    const collabTask = collabOut.layers.find((l) => l.layer === "task")!;
+    assert.strictEqual(issueTask.content, "任务");
+    assert.strictEqual(collabTask.content, "开场白");
+  });
+
+  it("group-basic 不再含 fromName(只在 task 层)", () => {
+    const ctx = baseCtx({
+      mode: "chat",
+      group: { id: "g1", name: "G", activeIssues: [] },
+      fromName: "张三",
     });
     const out = composePrompt(ctx);
     const g = out.layers.find((l) => l.layer === "group-basic")!;
+    assert.ok(!g.content.includes("张三"));
     assert.ok(!g.content.includes("发信人"));
   });
 
-  it("无 group + 有 fromName: group-basic 折叠,发信人也不渲染", () => {
-    const ctx = baseCtx({ group: null, fromName: "孔令飞" });
-    const out = composePrompt(ctx);
-    assert.ok(!out.layers.some((l) => l.layer === "group-basic"));
-    assert.ok(!out.final.includes("发信人"));
-  });
-
-  it("cwd 层 chat 模式提示只读语义,引导 agent 果断走 issue 而不是反问", () => {
+  it("cwd 层 chat 模式: 只读单行 + 指向 SKILL.md 锚点", () => {
     const ctx = baseCtx({ mode: "chat", cwd: "/Users/kong/work" });
     const out = composePrompt(ctx);
     const c = out.layers.find((l) => l.layer === "cwd")!;
     assert.ok(c.content.includes("/Users/kong/work"));
+    assert.ok(c.content.includes("chat"));
     assert.ok(c.content.includes("只读"));
-    assert.ok(c.content.includes("不得调用 Write/Edit"));
-    assert.ok(!c.content.includes("本次执行期间此目录可写"));
-    // 引导 agent 一步到位
-    assert.ok(c.content.includes("--run --approval-policy rw_allow"));
-    // 引导 agent 不要反问
-    assert.ok(c.content.includes("不要反问"), `应包含"不要反问"以引导 agent 果断执行,实际: ${c.content.slice(0, 300)}`);
+    assert.ok(c.content.includes("SKILL.md#写盘兜底话术"));
+    assert.ok(!c.content.includes("不得调用 Write/Edit"));
   });
 
-  it("cwd 层 issue 模式提示可写语义", () => {
+  it("cwd 层 issue 模式 rw_allow: 单行可写,无需 dashboard", () => {
+    const ctx = baseCtx({ mode: "issue", cwd: "/Users/kong/work", approvalPolicy: "rw_allow" });
+    const out = composePrompt(ctx);
+    const c = out.layers.find((l) => l.layer === "cwd")!;
+    assert.ok(c.content.includes("/Users/kong/work"));
+    assert.ok(c.content.includes("rw_allow"));
+    assert.ok(c.content.includes("无需 dashboard 确认"));
+    assert.ok(!c.content.includes("只读"));
+  });
+
+  it("cwd 层 issue 模式 r_allow(默认): 单行可写 + 提示用 rw_allow 免审批", () => {
     const ctx = baseCtx({ mode: "issue", cwd: "/Users/kong/work" });
     const out = composePrompt(ctx);
     const c = out.layers.find((l) => l.layer === "cwd")!;
     assert.ok(c.content.includes("/Users/kong/work"));
-    assert.ok(c.content.includes("本次执行期间此目录可写"));
-    assert.ok(c.content.includes("无需 dashboard 确认"));
-    assert.ok(!c.content.includes("此目录为只读"));
+    assert.ok(c.content.includes("r_allow"));
+    assert.ok(c.content.includes("Accept/Deny"));
+    assert.ok(c.content.includes("--approval-policy rw_allow"));
   });
 
-  it("cwd 层 collab 模式同样提示可写语义", () => {
+  it("cwd 层 collab 模式: 同 issue 模式,单行写盘策略", () => {
     const ctx = baseCtx({ mode: "collab", cwd: "/Users/kong/work" });
     const out = composePrompt(ctx);
     const c = out.layers.find((l) => l.layer === "cwd")!;
-    assert.ok(c.content.includes("本次执行期间此目录可写"));
+    assert.ok(c.content.includes("collab"));
+    assert.ok(c.content.includes("可写"));
   });
 
   it("task body 透传", () => {
@@ -278,26 +330,31 @@ describe("ROTOM_CLI_PROMPT golden string", () => {
     assert.strictEqual(
       ROTOM_CLI_PROMPT,
       `[rotom CLI 使用规则]
-在 rotom Mesh 网络里，通过 Bash 调用全局 \`rotom\` 命令完成所有操作（发消息、建 issue、协作）。
-- \`rotom\` 默认 JSON 输出（加 \`--pretty\` 看表格）；命令自动用当前 agent 身份，**不要传 \`--as\`**。
-- 命令清单见 \`~/.rotom/SKILL.md\`（写盘 / 查历史 / 建 issue / 协作等，需要时 Read 查看）。
-- **写盘必须先有 \`in_progress\` issue**；看上方 [当前群活跃 issue] 段判断。
-- 快速落代码：\`rotom issue create <groupId> --title T --description D --assignee <self> --run --approval-policy rw_allow\`，一步到位。**占位/模板/简单示例直接落，不要反问用户"想要什么"或"走 A/B"。**
+通过 Bash 调 \`rotom\` 操作 Mesh;详细见 ~/.rotom/SKILL.md,按需 Read(命令清单 / 行动判定 / 故障排查)。
+- 默认 JSON 输出(加 --pretty 看表格),命令自动用当前 agent 身份,**不要传 --as**。
+- **写盘前必须有 in_progress issue**;活跃 issue 数见下 [当前群活跃 issue]。
 
-错误解读（stderr 第一行即可判断）：
-- \`rotom: command failed: HTTP 4xx ...\` → 命令参数错，master 正常，修命令重试。
-- \`rotom: command failed: HTTP 5xx ...\` → master 异常，重试 1-2 次。
-- \`rotom: network error ...\` → 网络失败（连接拒/socket reset/DNS）；先 \`rotom status\` 自检，再查 master log。
-- \`rotom: response from master was interrupted ...\` → master 几乎收到了请求，body 被截断。**非幂等操作不要盲目重试**，先查 master log。
-- 不确定时先 \`rotom status\`，**不要凭 stderr 前缀猜系统状态**。
+错误速查(stderr 第一行即可判断):
+- HTTP 4xx → 命令参数错,改参数重试
+- HTTP 5xx → master 异常,重试 1-2 次
+- network error → 网络失败,先 \`rotom status\` 自检
+- interrupted → master 已收但 body 截断,**非幂等别盲重试**
 
-反模式：不要给 rotom 命令加 \`|| echo "X failed"\` 兜底。\`exit 1\` 都会触发 \`||\`，echo 会误导你自己。直接跑命令让原生 stderr 透传，非零 exit 时先 \`rotom status\`。
+反模式:rotom 命令不要加 \`|| echo "X failed"\` 兜底——直接 stderr 透传,exit≠0 先 \`rotom status\`。
 `,
+    );
+  });
+
+  it("ROTOM_CLI_PROMPT 控制在 800 字节以内(瘦身目标)", () => {
+    assert.ok(
+      Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8") < 800,
+      `ROTOM_CLI_PROMPT 应 <800B,实际 ${Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8")}B`,
     );
   });
 
   it("ROTOM_CLI_PROMPT_VERSION 是字符串", () => {
     assert.strictEqual(typeof ROTOM_CLI_PROMPT_VERSION, "string");
     assert.ok(ROTOM_CLI_PROMPT_VERSION.length > 0);
+    assert.match(ROTOM_CLI_PROMPT_VERSION, /^rotomCliPrompt@\d{4}-\d{2}-\d{2}[a-z]$/);
   });
 });

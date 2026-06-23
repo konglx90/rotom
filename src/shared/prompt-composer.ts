@@ -57,7 +57,6 @@ export interface ComposeContext {
 // ── Layer builders ──────────────────────────────────────────────────────
 
 const SOURCE_ROTOM_CLI = "src/shared/rotom-cli-prompt.ts (constant)";
-const SOURCE_AGENT_PROFILE_NULL = "agents.profile = null";
 const SOURCE_AGENT_PROFILE = "agents.profile JSON (edit via rotom agent profile set)";
 const SOURCE_GROUP_BASIC = "groups + active_issues (runtime, from master enrichConversationWithCollaboration)";
 const SOURCE_CWD = "<worker.executor>.resolveIssueCwd(groupId)";
@@ -67,36 +66,27 @@ function buildRotomCliLayer(): PromptLayer {
 }
 
 function buildAgentRoleLayer(profile: AgentProfile | null): PromptLayer | null {
-  if (!profile) {
-    return {
-      layer: "agent-role",
-      content: "[Agent 角色]\n(无 profile —— agents.profile 为空)\n",
-      source: SOURCE_AGENT_PROFILE_NULL,
-    };
-  }
-  const lines = [
-    "[Agent 角色]",
-    `category: ${profile.category ?? "(未填)"}`,
-    `position: ${profile.position ?? "(未填)"}`,
-    `responsibilities: ${profile.responsibilities ?? "(未填)"}`,
-    `tech_stack: ${profile.tech_stack ?? "(未填)"}`,
+  if (!profile) return null;
+  const fields: Array<[string, string | undefined]> = [
+    ["category", profile.category],
+    ["position", profile.position],
+    ["responsibilities", profile.responsibilities],
+    ["tech_stack", profile.tech_stack],
   ];
+  const present = fields.filter(([, v]) => typeof v === "string" && v.length > 0);
+  if (present.length === 0) return null;
+  const lines = ["[Agent 角色]", ...present.map(([k, v]) => `${k}: ${v}`)];
   return { layer: "agent-role", content: lines.join("\n") + "\n", source: SOURCE_AGENT_PROFILE };
 }
 
 function buildGroupBasicLayer(
   group: { id: string; name: string; activeIssues: ActiveIssueRef[] } | null | undefined,
   selfName: string,
-  fromName?: string | null,
 ): PromptLayer | null {
   if (!group) return null;
 
-  const fromClause = fromName ? `, 发信人是="${fromName}"` : "";
   const header =
-    `[群消息 context: groupId=${group.id}, groupName="${group.name}", ` +
-    `你自己是="${selfName}"${fromClause}。` +
-    `重要：如果 @ 的是你自己（"${selfName}"），那就是在叫你回答，直接回答即可，` +
-    `不要再调用发送消息给自己。]\n`;
+    `[群消息 context: groupId=${group.id}, groupName="${group.name}", 你自己是="${selfName}"]\n`;
 
   const issuesBlock = renderActiveIssues(group.activeIssues);
 
@@ -108,70 +98,52 @@ function buildGroupBasicLayer(
 }
 
 function renderActiveIssues(issues: ActiveIssueRef[] | undefined): string {
-  if (!issues || issues.length === 0) {
-    return (
-      `[当前群活跃 issue]\n` +
-      `无\n` +
-      `提示：本群当前没有进行中的 issue。要写文件？直接 \`rotom issue create <groupId> --title T --assignee <self> --run --approval-policy rw_allow\` 一步到位：建任务 + 认领 + 派给 worker + 工作目录可写。\n` +
-      `**占位 / 模板 / 简单示例类任务自己选合理内容直接落，不要反问用户"你想要什么内容"或"走 A 还是 B 方案"。**\n`
-    );
-  }
-  const lines = issues.map((it) => {
-    const id = it.id.slice(0, 8);
-    const owner = it.assignedTo ? ` by ${it.assignedTo}` : " 未认领";
-    const prio = it.priority ? ` [${it.priority}]` : "";
-    return `- #${id}  ${it.status}${prio}  "${it.title}"${owner}`;
-  });
-  return (
-    `[当前群活跃 issue]\n` +
-    lines.join("\n") + "\n" +
-    `提示：涉及文件改动请关联以上某个 issue;若无匹配的,先 \`rotom issue create\` 新建,确认 in_progress 后再写盘。\n`
-  );
+  const n = issues?.length ?? 0;
+  const status = n === 0 ? "无" : `${n} 个进行中`;
+  return `[当前群活跃 issue] ${status}\n`;
 }
 
 function buildCwdLayer(cwd: string | null, mode: ComposeContext["mode"], approvalPolicy?: "r_allow" | "rw_allow"): PromptLayer | null {
   if (!cwd) return null;
-  // chat 模式保持只读契约:对话场景不承载文件改动,需要写盘请走 issue。
-  // issue / collab 模式:工作目录可写,行为按 approvalPolicy 区分:
-  //   rw_allow 写盘自动放行(后台无人值守);
-  //   r_allow   写盘需 dashboard 审批(PreToolUse hook 挂起等用户 Accept/Deny)。
-  // 无论哪种策略都提醒"只写本任务相关",避免把无关产物塞进同一个工作目录。
+  // 写盘策略单行(详细话术见 SKILL.md 锚点):
+  //   chat    → 只读,仅 Read/Grep/Glob/Bash(只读)
+  //   rw_allow → 可写,Write/Edit/写 Bash 自动放行,无需 dashboard
+  //   r_allow  → 可写,但写盘需 dashboard Accept/Deny;要免审批用 --approval-policy rw_allow
   const effectivePolicy: "r_allow" | "rw_allow" = approvalPolicy ?? "r_allow";
   const writability =
     mode === "chat"
-      ? `**重要：此目录为只读，agent 仅可 Read/Grep/Glob/Bash（只读命令），不得调用 Write/Edit 等写盘工具。**\n` +
-        `要写文件？直接 \`rotom issue create <groupId> --title T --assignee <self> --run --approval-policy rw_allow\` 一步到位（建任务 + 派 worker + 工作目录可写）。\n` +
-        `**占位 / 模板 / 简单示例类任务自己选合理内容直接落,不要反问用户"你想要什么内容"或"走 A 还是 B 方案"。**\n`
+      ? `模式: chat(只读)。仅可 Read/Grep/Glob/Bash(只读);要写盘见 SKILL.md#写盘兜底话术。\n`
       : effectivePolicy === "rw_allow"
-        ? `**本次执行期间此目录可写(策略: rw_allow)**:Write/Edit/MultiEdit 以及写 Bash(重定向 \`>\`、\`tee\`、\`cp\`、\`mv\`、\`mkdir\`、\`touch\` 等)会自动放行,无需 dashboard 确认。\n` +
-          `请只写与本次任务直接相关的产出;跨机器同步以 issue 评论 / artifact 为准。\n`
-        : `**本次执行期间此目录可写,但写盘需 dashboard 审批(策略: r_allow)**:调用 Write/Edit/MultiEdit 以及写 Bash(重定向 \`>\`、\`tee\`、\`cp\`、\`mv\`、\`mkdir\`、\`touch\` 等)会被挂起,等用户在 dashboard 上 Accept 后才落盘;被 Deny 会带着反馈回传,务必根据反馈调整。\n` +
-          `若本任务确实需要落盘且要避免每步等审批,创建 issue 时用 \`--approval-policy rw_allow\`。请只写与本次任务直接相关的产出;跨机器同步以 issue 评论 / artifact 为准。\n`;
+        ? `模式: ${mode},可写(rw_allow)。Write/Edit/写 Bash 自动放行,无需 dashboard 确认;只写本任务相关产出。\n`
+        : `模式: ${mode},可写(r_allow)。Write/Edit/写 Bash 会被挂起等 dashboard Accept/Deny;要免审批,建 issue 时用 --approval-policy rw_allow。\n`;
   return {
     layer: "cwd",
     content:
       `[artifacts目录] ${cwd}\n` +
-      `所有相对路径基于此目录解析；spawn 的子进程 cwd 已设置在这里，` +
-      `Read/Grep/Glob 直接用相对路径即可，不要用 \`cd\` 切换到其他目录。\n` +
+      `相对路径基于此目录解析;Read/Grep/Glob 用相对路径即可,不要 \`cd\` 切到其他目录。\n` +
       writability,
     source: SOURCE_CWD,
   };
 }
 
-function buildTaskLayer(body: string, mode: ComposeContext["mode"]): PromptLayer {
+function buildTaskLayer(body: string, mode: ComposeContext["mode"], fromName?: string | null): PromptLayer {
   let source: string;
+  let content: string;
   switch (mode) {
     case "chat":
       source = "user message (GroupChatView.handleSendMessage → ws a2a_send.payload.message)";
+      content = fromName ? `[from=${fromName}]\n${body}` : body;
       break;
     case "issue":
       source = "issues.title + issues.description (db.ts:executeIssue)";
+      content = body;
       break;
     case "collab":
       source = "handleCollaborationStarted inline template (worker.ts:757-771)";
+      content = body;
       break;
   }
-  return { layer: "task", content: body, source };
+  return { layer: "task", content, source };
 }
 
 // ── Public API ──────────────────────────────────────────────────────────
@@ -187,13 +159,14 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
   const role = buildAgentRoleLayer(ctx.agentProfile);
   if (role) layers.push(role);
 
-  const group = buildGroupBasicLayer(ctx.group, ctx.agentName, ctx.fromName);
+  const group = buildGroupBasicLayer(ctx.group, ctx.agentName);
   if (group) layers.push(group);
 
   const cwd = buildCwdLayer(ctx.cwd, ctx.mode, ctx.approvalPolicy);
   if (cwd) layers.push(cwd);
 
-  layers.push(buildTaskLayer(ctx.body, ctx.mode));
+  // chat 模式下,发信人 fromName 注入到 task 层头部(只有 chat 才有 fromName 语义)。
+  layers.push(buildTaskLayer(ctx.body, ctx.mode, ctx.mode === "chat" ? ctx.fromName : null));
 
   return {
     layers,
