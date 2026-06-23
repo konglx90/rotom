@@ -70,61 +70,79 @@ export function SchedulePanel({ selectedGroupId }: SchedulePanelProps) {
         </div>
       ) : (
         <ul className={styles.scheduleList}>
-          {schedules.map(s => {
-            const disabled = !s.enabled
-            const lastClass =
-              s.last_status === 'error'
-                ? styles.error
-                : s.last_status === 'skipped'
-                  ? styles.skipped
-                  : ''
-            return (
-              <li
-                key={s.id}
-                className={`${styles.scheduleItem} ${disabled ? styles.disabled : ''}`}
-              >
-                <div className={styles.scheduleItemHeader}>
-                  <span className={styles.scheduleName}>{s.name}</span>
-                  <span className={`${styles.scheduleBadge} ${s.mode === 'agent' ? styles.modeAgent : styles.modeMessage}`}>
-                    {s.mode}
-                  </span>
-                  {disabled && (
-                    <span className={`${styles.scheduleBadge} ${styles.disabled}`}>disabled</span>
-                  )}
-                </div>
-                <div className={styles.scheduleMeta}>
-                  <span className={styles.scheduleMetaItem}>{formatScheduleLabel(s)}</span>
-                  {s.schedule_kind === 'interval' && s.repeat_times !== null && (
-                    <span className={styles.scheduleMetaItem}>
-                      repeat {s.repeat_count}/{s.repeat_times}
-                    </span>
-                  )}
-                  {s.schedule_kind === 'interval' && s.repeat_times === null && (
-                    <span className={styles.scheduleMetaItem}>ran ×{s.repeat_count}</span>
-                  )}
-                  <span className={styles.scheduleMetaItem}>
-                    next: {formatTs(s.next_run_at)}
-                  </span>
-                </div>
-                <div className={styles.schedulePrompt}>{s.prompt}</div>
-                {s.mode === 'agent' && (
-                  <div className={styles.scheduleMeta}>
-                    <span className={styles.scheduleMetaItem}>→ {s.agent_name ?? '(unset)'}</span>
-                  </div>
-                )}
-                {s.last_status && (
-                  <div className={`${styles.scheduleLastRun} ${lastClass}`}>
-                    last: {s.last_status}
-                    {s.last_status === 'error' && s.last_error ? ` · ${s.last_error}` : ''}
-                    {s.last_status === 'skipped' && s.last_error ? ` · ${s.last_error}` : ''}
-                    {' · '}{formatTs(s.last_run_at)}
-                  </div>
-                )}
-              </li>
-            )
-          })}
+          {schedules.map(s => (
+            <ScheduleItem key={s.id} schedule={s} />
+          ))}
         </ul>
       )}
     </div>
+  )
+}
+
+const COLLAPSE_THRESHOLD = 200
+
+function ScheduleItem({ schedule: s }: { schedule: Schedule }) {
+  const [expanded, setExpanded] = useState(false)
+  const disabled = !s.enabled
+  const lastClass =
+    s.last_status === 'error'
+      ? styles.error
+      : s.last_status === 'skipped'
+        ? styles.skipped
+        : ''
+  const canCollapse = s.prompt.length > COLLAPSE_THRESHOLD
+  return (
+    <li className={`${styles.scheduleItem} ${disabled ? styles.disabled : ''}`}>
+      <div className={styles.scheduleItemHeader}>
+        <span className={styles.scheduleName}>{s.name}</span>
+        <span className={`${styles.scheduleBadge} ${s.mode === 'agent' ? styles.modeAgent : styles.modeMessage}`}>
+          {s.mode}
+        </span>
+        {disabled && (
+          <span className={`${styles.scheduleBadge} ${styles.disabled}`}>disabled</span>
+        )}
+      </div>
+      <div className={styles.scheduleMeta}>
+        <span className={styles.scheduleMetaItem}>{formatScheduleLabel(s)}</span>
+        {s.schedule_kind === 'interval' && s.repeat_times !== null && (
+          <span className={styles.scheduleMetaItem}>
+            repeat {s.repeat_count}/{s.repeat_times}
+          </span>
+        )}
+        {s.schedule_kind === 'interval' && s.repeat_times === null && (
+          <span className={styles.scheduleMetaItem}>ran ×{s.repeat_count}</span>
+        )}
+        <span className={styles.scheduleMetaItem}>
+          next: {formatTs(s.next_run_at)}
+        </span>
+      </div>
+      <div
+        className={`${styles.schedulePrompt} ${canCollapse && !expanded ? styles.schedulePromptCollapsed : ''}`}
+      >
+        {s.prompt}
+      </div>
+      {canCollapse && (
+        <button
+          type="button"
+          className={styles.schedulePromptToggle}
+          onClick={() => setExpanded(v => !v)}
+        >
+          {expanded ? '收起' : '展开'}
+        </button>
+      )}
+      {s.mode === 'agent' && (
+        <div className={styles.scheduleMeta}>
+          <span className={styles.scheduleMetaItem}>→ {s.agent_name ?? '(unset)'}</span>
+        </div>
+      )}
+      {s.last_status && (
+        <div className={`${styles.scheduleLastRun} ${lastClass}`}>
+          last: {s.last_status}
+          {s.last_status === 'error' && s.last_error ? ` · ${s.last_error}` : ''}
+          {s.last_status === 'skipped' && s.last_error ? ` · ${s.last_error}` : ''}
+          {' · '}{formatTs(s.last_run_at)}
+        </div>
+      )}
+    </li>
   )
 }
