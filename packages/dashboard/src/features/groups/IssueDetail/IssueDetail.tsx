@@ -259,7 +259,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
             continuedBy={issue.created_by}
             status={issue.status}
             assignedTo={issue.assigned_to}
-            initialPrompt={displayDescription(issue) || issue.title}
+            initialPrompt={issue.description || issue.title}
             onSubmitted={handleSubmitted}
             pendingQueue={pendingQueue}
             onPushPending={pushPending}

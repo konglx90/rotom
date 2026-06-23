@@ -216,7 +216,7 @@
 .cardFoot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   font-size: 11px;
   color: var(--color-slate);
   opacity: 0.8;
@@ -225,6 +225,44 @@
 .round {
   font-family: var(--font-mono, monospace);
   font-weight: 600;
+}
+
+/* 耗时 chip:放在 formatRelative 时间戳右侧、协作 R 轮次前。
+ * 卡片窄列(min 280px),chip 必须紧凑,fold 用 gap 而非 space-between,
+ * 否则三个元素会被拉到三端导致阅读跳跃。 */
+.cardElapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+.cardElapsedIdle {
+  color: var(--color-slate);
+  background: rgba(22, 51, 0, 0.05);
+}
+
+.cardElapsedRunning {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.14);
+  animation: cardElapsedPulse 1.6s ease-in-out infinite;
+}
+
+.cardElapsedDone {
+  color: var(--color-slate);
+  background: rgba(22, 51, 0, 0.05);
+}
+
+@keyframes cardElapsedPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
 }
 
 /* ── Side drawer ─────────────────────────────────────────────────────── */

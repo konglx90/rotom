@@ -120,6 +120,42 @@
   border-radius: var(--radius-sm, 4px);
 }
 
+/* 耗时 chip:放在状态徽标后、assignee 前。idle(未开始)灰;running(进行中)蓝
+ * 呼吸;done(终态)灰底 + ✓ 表示已完结。密度对齐 assignee 避免窄列换行。 */
+.issueElapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+  flex-shrink: 0;
+}
+
+.issueElapsedIdle {
+  color: var(--color-gray);
+  background: rgba(22, 51, 0, 0.05);
+}
+
+.issueElapsedRunning {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.12);
+  animation: elapsedPulse 1.6s ease-in-out infinite;
+}
+
+.issueElapsedDone {
+  color: var(--color-gray);
+  background: rgba(22, 51, 0, 0.05);
+}
+
+@keyframes elapsedPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
 .issueAssigneeClaimed {
   color: var(--color-ink, #1a1a1a);
   background: rgba(159, 232, 112, 0.18);

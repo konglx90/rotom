@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { groupsApi } from '../../api/groups'
 import { issuesApi } from '../../api/issues'
-import type { Group, Issue } from '../../api/types'
+import type { Agent, Group, Issue } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
+import { useIssueElapsed } from '../../hooks/useIssueElapsed'
+import { formatDuration } from '../../utils/formatDuration'
 import { IssueDetail } from '../groups/IssueDetail'
 import { resolveAssigneeName, UNCLAIMED_LABEL } from '../groups/agentDisplayName'
 import styles from './KanbanView.module.css'
@@ -37,6 +39,74 @@ function formatRelative(iso: string): string {
   if (day < 7) return `${day} 天前`
   const d = new Date(ts)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// 单卡抽成子组件:每张卡自己调 useIssueElapsed,避免 1s tick 扇出到整
+// 个看板。看板一屏 6 列 × 多行,父组件 setInterval 会拖垮渲染。
+function KanbanCard({
+  issue,
+  groupName,
+  agents,
+  onOpen,
+}: {
+  issue: Issue
+  groupName: string
+  agents: Agent[]
+  onOpen: () => void
+}) {
+  const assignee = resolveAssigneeName(issue.assigned_to, agents)
+  const elapsedMs = useIssueElapsed(issue.started_at, issue.completed_at)
+  const isFinal = issue.status === 'completed' || issue.status === 'failed' || issue.status === 'cancelled'
+  const elapsedClass = isFinal
+    ? styles.cardElapsedDone
+    : issue.status === 'in_progress'
+      ? styles.cardElapsedRunning
+      : styles.cardElapsedIdle
+  const elapsedIcon = isFinal ? '✓' : issue.status === 'in_progress' ? '⏱' : '—'
+  const elapsedLabel = elapsedMs == null ? '—' : formatDuration(elapsedMs)
+  return (
+    <button
+      type="button"
+      className={styles.card}
+      onClick={onOpen}
+    >
+      <div className={styles.cardTopRow}>
+        <span className={`${styles.typeTag} ${issue.type === 'collaboration' ? styles.typeCollab : styles.typeTask}`}>
+          {issue.type === 'collaboration' ? '协作' : '任务'}
+        </span>
+        {issue.slash_command && (
+          <span className={styles.slashTag} title="计划模式">{issue.slash_command}</span>
+        )}
+        <Badge tone="priority" value={issue.priority}>{issue.priority}</Badge>
+      </div>
+      <div className={styles.cardTitle}>{displayTitle(issue)}</div>
+      <div className={styles.cardMeta}>
+        <span className={styles.groupName} title={`群: ${groupName}`}>
+          # {groupName}
+        </span>
+        <span
+          className={`${styles.assignee} ${assignee ? styles.assigneeClaimed : styles.assigneeUnclaimed}`}
+          title={assignee ? `执行 agent: ${assignee}` : '尚未认领'}
+        >
+          {assignee ? `👤 ${assignee}` : UNCLAIMED_LABEL}
+        </span>
+      </div>
+      <div className={styles.cardFoot}>
+        <span className={styles.time} title={issue.created_at}>
+          {formatRelative(issue.created_at)}
+        </span>
+        <span
+          className={`${styles.cardElapsed} ${elapsedClass}`}
+          title={elapsedMs == null ? '尚未开始' : isFinal ? '总耗时' : '当前区间耗时(实时刷新)'}
+        >
+          {elapsedIcon} {elapsedLabel}
+        </span>
+        {issue.type === 'collaboration' && issue.current_round != null && (
+          <span className={styles.round}>R{issue.current_round}/{issue.max_rounds}</span>
+        )}
+      </div>
+    </button>
+  )
 }
 
 export function KanbanView() {
@@ -150,44 +220,14 @@ export function KanbanView() {
                     <div className={styles.empty}>暂无</div>
                   ) : items.map(issue => {
                     const groupName = groupNameMap.get(issue.group_id) || issue.group_id.slice(0, 6)
-                    const assignee = resolveAssigneeName(issue.assigned_to, agents)
                     return (
-                      <button
+                      <KanbanCard
                         key={issue.id}
-                        type="button"
-                        className={styles.card}
-                        onClick={() => setOpenIssue({ id: issue.id, groupId: issue.group_id })}
-                      >
-                        <div className={styles.cardTopRow}>
-                          <span className={`${styles.typeTag} ${issue.type === 'collaboration' ? styles.typeCollab : styles.typeTask}`}>
-                            {issue.type === 'collaboration' ? '协作' : '任务'}
-                          </span>
-                          {issue.slash_command && (
-                            <span className={styles.slashTag} title="计划模式">{issue.slash_command}</span>
-                          )}
-                          <Badge tone="priority" value={issue.priority}>{issue.priority}</Badge>
-                        </div>
-                        <div className={styles.cardTitle}>{displayTitle(issue)}</div>
-                        <div className={styles.cardMeta}>
-                          <span className={styles.groupName} title={`群: ${groupName}`}>
-                            # {groupName}
-                          </span>
-                          <span
-                            className={`${styles.assignee} ${assignee ? styles.assigneeClaimed : styles.assigneeUnclaimed}`}
-                            title={assignee ? `执行 agent: ${assignee}` : '尚未认领'}
-                          >
-                            {assignee ? `👤 ${assignee}` : UNCLAIMED_LABEL}
-                          </span>
-                        </div>
-                        <div className={styles.cardFoot}>
-                          <span className={styles.time} title={issue.created_at}>
-                            {formatRelative(issue.created_at)}
-                          </span>
-                          {issue.type === 'collaboration' && issue.current_round != null && (
-                            <span className={styles.round}>R{issue.current_round}/{issue.max_rounds}</span>
-                          )}
-                        </div>
-                      </button>
+                        issue={issue}
+                        groupName={groupName}
+                        agents={agents}
+                        onOpen={() => setOpenIssue({ id: issue.id, groupId: issue.group_id })}
+                      />
                     )
                   })}
                 </div>

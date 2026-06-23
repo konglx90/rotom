@@ -7,6 +7,8 @@ import { Badge } from '../../components/ui/Badge'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
 import { useVisitorMode } from '../../context/VisitorContext'
+import { useIssueElapsed } from '../../hooks/useIssueElapsed'
+import { formatDuration } from '../../utils/formatDuration'
 import styles from './IssuePanel.module.css'
 import { displayTitle } from './createIssueTitle'
 
@@ -17,6 +19,73 @@ const STATUS_LABEL: Record<Issue['status'], string> = {
   completed: '已完成',
   failed: '失败',
   cancelled: '已取消',
+}
+
+// 每行抽成子组件:useIssueElapsed 内部 1s tick,放父组件会让所有行无
+// 谓重渲染。Link 跳转路径在此固定,避免每次渲染都拼字符串。
+function IssueLinkItem({ issue, groupId }: { issue: Issue; groupId: string }) {
+  const elapsedMs = useIssueElapsed(issue.started_at, issue.completed_at)
+  const isFinal = issue.status === 'completed' || issue.status === 'failed' || issue.status === 'cancelled'
+  const elapsedClass = isFinal
+    ? styles.issueElapsedDone
+    : issue.status === 'in_progress'
+      ? styles.issueElapsedRunning
+      : styles.issueElapsedIdle
+  const elapsedIcon = isFinal ? '✓' : issue.status === 'in_progress' ? '⏱' : '—'
+  const elapsedLabel = elapsedMs == null ? '—' : formatDuration(elapsedMs)
+  return (
+    <li className={styles.issueItem}>
+      <Link
+        to={`/dashboard/groups/${groupId}/issues-single/${issue.id}`}
+        style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
+      >
+        <div className={styles.issueTitleRow}>
+          <span
+            className={`${styles.issueTypeLabel} ${
+              issue.type === 'collaboration' ? styles.collabLabel : styles.taskLabel
+            }`}
+          >
+            {issue.type === 'collaboration' ? '协作' : '任务'}
+          </span>
+          {issue.slash_command && (
+            <span
+              title="此 issue 以计划模式执行：先输出方案，等待审批后落盘"
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                padding: '1px 6px',
+                borderRadius: 4,
+                background: 'rgba(99, 102, 241, 0.15)',
+                color: '#6366f1',
+              }}
+            >
+              {issue.slash_command}
+            </span>
+          )}
+          <span className={styles.issueTitle}>{displayTitle(issue)}</span>
+        </div>
+        <div className={styles.issueMeta}>
+          <Badge tone="status" value={issue.status}>
+            {issue.status === 'in_progress' && issue.type === 'collaboration'
+              ? '协作中'
+              : STATUS_LABEL[issue.status]}
+          </Badge>
+          {issue.type === 'collaboration' && issue.current_round != null && (
+            <span style={{ fontSize: 11, color: '#888' }}>
+              R{issue.current_round}/{issue.max_rounds}
+            </span>
+          )}
+          <span
+            className={`${styles.issueElapsed} ${elapsedClass}`}
+            title={elapsedMs == null ? '尚未开始' : isFinal ? '总耗时' : '当前区间耗时(实时刷新)'}
+          >
+            {elapsedIcon} {elapsedLabel}
+          </span>
+          <span className={styles.issueCreatedBy}>{issue.created_by}</span>
+        </div>
+      </Link>
+    </li>
+  )
 }
 
 export function IssuesListPage() {
@@ -113,51 +182,7 @@ export function IssuesListPage() {
       ) : (
         <ul className={styles.issueList}>
           {issues.map(issue => (
-            <li key={issue.id} className={styles.issueItem}>
-              <Link
-                to={`/dashboard/groups/${groupId}/issues-single/${issue.id}`}
-                style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
-              >
-                <div className={styles.issueTitleRow}>
-                  <span
-                    className={`${styles.issueTypeLabel} ${
-                      issue.type === 'collaboration' ? styles.collabLabel : styles.taskLabel
-                    }`}
-                  >
-                    {issue.type === 'collaboration' ? '协作' : '任务'}
-                  </span>
-                  {issue.slash_command && (
-                    <span
-                      title="此 issue 以计划模式执行：先输出方案，等待审批后落盘"
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 600,
-                        padding: '1px 6px',
-                        borderRadius: 4,
-                        background: 'rgba(99, 102, 241, 0.15)',
-                        color: '#6366f1',
-                      }}
-                    >
-                      {issue.slash_command}
-                    </span>
-                  )}
-                  <span className={styles.issueTitle}>{displayTitle(issue)}</span>
-                </div>
-                <div className={styles.issueMeta}>
-                  <Badge tone="status" value={issue.status}>
-                    {issue.status === 'in_progress' && issue.type === 'collaboration'
-                      ? '协作中'
-                      : STATUS_LABEL[issue.status]}
-                  </Badge>
-                  {issue.type === 'collaboration' && issue.current_round != null && (
-                    <span style={{ fontSize: 11, color: '#888' }}>
-                      R{issue.current_round}/{issue.max_rounds}
-                    </span>
-                  )}
-                  <span className={styles.issueCreatedBy}>{issue.created_by}</span>
-                </div>
-              </Link>
-            </li>
+            <IssueLinkItem key={issue.id} issue={issue} groupId={groupId} />
           ))}
         </ul>
       ))}
