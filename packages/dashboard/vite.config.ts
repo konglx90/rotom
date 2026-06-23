@@ -24,9 +24,29 @@ export default defineConfig({
   build: {
     outDir: './dist/src/master/dashboard',
     emptyOutDir: true,
+    modulePreload: false,
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        manualChunks(id) {
+          // Vite's __vitePreload helper must live in its own chunk so it
+          // doesn't drag monaco-core (2.5 MB) into index.js via a static
+          // import. monaco-editor uses dynamic imports internally for its
+          // own loaderWorker, which forces the helper into monaco-core by
+          // default.
+          if (id.includes('vite/preload-helper')) return 'vite-preload'
+          if (id.includes('node_modules/monaco-editor')) return 'monaco-core'
+          if (id.includes('node_modules/react-markdown') ||
+              id.includes('node_modules/remark') ||
+              id.includes('node_modules/unified') ||
+              id.includes('node_modules/micromark') ||
+              id.includes('node_modules/mdast')) {
+            return 'markdown'
+          }
+          if (id.includes('node_modules/react') ||
+              id.includes('node_modules/scheduler')) {
+            return 'react-vendor'
+          }
+        },
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]'

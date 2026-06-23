@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { issuesApi } from '../../../api/issues'
 import type { IssueEvent } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
-import { ApprovalCard } from './ApprovalCard'
 import styles from './PendingApprovalsBar.module.css'
+
+const LazyApprovalCard = lazy(() => import('./ApprovalCard').then((m) => ({ default: m.ApprovalCard })))
 
 // PendingApprovalsBar — sticky footer above issueActions that surfaces all
 // pending approval_request events. Click Accept/Deny resolves via the same
@@ -78,12 +79,13 @@ export function PendingApprovalsBar({ issueId, approvals, onResolved }: PendingA
         if (meta.kind === 'ask') {
           // ask 类审批走完整 ApprovalCard,避免在 bar 内维护两套问答 UI
           return (
-            <ApprovalCard
-              key={ev.id}
-              issueId={issueId}
-              event={ev}
-              onResolved={onResolved}
-            />
+            <Suspense key={ev.id} fallback={<div>加载中...</div>}>
+              <LazyApprovalCard
+                issueId={issueId}
+                event={ev}
+                onResolved={onResolved}
+              />
+            </Suspense>
           )
         }
         return (

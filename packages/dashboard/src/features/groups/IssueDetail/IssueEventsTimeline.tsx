@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import type { IssueEvent } from '../../../api/types'
 import type { ComposedPrompt } from '../../../api/groups'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
@@ -6,7 +6,7 @@ import { StreamingStatus } from '../../../components/ui/StreamingStatus'
 import { ComposedPromptModal } from '../modals/ComposedPromptModal'
 import shared from './_shared.module.css'
 import styles from './IssueEventsTimeline.module.css'
-import { ApprovalCard } from './ApprovalCard'
+const LazyApprovalCard = lazy(() => import('./ApprovalCard').then((m) => ({ default: m.ApprovalCard })))
 
 // 提取 content 里最后一个 [status:thinking]...[/status:thinking] 标签的内容。
 // 与 MessageRow.extractMessageStatus 同语义,issue 链路里 executor 也会喷这种
@@ -164,11 +164,13 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
               <span className={shared.issueEventTime}>{formatTime(item.event.created_at)}</span>
               <div className={styles.progressBody}>
                 <span className={shared.issueEventAgent}>{item.event.agent_name}</span>
-                <ApprovalCard
-                  event={item.event}
-                  issueId={issueId}
-                  onResolved={onApprovalResolved}
-                />
+                <Suspense fallback={<div className={styles.progressBody}>加载中...</div>}>
+                  <LazyApprovalCard
+                    event={item.event}
+                    issueId={issueId}
+                    onResolved={onApprovalResolved}
+                  />
+                </Suspense>
               </div>
             </div>
           )
