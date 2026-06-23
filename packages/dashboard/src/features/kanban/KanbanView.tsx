@@ -6,6 +6,7 @@ import { Badge } from '../../components/ui/Badge'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
 import { IssueDetail } from '../groups/IssueDetail'
+import { resolveAssigneeName, UNCLAIMED_LABEL } from '../groups/agentDisplayName'
 import styles from './KanbanView.module.css'
 import { displayTitle } from '../groups/createIssueTitle'
 
@@ -149,6 +150,7 @@ export function KanbanView() {
                     <div className={styles.empty}>暂无</div>
                   ) : items.map(issue => {
                     const groupName = groupNameMap.get(issue.group_id) || issue.group_id.slice(0, 6)
+                    const assignee = resolveAssigneeName(issue.assigned_to, agents)
                     return (
                       <button
                         key={issue.id}
@@ -170,8 +172,11 @@ export function KanbanView() {
                           <span className={styles.groupName} title={`群: ${groupName}`}>
                             # {groupName}
                           </span>
-                          <span className={styles.assignee}>
-                            {issue.assigned_to ? `👤 ${issue.assigned_to}` : '未指派'}
+                          <span
+                            className={`${styles.assignee} ${assignee ? styles.assigneeClaimed : styles.assigneeUnclaimed}`}
+                            title={assignee ? `执行 agent: ${assignee}` : '尚未认领'}
+                          >
+                            {assignee ? `👤 ${assignee}` : UNCLAIMED_LABEL}
                           </span>
                         </div>
                         <div className={styles.cardFoot}>

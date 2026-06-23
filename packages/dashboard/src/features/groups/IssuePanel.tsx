@@ -4,6 +4,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { IssueDetail } from './IssueDetail'
 import { CreateIssueDialog } from './CreateIssueDialog'
+import { resolveAssigneeName, UNCLAIMED_LABEL } from './agentDisplayName'
 import styles from './IssuePanel.module.css'
 import { displayTitle } from './createIssueTitle'
 
@@ -74,7 +75,9 @@ export function IssuePanel({
           </div>
         ) : (
           <ul className={styles.issueList}>
-            {issues.map(issue => (
+            {issues.map(issue => {
+              const assignee = resolveAssigneeName(issue.assigned_to, agents)
+              return (
               <li key={issue.id}
                 className={`${styles.issueItem} ${selectedIssueId === issue.id ? styles.active : ''}`}
                 onClick={() => setSelectedIssueId(issue.id)}>
@@ -110,10 +113,17 @@ export function IssuePanel({
                   {issue.type === 'collaboration' && issue.current_round != null && (
                     <span style={{ fontSize: 11, color: '#888' }}>R{issue.current_round}/{issue.max_rounds}</span>
                   )}
+                  <span
+                    className={`${styles.issueAssignee} ${assignee ? styles.issueAssigneeClaimed : styles.issueAssigneeUnclaimed}`}
+                    title={assignee ? `执行 agent: ${assignee}` : '尚未认领'}
+                  >
+                    {assignee ? `👤 ${assignee}` : UNCLAIMED_LABEL}
+                  </span>
                   <span className={styles.issueCreatedBy}>{issue.created_by}</span>
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
       </div>

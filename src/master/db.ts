@@ -1286,10 +1286,76 @@ export class MeshDb {
     });
   }
 
-  getIssueEvents(issueId: string, limit = 200): IssueEventRow[] {
-    return this.db.prepare(
-      "SELECT * FROM issue_events WHERE issue_id = ? ORDER BY created_at ASC LIMIT ?",
-    ).all(issueId, limit) as IssueEventRow[];
+  // 拉取 issue 的事件流。
+  //
+  // 旧实现是 SELECT * ORDER BY created_at ASC LIMIT 200,在 issue 跑久了
+  // events 累积超过 200 条时(典型如 worker 流式喷了大量 [status:thinking]
+  // progress chunk)会把**最新**的事件截掉 —— 用户的追加指令(appended)
+  // 即便已经入库、worker 已消费,也永远拉不回来,前端 reload 多少次都看不到。
+  // 参见 issue 2284adfa 的复现。
+  //
+  // 现在:把事件拆成两类分别处理:
+  //   - 非 progress(created/assigned/appended/approval_request/completed/failed/...)
+  //     是用户关心的关键节点,**全部保留**,不受 limit 影响。
+  //   - progress(worker 流式输出)条数最多,保留**最早 headKeep 条 + 最新
+  //     tailKeep 条**,中间被省略的部分用 event_type='progress_truncated' 的
+  //     虚拟事件标注,前端渲染成「已省略 N 条早期进展」chip。
+  getIssueEvents(issueId: string, headKeep = 5, tailKeep = 145): IssueEventRow[] {
+    const nonProgress = this.db.prepare(
+      "SELECT * FROM issue_events WHERE issue_id = ? AND event_type != 'progress' ORDER BY created_at ASC, id ASC",
+    ).all(issueId) as IssueEventRow[];
+
+    const progressCountRow = this.db.prepare(
+      "SELECT COUNT(*) AS c FROM issue_events WHERE issue_id = ? AND event_type = 'progress'",
+    ).get(issueId) as { c: number };
+
+    const progressCount = progressCountRow.c;
+
+    // progress 总数不超过 head+tail,直接全拿,不需要 marker。
+    if (progressCount <= headKeep + tailKeep) {
+      const allProgress = this.db.prepare(
+        "SELECT * FROM issue_events WHERE issue_id = ? AND event_type = 'progress' ORDER BY created_at ASC, id ASC",
+      ).all(issueId) as IssueEventRow[];
+      return this.mergeIssueEvents([...nonProgress, ...allProgress]);
+    }
+
+    const head = this.db.prepare(
+      "SELECT * FROM issue_events WHERE issue_id = ? AND event_type = 'progress' ORDER BY id ASC LIMIT ?",
+    ).all(issueId, headKeep) as IssueEventRow[];
+
+    const tail = this.db.prepare(
+      "SELECT * FROM issue_events WHERE issue_id = ? AND event_type = 'progress' ORDER BY id DESC LIMIT ?",
+    ).all(issueId, tailKeep).reverse() as IssueEventRow[];
+
+    const omitted = progressCount - head.length - tail.length;
+
+    // marker 插在 head 最后一条之后、tail 第一条之前。
+    // created_at 取 head 末尾 +1ms,确保排序落在 head 和 tail 之间。
+    const markerTime = head.length > 0
+      ? new Date(Date.parse(head[head.length - 1].created_at) + 1).toISOString()
+      : (tail[0]?.created_at ?? new Date().toISOString());
+
+    const marker: IssueEventRow = {
+      id: -1,
+      issue_id: issueId,
+      event_type: "progress_truncated",
+      agent_name: "",
+      content: "",
+      metadata: JSON.stringify({ omitted }),
+      created_at: markerTime,
+      reply_to_id: null,
+    };
+
+    return this.mergeIssueEvents([...nonProgress, ...head, marker, ...tail]);
+  }
+
+  private mergeIssueEvents(rows: IssueEventRow[]): IssueEventRow[] {
+    return rows.sort((a, b) => {
+      const ta = Date.parse(a.created_at);
+      const tb = Date.parse(b.created_at);
+      if (ta !== tb) return ta - tb;
+      return a.id - b.id;
+    });
   }
 
   /** Get a single issue event by its ID. */
