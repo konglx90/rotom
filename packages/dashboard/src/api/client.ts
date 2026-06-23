@@ -4,13 +4,39 @@
  * Dashboard endpoints are open (no auth). Agent-token-authed endpoints
  * (whoami / send-as-me) live on separate fetch paths that inject mesh_*
  * headers explicitly.
+ *
+ * Visitor mode: when the URL carries `?share=<token>`, the fetcher prefixes
+ * the path with `/share/<token>` so requests hit the read-only visitor
+ * endpoints (see src/master/api/share.ts). Mutating methods still work but
+ * the visitor UI never calls them — the backend would also 401/404 them
+ * since share routes only expose GETs.
  */
+
+function getShareTokenFromUrl(): string | null {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  return params.get('share')
+}
 
 export class ApiClient {
   private baseUrl: string
 
   constructor(baseUrl: string = '/api') {
     this.baseUrl = baseUrl
+  }
+
+  /**
+   * Resolve a logical path like `/groups/:id/messages` into a fully-qualified
+   * URL. If a share token is present in the URL, the path is rerouted under
+   * `/share/:token` so it hits the visitor endpoints.
+   */
+  private resolveUrl(path: string): string {
+    const token = getShareTokenFromUrl()
+    const cleanPath = path.startsWith('/') ? path : `/${path}`
+    if (token) {
+      return `${this.baseUrl}/share/${token}${cleanPath}`
+    }
+    return `${this.baseUrl}${cleanPath}`
   }
 
   private async request<T>(
@@ -23,7 +49,7 @@ export class ApiClient {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await fetch(this.resolveUrl(endpoint), {
         ...options,
         headers,
       })

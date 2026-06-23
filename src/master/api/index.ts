@@ -10,6 +10,7 @@ import type { MeshDb } from "../db.js";
 import { AuthService, hashToken } from "../auth.js";
 import type { WSHub } from "../ws-hub.js";
 import type { Router } from "../router.js";
+import { ShareTokenStore } from "../share-tokens.js";
 
 import { createLogger } from "../../shared/logger.js";
 import { registerAgentRoutes } from "./agents.js";
@@ -22,6 +23,7 @@ import { registerArtifactRoutes } from "./artifacts.js";
 import { registerE2edRoutes } from "./e2ed.js";
 import { registerSessionRoutes } from "./sessions.js";
 import { registerScheduleRoutes } from "./schedules.js";
+import { registerShareRoutes } from "./share.js";
 
 const log = createLogger("mesh-api");
 
@@ -29,9 +31,10 @@ const log = createLogger("mesh-api");
 // Create API router
 // ---------------------------------------------------------------------------
 
-export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, router?: Router, serverPort?: number): ExpressRouter {
+export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, router?: Router, serverPort?: number, shareStore?: ShareTokenStore): ExpressRouter {
   const apiRouter = ExpressRouter();
   const auth = sharedAuth ?? new AuthService(db);
+  const shareTokens = shareStore ?? new ShareTokenStore();
 
   // ── Request logging middleware ──────────────────────────────────────────
   apiRouter.use((req: Request, res: Response, next: NextFunction) => {
@@ -77,6 +80,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
   registerE2edRoutes(apiRouter, db);
   registerSessionRoutes(apiRouter, db, auth, hub);
   registerScheduleRoutes(apiRouter, db);
+  registerShareRoutes(apiRouter, db, shareTokens);
 
   return apiRouter;
 }

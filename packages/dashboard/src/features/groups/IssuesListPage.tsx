@@ -6,6 +6,7 @@ import type { Group, Issue } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
+import { useVisitorMode } from '../../context/VisitorContext'
 import styles from './IssuePanel.module.css'
 import { displayTitle } from './createIssueTitle'
 
@@ -22,6 +23,7 @@ export function IssuesListPage() {
   const { groupId = '' } = useParams<{ groupId: string }>()
   const { groups } = useChatContext()
   const { lastIssueChange } = useSocket()
+  const { isVisitor, validate: validateVisitor, error: visitorError, token: visitorToken, groupId: visitorResolvedGroupId } = useVisitorMode()
 
   const [issues, setIssues] = useState<Issue[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,6 +35,15 @@ export function IssuesListPage() {
     [groups, groupId],
   )
   const group = groupFromContext || fallbackGroup
+
+  // 访客 token 验证：visitorResolvedGroupId 等于当前 groupId 表示已验过,
+  // 否则触发 validate。isVisitor 不能用作已完成信号 —— 它在 validate 完成
+  // 之前就是 true。
+  useEffect(() => {
+    if (!visitorToken || !groupId) return
+    if (visitorResolvedGroupId === groupId) return
+    validateVisitor(groupId)
+  }, [visitorToken, groupId, visitorResolvedGroupId, validateVisitor])
 
   useEffect(() => {
     if (!groupId || groupFromContext) return
@@ -77,7 +88,23 @@ export function IssuesListPage() {
         </h3>
       </div>
 
-      {loading ? (
+      {visitorToken && visitorError && (
+        <div className={styles.issueEmpty} style={{ textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#0f172a', marginBottom: 8 }}>
+            分享链接无效
+          </div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>
+            {visitorError}。请联系分享者重新生成链接。
+          </div>
+        </div>
+      )}
+
+      {visitorToken && !visitorError && !isVisitor && (
+        <div className={styles.issueEmpty}>正在验证分享链接…</div>
+      )}
+
+      {(!visitorToken || isVisitor) && (loading ? (
         <div className={styles.issueEmpty}>加载中...</div>
       ) : error ? (
         <div className={styles.issueEmpty}>{error}</div>
@@ -133,7 +160,7 @@ export function IssuesListPage() {
             </li>
           ))}
         </ul>
-      )}
+      ))}
     </div>
   )
 }

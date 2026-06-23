@@ -22,6 +22,7 @@ import { OfflineQueue } from "./offline-queue.js";
 import { createApi } from "./api/index.js";
 import { TerminalHub } from "./terminal-hub.js";
 import { Scheduler } from "./scheduler.js";
+import { ShareTokenStore } from "./share-tokens.js";
 import { DEFAULT_MASTER_PORT, DEFAULT_MASTER_HOST } from "../shared/constants.js";
 import os from "node:os";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
@@ -108,6 +109,7 @@ async function main(): Promise<void> {
   const auth = new AuthService(db);
   const offlineQueue = new OfflineQueue(db);
   const router = new Router(db, log);
+  const shareTokens = new ShareTokenStore();
 
   // HTTP + Express
   const app = express();
@@ -159,7 +161,7 @@ async function main(): Promise<void> {
   scheduler.start();
 
   // REST API — shares auth service and hub with WSHub
-  app.use("/api", createApi(db, auth, hub, router, config.port));
+  app.use("/api", createApi(db, auth, hub, router, config.port, shareTokens));
 
   // Listen
   await new Promise<void>((resolve) => {

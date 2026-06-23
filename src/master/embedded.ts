@@ -20,6 +20,7 @@ import { Router } from "./router.js";
 import { OfflineQueue } from "./offline-queue.js";
 import { createApi } from "./api/index.js";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
+import { ShareTokenStore } from "./share-tokens.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -78,6 +79,7 @@ export async function startEmbeddedMaster(
   const auth = new AuthService(db);
   const offlineQueue = new OfflineQueue(db);
   const router = new Router(db, logger);
+  const shareTokens = new ShareTokenStore();
 
   // HTTP + Express
   const app = express();
@@ -91,7 +93,7 @@ export async function startEmbeddedMaster(
   hub.start();
 
   // REST API — shares auth service and hub with WSHub
-  app.use("/api", createApi(db, auth, hub, router, config.port));
+  app.use("/api", createApi(db, auth, hub, router, config.port, shareTokens));
 
   // Dashboard static files
   // Prod (running from dist/master): build:master copies React dashboard
