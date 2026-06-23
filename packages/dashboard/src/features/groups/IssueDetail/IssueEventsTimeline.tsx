@@ -26,16 +26,20 @@ interface IssueEventsTimelineProps {
   issueId: string
   inProgress: boolean
   onApprovalResolved: () => Promise<void> | void
-  /** 真人用户名(通常是 issue.created_by)。agent_name 等于此值的视为真人消息,
-   *  渲染为右对齐气泡;其他(agent)渲染为左对齐气泡。issue 执行链路里只会
-   *  有这两类发言者,用背景色区分即可,不需要每个字段独占一行。 */
-  userAgentName?: string
 }
 
 type TimelineItem =
   | { kind: 'approval'; event: IssueEvent }
+  | { kind: 'append'; event: IssueEvent }
+  | { kind: 'truncation'; event: IssueEvent }
   | { kind: 'progress'; agent: string; firstAt: string; content: string; events: IssueEvent[] }
   | { kind: 'single'; event: IssueEvent }
+
+// 真人发起的事件类型 → 右对齐用户气泡。其他事件(progress/output/completed/...)
+// 一律视为 agent 输出 → 左对齐。用 event_type 而非 agent_name 判断,避免在
+// agent 自建自执(created_by === assigned_to)的 issue 上,agent 的 progress
+// 被误判为真人消息而右对齐,导致真人追加指令被淹没在 agent 输出里。
+const HUMAN_EVENT_TYPES = new Set(['appended', 'continued', 'comment'])
 
 // codex 把 [tool:exec]/[tool-result:exec] 拆成多个 chunk(一个 chunk = 一个 progress 事件),
 // 单事件渲染没法把命令和输出配对。这里按 agent 把连续的 progress 合并成一个块,
@@ -66,6 +70,16 @@ function groupEvents(events: IssueEvent[]): TimelineItem[] {
     if (ev.event_type === 'approval_request') {
       flush()
       out.push({ kind: 'approval', event: ev })
+      continue
+    }
+    if (ev.event_type === 'appended') {
+      flush()
+      out.push({ kind: 'append', event: ev })
+      continue
+    }
+    if (ev.event_type === 'progress_truncated') {
+      flush()
+      out.push({ kind: 'truncation', event: ev })
       continue
     }
     const mergeable = ev.event_type === 'progress' || ev.event_type === 'output'
@@ -126,9 +140,8 @@ function formatTime(raw: string): string {
   })
 }
 
-export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalResolved, userAgentName }: IssueEventsTimelineProps) {
+export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalResolved }: IssueEventsTimelineProps) {
   const items = groupEvents(events)
-  const isUser = (agent: string) => !!userAgentName && agent === userAgentName
   // 最后一条 progress/单内容气泡是否还在 streaming(用来给 StreamingStatus 传 done)。
   // inProgress 时最后一条 agent 气泡视为正在流式。
   const lastContentIdx = (() => {
@@ -161,16 +174,57 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
           )
         }
 
+        if (item.kind === 'append') {
+          // 真人追加指令:强制右对齐 + mint 高亮 + "追加指令" 标题,
+          // 不依赖 agent_name 匹配 created_by(agent 自建自执场景下 created_by
+          // 就是 agent 名,旧的 isUser 判断会把 agent 的 progress 也右对齐,
+          // 把真人追加淹没掉)。
+          const ev = item.event
+          return (
+            <div
+              key={ev.id}
+              className={`${styles.bubbleRow} ${styles.bubbleRowUser}`}
+            >
+              <div className={`${styles.bubble} ${styles.bubbleAppend}`}>
+                <div className={styles.bubbleMeta}>
+                  <span className={styles.bubbleAgent}>追加指令 · {ev.agent_name}</span>
+                  <span className={styles.bubbleTime}>{formatTime(ev.created_at)}</span>
+                </div>
+                <div className={styles.bubbleContent}>
+                  <MarkdownContent content={ev.content} hideStatus />
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        if (item.kind === 'truncation') {
+          // progress 被截断的 marker(由后端 getIssueEvents 插入):渲染成
+          // 居中 chip,告诉用户「这里省略了 N 条早期 worker 流式输出」。
+          // 不破坏对话流的视觉节奏,但明确提示存在未展示内容。
+          const ev = item.event
+          const omitted = (() => {
+            try { return (JSON.parse(ev.metadata || '{}') as { omitted?: number }).omitted ?? 0 } catch { return 0 }
+          })()
+          return (
+            <div key={`trunc-${idx}`} className={styles.systemChip}>
+              <span className={styles.systemChipTag}>…</span>
+              <span className={styles.systemChipAgent}>
+                已省略 {omitted} 条早期进展
+              </span>
+            </div>
+          )
+        }
+
         if (item.kind === 'progress') {
           const trimmed = item.content.trim()
           if (!trimmed) return null
-          const user = isUser(item.agent)
           const status = extractMessageStatus(item.content)
           const streaming = inProgress && idx === lastContentIdx
           return (
             <div
               key={`prog-${item.events[0].id}-${idx}`}
-              className={`${styles.bubbleRow} ${user ? styles.bubbleRowUser : styles.bubbleRowAgent}`}
+              className={`${styles.bubbleRow} ${styles.bubbleRowAgent}`}
             >
               <div className={styles.bubble}>
                 <div className={styles.bubbleMeta}>
@@ -202,7 +256,7 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
         }
 
         const ev = item.event
-        const user = isUser(ev.agent_name)
+        const user = HUMAN_EVENT_TYPES.has(ev.event_type)
         // 系统事件(assigned/started/completed/failed/cancelled/interrupted 等)
         // 没有显著发言人对比,渲染成居中 chip 而不是气泡,避免和对话气泡混淆。
         const isSystem = !ev.content

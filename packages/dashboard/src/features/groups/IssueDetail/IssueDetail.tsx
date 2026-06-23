@@ -204,7 +204,6 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
             issueId={issueId}
             inProgress={issue.status === 'in_progress'}
             onApprovalResolved={reload}
-            userAgentName={issue.created_by}
           />
 
           {issue.type === 'collaboration' && (

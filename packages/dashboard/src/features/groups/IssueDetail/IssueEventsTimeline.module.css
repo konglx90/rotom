@@ -40,6 +40,16 @@
   color: var(--color-navy, #1f2a44);
 }
 
+/* 追加指令气泡:在 .bubble 基础上叠 mint 高亮 + 左侧色条,让真人追加跟普通
+ * 用户消息(蓝色)和 agent 输出(灰色)都拉开视觉层级,避免在 agent 自建自执
+ * 的 issue 里被淹没。 */
+.bubbleAppend {
+  background: var(--color-mint, #9fe870) !important;
+  border-left: 3px solid var(--color-wise-green, #2f6b21);
+  border-top-left-radius: 3px !important;
+  color: var(--color-dark-green, #1f3a12);
+}
+
 .bubbleMeta {
   display: flex;
   align-items: baseline;

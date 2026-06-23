@@ -194,11 +194,23 @@
 .assignee {
   flex-shrink: 0;
   color: var(--color-ink);
-  opacity: 0.75;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 50%;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.assigneeClaimed {
+  background: rgba(159, 232, 112, 0.18);
+  opacity: 1;
+}
+
+.assigneeUnclaimed {
+  background: rgba(22, 51, 0, 0.05);
+  opacity: 0.7;
+  font-style: italic;
 }
 
 .cardFoot {
