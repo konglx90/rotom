@@ -115,10 +115,29 @@
   border: 1px solid var(--border-color-light);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   margin-bottom: 4px;
+}
+
+.schedulePromptCollapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.schedulePromptToggle {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--color-accent, #1677ff);
+  background: none;
+  border: none;
+  padding: 0 0 4px 0;
+  cursor: pointer;
+}
+
+.schedulePromptToggle:hover {
+  text-decoration: underline;
 }
 
 .scheduleLastRun {
