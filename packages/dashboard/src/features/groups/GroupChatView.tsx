@@ -6,6 +6,7 @@ import type { Issue } from '../../api/types'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
 import { useZenMode } from '../../context/ZenModeContext'
+import { useVisitorMode } from '../../context/VisitorContext'
 import { extractMentions } from './types'
 import { useGroupChatWebSocket } from './useGroupChatWebSocket'
 import { pushHistory } from './messageHistory'
@@ -39,6 +40,11 @@ export function GroupChatView() {
     clearGroupMemberWorkingDir,
   } = useChatContext()
   const { status: connectionStatus, send, lastIssueChange } = useSocket()
+  const { isVisitor, error: visitorError, validate: validateVisitor, token: visitorToken, groupId: visitorResolvedGroupId } = useVisitorMode()
+
+  // Routing
+  const selectedGroupId = urlGroupId || ''
+  const selectedIssueId = urlIssueId || ''
 
   const [issues, setIssues] = useState<Issue[]>([])
   const [selectedIssueVersion, setSelectedIssueVersion] = useState(0)
@@ -46,9 +52,24 @@ export function GroupChatView() {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
 
-  // Routing
-  const selectedGroupId = urlGroupId || ''
-  const selectedIssueId = urlIssueId || ''
+  // 访客模式：URL 带 ?share=<token> 时,先用 groupId 验 token,失败显示错误页。
+  // 重复验证判断看 visitorResolvedGroupId —— validate 成功后 VisitorContext
+  // 会把它填上,空则代表还没验过(或已失败)。
+  useEffect(() => {
+    if (!visitorToken) return
+    if (!selectedGroupId) return
+    if (visitorResolvedGroupId === selectedGroupId) return
+    validateVisitor(selectedGroupId)
+  }, [visitorToken, selectedGroupId, visitorResolvedGroupId, validateVisitor])
+
+  // 访客直接访问 /dashboard/groups/:groupId 但 URL 没带 groupId (不应该发生,
+  // 防御一下):弹回 /dashboard/agents 让普通引导流程接管。
+  useEffect(() => {
+    if (visitorToken && !selectedGroupId) {
+      navigate('/dashboard/agents', { replace: true })
+    }
+  }, [visitorToken, selectedGroupId, navigate])
+
   const setSelectedIssueId = (id: string) => {
     if (!selectedGroupId) return
     if (id) {
@@ -358,6 +379,29 @@ export function GroupChatView() {
 
   return (
     <div className={`${styles.container} ${zenMode ? styles.containerZen : ''}`}>
+      {/* 访客 token 验证失败时,只展示错误页,不要渲染群内容。 */}
+      {visitorToken && visitorError && (
+        <div className={chatStyles.centerFill}>
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#0f172a', marginBottom: 8 }}>
+              分享链接无效
+            </div>
+            <div style={{ fontSize: 13, color: '#64748b' }}>
+              {visitorError}。请联系分享者重新生成链接。
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visitorToken && !visitorError && !isVisitor && (
+        <div className={chatStyles.centerFill}>
+          <span style={{ color: '#64748b' }}>正在验证分享链接…</span>
+        </div>
+      )}
+
+      {(!visitorToken || isVisitor) && (
+      <>
       <AddMemberModal
         open={showAddMemberModal}
         groupMemberNames={groupMembers}
@@ -476,6 +520,7 @@ export function GroupChatView() {
               setSelectedIssueId={setSelectedIssueId}
               onCreateIssue={handleCreateIssue}
               onCreateCollaboration={handleCreateCollaboration}
+              readOnly={isVisitor}
             />
           ) : rightTab === 'notes' ? (
             <NotePanel
@@ -488,6 +533,8 @@ export function GroupChatView() {
             <ArtifactPanel groupId={selectedGroupId} />
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   )

@@ -1,0 +1,24 @@
+.visitorBanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: linear-gradient(90deg, #fef3c7 0%, #fde68a 100%);
+  border-bottom: 1px solid #fbbf24;
+  font-size: 13px;
+  color: #78350f;
+}
+
+.visitorIcon {
+  font-size: 16px;
+}
+
+.visitorTitle {
+  font-weight: 600;
+  font-size: 14px;
+  color: #78350f;
+}
+
+.visitorText {
+  color: #92400e;
+}

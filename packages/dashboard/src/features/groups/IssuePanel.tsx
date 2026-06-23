@@ -30,6 +30,8 @@ interface IssuePanelProps {
     owner?: string
     createdBy: string
   }) => void
+  /** 访客模式:隐藏创建按钮、详情内的写操作。 */
+  readOnly?: boolean
 }
 
 export function IssuePanel({
@@ -42,6 +44,7 @@ export function IssuePanel({
   setSelectedIssueId,
   onCreateIssue,
   onCreateCollaboration,
+  readOnly = false,
 }: IssuePanelProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
@@ -50,9 +53,11 @@ export function IssuePanel({
       <div className={styles.issuePanel}>
         <div className={styles.issuePanelHeader}>
           <h3 className={styles.issuePanelTitle}>Issues</h3>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <Button variant="ghost" size="sm" onClick={() => setShowCreateDialog(true)}>+ 创建</Button>
-          </div>
+          {!readOnly && (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <Button variant="ghost" size="sm" onClick={() => setShowCreateDialog(true)}>+ 创建</Button>
+            </div>
+          )}
         </div>
         {selectedIssueId ? (
           <IssueDetail
@@ -61,10 +66,11 @@ export function IssuePanel({
             agents={agents}
             groupMembers={groupMembers}
             onBack={() => setSelectedIssueId('')}
+            readOnly={readOnly}
           />
         ) : issues.length === 0 ? (
           <div className={styles.issueEmpty}>
-            暂无 Issue<br />点击上方按钮创建
+            暂无 Issue{!readOnly && <><br />点击上方按钮创建</>}
           </div>
         ) : (
           <ul className={styles.issueList}>
@@ -112,19 +118,21 @@ export function IssuePanel({
         )}
       </div>
 
-      <CreateIssueDialog
-        open={showCreateDialog}
-        agents={agents}
-        groupMembers={groupMembers}
-        myAgentName={myAgentName}
-        onClose={() => setShowCreateDialog(false)}
-        onCreateIssue={(data) => {
-          onCreateIssue(data)
-        }}
-        onCreateCollaboration={(data) => {
-          onCreateCollaboration(data)
-        }}
-      />
+      {!readOnly && (
+        <CreateIssueDialog
+          open={showCreateDialog}
+          agents={agents}
+          groupMembers={groupMembers}
+          myAgentName={myAgentName}
+          onClose={() => setShowCreateDialog(false)}
+          onCreateIssue={(data) => {
+            onCreateIssue(data)
+          }}
+          onCreateCollaboration={(data) => {
+            onCreateCollaboration(data)
+          }}
+        />
+      )}
     </>
   )
 }

@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { Agent, Group } from '../../api/types'
 import { Avatar } from '../../components/ui/Avatar'
 import { Button } from '../../components/ui/Button'
+import { useVisitorMode } from '../../context/VisitorContext'
+import { ShareLinkModal } from './ShareLinkModal'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { MemberListModal } from './modals/MemberListModal'
@@ -61,7 +63,9 @@ export function GroupChatArea({
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
   const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
+  const { isVisitor } = useVisitorMode()
   const handleShowPrompt = useCallback((msg: ChatMessage) => {
     setComposedPromptFor(msg)
   }, [])
@@ -291,8 +295,13 @@ export function GroupChatArea({
           </div>
           {!headerCollapsed && (
             <div className={styles.chatHeaderActions}>
-              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onAddMembers() }}>+ 拉人</Button>
-              <Button variant="ghost" size="sm" iconOnly onClick={(e) => { e.stopPropagation(); onShowConfig() }} title="设置">⚙️</Button>
+              {!isVisitor && (
+                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onAddMembers() }}>+ 拉人</Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setShowShareModal(true) }}>分享</Button>
+              {!isVisitor && (
+                <Button variant="ghost" size="sm" iconOnly onClick={(e) => { e.stopPropagation(); onShowConfig() }} title="设置">⚙️</Button>
+              )}
             </div>
           )}
           <div className={styles.chatHeaderSub}>
@@ -326,6 +335,14 @@ export function GroupChatArea({
         onClose={() => setShowMemberList(false)}
         onUpdateMemberWorkingDir={onUpdateMemberWorkingDir}
       />
+
+      {showShareModal && (
+        <ShareLinkModal
+          groupId={selectedGroup.id}
+          groupName={selectedGroup.name}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
 
 
       <ComposedPromptModal
@@ -367,8 +384,9 @@ export function GroupChatArea({
         ))}
       </div>
 
-      <div className={styles.inputArea}>
-        <textarea ref={inputRef} rows={1} value={message}
+      {!isVisitor && (
+        <div className={styles.inputArea}>
+          <textarea ref={inputRef} rows={1} value={message}
           onChange={e => {
             if (isArchived) return;
             handleInputChange(e.target.value);
@@ -433,6 +451,7 @@ export function GroupChatArea({
           </div>
         )}
       </div>
+      )}
 
       {contextMenu && (
         <MessageContextMenu

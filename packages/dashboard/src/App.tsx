@@ -2,6 +2,7 @@ import { Navigate, Routes, Route } from 'react-router-dom'
 import { ChatProvider, useChatContext } from './context/ChatContext'
 import { SocketProvider } from './context/SocketContext'
 import { ZenModeProvider } from './context/ZenModeContext'
+import { VisitorProvider, useVisitorMode } from './context/VisitorContext'
 import { AppShell } from './components/layout/AppShell/AppShell'
 import { AgentsView } from './features/agents/AgentsView'
 import { GroupChatView } from './features/groups/GroupChatView'
@@ -44,8 +45,11 @@ function ChatModalsHost() {
 
 // 路由守卫：未绑定身份时把消息/群聊页统一弹回 /dashboard/agents，
 // 避免依赖 WS / 群消息身份的组件在 myAgentName='' 状态下渲染出半坏的 UI。
+// 访客模式（?share=<token>）绕过身份检查 —— 访客本来就没有 myAgentName。
 function RequireAgent({ children }: { children: React.ReactNode }) {
   const { myAgentName } = useChatContext()
+  const { isVisitor } = useVisitorMode()
+  if (isVisitor) return <>{children}</>
   if (!myAgentName) return <Navigate to="/dashboard/agents" replace />
   return <>{children}</>
 }
@@ -53,28 +57,30 @@ function RequireAgent({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <ZenModeProvider>
-      <ChatProvider>
-        <SocketProvider>
-          <AppShell>
-            <Routes>
-              <Route path="/dashboard/agents" element={<div className="container-full"><AgentsView /></div>} />
-              <Route path="/dashboard/kanban" element={<RequireAgent><div className="container-full"><KanbanView /></div></RequireAgent>} />
-              <Route path="/dashboard/messages" element={<RequireAgent><div className="container-full"><MessagesView /></div></RequireAgent>} />
-              <Route path="/dashboard/groups" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
-              <Route path="/dashboard/groups/:groupId" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
-              <Route path="/dashboard/groups/:groupId/issues/:issueId" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
-              <Route path="/dashboard/groups/:groupId/issues-single" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssuesListPage /></div></RequireAgent>} />
-              <Route path="/dashboard/groups/:groupId/issues-single/:issueId" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssueDetailPage /></div></RequireAgent>} />
-              <Route path="/dashboard/terminal" element={<div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><TerminalPage /></div>} />
-              <Route path="/dashboard/e2ed" element={<div className="container-full"><E2edGroupsView /></div>} />
-              <Route path="/dashboard/e2ed/:groupId" element={<div className="container-full"><E2edPipelineView /></div>} />
-              <Route path="/dashboard" element={<Navigate to="/dashboard/agents" replace />} />
-              <Route path="*" element={<Navigate to="/dashboard/agents" replace />} />
-            </Routes>
-          </AppShell>
-          <ChatModalsHost />
-        </SocketProvider>
-      </ChatProvider>
+      <VisitorProvider>
+        <ChatProvider>
+          <SocketProvider>
+            <AppShell>
+              <Routes>
+                <Route path="/dashboard/agents" element={<div className="container-full"><AgentsView /></div>} />
+                <Route path="/dashboard/kanban" element={<RequireAgent><div className="container-full"><KanbanView /></div></RequireAgent>} />
+                <Route path="/dashboard/messages" element={<RequireAgent><div className="container-full"><MessagesView /></div></RequireAgent>} />
+                <Route path="/dashboard/groups" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
+                <Route path="/dashboard/groups/:groupId" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
+                <Route path="/dashboard/groups/:groupId/issues/:issueId" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
+                <Route path="/dashboard/groups/:groupId/issues-single" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssuesListPage /></div></RequireAgent>} />
+                <Route path="/dashboard/groups/:groupId/issues-single/:issueId" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssueDetailPage /></div></RequireAgent>} />
+                <Route path="/dashboard/terminal" element={<div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><TerminalPage /></div>} />
+                <Route path="/dashboard/e2ed" element={<div className="container-full"><E2edGroupsView /></div>} />
+                <Route path="/dashboard/e2ed/:groupId" element={<div className="container-full"><E2edPipelineView /></div>} />
+                <Route path="/dashboard" element={<Navigate to="/dashboard/agents" replace />} />
+                <Route path="*" element={<Navigate to="/dashboard/agents" replace />} />
+              </Routes>
+            </AppShell>
+            <ChatModalsHost />
+          </SocketProvider>
+        </ChatProvider>
+      </VisitorProvider>
     </ZenModeProvider>
   )
 }

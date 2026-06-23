@@ -22,6 +22,8 @@ interface IssueDetailHeaderProps {
   /** 中断成功后触发(IssueDetail 用来清空 pendingQueue —— worker abort 时
    *  finally 块会消费队列,chip 对应的消息已被 worker 吃掉)。 */
   onInterrupted?: () => void
+  /** 访客模式:隐藏中断、完成、取消、删除、指派、编辑、approval_policy 等按钮。 */
+  readOnly?: boolean
 }
 
 type ApprovalPolicy = NonNullable<Issue['approval_policy']>
@@ -31,7 +33,7 @@ const APPROVAL_POLICY_OPTIONS: Array<{ value: ApprovalPolicy; label: string }> =
   { value: 'rw_allow', label: '读写默认通过' },
 ]
 
-export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete, onInterrupted }: IssueDetailHeaderProps) {
+export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete, onInterrupted, readOnly = false }: IssueDetailHeaderProps) {
   const [pendingAssignee, setPendingAssignee] = useState<string | null>(null)
   const [assigning, setAssigning] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -146,7 +148,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
         <div className={styles.headerPrimaryMeta}>
           <Badge tone="status" value={issue.status} />
           <UsageBadge issue={issue} />
-          {isInProgress && (
+          {!readOnly && isInProgress && (
             <Button
               variant="danger"
               outline
@@ -158,15 +160,17 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
               {interrupting ? '中断中…' : '■ 中断'}
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => setDetailsOpen(v => !v)}
-            title={detailsOpen ? '收起更多信息' : '展开优先级 / ID / 工作目录 / 指派 / 操作'}
-            disabled={edit.editing}
-          >
-            {detailsVisible ? '收起 ▴' : '更多 ▾'}
-          </Button>
+          {!readOnly && (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setDetailsOpen(v => !v)}
+              title={detailsOpen ? '收起更多信息' : '展开优先级 / ID / 工作目录 / 指派 / 操作'}
+              disabled={edit.editing}
+            >
+              {detailsVisible ? '收起 ▴' : '更多 ▾'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -198,7 +202,9 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
                 title={`该 issue 执行时绑定的 ${issue.cli_tool ?? '?'} session:\n${issue.session_id}\n注意:issue session 与 Debug Sessions 视图里的 chat session 是两个独立 session。点击复制。`}
                 style={{ cursor: 'pointer' }}
                 onClick={() => {
-                  navigator.clipboard.writeText(issue.session_id).then(() => {
+                  // 外层 {issue.session_id && (...)} 已保证 session_id 非空,
+                  // 但 TS 不会跨闭包收窄 prop 的可选属性,这里用 ! 显式断言。
+                  navigator.clipboard.writeText(issue.session_id!).then(() => {
                     setCopiedSession(true)
                     setTimeout(() => setCopiedSession(false), 1500)
                   }).catch(() => { /* ignore */ })
@@ -212,7 +218,8 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
             )}
           </div>
 
-          {/* 设置 + 操作：左设置簇，右操作簇 */}
+          {/* 设置 + 操作：左设置簇，右操作簇。访客模式只展示元信息,所有写操作隐藏。 */}
+          {!readOnly && (
           <div className={styles.controlsRow}>
             <div className={styles.settingsCluster}>
               {showAssign && (
@@ -295,6 +302,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
               )}
             </div>
           </div>
+          )}
         </div>
       )}
     </div>

@@ -27,9 +27,11 @@ interface IssueDetailProps {
    *  贴在视口底,并给 body 补等高的 padding-bottom,避免遮挡内容。
    *  IssuePanel 嵌入态保持原 flex 列内排版。 */
   standalone?: boolean
+  /** 访客模式:隐藏所有写操作(状态切换、中断、完成、取消、删除、续跑、评论)。 */
+  readOnly?: boolean
 }
 
-export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false }: IssueDetailProps) {
+export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false, readOnly = false }: IssueDetailProps) {
   const { issue, events, messages, loading, reload } = useIssueData(issueId, refreshSignal)
   const edit = useIssueEdit(issue, reload)
 
@@ -178,6 +180,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
         onCancel={handleCancel}
         onDelete={handleDelete}
         onInterrupted={clearPending}
+        readOnly={readOnly}
       />
 
       <div
@@ -229,8 +232,9 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
       </div>
 
       {/* 底部互斥区:有待确认时由 PendingApprovalsBar 短暂替换输入栏(对齐 Claude Code CLI
-          的「正常输入 → 选项确认 → 回到输入」交互)。cancelled 终态下两者都不渲染。 */}
-      {pendingApprovals.length > 0 ? (
+          的「正常输入 → 选项确认 → 回到输入」交互)。cancelled 终态下两者都不渲染。
+          访客模式下两者都不渲染 —— 访客不能 approve 也不能续跑。 */}
+      {!readOnly && (pendingApprovals.length > 0 ? (
         <div
           ref={dockRef}
           className={`${styles.bottomDock} ${standalone ? styles.bottomDockFixed : ''}`}
@@ -263,7 +267,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
             onRemovePending={removePending}
           />
         </div>
-      ) : null}
+      ) : null)}
     </div>
   )
 }

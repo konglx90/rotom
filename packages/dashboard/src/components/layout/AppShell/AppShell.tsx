@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useZenMode } from '../../../context/ZenModeContext'
 import { useChatContext } from '../../../context/ChatContext'
+import { useVisitorMode } from '../../../context/VisitorContext'
 import { AppSidebar } from '../AppSidebar/AppSidebar'
 import { E2edSidebar } from '../../../features/e2ed/E2edSidebar'
+import { VisitorBanner } from '../VisitorBanner'
 import styles from './AppShell.module.css'
 
 const ZEN_DEFAULT = 56
@@ -16,6 +18,7 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const { zenMode } = useZenMode()
   const { myAgentName, openConfigModal } = useChatContext()
+  const { isVisitor } = useVisitorMode()
   const location = useLocation()
   const isFullBleed = location.pathname.startsWith('/dashboard/groups')
   const hideSidebar = /^\/dashboard\/groups\/[^/]+\/issues-single(\/|$)/.test(
@@ -55,10 +58,12 @@ export function AppShell({ children }: AppShellProps) {
 
   // 未绑定身份时全局横条提醒。消息/群聊页此时其实会被 RequireAgent 路由守卫
   // 弹回 /agents，所以横条主要落在 agents 页面，告诉用户「先挑一个身份」。
-  const showIdentityBanner = !myAgentName
+  // 访客模式下隐藏 —— 访客本来就没有 myAgentName，banner 提示他们已经在访客模式了。
+  const showIdentityBanner = !myAgentName && !isVisitor
 
   return (
     <div className={styles.shell}>
+      {isVisitor && <VisitorBanner />}
       {showIdentityBanner && (
         <div role="status" className={styles.identityBanner}>
           <span className={styles.identityBannerTitle}>⚠️ 还没绑定身份</span>
@@ -75,8 +80,8 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       )}
       <div className={styles.shellInner}>
-        {!hideSidebar && !isE2edRoute && <AppSidebar width={sidebarWidth} onWidthChange={handleWidthChange} />}
-        {isE2edRoute && <E2edSidebar />}
+        {!isVisitor && !hideSidebar && !isE2edRoute && <AppSidebar width={sidebarWidth} onWidthChange={handleWidthChange} />}
+        {!isVisitor && isE2edRoute && <E2edSidebar />}
         <main
           className={`${styles.main} ${zenMode ? styles.mainZen : ''} ${
             isFullBleed ? styles.mainFullBleed : ''
