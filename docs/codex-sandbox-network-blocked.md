@@ -85,7 +85,7 @@ sandbox: "danger-full-access",
   一次就可能再翻车。
 - rotom worker 派任务给 codex 之前已经过 dashboard 审批
   (`approval_policy`),沙箱那层防护本来就是冗余的。worker 的 cwd 是
-  `~/.rotom/results/<groupId>`,任务也是受信进程派的。
+  `~/.rotom/artifacts/<groupId>`,任务也是受信进程派的。
 - 拉 `danger-full-access` 是 codex 官方支持的稳态选项,行为跨版本一致。
 
 **风险**:等于把 codex agent 的工作目录裸给所有写盘+网络。考虑到

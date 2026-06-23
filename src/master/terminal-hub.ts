@@ -132,7 +132,7 @@ export class TerminalHub {
       }
       // Standalone (cwd) mode skips the group lookup entirely; groupId mode
       // still resolves through the db so it picks up the group's working_dir
-      // override (or the default ~/.rotom/results/<groupId>).
+      // override (or the default ~/.rotom/artifacts/<groupId>).
       const cwd = parsed.kind === "cwd"
         ? parsed.cwd
         : resolveGroupArtifactRoot(this.db, parsed.groupId);
@@ -232,7 +232,7 @@ export class TerminalHub {
 
     // posix_spawnp from node-pty fails with a opaque "posix_spawnp failed"
     // when cwd doesn't exist. The group's working_dir or the default
-    // ~/.rotom/results/<groupId> may have never been created. Make sure
+    // ~/.rotom/artifacts/<groupId> may have never been created. Make sure
     // we hand the pty a real, traversable directory.
     let spawnCwd = cwd;
     try {

@@ -808,7 +808,7 @@ export class MeshDb {
   /**
    * Backfill working_dir on legacy groups (NULL or empty). Caller supplies the
    * `compute` fn — kept out of db.ts so this module stays free of filesystem
-   * conventions (homedir, RESULTS_ROOT, etc.). Returns the list of (id, path)
+   * conventions (homedir, ARTIFACTS_ROOT, etc.). Returns the list of (id, path)
    * pairs that were written, so the caller can mkdir each one.
    */
   backfillGroupDefaultWorkingDir(

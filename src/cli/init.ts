@@ -266,7 +266,7 @@ export async function cmdInit(_rest: string[], flags: Record<string, string | bo
 
   if (!fs.existsSync(ROTOM_HOME)) fs.mkdirSync(ROTOM_HOME, { recursive: true });
 
-  const defaultBase = path.join(ROTOM_HOME, "results");
+  const defaultBase = path.join(ROTOM_HOME, "artifacts");
   const workingDir = yesMode
     ? defaultBase
     : (await askText("Working dir base (per-group cwd will be <base>/<groupId>)", defaultBase)).trim();

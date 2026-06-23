@@ -53,7 +53,7 @@ const HOOK_TOOL_MATCHER = "Bash|Edit|Write|MultiEdit|NotebookEdit|ExitPlanMode|A
  * 把 cwd 转成 Claude Code 在 ~/.claude/projects/ 下的子目录名。
  * 编码规则(从实际目录观察): 绝对路径里的 `/` 和 `.` 全部替换为 `-`。
  *   /Users/kong/ai-work/rotom  → -Users-kong-ai-work-rotom
- *   /Users/kong/.rotom/results → -Users-kong--rotom-results
+ *   /Users/kong/.rotom/artifacts → -Users-kong--rotom-artifacts
  */
 function claudeProjectDir(cwd: string): string {
   const resolved = path.resolve(cwd);

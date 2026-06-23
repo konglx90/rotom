@@ -310,7 +310,7 @@ interface CodeVersionMeta {
 每个需求在 Rotom 工作目录下创建独立目录：
 
 ```
-~/.rotom/results/<groupId>/
+~/.rotom/artifacts/<groupId>/
 ├── requirement.md                  # 原始需求文本
 ├── plans/
 │   └── plan-v1/
