@@ -4,6 +4,7 @@ import { issuesApi } from '../../../api/issues'
 import type { IssueEvent } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
+import { useMonaco } from '../../../hooks/useMonaco'
 import styles from './ApprovalCard.module.css'
 import { APPROVAL_STATUS_LABEL, detectLanguage, type DiffData } from './utils'
 
@@ -35,6 +36,7 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
   // submissions fall back to the legacy generic reason.
   const [denyStage, setDenyStage] = useState<'idle' | 'composing'>('idle')
   const [denyFeedback, setDenyFeedback] = useState('')
+  const { ready: monacoReady } = useMonaco()
 
   const meta = (() => {
     try { return JSON.parse(event.metadata || '{}') as Record<string, unknown> } catch { return {} }
@@ -157,23 +159,27 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
                 <div className={styles.diffHunkLabel}>Edit {i + 1}</div>
               )}
               <div className={styles.diffEditorWrap}>
-                <DiffEditor
-                  height={Math.min(Math.max(hunk.old_string.split('\n').length, hunk.new_string.split('\n').length) * 18 + 40, 300)}
-                  language={files[0] ? detectLanguage(files[0]) : 'plaintext'}
-                  original={hunk.old_string}
-                  modified={hunk.new_string}
-                  theme="vs"
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    fontSize: 11,
-                    renderSideBySide: true,
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
-                    wordWrap: 'on',
-                    lineNumbers: 'on',
-                  }}
-                />
+                {monacoReady ? (
+                  <DiffEditor
+                    height={Math.min(Math.max(hunk.old_string.split('\n').length, hunk.new_string.split('\n').length) * 18 + 40, 300)}
+                    language={files[0] ? detectLanguage(files[0]) : 'plaintext'}
+                    original={hunk.old_string}
+                    modified={hunk.new_string}
+                    theme="vs"
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      fontSize: 11,
+                      renderSideBySide: true,
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                      wordWrap: 'on',
+                      lineNumbers: 'on',
+                    }}
+                  />
+                ) : (
+                  <div className={styles.diffEditorWrap} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: 12 }}>编辑器加载中...</div>
+                )}
               </div>
             </div>
           ))}

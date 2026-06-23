@@ -5,6 +5,7 @@ import type { ArtifactFile, ArtifactContent, ArtifactOriginal } from '../../api/
 import { Button } from '../../components/ui/Button'
 import { SessionPanel } from './SessionPanel'
 import { TerminalPane } from './TerminalPane'
+import { useMonaco } from '../../hooks/useMonaco'
 import styles from './ArtifactPanel.module.css'
 
 interface ArtifactPanelProps {
@@ -131,6 +132,7 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
   const [expandSignal, setExpandSignal] = useState<ExpandSignal>({ token: 0, mode: null })
   const [debugExpanded, setDebugExpanded] = useState(false)
   const [sessionCount, setSessionCount] = useState<number | null>(null)
+  const { ready: monacoReady } = useMonaco()
 
   const loadFiles = useCallback(async () => {
     try {
@@ -300,6 +302,8 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
             <div className={styles.loadingText}>加载中...</div>
           ) : previewBinary ? (
             <div className={styles.diffNote}>二进制文件 ({formatSize(content!.size)})，无法直接预览。</div>
+          ) : !monacoReady ? (
+            <div className={styles.loadingText}>编辑器加载中...</div>
           ) : mode === 'view' && content ? (
             <div className={styles.editorWrap}>
               <Editor

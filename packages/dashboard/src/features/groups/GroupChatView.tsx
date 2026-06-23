@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { groupsApi } from '../../api/groups'
 import { issuesApi } from '../../api/issues'
@@ -13,7 +13,7 @@ import { pushHistory } from './messageHistory'
 import { DirectChatArea } from './DirectChatArea'
 import { GroupChatArea } from './GroupChatArea'
 import { IssuePanel } from './IssuePanel'
-import { ArtifactPanel } from './ArtifactPanel'
+const LazyArtifactPanel = lazy(() => import('./ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })))
 import { NotePanel } from './NotePanel'
 import { SchedulePanel } from './SchedulePanel'
 import { AddMemberModal } from './modals/AddMemberModal'
@@ -530,7 +530,9 @@ export function GroupChatView() {
           ) : rightTab === 'schedules' ? (
             <SchedulePanel selectedGroupId={selectedGroupId} />
           ) : (
-            <ArtifactPanel groupId={selectedGroupId} />
+            <Suspense fallback={<div className={chatStyles.placeholder}>加载中...</div>}>
+              <LazyArtifactPanel groupId={selectedGroupId} />
+            </Suspense>
           )}
         </div>
       )}
