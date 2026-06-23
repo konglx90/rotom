@@ -146,6 +146,8 @@ Step 6: [终审] Claude 验证整体交付质量，输出交付报告
 
 **解决的问题**：传统 code review 依赖人工，效率低、覆盖不全。多异构 Agent 并行审查同一段代码，能从不同角度发现问题。
 
+![多 Agent 代码审查 — 多个 Agent 在群内围绕同一段代码给出不同视角的评审意见](https://mdn.alipayobjects.com/huamei_vaei4o/afts/img/kcEQSZVqFKgAAAAAYEAAAAgAenEvAQFr/fmt.webp)
+
 **工作模式**：
 
 ```bash

@@ -32,7 +32,7 @@ function resolveMasterUrlForStatus(): string {
 
 export async function cmdStatus(_rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
   const url = resolveMasterUrlForStatus();
-  const endpoint = `${url}/api/health`;
+  const endpoint = `${url}/health`;
   for (let attempt = 1; attempt <= 2; attempt++) {
     let resp: Response | undefined;
     try {
