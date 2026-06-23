@@ -1,6 +1,6 @@
 ---
 name: rotom-a2a-communicate
-description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）。适用于：(1) 群聊（rotom group send），(2) 查群历史/成员（rotom group history/members），(3) 查通讯录（rotom directory），(4) 创建任务 Issue（rotom issue create），(5) 发起多人协作 Issue（rotom collab create / conclude）。**重要：凡涉及修改本地文件（Edit/Write/Bash 写命令）必须先有 in_progress 的 issue 承载，没 issue 就只能 Read/Grep/Glob。** 群消息上下文 prompt 以 `[群消息 context:` 开头；活跃协作中会另带 `[协作上下文]` 前缀；prompt 同时携带 `[当前群活跃 issue]` 列表用于判断是否可写盘。
+description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）。适用于：(1) 群聊（rotom group send），(2) 查群历史/成员（rotom group history/members），(3) 查通讯录（rotom directory），(4) 创建任务 Issue（rotom issue create），(5) 发起多人协作 Issue（rotom collab create / conclude），(6) 定时任务（CronCreate / ScheduleWakeup）。**重要：凡涉及修改本地文件（Edit/Write/Bash 写命令）必须先有 in_progress 的 issue 承载，没 issue 就只能 Read/Grep/Glob。** 群消息上下文 prompt 以 `[群消息 context:` 开头；活跃协作中会另带 `[协作上下文]` 前缀；prompt 同时携带 `[当前群活跃 issue]` 列表用于判断是否可写盘。
 ---
 
 # 数字员工通信（rotom CLI）
@@ -128,6 +128,79 @@ rotom note delete <noteId>
 返回 JSON 中 `delivered: true` 表示已送达、`queued: true` 表示对方离线已暂存、`error` 表示路由失败。
 
 > **以上仅是最常用路径。** 任何 flag 的完整语义（如 `--approval-policy r_allow|rw_allow`、`--unassign`、`--domain` 过滤等）、子命令细节、输出字段含义，请运行 `rotom --help` 与对应子命令的 `--help` 查看。
+
+## 定时任务（Claude Code 内置 Cron / Wakeup）
+
+通过 `CronCreate` / `CronDelete` / `CronList` / `ScheduleWakeup` 实现「到点自动触发」。可与 rotom 联动（定时 `rotom group send` 提醒群、定时跑巡检脚本），但触发的是**当前 LLM 进程**（同一 Claude Code 会话），不是 rotom 集群里的独立机器人——会话结束任务也消失（除非 durable=true）。
+
+### CronCreate
+
+标准 5 字段 cron `min hour dom mon dow`，本机时区，无时区转换。
+
+**示例**：
+
+```bash
+# one-shot：今天 14:30 触发一次后自动删除（recurring=false 时 dom/month 必须钉死）
+CronCreate(cron="30 14 23 6 *", prompt="提醒我检查部署", recurring=false)
+
+# recurring：每个工作日早上 9:57 跑一次（避开 9:00 全网调度尖峰）
+CronCreate(cron="57 9 * * 1-5", prompt="跑每日巡检脚本", recurring=true)
+
+# durable=true：写到 ~/.claude/scheduled_tasks.json，会话重启后仍存活
+CronCreate(cron="0 */2 * * *", prompt="每两小时检查队列", recurring=true, durable=true)
+```
+
+**适用场景**：定时提醒、定期巡检、轮询拉取外部状态。
+
+**注意**：
+- **避开 :00 / :30 整点分**——除非用户明确要求整点，否则撞上全网调度尖峰（thundering herd）
+- recurring=true（默认）任务 **7 天后自动过期**，触发最后一次后被删除——不是 bug，是设计上避免 session 永久累积
+- one-shot 必须 `recurring=false`，并把 `dom` 和 `month` 钉到具体值
+- **durable 默认 false（仅内存，会话结束即失活）**；只有用户明确"想让它持久化"才开 `durable=true`，落盘到 `.claude/scheduled_tasks.json`
+- 任务只在 REPL idle 时触发——忙起来会顺延，不要当硬实时调度
+
+### CronDelete
+
+按 CronCreate 返回的 `id` 取消。
+
+```bash
+CronDelete(id="<cronId>")
+```
+
+**适用场景**：取消误建的、定时改主意了、或重建前先清干净。
+
+### CronList
+
+列出当前所有 cron（durable + session-only 都包含）。
+
+```bash
+CronList()
+```
+
+**适用场景**：排查"为什么 cron 没触发"、确认是否有重复任务、查看会话内所有定时任务状态。
+
+### ScheduleWakeup
+
+**仅供 `/loop` dynamic 模式使用**——让 agent 隔一段时间自己再跑一轮，而不是触发一次独立的提示。
+
+**示例**：
+
+```bash
+ScheduleWakeup(delaySeconds=1800, reason="等 CI 构建完成", prompt="/loop 检查 CI 状态")
+```
+
+**适用场景**：让 agent 周期性自检同一件事（如 `/loop 每 30 分钟检查 CI`，每次 wakeup 都重跑同一 prompt）。
+
+**注意**：
+- delaySeconds 被 runtime clamp 到 **[60, 3600]** 秒，超出会被裁剪
+- prompt 必须把 `/loop` 输入**完整原样**传回——否则 loop 中断
+- autonomous-loop 模式用 sentinel `<<autonomous-loop>>`，dynamic 模式用 `<<autonomous-loop-dynamic>>`——**别混用**，否则上下文错位
+- 选 delaySeconds 的原则：< 5 分钟（≤270s）prompt cache 不掉线，适合等 build / 等 CI；5 分钟到 1 小时付一次 cache miss；不要选 300s（"既付 cache miss 又没赚到等待"，性价比最差）；空闲轮询用 1200–1800s
+
+### CronCreate vs ScheduleWakeup 怎么选
+
+- **到某个时间点触发某件事** → `CronCreate`
+- **让 agent 自己每隔一段时间回头看一眼** → `ScheduleWakeup` + `/loop`
 
 ## 故障排查
 
