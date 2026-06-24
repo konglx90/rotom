@@ -1,0 +1,171 @@
+/**
+ * Row type definitions for the mesh SQLite database.
+ *
+ * Each interface mirrors the SQLite column names exactly — the runtime
+ * layer in `db/internal.ts` maps SELECT results onto these types.
+ *
+ * Kept in its own module so consumers (api/, executor/worker.ts, tests,
+ * dashboard) can import row types without dragging in better-sqlite3.
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Row types — match SQLite column names exactly
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface AgentRow {
+  id: string;
+  name: string;
+  description: string | null;
+  domain: string | null;
+  owner: string | null;
+  status: string;
+  instance_id: string | null;
+  hostname: string | null;
+  platform: string | null;
+  endpoint: string | null;
+  version: string | null;
+  last_heartbeat: string | null;
+  connected_at: string | null;
+  registered_at: string;
+  updated_at: string;
+  token_hash: string | null;
+  token: string | null;
+  enabled: number;
+  profile: string | null;
+}
+
+export interface OfflineMessageRow {
+  id: number;
+  target_agent: string;
+  from_name: string;
+  from_domain: string | null;
+  payload: string;
+  route_type: string | null;
+  created_at: string;
+  expires_at: string | null;
+}
+
+export interface AuditLogRow {
+  id: number;
+  timestamp: string;
+  from_name: string | null;
+  from_domain: string | null;
+  to_name: string | null;
+  to_domain: string | null;
+  route_type: string | null;
+  result: string;
+  message_summary: string | null;
+}
+
+export interface MessageLogRow {
+  id: number;
+  request_id: string;
+  timestamp: string;
+  from_name: string;
+  from_domain: string | null;
+  to_name: string | null;
+  to_domain: string | null;
+  route_type: string | null;
+  direction: string;
+  payload: string;
+  status: string;
+  latency_ms: number | null;
+  group_id: string | null;
+  source: string | null;
+}
+
+export interface DomainRow {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface IssueRow {
+  id: string;
+  group_id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  created_by: string;
+  assigned_to: string | null;
+  working_dir: string | null;
+  result: string | null;
+  error_message: string | null;
+  artifacts: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  // Collaboration fields
+  type: string;
+  collaboration_goal: string | null;
+  max_rounds: number | null;
+  current_round: number | null;
+  participants: string;
+  owner: string | null;
+  summary: string | null;
+  // Session continuation (added in migration 013)
+  session_id: string | null;
+  cli_tool: string | null;
+  // Slash command (added in migration 014). 例如 '/plan'，由 master 端解析 title 写入。
+  slash_command: string | null;
+  // 审批策略 (added in migration 015)。
+  //   'r_allow'  (默认) → 写类工具调用走人工审批，读类放行
+  //   'rw_allow'         → claude 不挂 PreToolUse hook；codex 不传 onApprovalRequest
+  approval_policy: string;
+  // Session usage / model (added in migration 025)。usage 是 TokenUsage 的
+  // JSON 字符串(见 src/executor/cli-executor.ts),由 worker 透传过来。
+  usage: string | null;
+  model: string | null;
+}
+
+export interface IssueEventRow {
+  id: number;
+  issue_id: string;
+  event_type: string;
+  agent_name: string;
+  content: string;
+  metadata: string;
+  created_at: string;
+  /** ID of the event/comment this is replying to (for message quoting) */
+  reply_to_id: number | null;
+}
+
+export interface NoteRow {
+  id: string;
+  group_id: string;
+  title: string;
+  description: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Scheduled tasks (群内定时任务)
+// 时间戳全部是 INTEGER ms (Unix epoch),由调度器进程维护 next_run_at。
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ScheduledTaskRow {
+  id: number;
+  name: string;
+  group_id: string;
+  mode: "agent" | "message";
+  agent_name: string | null;
+  schedule_kind: "once" | "interval";
+  interval_sec: number | null;
+  run_at: number | null;
+  prompt: string;
+  enabled: number;
+  next_run_at: number;
+  last_run_at: number | null;
+  last_status: "ok" | "error" | "skipped" | null;
+  last_error: string | null;
+  last_issue_id: string | null;
+  repeat_times: number | null;
+  repeat_count: number;
+  created_at: number;
+  updated_at: number;
+}
