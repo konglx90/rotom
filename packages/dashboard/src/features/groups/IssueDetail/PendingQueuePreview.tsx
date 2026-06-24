@@ -1,20 +1,19 @@
 /**
- * PendingQueuePreview —— in_progress 期间用户已发送但 worker 还没消费的
- * 追加指令 chip 列表。对齐 codex CLI 的 PendingInputPreview(bottom_pane/
- * pending_input_preview.rs:23):让用户看到「我发的消息排队中,本轮结束后
- * 会被合并进下一轮 prompt」。
+ * PendingQueuePreview —— in_progress 期间用户的本地草稿队列 chip 列表。
+ * 对齐 codex CLI 的 PendingInputPreview(bottom_pane/pending_input_preview.rs:23):
+ * 让用户看到「我发的消息排队中,稍后会被合并进下一轮 prompt」。
  *
- * 数据流:chip 在 ContinueInputBar 提交时 push,在以下情况清空:
- *   • issue 翻终态(completed/failed/cancelled)—— IssueDetail 监听 status
- *     变化时调 clearPending
- *   • 用户点中断按钮 —— 中断触发 worker abort + finally 消费队列,chip
- *     对应的消息已被 worker 吃掉,所以 IssueDetail 在 onInterrupted 回调里
- *     clearPending
- *   • 用户手动点 × —— removePending(idx) 删单条
- *
- * 不做的事:不跟踪 worker 何时真正消费队列(in_progress → in_progress 续跑
- * 无显式信号)。如果用户没点中断、issue 也没翻终态,chip 会一直留着——
- * 用户可以手动 × 删,语义上「我发过这条」也算正确。
+ * chip 是纯本地草稿,ContinueInputBar 提交时 push,不发 /append。两条 flush
+ * 路径都会把草稿真正发给 worker 触发 --resume 续跑:
+ *   • 用户按 ESC / 点「■ 中断」—— IssueDetailHeader.handleInterrupt 先逐条
+ *     /append flush,再 /interrupt,worker abort + finally 块(worker.ts:964-998)
+ *     消费 pendingAppends。IssueDetail 在 onInterrupted 回调里 clearPending。
+ *   • 用户不按 ESC、worker 自然跑完 —— IssueDetail 的 status 监听 effect
+ *     自动 /continue(completed/failed)或 /append(paused),合并 chip 为一次
+ *     prompt,worker 用 session_id --resume 起新轮。对齐 codex "steers persist
+ *     across rounds"。
+ *   • cancelled —— 直接丢弃草稿。
+ *   • 用户手动点 × —— removePending(idx) 删单条。
  */
 interface PendingQueuePreviewProps {
   items: string[]

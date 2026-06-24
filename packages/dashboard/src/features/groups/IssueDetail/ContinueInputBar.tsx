@@ -9,9 +9,12 @@ import { PendingQueuePreview } from './PendingQueuePreview'
 // assigned_to 切换提交通道与文案:
 //   - open  + 未指派 → disabled,提示先指派 Agent
 //   - open  + 已指派 → 预填 description 供编辑,按钮「开始任务」,提交走 /append
-//   - in_progress    → 追加指令(队列续跑),按钮「加入队列」,提交走 /append
-//                       + 上方展示 PendingQueuePreview chip 列表(对齐 codex
-//                       PendingInputPreview,让用户看到「待处理」消息)
+//   - in_progress    → 追加指令,按钮「加入队列」。**只入本地草稿队列(chip),
+//                       不立即调 /append** —— 对齐 codex CLI 的 Enter 入队 / Esc
+//                       flush 交互。用户按 ESC 时 IssueDetailHeader.handleInterrupt
+//                       会把草稿逐条 flush 给 worker,然后 worker abort + finally
+//                       块(worker.ts:964-998)用 --resume 续跑。上方展示
+//                       PendingQueuePreview chip 列表(对齐 codex PendingInputPreview)。
 //   - paused         → 中断后待继续,按钮「继续执行」,提交走 /append(worker
 //                       走 idle 分支用 --resume 续跑)。无队列预览。
 //   - completed/failed → 续聊,按钮「继续执行」,提交走 /continue
@@ -69,12 +72,21 @@ export function ContinueInputBar({
     setSubmitting(true)
     setError(null)
     try {
-      if (status === 'open' || status === 'in_progress' || status === 'paused') {
+      if (status === 'open' || status === 'paused') {
+        // open / paused 都是「立即执行」分支:worker 收到 issue_append 时
+        // activeTasks 没这条,走 else 直接起新一轮(worker.ts:525-539),
+        // 所以不需要本地草稿 chip。
         await issuesApi.append(issueId, trimmed, continuedBy)
-        // in_progress 时把消息也 push 到本地 pendingQueue(对齐 codex 的
-        // 「待处理消息」视觉)。open / paused 都是「立即执行」分支 —— worker 收到
-        // issue_append 时 activeTasks 里没这条,走 else 直接起一轮,不需要 chip。
-        if (isInProgress) onPushPending?.(trimmed)
+      } else if (isInProgress) {
+        // in_progress:对齐 codex CLI 的 Enter 入队 / Esc flush。只入本地
+        // 草稿队列(chip),不立即调 /append。两条 flush 路径都会把草稿真正
+        // 发给 worker 触发 --resume 续跑:
+        //   - 用户按 ESC → IssueDetailHeader.handleInterrupt 逐条 /append +
+        //     /interrupt,worker abort + finally 块(worker.ts:964-998)消费队列。
+        //   - 用户不按 ESC、worker 自然跑完 → IssueDetail 的 status 监听自动
+        //     /continue(completed/failed)或 /append(paused),worker 用 session_id
+        //     起新轮。对齐 codex "steers persist across rounds"。
+        onPushPending?.(trimmed)
       } else if (status === 'completed' || status === 'failed') {
         await issuesApi.continue(issueId, trimmed, continuedBy)
       } else {
@@ -92,7 +104,7 @@ export function ContinueInputBar({
   const placeholder = (() => {
     if (disabled) return '请先在上方指派 Agent，再发送指令'
     if (isStartMode) return `确认或编辑给 ${assignedTo} 的 prompt，点下方「开始任务」`
-    if (isInProgress) return '输入追加指令(本轮结束后自动合并进下一轮)…'
+    if (isInProgress) return '输入追加指令(Enter 入草稿队列,Esc 统一发送并中断当前步骤)…'
     if (isPaused) return '中断后待继续。输入指令后 worker 会用上一轮 session 续跑…'
     if (status === 'completed') return '执行完成。补充新指令继续对话(基于上次 session)…'
     if (status === 'failed') return '上次执行失败。在这里告诉 Agent 怎么修后继续…'
