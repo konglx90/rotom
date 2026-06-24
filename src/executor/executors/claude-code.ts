@@ -18,7 +18,7 @@
  * stdin.
  */
 
-import { runProcess } from "../process-runner.js";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
@@ -123,14 +123,24 @@ export class ClaudeCodeExecutor implements CliExecutor {
       }
       console.log(`[claude-code] Spawning claude (cwd: ${workingDir}, session: ${resumeSessionId ? `${sessionMode}=${resumeSessionId}` : "new"}, ROTOM_AGENT=${spawnEnv.ROTOM_AGENT}, ROTOM_HOME=${spawnEnv.ROTOM_HOME}, gate=${approvalGate ? "on" : "off"})`);
 
-      const { proc } = runProcess({
-        bin: "claude",
-        args,
+      const proc = spawn("claude", args, {
         cwd: workingDir,
-        env: spawnEnv as Record<string, string>,
-        label: "claude-code",
-        signal: options?.signal,
+        env: spawnEnv,
+        stdio: ["pipe", "pipe", "pipe"],
       });
+
+      const onAbort = () => {
+        console.log(`[claude-code] Aborted, killing pid=${proc.pid}`);
+        try { proc.kill("SIGTERM"); } catch { /* already exited */ }
+        setTimeout(() => { try { proc.kill("SIGKILL"); } catch { /* noop */ } }, 3_000);
+      };
+      if (options?.signal) {
+        if (options.signal.aborted) {
+          onAbort();
+        } else {
+          options.signal.addEventListener("abort", onAbort, { once: true });
+        }
+      }
 
       // Write structured input (stream-json format)
       // prompt 已经由 worker 用 composePrompt() 拼好(rotom-cli + agent-role +
