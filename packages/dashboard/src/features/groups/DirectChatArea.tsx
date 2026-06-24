@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { Avatar } from '../../components/ui/Avatar'
-import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import { StreamingStatus } from '../../components/ui/StreamingStatus'
 import type { ChatMessage } from './types'
@@ -18,10 +17,6 @@ interface DirectChatAreaProps {
   /** 中断某个 agent 的在飞 chat 流。requestId 是 master/worker 侧的原始 id
    *  (即 bubble.id 去掉 `stream_` 前缀);agentName 是响应方名字。 */
   onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
-  onNewDmConversation: () => void
-  onShowConfig: () => void
-  /** Delete the current DM (the underlying `groups` row + its messages). */
-  onDeleteConversation?: () => void
 }
 
 // Extract the last [status:thinking]...[/status:thinking] tag from message
@@ -46,9 +41,6 @@ export function DirectChatArea({
   connectionStatus,
   onSendMessage,
   onCancelStream,
-  onNewDmConversation,
-  onShowConfig,
-  onDeleteConversation,
 }: DirectChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -116,35 +108,6 @@ export function DirectChatArea({
 
   return (
     <>
-      <div className={styles.chatHeader}>
-        <div className={styles.chatHeaderLeft}>
-          <Avatar name={directTarget} size={40} />
-          <div style={{ overflow: 'hidden', minWidth: 0 }}>
-            <h3 className={styles.chatTitle}>{directTarget}</h3>
-                    </div>
-        </div>
-        <div className={styles.chatHeaderActions}>
-          <Button variant="ghost" size="sm" onClick={onNewDmConversation}>新对话</Button>
-          {onDeleteConversation && (
-            <Button variant="ghost" size="sm" onClick={onDeleteConversation} title="删除整个对话">
-              删除
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" iconOnly onClick={onShowConfig} title="设置">⚙️</Button>
-        </div>
-        <div className={styles.chatHeaderSub}>
-          <span className={`${styles.connectionDot} ${styles[connectionStatus]}`} />
-          <span className={styles.connectionText}>
-            {connectionStatus === 'connected' ? '已连接' :
-             connectionStatus === 'connecting' ? '连接中...' :
-             connectionStatus === 'conflict' ? '连接冲突' :
-             '未连接'}
-          </span>
-          <span className={styles.connectionSep}>·</span>
-          <span className={styles.connectionIdentity}>{myAgentName}</span>
-        </div>
-      </div>
-
       <div ref={scrollContainerRef} className={styles.messagesArea} onScroll={handleMessagesScroll}>
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>与 {directTarget} 开始一对一对话</div>
