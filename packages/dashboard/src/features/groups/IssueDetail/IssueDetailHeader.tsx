@@ -21,9 +21,13 @@ interface IssueDetailHeaderProps {
   onComplete: () => void
   onCancel: () => void
   onDelete: () => void
-  /** 中断成功后触发(IssueDetail 用来清空 pendingQueue —— worker abort 时
-   *  finally 块会消费队列,chip 对应的消息已被 worker 吃掉)。 */
+  /** 中断成功后触发(IssueDetail 用来清空 pendingQueue —— flush 已经把 chip
+   *  通过 /append 推给 worker,worker abort 时 finally 块会消费队列)。 */
   onInterrupted?: () => void
+  /** in_progress 期间用户已发送的本地草稿队列(chip 列表)。中断前会逐条
+   *  flush 给 worker(走 /append 进 pendingAppends),对齐 codex CLI 的
+   *  Enter 入队 / Esc flush 交互。空数组或 undefined 时跳过 flush。 */
+  pendingQueue?: string[]
   /** 访客模式:隐藏中断、完成、取消、删除、指派、编辑、approval_policy 等按钮。 */
   readOnly?: boolean
 }
@@ -35,7 +39,7 @@ const APPROVAL_POLICY_OPTIONS: Array<{ value: ApprovalPolicy; label: string }> =
   { value: 'rw_allow', label: '读写默认通过' },
 ]
 
-export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete, onInterrupted, readOnly = false }: IssueDetailHeaderProps) {
+export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete, onInterrupted, pendingQueue, readOnly = false }: IssueDetailHeaderProps) {
   const [pendingAssignee, setPendingAssignee] = useState<string | null>(null)
   const [assigning, setAssigning] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -69,13 +73,21 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
       : '当前区间耗时(实时刷新)'
   const showAssign = issue.type !== 'collaboration'
 
-  // 中断当前步骤(对齐 codex CLI 的 ESC):POST /issues/:id/interrupt →
-  // worker abort 当前 CLI → runIssueExecution finally 块消费 pendingAppends
-  // 用 --resume 续跑(队列非空)或保持 idle in_progress(队列空)。
+  // 中断当前步骤(对齐 codex CLI 的 ESC + flush steers):POST /issues/:id/append
+  // 把 pendingQueue 里的草稿逐条 flush 给 worker → POST /issues/:id/interrupt →
+  // worker abort 当前 CLI → runIssueExecution finally 块(worker.ts:964-998)
+  // 消费 pendingAppends 用 --resume 续跑。chip 一直只是本地草稿,到这里才真正
+  // 落到 worker 队列里。逐条 await 保证 worker.pendingAppends 顺序与 chip 一致,
+  // 时间线上的「追加指令」气泡顺序也对得上。
   const handleInterrupt = async () => {
     if (interrupting) return
     setInterrupting(true)
     try {
+      if (pendingQueue && pendingQueue.length > 0) {
+        for (const text of pendingQueue) {
+          await issuesApi.append(issue.id, text, issue.created_by)
+        }
+      }
       await issuesApi.interrupt(issue.id, issue.created_by)
       onInterrupted?.()
       await reload()
@@ -102,11 +114,13 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // handleInterrupt 依赖 issue.id / created_by / interrupting,但中断进行中
-    // 的去重由 setInterrupting + 早 return 保证,这里不把 handleInterrupt 放
-    // 依赖避免每次 render 重绑监听。
+    // handleInterrupt 依赖 issue.id / created_by / interrupting / pendingQueue,
+    // 但中断进行中的去重由 setInterrupting + 早 return 保证。pendingQueue
+    // 必须放依赖:否则用户加 chip 后按 ESC,监听闭包里的 handleInterrupt 还是
+    // 旧 render 的(空队列),chip 不会被 flush。pendingQueue 只在 chip 增删
+    // 时换引用,重绑频率很低。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInProgress, issue.id])
+  }, [isInProgress, issue.id, pendingQueue])
 
   // 候选指派对象 = 群成员 ∩ 非真人 agent（真人不参与抢单执行）。
   const memberSet = new Set(groupMembers)

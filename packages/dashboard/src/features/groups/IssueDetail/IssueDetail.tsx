@@ -37,16 +37,48 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
 
   // in_progress 期间用户已发送但 worker 还没消费的追加指令(chip 列表)。
   // 提升到 IssueDetail 层,让 ContinueInputBar(push)和 IssueDetailHeader
-  // (中断时 clear)都能访问。issue 翻终态时也清空(自然结束 / 取消)。
+  // (中断时 flush + clear)都能访问。issue 翻终态时按下面 effect 处理。
   const [pendingQueue, setPendingQueue] = useState<string[]>([])
   const prevStatusRef = useRef<Issue['status'] | undefined>(undefined)
+  // pendingQueue 的 ref 副本:status 变化 effect 只在 issue?.status 改变时跑,
+  // 但 effect 里要读「用户最后一次加 chip 后」的最新队列。直接把 pendingQueue
+  // 放 effect 依赖会让每次 push/remove 都重跑(还要先于本 effect 把 ref 置空,
+  // 否则 reload 触发的二次渲染可能重入),所以走 ref 同步。
+  const pendingQueueRef = useRef<string[]>([])
+  pendingQueueRef.current = pendingQueue
+
   useEffect(() => {
     const prev = prevStatusRef.current
     prevStatusRef.current = issue?.status
     if (!issue) return
-    // 离开 in_progress(翻终态 / 回 open)时清空 chip —— 队列语义只对 in_progress 有意义。
+    // 离开 in_progress 时处理本地草稿:
+    //   - completed/failed(worker 自然跑完)→ 自动 /continue,worker 用
+    //     session_id --resume 起新轮。对齐 codex CLI "steers persist across
+    //     rounds" 语义:用户加了 chip 但没按 ESC,草稿也不丢。
+    //   - paused → 自动 /append(worker idle 分支同样 --resume 起新轮)。
+    //   - cancelled / 回 open → 丢弃草稿。
+    // ESC 路径不在这里:handleInterrupt 自己 flush + /interrupt,queue 非空
+    // 时 worker 会续跑保持 in_progress,本 effect 不会触发。
     if (prev === 'in_progress' && issue.status !== 'in_progress') {
+      const queued = pendingQueueRef.current
+      // 先清本地 chip + ref,避免 reload 期间旧 chip 闪一帧 / effect 重入。
       setPendingQueue([])
+      pendingQueueRef.current = []
+      if (queued.length === 0) return
+
+      const merged = queued.join('\n\n')
+      if (issue.status === 'completed' || issue.status === 'failed') {
+        void issuesApi
+          .continue(issue.id, merged, issue.created_by)
+          .then(() => reload())
+          .catch(err => console.error('Failed to auto-continue pending drafts:', err))
+      } else if (issue.status === 'paused') {
+        void issuesApi
+          .append(issue.id, merged, issue.created_by)
+          .then(() => reload())
+          .catch(err => console.error('Failed to auto-append pending drafts:', err))
+      }
+      // cancelled:丢弃(已 setPendingQueue([]))
     }
   }, [issue?.status])
 
@@ -180,6 +212,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
         onCancel={handleCancel}
         onDelete={handleDelete}
         onInterrupted={clearPending}
+        pendingQueue={pendingQueue}
         readOnly={readOnly}
       />
 
