@@ -2,16 +2,17 @@ import { useState, useEffect } from 'react';
 import type { Agent, AgentProfile } from '../../api/types';
 import { agentsApi } from '../../api/agents';
 import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import styles from './AddAgentModal.module.css';
 
 interface AgentProfileModalProps {
   agent: Agent | null;
-  isOpen: boolean;
+  open: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function AgentProfileModal({ agent, isOpen, onClose, onSuccess }: AgentProfileModalProps) {
+export function AgentProfileModal({ agent, open, onClose, onSuccess }: AgentProfileModalProps) {
   const [position, setPosition] = useState('');
   const [responsibilities, setResponsibilities] = useState('');
   const [techStack, setTechStack] = useState('');
@@ -44,10 +45,9 @@ export function AgentProfileModal({ agent, isOpen, onClose, onSuccess }: AgentPr
     return () => { cancelled = true };
   }, [agent]);
 
-  if (!isOpen || !agent) return null;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!agent) return;
     setLoading(true);
     setError('');
 
@@ -98,115 +98,111 @@ export function AgentProfileModal({ agent, isOpen, onClose, onSuccess }: AgentPr
     : token ?? '未知（旧 agent 没有保存明文，请点「重置 token」生成新 token）';
 
   return (
-    <div className={styles.overlay} onClick={handleClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
-          <h3>编辑员工介绍 — {agent.name}</h3>
-          <Button variant="ghost" size="sm" iconOnly onClick={handleClose} title="关闭">&times;</Button>
-        </div>
-
-        <div className={styles.content}>
-          <div className={styles.field}>
-            <label>Mesh Token</label>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    type="text"
-                    value={tokenDisplay}
-                    readOnly
-                    onFocus={(e) => e.currentTarget.select()}
-                    style={{
-                      flex: 1,
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                      fontSize: '12px',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      border: '1px solid #d1d5db',
-                      background: '#f9fafb',
-                      color: token ? '#111827' : '#9ca3af',
-                      cursor: token ? 'text' : 'not-allowed',
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleCopyToken}
-                    disabled={!token}
-                    title={token ? '复制 token 到剪贴板' : '当前无可复制的明文 token'}
-                  >
-                    {copied ? '已复制' : '复制'}
-                  </Button>
-                </div>
-              </div>
-              <div style={{
-                width: 200,
-                fontSize: 12,
-                color: '#6b7280',
-                lineHeight: 1.5,
-                padding: '6px 10px',
-                borderLeft: '3px solid #e5e7eb',
-              }}>
-                <div style={{ fontWeight: 600, color: '#374151', marginBottom: 4 }}>关于 mesh_*</div>
-                目前仅作为唯一 ID 使用，后续可作为鉴权使用。
-              </div>
+    <Modal
+      open={open && !!agent}
+      title={agent ? `编辑员工介绍 — ${agent.name}` : '编辑员工介绍'}
+      onClose={handleClose}
+      size="md"
+    >
+      <div className={styles.field}>
+        <label>Mesh Token</label>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                value={tokenDisplay}
+                readOnly
+                onFocus={(e) => e.currentTarget.select()}
+                style={{
+                  flex: 1,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontSize: '12px',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  background: '#f9fafb',
+                  color: token ? '#111827' : '#9ca3af',
+                  cursor: token ? 'text' : 'not-allowed',
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleCopyToken}
+                disabled={!token}
+                title={token ? '复制 token 到剪贴板' : '当前无可复制的明文 token'}
+              >
+                {copied ? '已复制' : '复制'}
+              </Button>
             </div>
           </div>
-
-          <form onSubmit={handleSubmit}>
-            <div className={styles.field}>
-              <label>岗位</label>
-              <input
-                type="text"
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                placeholder="如：前端开发工程师"
-                disabled={loading}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label>负责</label>
-              <textarea
-                value={responsibilities}
-                onChange={(e) => setResponsibilities(e.target.value)}
-                placeholder="如：负责保险业务前端架构和核心模块开发"
-                rows={3}
-                disabled={loading}
-                style={{ width: '100%', resize: 'vertical', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px' }}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label>技术栈</label>
-              <input
-                type="text"
-                value={techStack}
-                onChange={(e) => setTechStack(e.target.value)}
-                placeholder="如：React, TypeScript, Node.js"
-                disabled={loading}
-              />
-            </div>
-
-            {error && <div style={{ color: 'var(--color-error)', fontSize: '13px', marginBottom: '12px' }}>{error}</div>}
-
-            <div className={styles.actions}>
-              <Button type="button" variant="secondary" size="md" onClick={handleClose}>
-                取消
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                disabled={loading}
-              >
-                {loading ? '保存中...' : '保存'}
-              </Button>
-            </div>
-          </form>
+          <div style={{
+            width: 200,
+            fontSize: 12,
+            color: '#6b7280',
+            lineHeight: 1.5,
+            padding: '6px 10px',
+            borderLeft: '3px solid #e5e7eb',
+          }}>
+            <div style={{ fontWeight: 600, color: '#374151', marginBottom: 4 }}>关于 mesh_*</div>
+            目前仅作为唯一 ID 使用，后续可作为鉴权使用。
+          </div>
         </div>
       </div>
-    </div>
+
+      <form onSubmit={handleSubmit}>
+        <div className={styles.field}>
+          <label>岗位</label>
+          <input
+            type="text"
+            value={position}
+            onChange={(e) => setPosition(e.target.value)}
+            placeholder="如：前端开发工程师"
+            disabled={loading}
+          />
+        </div>
+
+        <div className={styles.field}>
+          <label>负责</label>
+          <textarea
+            value={responsibilities}
+            onChange={(e) => setResponsibilities(e.target.value)}
+            placeholder="如：负责保险业务前端架构和核心模块开发"
+            rows={3}
+            disabled={loading}
+            style={{ width: '100%', resize: 'vertical', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px' }}
+          />
+        </div>
+
+        <div className={styles.field}>
+          <label>技术栈</label>
+          <input
+            type="text"
+            value={techStack}
+            onChange={(e) => setTechStack(e.target.value)}
+            placeholder="如：React, TypeScript, Node.js"
+            disabled={loading}
+          />
+        </div>
+
+        {error && <div style={{ color: 'var(--color-error)', fontSize: '13px', marginBottom: '12px' }}>{error}</div>}
+
+        <div className={styles.actions}>
+          <Button type="button" variant="secondary" size="md" onClick={handleClose}>
+            取消
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            disabled={loading}
+          >
+            {loading ? '保存中...' : '保存'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

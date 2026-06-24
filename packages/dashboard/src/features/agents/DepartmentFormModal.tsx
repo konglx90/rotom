@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { domainsApi } from '../../api/domains'
 import type { Domain } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { Modal } from '../../components/ui/Modal'
 import styles from './DepartmentFormModal.module.css'
 
 type Mode = 'create' | 'edit'
@@ -39,8 +40,6 @@ export function DepartmentFormModal({
     }
   }, [open, mode, domain])
 
-  if (!open) return null
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = name.trim()
@@ -77,58 +76,49 @@ export function DepartmentFormModal({
   const submitLabel = mode === 'create' ? '创建' : '保存'
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
-          <h3>{title}</h3>
-          <Button type="button" variant="ghost" size="sm" iconOnly onClick={onClose} title="关闭">
-            &times;
-          </Button>
+    <Modal open={open} title={title} onClose={onClose} size="sm">
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <div className={styles.field}>
+          <label>部门名称 *</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="如：技术部"
+            required
+            autoFocus
+            disabled={submitting}
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.form}>
-          <div className={styles.field}>
-            <label>部门名称 *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="如：技术部"
-              required
-              autoFocus
-              disabled={submitting}
-            />
-          </div>
+        <div className={styles.field}>
+          <label>描述（可选）</label>
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="简要描述该部门的职责"
+            disabled={submitting}
+          />
+        </div>
 
-          <div className={styles.field}>
-            <label>描述（可选）</label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="简要描述该部门的职责"
-              disabled={submitting}
-            />
-          </div>
+        {error && <div className={styles.error}>{error}</div>}
 
-          {error && <div className={styles.error}>{error}</div>}
-
-          <div className={styles.actions}>
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={onClose}
-              disabled={submitting}
-            >
-              取消
-            </Button>
-            <Button type="submit" variant="primary" size="md" disabled={submitting}>
-              {submitting ? '提交中…' : submitLabel}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className={styles.actions}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            onClick={onClose}
+            disabled={submitting}
+          >
+            取消
+          </Button>
+          <Button type="submit" variant="primary" size="md" disabled={submitting}>
+            {submitting ? '提交中…' : submitLabel}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }

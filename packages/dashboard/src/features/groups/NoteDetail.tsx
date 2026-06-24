@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Note } from '../../api/types'
 import { notesApi } from '../../api/notes'
+import { AsyncBoundary } from '../../components/data/AsyncBoundary'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import { MarkdownEditor } from '../../components/ui/MarkdownEditor'
@@ -16,45 +17,91 @@ interface NoteDetailProps {
 
 export function NoteDetail({ noteId, refreshSignal, onBack, onChanged }: NoteDetailProps) {
   const [note, setNote] = useState<Note | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<Error | null>(null)
+
+  const refetch = () => {
+    setLoading(true)
+    setLoadError(null)
+    notesApi.getById(noteId)
+      .then(data => {
+        setNote(data)
+        setLoading(false)
+      })
+      .catch(err => {
+        setLoadError(err instanceof Error ? err : new Error(err?.message ?? '加载失败'))
+        setLoading(false)
+      })
+  }
+
+  useEffect(() => {
+    refetch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteId, refreshSignal])
+
+  return (
+    <AsyncBoundary
+      data={note}
+      loading={loading}
+      error={loadError}
+      onRetry={refetch}
+      loadingFallback={
+        <div className={styles.noteDetail}>
+          <div className={styles.noteDetailHeader}>
+            <button className={styles.noteDetailBack} onClick={onBack}>← 返回</button>
+          </div>
+          <div className={styles.noteEmpty}>加载中...</div>
+        </div>
+      }
+      errorFallback={(err, retry) => (
+        <div className={styles.noteDetail}>
+          <div className={styles.noteDetailHeader}>
+            <button className={styles.noteDetailBack} onClick={onBack}>← 返回</button>
+          </div>
+          <div className={styles.noteEmpty}>
+            {typeof err === 'string' ? err : err.message}
+            <Button variant="ghost" size="sm" onClick={retry}>重试</Button>
+          </div>
+        </div>
+      )}
+    >
+      {(data) => (
+        <NoteDetailBody
+          note={data}
+          onBack={onBack}
+          onChanged={onChanged}
+        />
+      )}
+    </AsyncBoundary>
+  )
+}
+
+interface NoteDetailBodyProps {
+  note: Note
+  onBack: () => void
+  onChanged: () => void
+}
+
+function NoteDetailBody({ note, onBack, onChanged }: NoteDetailBodyProps) {
   const [editing, setEditing] = useState(false)
-  const [titleDraft, setTitleDraft] = useState('')
-  const [descDraft, setDescDraft] = useState('')
+  const [titleDraft, setTitleDraft] = useState(note.title)
+  const [descDraft, setDescDraft] = useState(note.description)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    setError(null)
-    notesApi.getById(noteId)
-      .then(data => {
-        if (cancelled) return
-        setNote(data)
-        setTitleDraft(data.title)
-        setDescDraft(data.description)
-        setEditing(false)
-      })
-      .catch(err => {
-        if (!cancelled) setError(err?.message ?? '加载失败')
-      })
-    return () => { cancelled = true }
-  }, [noteId, refreshSignal])
-
   const startEdit = () => {
-    if (!note) return
     setTitleDraft(note.title)
     setDescDraft(note.description)
     setEditing(true)
   }
 
   const cancelEdit = () => {
-    if (!note) return
     setTitleDraft(note.title)
     setDescDraft(note.description)
     setEditing(false)
   }
 
   const saveEdit = async () => {
-    if (!note) return
     const newTitle = titleDraft.trim()
     if (!newTitle) {
       setError('标题不能为空')
@@ -65,7 +112,6 @@ export function NoteDetail({ noteId, refreshSignal, onBack, onChanged }: NoteDet
     try {
       await notesApi.update(note.id, { title: newTitle, description: descDraft })
       const fresh = await notesApi.getById(note.id)
-      setNote(fresh)
       setTitleDraft(fresh.title)
       setDescDraft(fresh.description)
       setEditing(false)
@@ -78,7 +124,6 @@ export function NoteDetail({ noteId, refreshSignal, onBack, onChanged }: NoteDet
   }
 
   const handleDelete = async () => {
-    if (!note) return
     if (!window.confirm(`确认删除 note "${note.title}"?此操作不可恢复。`)) return
     try {
       await notesApi.delete(note.id)
@@ -87,28 +132,6 @@ export function NoteDetail({ noteId, refreshSignal, onBack, onChanged }: NoteDet
     } catch (err: any) {
       setError(err?.message ?? '删除失败')
     }
-  }
-
-  if (error && !note) {
-    return (
-      <div className={styles.noteDetail}>
-        <div className={styles.noteDetailHeader}>
-          <button className={styles.noteDetailBack} onClick={onBack}>← 返回</button>
-        </div>
-        <div className={styles.noteEmpty}>{error}</div>
-      </div>
-    )
-  }
-
-  if (!note) {
-    return (
-      <div className={styles.noteDetail}>
-        <div className={styles.noteDetailHeader}>
-          <button className={styles.noteDetailBack} onClick={onBack}>← 返回</button>
-        </div>
-        <div className={styles.noteEmpty}>加载中...</div>
-      </div>
-    )
   }
 
   return (

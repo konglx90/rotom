@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { Domain } from '../../api/types';
 import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import styles from './AddAgentModal.module.css';
 
 interface AddAgentModalProps {
-  isOpen: boolean;
+  open: boolean;
   onClose: () => void;
   domains: Domain[];
   onSuccess: () => void;
@@ -24,7 +25,7 @@ interface AgentConfig {
   };
 }
 
-export function AddAgentModal({ isOpen, onClose, domains, onSuccess, defaultDomain }: AddAgentModalProps) {
+export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain }: AddAgentModalProps) {
   const [name, setName] = useState('');
   const [domain, setDomain] = useState(defaultDomain ?? '');
   const [category, setCategory] = useState('');
@@ -36,12 +37,10 @@ export function AddAgentModal({ isOpen, onClose, domains, onSuccess, defaultDoma
   const [result, setResult] = useState<{ success: boolean; config?: AgentConfig; error?: string } | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
+    if (open) {
       setDomain(defaultDomain ?? '');
     }
-  }, [isOpen, defaultDomain]);
-
-  if (!isOpen) return null;
+  }, [open, defaultDomain]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,156 +138,152 @@ export function AddAgentModal({ isOpen, onClose, domains, onSuccess, defaultDoma
   };
 
   return (
-    <div className={styles.overlay} onClick={handleClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
-          <h3>添加数字员工</h3>
-          <Button variant="ghost" size="sm" iconOnly onClick={handleClose} title="关闭">&times;</Button>
+    <Modal
+      open={open}
+      title="添加数字员工"
+      onClose={handleClose}
+      size="md"
+    >
+      {domains.length === 0 && (
+        <div className={styles.warning}>
+          请先在「部门」中创建至少一个域。
         </div>
+      )}
 
-        <div className={styles.content}>
-          {domains.length === 0 && (
-            <div className={styles.warning}>
-              请先在「部门」中创建至少一个域。
-            </div>
-          )}
+      {!result ? (
+        <form onSubmit={handleSubmit}>
+          <div className={styles.field}>
+            <label>节点名称 *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="如：小七"
+              disabled={loading}
+            />
+          </div>
 
-          {!result ? (
-            <form onSubmit={handleSubmit}>
-              <div className={styles.field}>
-                <label>节点名称 *</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="如：小七"
-                  disabled={loading}
-                />
-              </div>
+          <div className={styles.field}>
+            <label>所属域 *</label>
+            <select
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              disabled={loading || domains.length === 0}
+            >
+              <option value="">选择域</option>
+              {domains.map((d) => (
+                <option key={d.id} value={d.name}>
+                  {d.name}{d.description ? ` — ${d.description}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
 
-              <div className={styles.field}>
-                <label>所属域 *</label>
-                <select
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  disabled={loading || domains.length === 0}
-                >
-                  <option value="">选择域</option>
-                  {domains.map((d) => (
-                    <option key={d.id} value={d.name}>
-                      {d.name}{d.description ? ` — ${d.description}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <div className={styles.field}>
+            <label>员工类型</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">🚀 Agent（默认）</option>
+              <option value="真人">👤 真人 — 真实人类团队成员</option>
+            </select>
+          </div>
 
-              <div className={styles.field}>
-                <label>员工类型</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  disabled={loading}
-                >
-                  <option value="">🚀 Agent（默认）</option>
-                  <option value="真人">👤 真人 — 真实人类团队成员</option>
-                </select>
-              </div>
+          <div className={styles.field}>
+            <label>岗位</label>
+            <input
+              type="text"
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              placeholder="如：前端开发工程师"
+              disabled={loading}
+            />
+          </div>
 
-              <div className={styles.field}>
-                <label>岗位</label>
-                <input
-                  type="text"
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value)}
-                  placeholder="如：前端开发工程师"
-                  disabled={loading}
-                />
-              </div>
+          <div className={styles.field}>
+            <label>负责</label>
+            <input
+              type="text"
+              value={responsibilities}
+              onChange={(e) => setResponsibilities(e.target.value)}
+              placeholder="如：负责保险业务前端架构和核心模块开发"
+              disabled={loading}
+            />
+          </div>
 
-              <div className={styles.field}>
-                <label>负责</label>
-                <input
-                  type="text"
-                  value={responsibilities}
-                  onChange={(e) => setResponsibilities(e.target.value)}
-                  placeholder="如：负责保险业务前端架构和核心模块开发"
-                  disabled={loading}
-                />
-              </div>
+          <div className={styles.field}>
+            <label>技术栈</label>
+            <input
+              type="text"
+              value={techStack}
+              onChange={(e) => setTechStack(e.target.value)}
+              placeholder="如：React, TypeScript, Node.js"
+              disabled={loading}
+            />
+          </div>
 
-              <div className={styles.field}>
-                <label>技术栈</label>
-                <input
-                  type="text"
-                  value={techStack}
-                  onChange={(e) => setTechStack(e.target.value)}
-                  placeholder="如：React, TypeScript, Node.js"
-                  disabled={loading}
-                />
+          <div className={styles.actions}>
+            <Button type="button" variant="secondary" size="md" onClick={handleClose}>
+              取消
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              disabled={loading || domains.length === 0}
+            >
+              {loading ? '生成中...' : '生成 Token'}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div className={styles.success}>
+          {result.success ? (
+            <>
+              <div className={styles.successIcon}>✓</div>
+              <h4>注册成功</h4>
+
+              <div className={styles.configSection}>
+                <p className={styles.configLabel}>
+                  将以下配置发给对方，添加到 openclaw.json 的 channels 中：
+                </p>
+                <div className={styles.configContainer}>
+                  <pre className={styles.configJson}>
+                    {JSON.stringify(result.config, null, 2)}
+                  </pre>
+                  <Button
+                    onClick={copyConfig}
+                    variant={copied ? 'success' : 'secondary'}
+                    size="sm"
+                    type="button"
+                  >
+                    {copied ? '已复制' : '复制配置'}
+                  </Button>
+                </div>
+                <div className={styles.info}>
+                  对方粘贴配置后启动 Gateway 即可自动连接。<br />
+                  profile 中的岗位、负责、技术栈会帮助其他数字员工了解该员工角色。
+                </div>
               </div>
 
               <div className={styles.actions}>
-                <Button type="button" variant="secondary" size="md" onClick={handleClose}>
-                  取消
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  disabled={loading || domains.length === 0}
-                >
-                  {loading ? '生成中...' : '生成 Token'}
+                <Button variant="secondary" size="md" onClick={handleClose}>
+                  关闭
                 </Button>
               </div>
-            </form>
+            </>
           ) : (
-            <div className={styles.success}>
-              {result.success ? (
-                <>
-                  <div className={styles.successIcon}>✓</div>
-                  <h4>注册成功</h4>
-
-                  <div className={styles.configSection}>
-                    <p className={styles.configLabel}>
-                      将以下配置发给对方，添加到 openclaw.json 的 channels 中：
-                    </p>
-                    <div className={styles.configContainer}>
-                      <pre className={styles.configJson}>
-                        {JSON.stringify(result.config, null, 2)}
-                      </pre>
-                      <Button
-                        onClick={copyConfig}
-                        variant={copied ? 'success' : 'secondary'}
-                        size="sm"
-                        type="button"
-                      >
-                        {copied ? '已复制' : '复制配置'}
-                      </Button>
-                    </div>
-                    <div className={styles.info}>
-                      对方粘贴配置后启动 Gateway 即可自动连接。<br />
-                      profile 中的岗位、负责、技术栈会帮助其他数字员工了解该员工角色。
-                    </div>
-                  </div>
-
-                  <div className={styles.actions}>
-                    <Button variant="secondary" size="md" onClick={handleClose}>
-                      关闭
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <div className={styles.errorMsg}>
-                  {result.error}
-                  <Button variant="ghost" size="sm" onClick={() => setResult(null)}>
-                    重试
-                  </Button>
-                </div>
-              )}
+            <div className={styles.errorMsg}>
+              {result.error}
+              <Button variant="ghost" size="sm" onClick={() => setResult(null)}>
+                重试
+              </Button>
             </div>
           )}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 }
