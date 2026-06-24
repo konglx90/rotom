@@ -276,25 +276,30 @@ export function GroupChatArea({
       <div ref={messagesAreaRef} className={styles.messagesArea} onScroll={handleMessagesScroll}>
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>在群 {selectedGroup.name} 中开始对话吧</div>
-        ) : visibleMessages.map(msg => (
-          msg.truncated ? (
-            <div key={msg.id} className={styles.truncatedChip}>
-              已省略 {msg.truncated.omitted} 条较早消息
-            </div>
-          ) : (
-            <MessageRow
-              key={msg.id}
-              msg={msg}
-              agents={agents}
-              myAgentName={myAgentName}
-              groupMembers={groupMembers}
-              onShowPrompt={handleShowPrompt}
-              onQuote={handleQuote}
-              onCancelStream={onCancelStream}
-              onContextMenu={handleMessageContextMenu}
-            />
-          )
-        ))}
+        ) : visibleMessages.map((msg, idx) => {
+          const prev = visibleMessages[idx - 1];
+          const isContinuation = !!prev && !prev.truncated && !msg.truncated && prev.from === msg.from;
+          return (
+            msg.truncated ? (
+              <div key={msg.id} className={styles.truncatedChip}>
+                已省略 {msg.truncated.omitted} 条较早消息
+              </div>
+            ) : (
+              <MessageRow
+                key={msg.id}
+                msg={msg}
+                agents={agents}
+                myAgentName={myAgentName}
+                groupMembers={groupMembers}
+                onShowPrompt={handleShowPrompt}
+                onQuote={handleQuote}
+                onCancelStream={onCancelStream}
+                onContextMenu={handleMessageContextMenu}
+                isContinuation={isContinuation}
+              />
+            )
+          );
+        })}
       </div>
 
       {!isVisitor && (

@@ -299,12 +299,33 @@
   font-weight: 600;
   font-size: 13px;
   color: var(--color-ink);
-  margin-bottom: 2px;
-  word-break: break-all;
   letter-spacing: -0.108px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.groupNameText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.memberCount {
+  font-size: 11px;
+  color: var(--color-gray);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+.groupItem:hover .memberCount,
+.groupItem:focus-within .memberCount,
+.groupItem:has(.moreDropdown) .memberCount {
+  opacity: 0;
 }
 
 
@@ -871,8 +892,10 @@
 
 /* ── More-actions dropdown (··· menu) ──────────────── */
 .moreWrap {
-  position: relative;
-  flex-shrink: 0;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .moreBtn {
@@ -898,7 +921,8 @@
 }
 
 .groupItem:hover .moreBtn,
-.groupItem:focus-within .moreBtn {
+.groupItem:focus-within .moreBtn,
+.groupItem:has(.moreDropdown) .moreBtn {
   opacity: 1;
 }
 

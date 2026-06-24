@@ -12,16 +12,16 @@
   width: 100%;
 }
 
-.bubbleRowAgent {
+/* 单列左对齐:agent 和 user 都从左侧延伸,靠背景色区分(agent 灰 / user 蓝)。
+   原 user 右对齐 + max-width 85% 浪费 ~15% 横向空间,参考群聊 Slack 风格改成左对齐铺满。 */
+.bubbleRowAgent,
+.bubbleRowUser {
   justify-content: flex-start;
 }
 
-.bubbleRowUser {
-  justify-content: flex-end;
-}
-
 .bubble {
-  max-width: 85%;
+  /* 铺满:无头像列,气泡占整个时间线宽度,长内容(代码/agent 输出)充分展示。 */
+  max-width: 100%;
   min-width: 0;
   border-radius: 10px;
   padding: 5px 10px;
@@ -36,7 +36,7 @@
 
 .bubbleRowUser .bubble {
   background: #e3f0ff;
-  border-top-right-radius: 3px;
+  border-top-left-radius: 3px;
   color: var(--color-navy, #1f2a44);
 }
 
@@ -57,11 +57,6 @@
   margin-bottom: 1px;
 }
 
-.bubbleRowUser .bubbleMeta {
-  /* 真人消息的 agent 名其实是自己,弱化展示,重点让时间靠右 */
-  flex-direction: row-reverse;
-}
-
 .bubbleAgent {
   font-size: 11px;
   font-weight: 600;
@@ -72,6 +67,7 @@
   font-size: 10px;
   color: var(--color-gray, #999);
   font-family: var(--font-mono, 'SF Mono', monospace);
+  margin-left: auto;
 }
 
 .bubbleContent {
