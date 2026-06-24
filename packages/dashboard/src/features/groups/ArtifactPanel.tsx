@@ -10,6 +10,12 @@ import styles from './ArtifactPanel.module.css'
 
 interface ArtifactPanelProps {
   groupId: string
+  /** 受控选中路径:外部(如 Issue 详情里的 artifact 链接)传入时,面板自动
+   *  选中并加载该文件。null/undefined 时走面板内部选中态。
+   *  与内部点击树节点的双向同步:onSelectedPathChange 把内部选中反向通知
+   *  外部;外部不回写就不会形成循环(useEffect 依赖 [selectedPath] 不变即跳过)。 */
+  selectedPath?: string | null
+  onSelectedPathChange?: (path: string | null) => void
 }
 
 /** Depth at which directories are expanded by default on first load. */
@@ -54,6 +60,19 @@ function getFileIcon(name: string): string {
   if (['md', 'txt', 'doc'].includes(ext)) return '\u{1F4DD}'
   if (['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext)) return '\u{1F5BC}'
   return '\u{1F4C4}'
+}
+
+/** 在文件树里按 path 递归查找 ArtifactFile 节点(目录节点也匹配,但调用方
+ *  一般只关心文件)。返回 null 表示没找到(可能文件已被删除/未生成)。 */
+function findFileByPath(files: ArtifactFile[], path: string): ArtifactFile | null {
+  for (const f of files) {
+    if (f.path === path) return f
+    if (f.type === 'directory' && f.children) {
+      const hit = findFileByPath(f.children, path)
+      if (hit) return hit
+    }
+  }
+  return null
 }
 
 function FileTreeNode({
@@ -118,7 +137,7 @@ function FileTreeNode({
   )
 }
 
-export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
+export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: ArtifactPanelProps) {
   const [root, setRoot] = useState<string | null>(null)
   const [files, setFiles] = useState<ArtifactFile[]>([])
   const [selectedFile, setSelectedFile] = useState<ArtifactFile | null>(null)
@@ -158,11 +177,14 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
     setMode('view')
   }, [groupId, loadFiles])
 
-  const handleSelect = async (file: ArtifactFile) => {
+  const handleSelect = useCallback(async (file: ArtifactFile) => {
     setSelectedFile(file)
     setContentLoading(true)
     setOriginal(null)
     setMode('view')
+    // 双向同步:把内部选中反向通知外部,外部 state 不回写就不会形成循环
+    // (useEffect 依赖 selectedPath,相同值不触发)。
+    onSelectedPathChange?.(file.path)
     try {
       const data = await artifactsApi.getContent(groupId, file.path)
       setContent(data)
@@ -172,7 +194,19 @@ export function ArtifactPanel({ groupId }: ArtifactPanelProps) {
     } finally {
       setContentLoading(false)
     }
-  }
+  }, [groupId, onSelectedPathChange])
+
+  // 外部受控 selectedPath 变化时(例如 Issue 详情点击 artifact 链接),
+  // 在文件树里找到节点并触发选中。files 还没加载完时跳过,等加载完再跑。
+  // selectedFile 已对齐 selectedPath 时跳过,避免与内部点击形成循环。
+  useEffect(() => {
+    if (!selectedPath) return
+    if (files.length === 0) return
+    if (selectedFile?.path === selectedPath) return
+    const target = findFileByPath(files, selectedPath)
+    if (!target) return
+    void handleSelect(target)
+  }, [selectedPath, files, selectedFile, handleSelect])
 
   const handleDiff = async () => {
     if (!selectedFile) return

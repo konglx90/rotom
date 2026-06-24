@@ -113,6 +113,8 @@ interface IssuePanelProps {
   }) => void
   /** 访客模式:隐藏创建按钮、详情内的写操作。 */
   readOnly?: boolean
+  /** 点击 issue 详情里的产物路径时的回调。透传到 IssueDetail。 */
+  onArtifactClick?: (path: string) => void
 }
 
 export function IssuePanel({
@@ -126,6 +128,7 @@ export function IssuePanel({
   onCreateIssue,
   onCreateCollaboration,
   readOnly = false,
+  onArtifactClick,
 }: IssuePanelProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
@@ -148,6 +151,7 @@ export function IssuePanel({
             groupMembers={groupMembers}
             onBack={() => setSelectedIssueId('')}
             readOnly={readOnly}
+            onArtifactClick={onArtifactClick}
           />
         ) : issues.length === 0 ? (
           <div className={styles.issueEmpty}>

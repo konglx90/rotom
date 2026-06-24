@@ -29,9 +29,13 @@ interface IssueDetailProps {
   standalone?: boolean
   /** 访客模式:隐藏所有写操作(状态切换、中断、完成、取消、删除、续跑、评论)。 */
   readOnly?: boolean
+  /** 点击产物文件路径时的回调。嵌入态由 GroupChatView 接管,把 ArtifactPanel
+   *  切换到可见并选中该文件;standalone 态由 IssueDetailPage 弹出抽屉预览。
+   *  不传时产物列表维持只读展示(不做点击)。 */
+  onArtifactClick?: (path: string) => void
 }
 
-export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false, readOnly = false }: IssueDetailProps) {
+export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false, readOnly = false, onArtifactClick }: IssueDetailProps) {
   const { issue, events, messages, loading, reload } = useIssueData(issueId, refreshSignal)
   const edit = useIssueEdit(issue, reload)
 
@@ -247,7 +251,14 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
             <div className={shared.artifactsSection}>
               <div className={shared.artifactsTitle}>产物 ({artifacts.length})</div>
               {artifacts.map((a, i) => (
-                <div key={i} className={styles.artifactItem}>{a}</div>
+                <a
+                  key={i}
+                  className={styles.artifactItem}
+                  onClick={() => onArtifactClick?.(a)}
+                  title={onArtifactClick ? `点击在 Artifacts 中查看: ${a}` : a}
+                >
+                  {a}
+                </a>
               ))}
             </div>
           )}

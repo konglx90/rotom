@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { groupsApi } from '../../api/groups'
 import type { Group } from '../../api/types'
@@ -6,6 +6,7 @@ import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
 import { useVisitorMode } from '../../context/VisitorContext'
 import { IssueDetail } from './IssueDetail'
+const LazyArtifactPanel = lazy(() => import('./ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })))
 import styles from './IssueDetail/IssueDetail.module.css'
 
 export function IssueDetailPage() {
@@ -17,6 +18,9 @@ export function IssueDetailPage() {
 
   const [fallbackGroup, setFallbackGroup] = useState<Group | null>(null)
   const [refreshSignal, setRefreshSignal] = useState(0)
+  // standalone 路由没有 rightPanel 堆叠可用,artifact 链接点击后从右侧滑出抽屉预览。
+  // null = 抽屉关闭;string = 抽屉打开并选中该路径。
+  const [artifactSelectedPath, setArtifactSelectedPath] = useState<string | null>(null)
 
   const groupFromContext = useMemo(
     () => groups.find(g => g.id === groupId),
@@ -81,14 +85,42 @@ export function IssueDetailPage() {
   if (!issueId) return <div className={styles.issueEmpty}>Issue 未找到</div>
 
   return (
-    <IssueDetail
-      issueId={issueId}
-      refreshSignal={refreshSignal}
-      agents={agents}
-      groupMembers={groupMembers}
-      onBack={() => navigate(`/dashboard/groups/${groupId}/issues-single`)}
-      standalone
-      readOnly={isVisitor}
-    />
+    <>
+      <IssueDetail
+        issueId={issueId}
+        refreshSignal={refreshSignal}
+        agents={agents}
+        groupMembers={groupMembers}
+        onBack={() => navigate(`/dashboard/groups/${groupId}/issues-single`)}
+        standalone
+        readOnly={isVisitor}
+        onArtifactClick={setArtifactSelectedPath}
+      />
+      {artifactSelectedPath !== null && (
+        <div className={styles.artifactDrawer}>
+          <div className={styles.drawerHeader}>
+            <span className={styles.drawerTitle}>{'\u{1F4E6}'} Artifacts</span>
+            <button
+              type="button"
+              className={styles.drawerClose}
+              onClick={() => setArtifactSelectedPath(null)}
+              title="关闭"
+              aria-label="关闭 Artifacts 抽屉"
+            >
+              ×
+            </button>
+          </div>
+          <div className={styles.drawerBody}>
+            <Suspense fallback={<div className={styles.drawerLoading}>加载中...</div>}>
+              <LazyArtifactPanel
+                groupId={groupId}
+                selectedPath={artifactSelectedPath}
+                onSelectedPathChange={setArtifactSelectedPath}
+              />
+            </Suspense>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
