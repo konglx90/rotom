@@ -1,0 +1,737 @@
+/**
+ * Connection handling — WebSocket lifecycle and message dispatch.
+ *
+ * Two big methods:
+ *   - handleConnection: per-connection message loop. Owns closure state
+ *     (authenticated flag, agentId, generation) and dispatches by msg.type
+ *     to auth / heartbeat / a2a_send / a2a_reply / a2a_reply_chunk /
+ *     a2a_reply_end / update_info / disconnect / issue_update /
+ *     issue_approval_request / session_view_response / session_delete_response
+ *     / session_snapshot handlers. The handlers stay inside this single
+ *     function to keep the closure simple — splitting per-type is a follow-up.
+ *   - handleDisconnect: generation-aware, prevents stale close events from
+ *     kicking a fresh reconnect.
+ *
+ * Methods attach via `Object.assign(this, connectionMethods)` in the WSHub
+ * composition root. `this` is typed as `WSHubSelf` so cross-module calls
+ * (broadcast, enrichConversationWithCollaboration, trackCollaborationTurn,
+ * logMessage, etc.) compile.
+ */
+
+import { WebSocket } from "ws";
+import {
+  AUTH_TIMEOUT_MS,
+  WS_CLOSE,
+  RATE_LIMIT_MAX,
+  RATE_LIMIT_WINDOW_MS,
+  PROTOCOL_VERSION,
+} from "../../shared/constants.js";
+import { isClientMessage, type ClientMessage } from "../../shared/protocol.js";
+import { parseProfile, type WSHubSelf } from "./hub.js";
+
+export const connectionMethods = {
+  handleConnection(this: WSHubSelf, ws: WebSocket): void {
+    let authenticated = false;
+    let agentId = "";
+    let connGeneration = 0;
+
+    // Must auth within timeout
+    const authTimeout = setTimeout(() => {
+      if (!authenticated) {
+        ws.close(WS_CLOSE.AUTH_TIMEOUT, "Auth timeout");
+      }
+    }, AUTH_TIMEOUT_MS);
+
+    ws.on("message", (raw) => {
+      // Parse
+      let msg: ClientMessage;
+      try {
+        const parsed = JSON.parse(raw.toString());
+        if (!isClientMessage(parsed)) {
+          ws.close(WS_CLOSE.INVALID_JSON, "Invalid message format");
+          return;
+        }
+        msg = parsed;
+      } catch {
+        ws.close(WS_CLOSE.INVALID_JSON, "Invalid JSON");
+        return;
+      }
+
+      // Must authenticate first
+      if (!authenticated && msg.type !== "auth") {
+        ws.close(WS_CLOSE.NOT_AUTHENTICATED, "Authenticate first");
+        return;
+      }
+
+      // ── Auth ────────────────────────────────────────────────────────────
+      if (msg.type === "auth") {
+        clearTimeout(authTimeout);
+
+        // Reject if already authenticated
+        if (authenticated) {
+          ws.close(WS_CLOSE.AUTH_FAILED, "Already authenticated");
+          return;
+        }
+
+        // Try JWT reconnect first, then fall back to token auth
+        let result: { jwt: string; agent: Record<string, unknown> } | null = null;
+
+        if (msg.jwt) {
+          const payload = this.auth.verify(msg.jwt);
+          if (payload) {
+            const agent = this.db.getAgentById(payload.sub);
+            if (agent) {
+              // Check if JWT was issued before the last token refresh
+              const refreshedAt = this.db.getTokenRefreshedAt(payload.sub);
+              const jwtIat = (payload as unknown as Record<string, unknown>).iat as number | undefined;
+              if (refreshedAt && jwtIat) {
+                const refreshTs = Math.floor(new Date(refreshedAt).getTime() / 1000);
+                if (jwtIat < refreshTs) {
+                  // JWT was issued before token refresh — reject
+                  this.logger.warn(`[mesh] JWT rejected for ${agent.name}: issued before token refresh`);
+                  // Fall through to token auth below
+                } else {
+                  result = this.auth.authenticate(msg.token, msg.name);
+                  if (!result) {
+                    const freshJwt = this.auth.issueJwt(payload.sub, payload.name, payload.domain);
+                    result = { jwt: freshJwt, agent: agent as unknown as Record<string, unknown> };
+                  }
+                }
+              } else {
+                // No refresh recorded — allow JWT reconnect
+                result = this.auth.authenticate(msg.token, msg.name);
+                if (!result) {
+                  const freshJwt = this.auth.issueJwt(payload.sub, payload.name, payload.domain);
+                  result = { jwt: freshJwt, agent: agent as unknown as Record<string, unknown> };
+                }
+              }
+            }
+          }
+        }
+
+        if (!result) {
+          result = this.auth.authenticate(msg.token, msg.name);
+        }
+
+        // Fallback: agent changed name but kept same token
+        if (!result && msg.token) {
+          result = this.auth.authenticateByToken(msg.token);
+          if (result) {
+            const oldName = result.agent.name as string;
+            if (oldName !== msg.name) {
+              // Check name collision — another agent may already have this name
+              const nameConflict = this.db.getAgentByName(msg.name);
+              if (nameConflict) {
+                this.send(ws, { type: "auth_fail", reason: `Name "${msg.name}" is already taken` });
+                ws.close(WS_CLOSE.AUTH_FAILED, "Name conflict");
+                return;
+              }
+              this.db.updateAgentName(result.agent.id as string, msg.name);
+              result.agent.name = msg.name;
+              this.logger.info(`[mesh] Agent renamed: "${oldName}" → "${msg.name}"`);
+            }
+          }
+        }
+
+        if (!result) {
+          this.send(ws, { type: "auth_fail", reason: "Invalid token or name" });
+          ws.close(WS_CLOSE.AUTH_FAILED, "Auth failed");
+          return;
+        }
+
+        authenticated = true;
+        agentId = result.agent.id as string;
+        const agent = result.agent;
+
+        // Kick existing connection if any (same agent reconnecting)
+        const existing = this.connections.get(agentId);
+        if (existing && existing.ws !== ws) {
+          this.logger.info(`[mesh] Kicking old connection for ${agent.name}`);
+          existing.ws.close(1000, "Replaced by new connection");
+          this.connections.delete(agentId);
+        }
+
+        // Assign generation for this connection
+        this.generation++;
+        connGeneration = this.generation;
+
+        // Update online status
+        this.db.setAgentOnline(agentId, msg.instance);
+
+        // Agent-owned fields: accept description and profile from agent
+        if (msg.description) {
+          this.db.updateAgentMeta(agentId, { description: msg.description });
+        }
+        if (msg.profile) {
+          this.db.updateAgentMeta(agentId, { profile: JSON.stringify(msg.profile) });
+        }
+        // Master-owned: domain is IGNORED from agent auth — use DB value
+
+        // Re-read agent from DB to get authoritative domain & enabled
+        const freshAgent = this.db.getAgentById(agentId);
+        const dbDomain = freshAgent?.domain || (agent.domain as string) || undefined;
+        const dbEnabled = freshAgent?.enabled ?? 1;
+
+        // Register connection
+        this.connections.set(agentId, {
+          ws,
+          agentId,
+          name: agent.name as string,
+          domain: dbDomain,
+          cliTool: typeof msg.cliTool === "string" && msg.cliTool ? msg.cliTool : undefined,
+          lastHeartbeat: Date.now(),
+          generation: connGeneration,
+          messageTimestamps: [],
+        });
+
+        // Broadcast join
+        this.broadcastDirectory("join", {
+          name: agent.name as string,
+          domain: dbDomain,
+          description: freshAgent?.description || msg.description || undefined,
+          status: "online",
+          enabled: dbEnabled !== 0,
+          profile: parseProfile(freshAgent?.profile),
+        });
+
+        // Reply auth_ok with directory, protocol version, and master-assigned config
+        const directory = this.getDirectory();
+        this.send(ws, {
+          type: "auth_ok",
+          version: PROTOCOL_VERSION,
+          jwt: result.jwt,
+          directory,
+          config: { domain: dbDomain, enabled: dbEnabled !== 0 },
+        });
+
+        // Push offline messages
+        const offlineMsgs = this.offlineQueue.pop(agentId);
+        if (offlineMsgs.length > 0) {
+          this.send(ws, { type: "offline_messages", messages: offlineMsgs });
+        }
+
+        this.logger.info(`[mesh] ${agent.name} connected (v${msg.version ?? "?"})`);
+        return;
+      }
+
+      // ── Rate limit check ─────────────────────────────────────────────
+      // 流式 chunk（chat reply 的 a2a_reply_chunk / a2a_reply_end、issue
+      // 进度的 issue_update）是 session 内的中间产物，只会透传给原始 target，
+      // 不会扇出给其他 agent，不该按 a2a_send 那种"防 spam"逻辑限流。新版
+      // hermes 把思考流式拆得很细，一次回答可能产生上百个 chunk，套用 60/min
+      // 直接被掐断，前端表现就是"思考完就卡住"。
+      const conn = this.connections.get(agentId);
+      const rateLimitExempt =
+        msg.type === "heartbeat" ||
+        msg.type === "a2a_reply_chunk" ||
+        msg.type === "a2a_reply_end" ||
+        msg.type === "issue_update";
+      if (conn && !rateLimitExempt) {
+        const now = Date.now();
+        conn.messageTimestamps = conn.messageTimestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+        if (conn.messageTimestamps.length >= RATE_LIMIT_MAX) {
+          this.send(ws, {
+            type: "route_result",
+            requestId: (msg as unknown as { requestId?: string }).requestId || "",
+            delivered: false,
+            queued: false,
+            error: "Rate limit exceeded",
+          });
+          this.logger.warn(`[mesh] Rate limited ${conn.name}`);
+          return;
+        }
+        conn.messageTimestamps.push(now);
+      }
+
+      // ── Heartbeat ───────────────────────────────────────────────────────
+      if (msg.type === "heartbeat") {
+        const conn = this.connections.get(agentId);
+        if (conn) conn.lastHeartbeat = Date.now();
+        this.db.updateHeartbeat(agentId);
+        this.send(ws, { type: "heartbeat_ack" });
+        return;
+      }
+
+      // ── Send message ────────────────────────────────────────────────────
+      if (msg.type === "a2a_send") {
+        const sendTs = Date.now();
+        const result = this.router.route(agentId, msg);
+        const conn = this.connections.get(agentId);
+        const fromName = conn?.name || "unknown";
+        const fromDomain = conn?.domain;
+        const routeType = "exact";
+
+        // Block messages for archived groups
+        if (msg.conversation?.groupId && this.db.isGroupArchived(msg.conversation.groupId)) {
+          this.send(ws, {
+            type: "route_result",
+            requestId: msg.requestId,
+            delivered: false,
+            queued: false,
+            error: "Group is archived",
+          });
+          return;
+        }
+
+        let delivered = false;
+        let queued = false;
+
+        if (result.targetAgentId) {
+          const enrichedConversation = this.enrichConversationWithCollaboration(msg.conversation, result.targetName);
+          const outMsg = {
+            type: "a2a_message" as const,
+            requestId: msg.requestId,
+            from: { name: fromName, domain: fromDomain, status: "online" as const },
+            payload: msg.payload,
+            routeType,
+            conversation: enrichedConversation,
+          };
+          delivered = this.sendToAgent(result.targetAgentId, outMsg);
+
+          // Persist + (for group) broadcast. Group messages are also delivered to
+          // the rest of the group via broadcastToGroup so dashboards/agents can see
+          // the conversation in real-time (mirrors a2a_reply behavior at L462-465).
+          // excludeAgentIds covers both the sender and the targeted agent so the
+          // target does not receive the same a2a_message twice.
+          if ((msg.conversation?.type === "group" || msg.conversation?.type === "single") && msg.conversation.groupId) {
+            // 兜底:发信人不在 group_members 时自动 addMembers(防"自激丢消息" +
+            // "多 tab 真人看不到自己的消息")。INSERT OR IGNORE 幂等。
+            const groupMembers = this.db.getGroupMembers(msg.conversation.groupId);
+            if (!groupMembers.some((m) => m.agent_name === fromName)) {
+              this.db.addGroupMembers(msg.conversation.groupId, [fromName]);
+              this.logger.info(`[mesh] a2a_send group: auto-joined sender "${fromName}" as group member`);
+            }
+
+            const mentions = msg.payload?.message?.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+            // Skip db.addGroupMessage for group messages: the Dashboard /
+            // CLI REST endpoint already persists via POST /groups/:id/messages.
+            // Without this skip, sending one a2a_send per @mentioned agent
+            // (N sends) would store the same message N times.
+            if (msg.conversation.type !== "group") {
+              this.db.addGroupMessage(msg.conversation.groupId, fromName, msg.payload?.message || "", mentions);
+            }
+
+            if (msg.conversation.type === "group") {
+              // Exclude ALL @mentioned agents from broadcast — not just the
+              // current result.targetAgentId. When the Dashboard sends one
+              // a2a_send per @mentioned target (e.g. @A @B @C -> 3 sends),
+              // each send's broadcast only excludes its own target, causing
+              // other mentioned agents to receive duplicate copies via
+              // broadcast on top of their own direct delivery.
+              const mentionAgentIds = mentions
+                .map((name: string) => this.db.getAgentByName(name)?.id)
+                .filter((id: string | undefined): id is string => !!id);
+              this.broadcastToGroup(
+                msg.conversation.groupId,
+                outMsg,
+                [agentId, result.targetAgentId, ...mentionAgentIds],
+              );
+
+              // 协作轮次:mesh_group_send 走的也是 a2a_send,需要同样计入贡献,
+              // 否则 firstParticipant 用工具 @ 别人这一步永远不会被算作"已发言",
+              // 导致整轮永远不完成、轮数不推进、自动总结永远不触发。
+              this.trackCollaborationTurn(msg.conversation.groupId, fromName, msg.payload?.message || "");
+            }
+          }
+
+          if (!delivered) {
+            queued = this.offlineQueue.enqueue(
+              result.targetAgentId, fromName, fromDomain,
+              msg.payload, routeType,
+            );
+          }
+        }
+
+        // Log message
+        this.db.logMessage({
+          requestId: msg.requestId,
+          fromName,
+          fromDomain,
+          toName: result.targetName,
+          toDomain: result.targetAgentId ? this.db.getAgentById(result.targetAgentId)?.domain ?? undefined : undefined,
+          routeType,
+          direction: "send",
+          payload: JSON.stringify(msg.payload),
+          status: result.error ? "failed" : queued ? "queued" : delivered ? "routed" : "no_target",
+          groupId: msg.conversation?.groupId,
+          source: "ws",
+        });
+
+        // Store send timestamp for latency calc on reply
+        if (result.targetAgentId) {
+          this.sendTimestamps.set(msg.requestId, sendTs);
+        }
+
+        this.send(ws, {
+          type: "route_result",
+          requestId: msg.requestId,
+          delivered, queued,
+          error: result.error,
+        });
+        return;
+      }
+
+      // ── Reply ───────────────────────────────────────────────────────────
+      if (msg.type === "a2a_reply") {
+        this.logger.info(`[mesh] Received a2a_reply (non-streaming) for requestId=${msg.requestId}`);
+        const targetId = this.router.resolveReplyTarget(msg.requestId);
+        const conversation = this.router.getConversation(msg.requestId);
+        if (targetId) {
+          const conn = this.connections.get(agentId);
+          const fromName = conn?.name || "unknown";
+          const targetAgent = this.db.getAgentById(targetId);
+          const enrichedConversation = this.enrichConversationWithCollaboration(conversation, targetAgent?.name);
+          const replyMsg: Record<string, unknown> = {
+            type: "a2a_message" as const,
+            requestId: msg.requestId,
+            from: { name: fromName, domain: conn?.domain, status: "online" as const },
+            payload: msg.payload,
+            routeType: "reply" as const,
+            conversation: enrichedConversation,
+          };
+          if (msg.cwd) replyMsg.cwd = msg.cwd;
+
+          // Persist to group history BEFORE sending (avoids race with history refresh)
+          if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
+            this.db.addGroupMessage(conversation.groupId, fromName, msg.payload?.message || "", []);
+          }
+
+          // Group replies: broadcast to all members so everyone sees it in real-time
+          // DM replies: send to original sender only
+          if (conversation?.type === "group" && conversation.groupId) {
+            this.broadcastToGroup(conversation.groupId, replyMsg as unknown as Parameters<typeof this.sendToAgent>[1], [agentId]);
+
+            // Track collaboration turns if there's an active collaboration in this group
+            this.trackCollaborationTurn(conversation.groupId, fromName, msg.payload?.message || "");
+          } else {
+            this.sendToAgent(targetId, replyMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
+          }
+
+          // Log reply with latency
+          const sendTs = this.sendTimestamps.get(msg.requestId);
+          const latencyMs = sendTs ? Date.now() - sendTs : undefined;
+          this.db.logMessage({
+            requestId: msg.requestId,
+            fromName,
+            fromDomain: conn?.domain,
+            toName: targetAgent?.name,
+            toDomain: targetAgent?.domain ?? undefined,
+            routeType: "reply",
+            direction: "reply",
+            payload: JSON.stringify(msg.payload),
+            status: "replied",
+            latencyMs,
+            groupId: conversation?.groupId,
+            source: "ws",
+          });
+        } else {
+          this.logger.warn(`[mesh] Reply target not found for requestId=${msg.requestId}`);
+        }
+        return;
+      }
+
+      // ── Streaming reply chunk ──────────────────────────────────────────
+      if (msg.type === "a2a_reply_chunk") {
+        const targetId = this.router.resolveReplyTarget(msg.requestId);
+        const conversation = this.router.getConversation(msg.requestId);
+        if (targetId) {
+          const conn = this.connections.get(agentId);
+          const fromName = conn?.name || "unknown";
+          const chunkMsg = {
+            type: "a2a_stream_chunk" as const,
+            requestId: msg.requestId,
+            from: { name: fromName, domain: conn?.domain, status: "online" as const },
+            delta: msg.delta,
+            conversation,
+          };
+          // Send stream chunk to original sender only (streaming is per-session, no broadcast)
+          if (conversation?.type === "group" && conversation.groupId) {
+            this.broadcastToGroup(conversation.groupId, chunkMsg, [agentId]);
+          } else {
+            this.sendToAgent(targetId, chunkMsg);
+          }
+        }
+        return;
+      }
+
+      // ── Streaming reply end ────────────────────────────────────────────
+      if (msg.type === "a2a_reply_end") {
+        const targetId = this.router.resolveReplyTarget(msg.requestId);
+        const conversation = this.router.getConversation(msg.requestId);
+        if (targetId) {
+          const conn = this.connections.get(agentId);
+          const fromName = conn?.name || "unknown";
+          const cancelled = msg.cancelled === true;
+          const endMsg: Record<string, unknown> = {
+            type: "a2a_stream_end" as const,
+            requestId: msg.requestId,
+            from: { name: fromName, domain: conn?.domain, status: "online" as const },
+            conversation,
+          };
+          if (msg.cwd) endMsg.cwd = msg.cwd;
+          if (cancelled) endMsg.cancelled = true;
+          // Persist to group history BEFORE sending (avoids race with history refresh).
+          // Cancelled replies still persist their partial content (the user wants
+          // to keep what was streamed before the interrupt) but stamp cancelled_at
+          // so the dashboard can render the "⏹ 已中断" footer on reload.
+          if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
+            const msgId = this.db.addGroupMessage(
+              conversation.groupId,
+              fromName,
+              msg.payload?.message || "",
+              [],
+              cancelled ? { cancelledAt: new Date().toISOString() } : undefined,
+            );
+            // 把 worker 回传的 composedPrompt 持久化,前端点击消息可直接读出来渲染分层。
+            // 中断态也保留(用户可能想看 prompt 排查为何中断),只要 worker 带了就存。
+            const cp = (msg as any).composedPrompt as
+              | { layers: { layer: string; content: string; source: string }[]; final: string; generatedAt: string; promptVersion: string }
+              | undefined;
+            if (cp && cp.layers && cp.final) {
+              try {
+                this.db.addChatMessagePrompt(
+                  msgId,
+                  JSON.stringify(cp.layers),
+                  cp.final,
+                  cp.generatedAt ?? new Date().toISOString(),
+                  cp.promptVersion ?? "unknown",
+                );
+              } catch (err: any) {
+                this.logger.warn(`[mesh] Failed to persist composedPrompt for msgId=${msgId}: ${err.message}`);
+              }
+            }
+          }
+
+          // Group stream end: broadcast to all members
+          if (conversation?.type === "group" && conversation.groupId) {
+            this.broadcastToGroup(conversation.groupId, endMsg as unknown as Parameters<typeof this.sendToAgent>[1], [agentId]);
+            // 流式结束同样计入协作轮次贡献 —— 但中断的回复不算贡献,
+            // 否则会让协作轮次在 agent 还没真正表达完整观点时误推进。
+            if (!cancelled) {
+              this.trackCollaborationTurn(conversation.groupId, fromName, msg.payload?.message || "");
+            }
+          } else {
+            this.sendToAgent(targetId, endMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
+          }
+
+          // Log complete reply with latency
+          const sendTs = this.sendTimestamps.get(msg.requestId);
+          const latencyMs = sendTs ? Date.now() - sendTs : undefined;
+          const targetAgent = this.db.getAgentById(targetId);
+          this.db.logMessage({
+            requestId: msg.requestId,
+            fromName,
+            fromDomain: conn?.domain,
+            toName: targetAgent?.name,
+            toDomain: targetAgent?.domain ?? undefined,
+            routeType: "reply",
+            direction: "reply",
+            payload: JSON.stringify(msg.payload),
+            status: cancelled ? "cancelled" : "replied",
+            latencyMs,
+            groupId: conversation?.groupId,
+            source: "ws",
+          });
+          this.sendTimestamps.delete(msg.requestId);
+        }
+        return;
+      }
+
+      // ── Update info (description / profile push from agent) ───────────
+      if (msg.type === "update_info") {
+        if (msg.description) {
+          this.db.updateAgentMeta(agentId, { description: msg.description });
+        }
+        if (msg.profile) {
+          this.db.updateAgentMeta(agentId, { profile: JSON.stringify(msg.profile) });
+        }
+        // Re-broadcast directory so dashboards see the update
+        this.broadcastAgentUpdate(agentId);
+        return;
+      }
+
+      // ── Disconnect (graceful) ──────────────────────────────────────────
+      if (msg.type === "disconnect") {
+        this.handleDisconnect(agentId, connGeneration, "graceful");
+        return;
+      }
+
+      // ── Issue update (from executor worker) ──────────────────────────
+      if (msg.type === "issue_update") {
+        const conn = this.connections.get(agentId);
+        if (!conn) return;
+        const { issueId, status, content, metadata } = msg;
+        const issue = this.db.getIssueById(issueId);
+        if (!issue) return;
+
+        if (status === "in_progress" || status === "completed" || status === "failed" || status === "paused") {
+          const extra: {
+            result?: string;
+            errorMessage?: string;
+            artifacts?: string[];
+            sessionId?: string | null;
+            cliTool?: string | null;
+            usage?: string | null;
+            model?: string | null;
+          } = {};
+          if (status === "completed" && content) extra.result = content;
+          if (status === "failed" && content) extra.errorMessage = content;
+          if (metadata?.artifacts) extra.artifacts = metadata.artifacts;
+          // 续聊用:首次/再次执行结束时 worker 把 cli sessionId 带回来,落到
+          // issue 表上,POST /issues/:id/continue 时再读回去 --resume。
+          // null = resume failed, clear stale session_id in DB.
+          if (metadata?.sessionId !== undefined) {
+            extra.sessionId = metadata.sessionId as string | null;
+          }
+          if (typeof metadata?.cliTool === "string" && metadata.cliTool) {
+            extra.cliTool = metadata.cliTool;
+          }
+          // Token usage / model (claude result / codex turn/completed /
+          // hermes usage_update)。usage 序列化为 JSON 字符串入库,前端按需解析。
+          if (metadata?.usage !== undefined) {
+            extra.usage = typeof metadata.usage === "string"
+              ? metadata.usage
+              : JSON.stringify(metadata.usage);
+          }
+          if (typeof metadata?.model === "string" && metadata.model) {
+            extra.model = metadata.model;
+          }
+          // Don't downgrade a cancelled issue back to anything else — but if it
+          // arrived after cancellation, still record the event below.
+          if (issue.status !== "cancelled") {
+            this.db.updateIssueStatus(issueId, status, Object.keys(extra).length > 0 ? extra : undefined);
+          }
+        }
+
+        // 提取 composedPrompt 并嵌入 issue_event 的 metadata,前端可像消息气泡一样
+        // 点击 🔍 prompt 看分层。
+        const cp = (msg as any).composedPrompt as
+          | { layers: { layer: string; content: string; source: string }[]; final: string; generatedAt: string; promptVersion: string }
+          | undefined;
+        const eventMeta: Record<string, unknown> = metadata ? { ...metadata } : {};
+        if (msg.cwd) eventMeta.cwd = msg.cwd;
+        if (cp && cp.layers && cp.final) {
+          eventMeta.composed_prompt = cp;
+        }
+        this.db.addIssueEvent({
+          issueId,
+          eventType: status === "in_progress" ? "progress" :
+                     status === "completed" ? "completed" :
+                     status === "failed" ? "failed" :
+                     status === "paused" ? "paused" : "output",
+          agentName: conn.name,
+          content: content || "",
+          metadata: Object.keys(eventMeta).length > 0 ? eventMeta : undefined,
+        });
+
+        // Notify group when issue is completed or failed
+        if ((status === "completed" || status === "failed") && issue.group_id) {
+          const artifacts = metadata?.artifacts;
+          const summary = status === "completed"
+            ? `✅ Issue 「${issue.title}」已由 ${conn.name} 完成`
+            : `❌ Issue 「${issue.title}」执行失败（${conn.name}）`;
+          const details = artifacts?.length
+            ? `${summary}\n\n产出文件：${(artifacts as string[]).join("、")}`
+            : summary;
+          // Master-proactive announcement → sender=system.
+          this.postSystemToGroup(issue.group_id, details);
+        }
+
+        this.send(ws, { type: "issue_update_ack" as const, issueId, ok: true });
+        this.notifyIssueChanged(issueId, issue.group_id, "event_appended");
+        this.logger.info(`[mesh] Issue ${issueId} update: ${status} from ${conn.name}`);
+        return;
+      }
+
+      // ── Issue approval request (codex etc. asks for human Accept/Deny) ─
+      if (msg.type === "issue_approval_request") {
+        const conn = this.connections.get(agentId);
+        if (!conn) return;
+        const issue = this.db.getIssueById(msg.issueId);
+        if (!issue) {
+          this.logger.warn(`[mesh] approval_request for unknown issue ${msg.issueId}`);
+          return;
+        }
+        this.db.addIssueEvent({
+          issueId: msg.issueId,
+          eventType: "approval_request",
+          agentName: conn.name,
+          content: msg.summary,
+          metadata: {
+            approvalId: msg.approvalId,
+            kind: msg.kind,
+            command: msg.command,
+            cwd: msg.cwd,
+            files: msg.files,
+            plan: msg.plan,
+            diff: msg.diff,
+            questions: msg.questions,
+            status: "pending",
+            requestedBy: conn.name,
+          },
+        });
+        this.notifyIssueChanged(msg.issueId, issue.group_id, "event_appended");
+        this.logger.info(`[mesh] Approval requested by ${conn.name} on issue ${msg.issueId} (${msg.kind}, id=${msg.approvalId})`);
+        return;
+      }
+
+      // ── Session management responses from worker (Master → Executor) ──
+      if (msg.type === "session_view_response" || msg.type === "session_delete_response") {
+        const pending = this.pendingSessionRequests.get(msg.requestId);
+        if (pending) {
+          this.pendingSessionRequests.delete(msg.requestId);
+          clearTimeout(pending.timer);
+          pending.resolve(msg);
+        }
+        return;
+      }
+
+      // ── Session snapshot push (worker → master cache) ─────────────────
+      if (msg.type === "session_snapshot") {
+        // Replace the worker's snapshot wholesale — workers push a full
+        // SessionEntry[] each time, not a diff.
+        this.sessionSnapshots.set(agentId, msg.entries);
+        return;
+      }
+    });
+
+    ws.on("close", () => {
+      clearTimeout(authTimeout);
+      if (authenticated) {
+        this.handleDisconnect(agentId, connGeneration, "ws_closed");
+      }
+    });
+
+    ws.on("error", (err: Error) => {
+      this.logger.warn(`[mesh] WS error:`, err.stack || err.message);
+    });
+  },
+
+  handleDisconnect(this: WSHubSelf, agentId: string, generation: number, reason: string): void {
+    const conn = this.connections.get(agentId);
+    if (!conn) return;
+
+    // Only disconnect if this is the SAME generation (not a newer reconnection)
+    if (conn.generation !== generation) return;
+
+    this.connections.delete(agentId);
+    this.db.setAgentOffline(agentId);
+    // Drop the worker's session snapshot so the dashboard doesn't surface
+    // stale sessions for an offline executor. The worker re-pushes a fresh
+    // snapshot on next auth.
+    this.sessionSnapshots.delete(agentId);
+
+    this.broadcastDirectory("leave", {
+      name: conn.name,
+      domain: conn.domain,
+      status: "offline",
+    });
+
+    // Close WebSocket if still open
+    if (conn.ws.readyState === WebSocket.OPEN) {
+      conn.ws.close(1000, reason);
+    }
+
+    this.logger.info(`[mesh] ${conn.name} disconnected (${reason})`);
+  },
+} as const;
