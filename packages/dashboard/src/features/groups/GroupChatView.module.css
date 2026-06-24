@@ -17,8 +17,8 @@
   width: 100%;
 }
 
-/* 最左侧 mode 切换条:垂直窄条,3 个布局模式按钮。
-   占主区高度,让 chat panel 顶部不被 toolbar 占用。 */
+/* 最左侧竖列:连接状态 + 布局切换 + 当前对话动作。
+   占主区高度,让 chat panel 顶部不被 toolbar 占用,消息直接顶到顶。 */
 .modeSidebar {
   flex: 0 0 auto;
   width: 44px;
@@ -28,6 +28,46 @@
   padding: 6px 2px;
   border-right: 1px solid var(--border-color-light);
   background: var(--color-canvas-elevated);
+}
+
+/* 顶部连接状态 dot。颜色随 connectionStatus 变化,tooltip 显示完整文案。 */
+.modeStatusDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin: 4px auto 6px;
+  flex-shrink: 0;
+}
+
+.modeStatus_connected {
+  background: var(--color-wise-green);
+  box-shadow: 0 0 0 2px var(--color-canvas-elevated);
+}
+
+.modeStatus_connecting {
+  background: var(--color-warning);
+}
+
+.modeStatus_disconnected {
+  background: var(--color-error);
+}
+
+.modeStatus_conflict {
+  background: var(--color-warning);
+  animation: modeStatusPulse 1.5s infinite;
+}
+
+@keyframes modeStatusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* 分隔线:布局切换 与 对话动作 两组按钮之间。 */
+.modeSidebarDivider {
+  height: 1px;
+  margin: 6px 6px;
+  background: var(--border-color-light);
+  flex-shrink: 0;
 }
 
 .modeBtn {

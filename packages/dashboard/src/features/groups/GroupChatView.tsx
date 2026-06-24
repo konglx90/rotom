@@ -21,6 +21,8 @@ import { SchedulePanel } from './SchedulePanel'
 import { CreateIssueDialog } from './CreateIssueDialog'
 import { CreateNoteDialog } from './CreateNoteDialog'
 import { AddMemberModal } from './modals/AddMemberModal'
+import { MemberListModal } from './modals/MemberListModal'
+import { ShareLinkModal } from './ShareLinkModal'
 import { Button } from '../../components/ui/Button'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
@@ -86,7 +88,6 @@ export function GroupChatView() {
     setDirectTarget,
     openConfigModal,
     loadGroups,
-    toggleGroupArchived,
     setGroupMemberWorkingDir,
     clearGroupMemberWorkingDir,
   } = useChatContext()
@@ -108,6 +109,8 @@ export function GroupChatView() {
   const { widths, onSplitterMouseDown } = useResizablePanels('rotom-panel-widths', PANEL_CONFIGS)
   const [artifactSelectedPath, setArtifactSelectedPath] = useState<string | null>(null)
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
+  const [showMemberList, setShowMemberList] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
   // 创建对话框状态从 IssuePanel/NotePanel 上移到 process panel 顶部 tabs 行,
   // 让 tabs 行与 chat header 等高对齐。kind 区分走 Issue/协作 还是 Note 流程。
@@ -341,15 +344,6 @@ export function GroupChatView() {
     }
   }, [selfJoinError, myAgentName, loadGroups])
 
-  const handleArchiveGroup = async (archived: boolean) => {
-    if (!selectedGroupId) return
-    try {
-      await toggleGroupArchived(selectedGroupId, archived)
-    } catch (error) {
-      console.error('Failed to toggle archived:', error)
-    }
-  }
-
   const handleDeleteDm = async () => {
     const dmGroupId = localStorage.getItem('dm_active_group')
     if (!dmGroupId) return
@@ -471,6 +465,35 @@ export function GroupChatView() {
             onAdd={handleAddMembers}
           />
 
+          {/* 群模式:成员列表 modal(从原 chatHeader 上移)。 */}
+          {selectedGroup && !isDirectMode && (
+            <MemberListModal
+              open={showMemberList}
+              members={selectedGroup.members || []}
+              agents={agents}
+              groupId={selectedGroup.id}
+              groupWorkingDir={selectedGroup.working_dir ?? null}
+              onClose={() => setShowMemberList(false)}
+              onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
+                if (dir === null) {
+                  await clearGroupMemberWorkingDir(gid, agentName)
+                } else {
+                  await setGroupMemberWorkingDir(gid, agentName, dir)
+                }
+              }}
+            />
+          )}
+
+          {/* 群模式:分享链接 modal(从原 chatHeader 上移)。 */}
+          {showShareModal && selectedGroup && !isDirectMode && (
+            <ShareLinkModal
+              open
+              groupId={selectedGroup.id}
+              groupName={selectedGroup.name}
+              onClose={() => setShowShareModal(false)}
+            />
+          )}
+
           {createDialog?.kind === 'issue' && selectedGroupId && (
             <CreateIssueDialog
               open
@@ -509,10 +532,22 @@ export function GroupChatView() {
             />
           )}
 
-          {/* 最左侧 mode 切换条:垂直窄条,3 种布局模式。
-              放这里(而不是顶部)是为了让 panelsRow(尤其 chat)顶部不被
-              toolbar 占用,高度最大化。 */}
+          {/* 最左侧竖列:连接状态 + 布局切换 + 当前对话动作。
+              承接原 chatHeader 里的非标题内容(成员/拉人/分享/设置/连接状态),
+              让 chat 区域消息直接顶到顶部,最大化纵向空间。 */}
           <div className={styles.modeSidebar}>
+            {/* 顶部:连接状态 dot。tooltip 显示完整文案。 */}
+            <div
+              className={`${styles.modeStatusDot} ${styles[`modeStatus_${connectionStatus}`]}`}
+              title={
+                connectionStatus === 'connected' ? `已连接 · ${myAgentName}` :
+                connectionStatus === 'connecting' ? '连接中...' :
+                connectionStatus === 'conflict' ? '连接冲突' :
+                '未连接'
+              }
+            />
+
+            {/* 布局切换:3 选 1,确保主区始终 2 个 panel 同屏。 */}
             <button
               type="button"
               className={`${styles.modeBtn} ${mode === 'chat-process' ? styles.modeBtnActive : ''}`}
@@ -537,6 +572,70 @@ export function GroupChatView() {
             >
               <span className={styles.modeBtnIcons}>📋<br/>📦</span>
             </button>
+
+            {/* 分隔线:布局切换 与 对话动作 两组按钮之间。 */}
+            <div className={styles.modeSidebarDivider} />
+
+            {/* 对话动作:按 isDirectMode 切换。Group 模式才显示成员/拉人/分享。 */}
+            {isDirectMode ? (
+              <>
+                <button
+                  type="button"
+                  className={styles.modeBtn}
+                  onClick={handleDeleteDm}
+                  title={`删除与 ${directTarget} 的对话`}
+                >
+                  <span className={styles.modeBtnIcons}>🗑️</span>
+                </button>
+                <button
+                  type="button"
+                  className={styles.modeBtn}
+                  onClick={openConfigModal}
+                  title="设置"
+                >
+                  <span className={styles.modeBtnIcons}>⚙️</span>
+                </button>
+              </>
+            ) : selectedGroup && (
+              <>
+                <button
+                  type="button"
+                  className={styles.modeBtn}
+                  onClick={() => setShowMemberList(true)}
+                  title="成员"
+                >
+                  <span className={styles.modeBtnIcons}>👥</span>
+                </button>
+                {!isVisitor && (
+                  <button
+                    type="button"
+                    className={styles.modeBtn}
+                    onClick={() => setShowAddMemberModal(true)}
+                    title="拉人"
+                  >
+                    <span className={styles.modeBtnIcons}>➕</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={styles.modeBtn}
+                  onClick={() => setShowShareModal(true)}
+                  title="分享"
+                >
+                  <span className={styles.modeBtnIcons}>🔗</span>
+                </button>
+                {!isVisitor && (
+                  <button
+                    type="button"
+                    className={styles.modeBtn}
+                    onClick={openConfigModal}
+                    title="设置"
+                  >
+                    <span className={styles.modeBtnIcons}>⚙️</span>
+                  </button>
+                )}
+              </>
+            )}
           </div>
 
           {/* 主区:2 个 panel + 1 条 splitter */}
@@ -576,11 +675,6 @@ export function GroupChatView() {
                               connectionStatus={connectionStatus}
                               onSendMessage={handleSendMessage}
                               onCancelStream={cancelStream}
-                              onNewDmConversation={() => {
-                                /* sidebar handles new DM creation now */
-                              }}
-                              onShowConfig={openConfigModal}
-                              onDeleteConversation={handleDeleteDm}
                             />
                           ) : selectedGroup ? (
                             <>
@@ -607,16 +701,6 @@ export function GroupChatView() {
                                 connectionStatus={connectionStatus}
                                 onSendMessage={handleSendMessage}
                                 onCancelStream={cancelStream}
-                                onShowConfig={openConfigModal}
-                                onAddMembers={() => setShowAddMemberModal(true)}
-                                onArchiveGroup={handleArchiveGroup}
-                                onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
-                                  if (dir === null) {
-                                    await clearGroupMemberWorkingDir(gid, agentName)
-                                  } else {
-                                    await setGroupMemberWorkingDir(gid, agentName, dir)
-                                  }
-                                }}
                               />
                             </>
                           ) : (
