@@ -159,14 +159,26 @@
   overflow: hidden;
 }
 
+/* Process panel 顶部 tabs 行 —— 与左侧 chatHeader、左侧 Rotom logo 同行等高对齐。
+   左半边放三个 tab,右半边放「+ 创建」动作(Issues/Notes 才有,定时任务无)。
+   高度靠 .processTab + .processCreateBtn 的 padding+font 控制,与 chatHeader 的
+   padding 6px + 头像/字号总和接近 ~40px。 */
 .processTabs {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 0 8px;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border-color-light);
   background: var(--color-canvas-elevated);
+  min-height: 40px;
+}
+
+.processTabsLeft {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
 }
 
 .processTab {
@@ -190,6 +202,10 @@
   color: var(--color-ink);
   border-bottom-color: var(--color-wise-green);
   font-weight: 700;
+}
+
+.processCreateBtn {
+  align-self: center;
 }
 
 .processBody {

@@ -5,20 +5,8 @@
  * any CLI-backed agent knows which group it is responding in.
  */
 
-export interface ActiveIssueRef {
-  id: string;
-  title: string;
-  status: string;
-  assignedTo?: string;
-  priority?: string;
-}
-
-export interface GroupConversation {
-  type?: string;
-  groupId?: string;
-  groupName?: string;
-  activeIssues?: ActiveIssueRef[];
-}
+import type { ActiveIssueRef, GroupConversation } from "./protocol.js";
+export type { ActiveIssueRef, GroupConversation };
 
 function renderActiveIssues(issues: ActiveIssueRef[] | undefined): string {
   if (!issues || issues.length === 0) {

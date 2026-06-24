@@ -1,32 +1,51 @@
 import type { Agent } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { AsyncBoundary } from '../../components/data/AsyncBoundary'
 import { useAgents } from '../../hooks/useAgents'
 import styles from './AgentList.module.css'
 
 export function AgentList() {
   const { agents, loading, error, refetch } = useAgents()
 
+  return (
+    <AsyncBoundary
+      data={agents}
+      loading={loading}
+      error={error}
+      isEmpty={(data) => data.length === 0}
+      onRetry={refetch}
+      loadingFallback={
+        <div className={styles.loading}>
+          <div className={styles.spinner}></div>
+          <p>加载员工数据...</p>
+        </div>
+      }
+      errorFallback={(err, retry) => (
+        <div className={styles.error}>
+          <p>❌ 加载失败: {typeof err === 'string' ? err : err.message}</p>
+          <Button variant="ghost" size="sm" onClick={retry}>重试</Button>
+        </div>
+      )}
+      emptyFallback={
+        <div className={styles.empty}>
+          <p>暂无员工数据</p>
+          <p className={styles.hint}>请先注册员工</p>
+        </div>
+      }
+    >
+      {(data) => <AgentListContent agents={data} />}
+    </AsyncBoundary>
+  )
+}
+
+interface AgentListContentProps {
+  agents: Agent[]
+}
+
+function AgentListContent({ agents }: AgentListContentProps) {
   const onlineCount = agents.filter(a => a.status === 'online').length
   const offlineCount = agents.length - onlineCount
-
-  if (loading) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner}></div>
-        <p>加载员工数据...</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className={styles.error}>
-        <p>❌ 加载失败: {error}</p>
-        <Button variant="ghost" size="sm" onClick={refetch}>重试</Button>
-      </div>
-    )
-  }
 
   return (
     <div className={styles.container}>
@@ -48,16 +67,9 @@ export function AgentList() {
 
       {/* Agent List */}
       <div className={styles.list}>
-        {agents.length === 0 ? (
-          <div className={styles.empty}>
-            <p>暂无员工数据</p>
-            <p className={styles.hint}>请先注册员工</p>
-          </div>
-        ) : (
-          agents.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} />
-          ))
-        )}
+        {agents.map((agent) => (
+          <AgentCard key={agent.id} agent={agent} />
+        ))}
       </div>
     </div>
   )

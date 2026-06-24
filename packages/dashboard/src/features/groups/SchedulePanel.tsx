@@ -56,9 +56,6 @@ export function SchedulePanel({ selectedGroupId }: SchedulePanelProps) {
 
   return (
     <div className={styles.schedulePanel}>
-      <div className={styles.schedulePanelHeader}>
-        <h3 className={styles.schedulePanelTitle}>定时任务</h3>
-      </div>
       {error ? (
         <div className={styles.scheduleEmpty}>{error}</div>
       ) : schedules.length === 0 ? (
