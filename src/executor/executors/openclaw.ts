@@ -27,7 +27,7 @@
  * Mirrors multica's "openclaw returned no parseable output" canonical error.
  */
 
-import { runProcess } from "../process-runner.js";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -92,28 +92,34 @@ export class OpenclawExecutor implements CliExecutor {
       const spawnEnv = { ...process.env, ...options?.env };
       console.log(`[openclaw] Spawning openclaw agent (cwd: ${workingDir}, session: ${sessionId}, agent: ${this.agentName ?? "(default)"}, timeoutMs=${timeoutMs ?? "none"})`);
 
-      // runProcess owns abort + the defensive wall-clock timer:
-      //   - options.signal: SIGTERM → 3s → SIGKILL (graceful)
-      //   - timeoutMs + 5_000: SIGKILL (defensive; openclaw may ignore its
-      //     own --timeout if a network call hangs)
-      const { proc, done: procDone } = runProcess({
-        bin: "openclaw",
-        args,
+      const proc = spawn("openclaw", args, {
         cwd: workingDir,
-        env: spawnEnv as Record<string, string>,
-        label: "openclaw",
-        signal: options?.signal,
-        timeoutMs: timeoutMs && timeoutMs > 0 ? timeoutMs + 5_000 : undefined,
+        env: spawnEnv,
+        stdio: ["ignore", "pipe", "pipe"],
       });
 
-      let timedOut = false;
-      // Detect whether the wall-clock fired so the close handler can attribute
-      // the failure correctly. runProcess doesn't expose "did timeout" — we
-      // infer it from the exit signal: SIGKILL with no user abort = timeout.
-      let killedByUser = false;
+      const onAbort = () => {
+        console.log(`[openclaw] Aborted, killing pid=${proc.pid}`);
+        try { proc.kill("SIGTERM"); } catch { /* already exited */ }
+        setTimeout(() => { try { proc.kill("SIGKILL"); } catch { /* noop */ } }, 3_000);
+      };
       if (options?.signal) {
-        if (options.signal.aborted) killedByUser = true;
-        else options.signal.addEventListener("abort", () => { killedByUser = true; }, { once: true });
+        if (options.signal.aborted) onAbort();
+        else options.signal.addEventListener("abort", onAbort, { once: true });
+      }
+
+      // Defensive wall-clock timer: if openclaw ignores its --timeout flag
+      // (e.g. a network call is hung without returning), SIGKILL after a
+      // small grace period so the worker's activeTasks slot is released.
+      let wallClockTimer: NodeJS.Timeout | null = null;
+      let timedOut = false;
+      if (timeoutMs && timeoutMs > 0) {
+        const graceMs = 5_000;
+        wallClockTimer = setTimeout(() => {
+          timedOut = true;
+          console.warn(`[openclaw] Wall-clock timeout (${timeoutMs}ms + ${graceMs}ms grace) reached, SIGKILL pid=${proc.pid}`);
+          try { proc.kill("SIGKILL"); } catch { /* already exited */ }
+        }, timeoutMs + graceMs);
       }
 
       let fullOutput = "";
@@ -307,6 +313,7 @@ export class OpenclawExecutor implements CliExecutor {
       function finalize(code: number | null, reason: "close" | "error" | "early"): void {
         if (done) return;
         done = true;
+        if (wallClockTimer) { clearTimeout(wallClockTimer); wallClockTimer = null; }
 
         if (stdoutBuffer.trim()) handleLine(stdoutBuffer, rawStdoutLines);
         if (stderrBuffer.trim()) handleLine(stderrBuffer.replace(/\x1b\[[0-9;]*m/g, ""), rawStderrLines);
@@ -390,15 +397,14 @@ export class OpenclawExecutor implements CliExecutor {
         }
       });
 
-      // runProcess owns close + error handling; resolve done() gives us
-      // `{ exitCode, signal }`. A SIGKILL with no user abort = our wall-clock
-      // timer fired; attribute the failure accordingly.
-      procDone.then(({ exitCode, signal }) => {
-        if (signal === "SIGKILL" && !killedByUser && timeoutMs && timeoutMs > 0) {
-          timedOut = true;
-          console.warn(`[openclaw] Wall-clock timeout (${timeoutMs}ms + 5_000ms grace) reached, SIGKILL pid=${proc.pid}`);
-        }
-        finalize(exitCode, "close");
+      proc.on("close", (code) => {
+        finalize(code, "close");
+      });
+
+      proc.on("error", (err) => {
+        console.error(`[openclaw] Spawn error: ${err.message}`);
+        if (!fullOutput) fullOutput = `[错误] openclaw 启动失败: ${err.message}`;
+        finalize(1, "error");
       });
     });
   }
