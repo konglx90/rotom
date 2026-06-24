@@ -11,8 +11,9 @@
  *   4. auto-approve permission requests
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
-import { createInterface, type Interface as ReadlineInterface } from "node:readline";
+import { runProcess } from "../process-runner.js";
+import { createJsonRpcTransport, type JsonRpcTransport } from "../jsonrpc-transport.js";
+import { createInterface } from "node:readline";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
@@ -21,36 +22,6 @@ import {
   createReasoningStatusBuffer,
   emitStatus,
 } from "../reasoning-status.js";
-
-// ── ACP JSON-RPC types ──────────────────────────────────────────────────
-
-interface JsonRpcRequest {
-  jsonrpc: "2.0";
-  id: number;
-  method: string;
-  params?: unknown;
-}
-
-interface JsonRpcResponse {
-  jsonrpc: "2.0";
-  id: number;
-  result?: unknown;
-  error?: { code: number; message: string };
-}
-
-interface JsonRpcNotification {
-  jsonrpc: "2.0";
-  method: string;
-  params?: unknown;
-}
-
-// ── Pending RPC tracking ────────────────────────────────────────────────
-
-interface PendingRpc {
-  resolve: (result: unknown) => void;
-  reject: (err: Error) => void;
-  method: string;
-}
 
 // ── Tool call buffer ────────────────────────────────────────────────────
 
@@ -219,25 +190,16 @@ export class HermesCliExecutor implements CliExecutor {
         ? `${extraPath}:${process.env.PATH ?? ""}`
         : process.env.PATH;
 
-      const proc = spawn("hermes", args, {
+      const { proc } = runProcess({
+        bin: "hermes",
+        args,
         cwd: workingDir,
-        env: buildHermesEnv(process.env, options?.env, mergedPath),
-        stdio: ["pipe", "pipe", "pipe"],
+        env: buildHermesEnv(process.env, options?.env, mergedPath) as Record<string, string>,
+        label: "hermes-cli",
+        signal: options?.signal,
       });
 
-      const onAbort = () => {
-        console.log(`[hermes-cli] Aborted, killing pid=${proc.pid}`);
-        try { proc.kill("SIGTERM"); } catch { /* noop */ }
-        setTimeout(() => { try { proc.kill("SIGKILL"); } catch { /* noop */ } }, 3_000);
-      };
-      if (options?.signal) {
-        if (options.signal.aborted) onAbort();
-        else options.signal.addEventListener("abort", onAbort, { once: true });
-      }
-
       let fullOutput = "";
-      let nextId = 1;
-      const pending = new Map<number, PendingRpc>();
       const pendingTools = new Map<string, PendingToolCall>();
       let sessionId = "";
       let settled = false;
@@ -302,19 +264,26 @@ export class HermesCliExecutor implements CliExecutor {
         reasoningStatus.reset();
       }
 
+      // ── JSON-RPC transport ──
+      // The transport owns the readline loop, the pending-request map, and
+      // the JSON frame formatting. We plug our domain handlers into the
+      // onRequest / onNotification callbacks below.
+      const transport: JsonRpcTransport = createJsonRpcTransport({
+        stdin: proc.stdin,
+        stdout: proc.stdout,
+        label: "hermes-cli",
+        onRequest: (method, params, id) => handleAgentRequest(method, params, id),
+        onNotification: (method, params) => handleNotification(method, params),
+      });
+
       // ── Helpers ──
 
-      function send(msg: JsonRpcRequest | Record<string, unknown>): void {
-        const data = JSON.stringify(msg) + "\n";
-        proc.stdin!.write(data);
+      function send(msg: Record<string, unknown>): void {
+        transport.send(msg);
       }
 
       function request(method: string, params?: unknown): Promise<unknown> {
-        const id = nextId++;
-        return new Promise((res, rej) => {
-          pending.set(id, { resolve: res, reject: rej, method });
-          send({ jsonrpc: "2.0", id, method, params });
-        });
+        return transport.request(method, params);
       }
 
       function finish(exitCode: number): void {
@@ -383,18 +352,14 @@ export class HermesCliExecutor implements CliExecutor {
         return ids[0] ?? "approve_for_session";
       }
 
-      function handleAgentRequest(raw: Record<string, unknown>): void {
-        const method = raw.method as string;
-        const rawId = raw.id;
-        if (rawId == null) return;
-
+      function handleAgentRequest(method: string, rawParams: unknown, id: number | string): void {
         let resp: Record<string, unknown>;
         if (method === "session/request_permission") {
-          const optionId = pickApproveOption(raw.params);
+          const optionId = pickApproveOption(rawParams);
           console.log(`[hermes-cli] auto-approve permission → ${optionId}`);
           resp = {
             jsonrpc: "2.0",
-            id: rawId,
+            id,
             result: {
               outcome: {
                 outcome: "selected",
@@ -403,10 +368,10 @@ export class HermesCliExecutor implements CliExecutor {
             },
           };
         } else {
-          console.warn(`[hermes-cli] unhandled agent→client method: ${method} (params=${JSON.stringify(raw.params).slice(0, 200)})`);
+          console.warn(`[hermes-cli] unhandled agent→client method: ${method} (params=${JSON.stringify(rawParams).slice(0, 200)})`);
           resp = {
             jsonrpc: "2.0",
-            id: rawId,
+            id,
             error: { code: -32601, message: `method not found: ${method}` },
           };
         }
@@ -414,20 +379,8 @@ export class HermesCliExecutor implements CliExecutor {
       }
 
       // ── Handle JSON-RPC responses ──
-
-      function handleResponse(raw: Record<string, unknown>): void {
-        const id = typeof raw.id === "number" ? raw.id : Number(raw.id);
-        const p = pending.get(id);
-        if (!p) return;
-        pending.delete(id);
-
-        if (raw.error) {
-          const err = raw.error as { code: number; message: string };
-          p.reject(new Error(`${p.method}: ${err.message} (code=${err.code})`));
-        } else {
-          p.resolve(raw.result);
-        }
-      }
+      // (The transport's pending map owns this — responses matching a
+      //  transport.request() id resolve the corresponding promise.)
 
       // ── ACP notification handling ──
 
@@ -514,11 +467,10 @@ export class HermesCliExecutor implements CliExecutor {
         return undefined;
       }
 
-      function handleNotification(raw: Record<string, unknown>): void {
-        const method = raw.method as string;
+      function handleNotification(method: string, rawParams: unknown): void {
         if (method !== "session/update" && method !== "session/notification") return;
 
-        const params = raw.params as Record<string, unknown> | undefined;
+        const params = rawParams as Record<string, unknown> | undefined;
         const update = params?.update as Record<string, unknown> | undefined;
         if (!update) return;
 
@@ -690,38 +642,9 @@ export class HermesCliExecutor implements CliExecutor {
         }
       }
 
-      // ── Route every line from stdout ──
-
-      function handleLine(line: string): void {
-        let raw: Record<string, unknown>;
-        try {
-          raw = JSON.parse(line);
-        } catch {
-          return;
-        }
-
-        // Agent → client request (has id + method, no result/error yet)
-        if (raw.id != null && raw.method && !("result" in raw) && !("error" in raw)) {
-          handleAgentRequest(raw);
-          return;
-        }
-
-        // JSON-RPC response (has id + result or error)
-        if (raw.id != null && ("result" in raw || "error" in raw)) {
-          handleResponse(raw);
-          return;
-        }
-
-        // Notification (no id, has method)
-        if (raw.method) {
-          handleNotification(raw);
-        }
-      }
-
       // ── Wire up stdout reader ──
-
-      const rl = createInterface({ input: proc.stdout! });
-      rl.on("line", (line) => handleLine(line.trim()));
+      // (The transport owns the readline loop above; it routes each frame
+      //  into onRequest → handleAgentRequest or onNotification → handleNotification.)
 
       // ── stderr logging + provider error sniffing ──
 
