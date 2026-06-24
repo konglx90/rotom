@@ -20,6 +20,9 @@ export interface ChatMessage {
    *  bubble 渲染「⏹ 已中断」footer + 状态 pill 切到「已中断」。 */
   cancelled?: boolean
   cancelledAt?: Date
+  /** 虚拟 marker:群消息 head+tail 截断时中间被省略的提示。
+   *  MessageRow 识别到此字段后渲染居中 chip,不画普通气泡。 */
+  truncated?: { omitted: number }
 }
 
 export interface ServerMessage {

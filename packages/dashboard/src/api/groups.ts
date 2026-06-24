@@ -26,6 +26,9 @@ export interface GroupMessage {
   composed_prompt: ComposedPrompt | null
   /** 老消息(migration 022 之前)无该字段。新消息被用户中途中断时记 ISO 时间戳。 */
   cancelled_at?: string | null
+  /** 虚拟 marker 行:群消息总数超过 head+tail 预算时,中间被省略的提示。
+   *  sender='__truncated',前端渲染成居中 chip「已省略 N 条早期消息」。 */
+  truncated?: { omitted: number }
 }
 
 export const groupsApi = {

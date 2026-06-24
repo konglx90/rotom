@@ -247,8 +247,14 @@ export function registerGroupRoutes(
       res.status(404).json({ error: "Group not found" });
       return;
     }
-    const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
-    res.json(db.getGroupMessages(req.params.id, limit));
+    // 新签名是 (headKeep, tailKeep)。?limit= 仍接受,当作 head+tail 总预算
+    // 分配(head 固定 5);不带 limit 时走 db 层默认 head=5 / tail=295。
+    if (Object.prototype.hasOwnProperty.call(req.query, "limit")) {
+      const total = Math.min(parseInt(req.query.limit as string) || 300, 500);
+      res.json(db.getGroupMessages(req.params.id, 5, Math.max(total - 5, 0)));
+    } else {
+      res.json(db.getGroupMessages(req.params.id));
+    }
   });
 
   apiRouter.post("/groups/:id/messages", (req, res) => {

@@ -7,6 +7,7 @@
  * "分层组成" view — populated by worker when it runs prompt-composer.
  */
 
+import type BetterSqlite3 from "better-sqlite3";
 import type { MeshDbSelf } from "./core.js";
 
 export interface GroupRow {
@@ -40,6 +41,55 @@ export interface GroupMessageRow {
     generated_at: string;
     prompt_version: string;
   } | null;
+  // 虚拟 marker 行:head 与 tail 之间被省略的中间段提示。
+  // 后端按 issue_events.progress_truncated 同款套路合成,sender='__truncated'。
+  truncated?: { omitted: number };
+}
+
+// 内部 helper:执行 SELECT 群消息 + LEFT JOIN chat_message_prompts,
+// 拼装成 GroupMessageRow[](剥掉 layers/final/generated_at/prompt_version
+// 四个字符串列,组装成 composed_prompt 对象)。whereClause 由调用方提供,
+// 绑定参数顺序为 groupId,然后再是 LIMIT 值(如果有的话)。
+//
+// module-level 而非 groupMethods 上的方法,因为只有 getGroupMessages 在用,
+// 放在 self 上反而需要扩展 MeshDbSelf interface。
+function fetchGroupMessageRows(
+  db: BetterSqlite3.Database,
+  whereClause: string,
+  groupId: string,
+  limit?: number,
+): GroupMessageRow[] {
+  const sql = `SELECT m.id, m.sender, m.content, m.mentions, m.created_at, m.cancelled_at,
+                 p.layers, p.final, p.generated_at, p.prompt_version
+          FROM group_messages m
+          LEFT JOIN chat_message_prompts p ON p.group_message_id = m.id
+          ${whereClause}`;
+  const rows = (limit != null
+    ? db.prepare(sql).all(groupId, limit)
+    : db.prepare(sql).all(groupId)) as Array<{
+      id: number; sender: string; content: string; mentions: string; created_at: string;
+      cancelled_at: string | null;
+      layers: string | null; final: string | null; generated_at: string | null; prompt_version: string | null;
+    }>;
+  return rows.map((r) => {
+    let composed_prompt: {
+      layers: { layer: string; content: string; source: string }[];
+      final: string; generated_at: string; prompt_version: string;
+    } | null = null;
+    if (r.layers && r.final && r.generated_at && r.prompt_version) {
+      composed_prompt = {
+        layers: JSON.parse(r.layers),
+        final: r.final,
+        generated_at: r.generated_at,
+        prompt_version: r.prompt_version,
+      };
+    }
+    return {
+      id: r.id, sender: r.sender, content: r.content, mentions: r.mentions, created_at: r.created_at,
+      cancelled_at: r.cancelled_at,
+      composed_prompt,
+    };
+  });
 }
 
 export const groupMethods = {
@@ -309,38 +359,61 @@ export const groupMethods = {
     };
   },
 
-  getGroupMessages(this: MeshDbSelf, groupId: string, limit = 200): GroupMessageRow[] {
-    const rows = this.db.prepare(
-      `SELECT m.id, m.sender, m.content, m.mentions, m.created_at, m.cancelled_at,
-              p.layers, p.final, p.generated_at, p.prompt_version
-       FROM group_messages m
-       LEFT JOIN chat_message_prompts p ON p.group_message_id = m.id
-       WHERE m.group_id = ?
-       ORDER BY m.created_at ASC
-       LIMIT ?`,
-    ).all(groupId, limit) as Array<{
-      id: number; sender: string; content: string; mentions: string; created_at: string;
-      cancelled_at: string | null;
-      layers: string | null; final: string | null; generated_at: string | null; prompt_version: string | null;
-    }>;
-    return rows.map((r) => {
-      let composed_prompt: {
-        layers: { layer: string; content: string; source: string }[];
-        final: string; generated_at: string; prompt_version: string;
-      } | null = null;
-      if (r.layers && r.final && r.generated_at && r.prompt_version) {
-        composed_prompt = {
-          layers: JSON.parse(r.layers),
-          final: r.final,
-          generated_at: r.generated_at,
-          prompt_version: r.prompt_version,
-        };
-      }
-      return {
-        id: r.id, sender: r.sender, content: r.content, mentions: r.mentions, created_at: r.created_at,
-        cancelled_at: r.cancelled_at,
-        composed_prompt,
-      };
-    });
+  // 内部 helper:执行 SELECT 群消息 + LEFT JOIN chat_message_prompts,
+  // 拼装成 GroupMessageRow[](剥掉 layers/final/generated_at/prompt_version
+  // 四个字符串列,组装成 composed_prompt 对象)。whereClause 由调用方提供,
+  // 绑定参数顺序为 groupId,然后再是 LIMIT 值(如果有的话)。
+  // 拉取群消息。和 getIssueEvents 同款 head+tail+marker 思路:
+  //   - 总数 <= headKeep+tailKeep:全拿(ASC)。
+  //   - 总数超过:head(最早 headKeep 条) + tail(最新 tailKeep 条) + 中间合成一条
+  //     truncated marker,sender='__truncated',前端渲染成「已省略 N 条」chip。
+  // 旧实现 ORDER BY created_at ASC LIMIT N 会把最新消息截掉,群里消息累积
+  // 超过 N 条后新消息永远拉不到——参见群 f080e51e 的复现。
+  getGroupMessages(this: MeshDbSelf, groupId: string, headKeep = 5, tailKeep = 295): GroupMessageRow[] {
+    const totalCount = this.db.prepare(
+      "SELECT COUNT(*) AS c FROM group_messages WHERE group_id = ?",
+    ).get(groupId) as { c: number };
+
+    const total = totalCount.c;
+    if (total <= headKeep + tailKeep) {
+      return fetchGroupMessageRows(
+        this.db,
+        `WHERE m.group_id = ? ORDER BY m.created_at ASC, m.id ASC`,
+        groupId,
+      );
+    }
+
+    const head = fetchGroupMessageRows(
+      this.db,
+      `WHERE m.group_id = ? ORDER BY m.created_at ASC, m.id ASC LIMIT ?`,
+      groupId,
+      headKeep,
+    );
+    const tail = fetchGroupMessageRows(
+      this.db,
+      `WHERE m.group_id = ? ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
+      groupId,
+      tailKeep,
+    );
+    tail.reverse();
+
+    const omitted = total - head.length - tail.length;
+    // marker 的 created_at 取 head 末尾 +1ms,落在 head 和 tail 之间,
+    // 前端按 timestamp 排序时位置正确。
+    const markerTime = head.length > 0
+      ? new Date(Date.parse(head[head.length - 1].created_at.replace(" ", "T") + "Z") + 1).toISOString()
+      : (tail[0]?.created_at ?? new Date().toISOString());
+    const marker: GroupMessageRow = {
+      id: -1,
+      sender: "__truncated",
+      content: "",
+      mentions: "[]",
+      created_at: markerTime,
+      cancelled_at: null,
+      composed_prompt: null,
+      truncated: { omitted },
+    };
+
+    return [...head, marker, ...tail];
   },
 };
