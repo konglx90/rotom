@@ -85,6 +85,18 @@ export interface ActiveIssueRef {
   priority?: string;
 }
 
+/**
+ * Looser shape of `ConversationContext` for prompt-injection use. Only the
+ * fields `injectGroupContext` reads are declared (all optional so the caller
+ * can pass a partial / unknown payload and let the function short-circuit).
+ */
+export interface GroupConversation {
+  type?: string;
+  groupId?: string;
+  groupName?: string;
+  activeIssues?: ActiveIssueRef[];
+}
+
 /** Active collaboration metadata for an in-flight group message. */
 export interface CollaborationContext {
   issueId: string;

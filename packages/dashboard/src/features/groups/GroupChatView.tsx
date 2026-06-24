@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, lazy, Suspense } fr
 import { useNavigate, useParams } from 'react-router-dom'
 import { groupsApi } from '../../api/groups'
 import { issuesApi } from '../../api/issues'
+import { notesApi } from '../../api/notes'
 import type { Issue } from '../../api/types'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
@@ -17,7 +18,10 @@ import { IssuePanel } from './IssuePanel'
 const LazyArtifactPanel = lazy(() => import('./ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })))
 import { NotePanel } from './NotePanel'
 import { SchedulePanel } from './SchedulePanel'
+import { CreateIssueDialog } from './CreateIssueDialog'
+import { CreateNoteDialog } from './CreateNoteDialog'
 import { AddMemberModal } from './modals/AddMemberModal'
+import { Button } from '../../components/ui/Button'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
 
@@ -105,6 +109,13 @@ export function GroupChatView() {
   const [artifactSelectedPath, setArtifactSelectedPath] = useState<string | null>(null)
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
+  // 创建对话框状态从 IssuePanel/NotePanel 上移到 process panel 顶部 tabs 行,
+  // 让 tabs 行与 chat header 等高对齐。kind 区分走 Issue/协作 还是 Note 流程。
+  const [createDialog, setCreateDialog] = useState<
+    | { kind: 'issue' }
+    | { kind: 'note' }
+    | null
+  >(null)
 
   const activePanels = MODE_PANELS[mode]
 
@@ -460,6 +471,44 @@ export function GroupChatView() {
             onAdd={handleAddMembers}
           />
 
+          {createDialog?.kind === 'issue' && selectedGroupId && (
+            <CreateIssueDialog
+              open
+              agents={agents}
+              groupMembers={groupMembers}
+              myAgentName={myAgentName}
+              onClose={() => setCreateDialog(null)}
+              onCreateIssue={(data) => {
+                handleCreateIssue(data)
+                setCreateDialog(null)
+              }}
+              onCreateCollaboration={(data) => {
+                handleCreateCollaboration(data)
+                setCreateDialog(null)
+              }}
+            />
+          )}
+
+          {createDialog?.kind === 'note' && selectedGroupId && (
+            <CreateNoteDialog
+              open
+              onClose={() => setCreateDialog(null)}
+              onCreate={async (data) => {
+                try {
+                  await notesApi.create(selectedGroupId, {
+                    title: data.title,
+                    description: data.description,
+                    createdBy: myAgentName,
+                  })
+                  setCreateDialog(null)
+                } catch (err) {
+                  console.error('Failed to create note:', err)
+                  window.alert(`创建失败：${err instanceof Error ? err.message : String(err)}`)
+                }
+              }}
+            />
+          )}
+
           {/* 最左侧 mode 切换条:垂直窄条,3 种布局模式。
               放这里(而不是顶部)是为了让 panelsRow(尤其 chat)顶部不被
               toolbar 占用,高度最大化。 */}
@@ -587,27 +636,39 @@ export function GroupChatView() {
                       {id === 'process' && (
                         <div className={styles.processWrap}>
                           <div className={styles.processTabs}>
-                            <button
-                              type="button"
-                              className={`${styles.processTab} ${processTab === 'issues' ? styles.processTabActive : ''}`}
-                              onClick={() => setProcessTab('issues')}
-                            >
-                              Issues
-                            </button>
-                            <button
-                              type="button"
-                              className={`${styles.processTab} ${processTab === 'notes' ? styles.processTabActive : ''}`}
-                              onClick={() => setProcessTab('notes')}
-                            >
-                              Notes
-                            </button>
-                            <button
-                              type="button"
-                              className={`${styles.processTab} ${processTab === 'schedules' ? styles.processTabActive : ''}`}
-                              onClick={() => setProcessTab('schedules')}
-                            >
-                              定时任务
-                            </button>
+                            <div className={styles.processTabsLeft}>
+                              <button
+                                type="button"
+                                className={`${styles.processTab} ${processTab === 'issues' ? styles.processTabActive : ''}`}
+                                onClick={() => setProcessTab('issues')}
+                              >
+                                Issues
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.processTab} ${processTab === 'notes' ? styles.processTabActive : ''}`}
+                                onClick={() => setProcessTab('notes')}
+                              >
+                                Notes
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.processTab} ${processTab === 'schedules' ? styles.processTabActive : ''}`}
+                                onClick={() => setProcessTab('schedules')}
+                              >
+                                定时任务
+                              </button>
+                            </div>
+                            {!isVisitor && (processTab === 'issues' || processTab === 'notes') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setCreateDialog({ kind: processTab === 'issues' ? 'issue' : 'note' })}
+                                className={styles.processCreateBtn}
+                              >
+                                + 创建
+                              </Button>
+                            )}
                           </div>
                           <div className={styles.processBody}>
                             {!selectedGroup ? (
@@ -622,8 +683,6 @@ export function GroupChatView() {
                                 groupMembers={groupMembers}
                                 myAgentName={myAgentName}
                                 setSelectedIssueId={setSelectedIssueId}
-                                onCreateIssue={handleCreateIssue}
-                                onCreateCollaboration={handleCreateCollaboration}
                                 readOnly={isVisitor}
                                 onArtifactClick={handleArtifactClick}
                               />

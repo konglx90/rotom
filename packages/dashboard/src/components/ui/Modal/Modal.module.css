@@ -26,6 +26,18 @@
   flex-direction: column;
 }
 
+.size-sm {
+  max-width: 400px;
+}
+
+.size-md {
+  max-width: 560px;
+}
+
+.size-lg {
+  max-width: 760px;
+}
+
 .titleRow {
   display: flex;
   align-items: center;

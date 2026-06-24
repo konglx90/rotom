@@ -38,11 +38,14 @@
 }
 
 /* ── Logo ────────────────────────────────────────────────── */
+/* padding 收回到与中右两块 panel 顶部 header 等高(~40px):logo 图 32px + 上下各 ~4px。
+   原来 18px 让 Rotom 区明显高出 chatHeader / processTabs,造成三块顶部不齐。 */
 .logo {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 18px 20px;
+  padding: 4px 20px;
+  min-height: 40px;
   border-bottom: 1px solid var(--border-color-light);
   flex-shrink: 0;
 }
