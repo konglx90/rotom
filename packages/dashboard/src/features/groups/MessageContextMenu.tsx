@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Reply, Copy, FileText, Search } from 'lucide-react'
 import type { ChatMessage } from './types'
 import styles from './ChatArea.module.css'
 
@@ -79,7 +80,7 @@ export function MessageContextMenu({
         role="menuitem"
         onClick={run(() => onQuote(msg))}
       >
-        💬 引用
+        <Reply size={14} /> 引用
       </div>
       <div className={styles.contextMenuSeparator} />
       <div
@@ -87,14 +88,14 @@ export function MessageContextMenu({
         role="menuitem"
         onClick={run(() => onCopy(msg, false))}
       >
-        📋 复制
+        <Copy size={14} /> 复制
       </div>
       <div
         className={styles.contextMenuItem}
         role="menuitem"
         onClick={run(() => onCopy(msg, true))}
       >
-        📝 复制纯文本
+        <FileText size={14} /> 复制纯文本
       </div>
       {hasPrompt && onShowPrompt && (
         <>
@@ -104,7 +105,7 @@ export function MessageContextMenu({
             role="menuitem"
             onClick={run(() => onShowPrompt(msg))}
           >
-            🔍 查看 prompt
+            <Search size={14} /> 查看 prompt
           </div>
         </>
       )}
