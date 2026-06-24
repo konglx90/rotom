@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { Search, Square } from 'lucide-react'
 import { Avatar } from '../../components/ui/Avatar'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import { StreamingStatus } from '../../components/ui/StreamingStatus'
@@ -134,27 +135,64 @@ export function DirectChatArea({
             <div
               className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing}`}
             >
-              {msg.isIncoming && (
-                <div className={styles.messageSender}>
-                  {msg.from}
-                  {(() => {
-                    const st = extractMessageStatus(msg.content)
-                    if (!st) return null
-                    return <StreamingStatus content={st} done={!msg.streaming} variant="inline" />
-                  })()}
-                  {canCancel && (
-                    <button
-                      type="button"
-                      className={styles.stopBtn}
-                      onClick={handleCancel}
-                      title="中断当前响应"
-                      aria-label="中断当前响应"
-                    >
-                      ⏹ 中断
-                    </button>
+              <div className={styles.messageSender}>
+                <div className={styles.senderLeft}>
+                  {msg.isIncoming ? (
+                    <>
+                      <span className={styles.senderName}>{msg.from}</span>
+                      {(() => {
+                        const st = extractMessageStatus(msg.content)
+                        if (!st) return null
+                        return <StreamingStatus content={st} done={!msg.streaming} variant="inline" />
+                      })()}
+                    </>
+                  ) : (
+                    <span className={`${styles.senderName} ${styles.senderNameOutgoing}`}>{myAgentName}</span>
                   )}
                 </div>
-              )}
+                <div className={styles.senderMeta}>
+                  <span className={styles.senderActions}>
+                    {hasPrompt && (
+                      <span
+                        className={styles.messageActionBtn}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setComposedPromptFor(msg)}
+                        onKeyDown={(e: React.KeyboardEvent) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setComposedPromptFor(msg)
+                          }
+                        }}
+                        title="查看 prompt 组合"
+                      >
+                        <Search size={14} />
+                      </span>
+                    )}
+                    {canCancel && (
+                      <button
+                        type="button"
+                        className={styles.stopBtn}
+                        onClick={handleCancel}
+                        title="中断当前响应"
+                        aria-label="中断当前响应"
+                      >
+                        <Square size={11} fill="currentColor" stroke="none" />
+                      </button>
+                    )}
+                  </span>
+                  <span className={styles.senderInfo}>
+                    {msg.isIncoming && msg.cwd && (
+                      <span className={styles.messageCwd} title={`Agent 实际工作目录：${msg.cwd}`}>
+                        📁 {msg.cwd}
+                      </span>
+                    )}
+                    <span className={styles.senderTime}>
+                      {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
+                    </span>
+                  </span>
+                </div>
+              </div>
               <div className={styles.messageContent}>
                 {msg.isLoading ? (
                   <div className={styles.loadingDots}>
@@ -170,34 +208,6 @@ export function DirectChatArea({
                   <span>已中断 · {msg.cancelledAt?.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}</span>
                 </div>
               )}
-              <div className={styles.messageTimestamp}>
-                {msg.timestamp.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}
-                {msg.isIncoming && msg.cwd && (
-                  <span
-                    className={styles.messageCwd}
-                    title={`Agent 实际工作目录：${msg.cwd}`}
-                  >
-                    📁 {msg.cwd}
-                  </span>
-                )}
-                {hasPrompt && (
-                  <span
-                    className={styles.messagePromptButton}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setComposedPromptFor(msg)}
-                    onKeyDown={(e: React.KeyboardEvent) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setComposedPromptFor(msg)
-                      }
-                    }}
-                    title="查看 prompt 组合"
-                  >
-                    🔍 prompt
-                  </span>
-                )}
-              </div>
             </div>
           </div>
           )

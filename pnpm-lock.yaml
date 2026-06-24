@@ -4,16 +4,10 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  a2a-gateway: 'link:'
-
 importers:
 
   .:
     dependencies:
-      a2a-gateway:
-        specifier: 'link:'
-        version: 'link:'
       express:
         specifier: ^4.21.2
         version: 4.22.1
@@ -23,6 +17,13 @@ importers:
       ws:
         specifier: ^8.18.0
         version: 8.19.0
+    optionalDependencies:
+      better-sqlite3:
+        specifier: ^11.0.0
+        version: 11.10.0
+      node-pty:
+        specifier: ^1.0.0
+        version: 1.1.0
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.12
@@ -45,13 +46,6 @@ importers:
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
-    optionalDependencies:
-      better-sqlite3:
-        specifier: ^11.0.0
-        version: 11.10.0
-      node-pty:
-        specifier: ^1.0.0
-        version: 1.1.0
 
   packages/dashboard:
     dependencies:
@@ -67,6 +61,9 @@ importers:
       '@xterm/xterm':
         specifier: ^5.5.0
         version: 5.5.0
+      lucide-react:
+        specifier: ^1.21.0
+        version: 1.21.0(react@18.3.1)
       monaco-editor:
         specifier: ^0.52.0
         version: 0.52.2
@@ -1149,6 +1146,11 @@ packages:
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
+
+  lucide-react@1.21.0:
+    resolution: {integrity: sha512-reEZMXq8Qdd5jg5XYkQ5TR1fB/GiQ7ih4vcrthYDtgjSDwh0i6/YLiGjsWsIwgN49gpAnd4J2elSNzncMEEUUQ==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
@@ -2681,6 +2683,10 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
+
+  lucide-react@1.21.0(react@18.3.1):
+    dependencies:
+      react: 18.3.1
 
   markdown-table@3.0.4: {}
 

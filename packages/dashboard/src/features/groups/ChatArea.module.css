@@ -157,38 +157,51 @@
   border: 1px solid transparent;
 }
 
-.messagePromptButton {
-  margin-left: 8px;
-  padding: 2px 6px;
+/* sender 行 hover action 按钮(引用 💬 / prompt 🔍)。Slack 风格:默认隐藏,
+   hover 消息行时浮现。icon-only,紧凑尺寸。 */
+.messageActionBtn {
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1;
   cursor: pointer;
   user-select: none;
-  opacity: 0.55;
+  opacity: 0;
   transition: opacity 0.15s ease, background-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.messagePromptButton:hover,
-.messagePromptButton:focus-visible {
+.messageActionBtn:hover,
+.messageActionBtn:focus-visible {
   opacity: 1;
   background-color: rgba(14, 15, 12, 0.06);
   outline: none;
+}
+.messageBubble:hover .messageActionBtn,
+.messageBubble:focus-within .messageActionBtn {
+  opacity: 0.7;
 }
 
 /* ⏹ 中断按钮:挂在 incoming bubble 的 sender 行(只在 streaming 时渲染)。
  * 风格与 .messagePromptButton 对齐,但用红色调高视觉优先级 —— 用户主动
  * 想停的时候要一眼能看到。 */
 .stopBtn {
-  margin-left: 8px;
-  padding: 2px 8px;
+  padding: 3px;
   border: 1px solid var(--border-color);
   border-radius: 4px;
   background: var(--color-canvas);
   color: var(--color-error);
-  font-size: 11px;
-  font-weight: 500;
+  line-height: 0;
   cursor: pointer;
   user-select: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .stopBtn:hover,
 .stopBtn:focus-visible {
@@ -196,6 +209,10 @@
   color: var(--color-canvas);
   border-color: var(--color-error);
   outline: none;
+}
+.messageBubble:hover .stopBtn,
+.messageBubble:focus-within .stopBtn {
+  opacity: 1;
 }
 
 /* 中断 footer:气泡底部小字「⏹ 已中断 HH:MM:SS」,跟 .messageTimestamp
@@ -246,6 +263,52 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: nowrap;
+}
+
+/* sender 行:左侧 sender 名 + badge/streaming,右侧 meta(时间/cwd/status/actions)。
+   Slack 风格:时间戳和元信息上提到 sender 行,内容区不再被底部 timestamp 挤占。 */
+.senderLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.senderMeta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* sender 行右侧分两组:actions(💬/🔍/⏹)紧凑靠左,info(📁cwd/status/时间)靠右。
+   Slack 风格:hover actions + 常驻元信息。 */
+.senderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.senderInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.65;
+}
+
+.senderNameOutgoing {
+  opacity: 0.55;
+  font-weight: 500;
+}
+
+.senderTime {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .systemRow .messageBubble,

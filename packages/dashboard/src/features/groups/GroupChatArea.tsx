@@ -289,6 +289,7 @@ export function GroupChatArea({
               myAgentName={myAgentName}
               groupMembers={groupMembers}
               onShowPrompt={handleShowPrompt}
+              onQuote={handleQuote}
               onCancelStream={onCancelStream}
               onContextMenu={handleMessageContextMenu}
             />
