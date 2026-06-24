@@ -60,7 +60,7 @@ export const MessageRow = memo(function MessageRow({
 
   return (
     <div className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''}`}>
-      <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={36} className={styles.messageAvatar} />
+      <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={30} className={styles.messageAvatar} />
       <div
         className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''}`}
         onContextMenu={onContextMenu ? (e) => onContextMenu(e, msg) : undefined}

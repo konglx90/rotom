@@ -130,7 +130,7 @@ export function DirectChatArea({
           }
           return (
           <div key={msg.id} className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing}`}>
-            <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={36} className={styles.messageAvatar} />
+            <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={30} className={styles.messageAvatar} />
             <div
               className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing}`}
             >
