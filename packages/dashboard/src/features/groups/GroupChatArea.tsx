@@ -372,16 +372,22 @@ export function GroupChatArea({
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>在群 {selectedGroup.name} 中开始对话吧</div>
         ) : visibleMessages.map(msg => (
-          <MessageRow
-            key={msg.id}
-            msg={msg}
-            agents={agents}
-            myAgentName={myAgentName}
-            groupMembers={groupMembers}
-            onShowPrompt={handleShowPrompt}
-            onCancelStream={onCancelStream}
-            onContextMenu={handleMessageContextMenu}
-          />
+          msg.truncated ? (
+            <div key={msg.id} className={styles.truncatedChip}>
+              已省略 {msg.truncated.omitted} 条较早消息
+            </div>
+          ) : (
+            <MessageRow
+              key={msg.id}
+              msg={msg}
+              agents={agents}
+              myAgentName={myAgentName}
+              groupMembers={groupMembers}
+              onShowPrompt={handleShowPrompt}
+              onCancelStream={onCancelStream}
+              onContextMenu={handleMessageContextMenu}
+            />
+          )
         ))}
       </div>
 

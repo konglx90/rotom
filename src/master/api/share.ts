@@ -151,8 +151,12 @@ export function registerShareRoutes(
       res.status(403).json({ error: "Group not in shared scope" });
       return;
     }
-    const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
-    res.json(db.getGroupMessages(record.groupId, limit));
+    if (Object.prototype.hasOwnProperty.call(req.query, "limit")) {
+      const total = Math.min(parseInt(req.query.limit as string) || 300, 500);
+      res.json(db.getGroupMessages(record.groupId, 5, Math.max(total - 5, 0)));
+    } else {
+      res.json(db.getGroupMessages(record.groupId));
+    }
   });
 
   apiRouter.get("/share/:token/groups/:groupId/issues", (req, res) => {

@@ -149,6 +149,13 @@ export function DirectChatArea({
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>与 {directTarget} 开始一对一对话</div>
         ) : messages.map(msg => {
+          if (msg.truncated) {
+            return (
+              <div key={msg.id} className={styles.truncatedChip}>
+                已省略 {msg.truncated.omitted} 条较早消息
+              </div>
+            )
+          }
           const hasPrompt = Boolean(msg.composedPrompt)
           // ⏹ 按钮条件:agent 正在流式响应中的 incoming 气泡。outgoing(用户自己
           // 发的)不显示;已完成(cancelled 或正常 end)的也不显示。

@@ -227,6 +227,7 @@ export function useGroupChatWebSocket({
                   cancelled: true,
                   cancelledAt: new Date(m.cancelled_at + (m.cancelled_at.includes('Z') || m.cancelled_at.includes('+') ? '' : 'Z')),
                 } : {}),
+                ...(m.truncated ? { truncated: m.truncated } : {}),
               }))
               const hydratedIds = new Set(hydrated.map(h => h.id))
               // 找持久化后的"真身"消息 —— 用 (from + content) 匹配流式占位
@@ -305,6 +306,7 @@ export function useGroupChatWebSocket({
           cancelled: true,
           cancelledAt: new Date(m.cancelled_at + (m.cancelled_at.includes('Z') || m.cancelled_at.includes('+') ? '' : 'Z')),
         } : {}),
+        ...(m.truncated ? { truncated: m.truncated } : {}),
       })))
     }).catch(() => setMessages([]))
   }, [selectedGroupId, myAgentName])
