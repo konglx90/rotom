@@ -27,22 +27,14 @@
  * 走 auto-accept 路径。
  */
 
-import { spawn } from "node:child_process";
-import { createInterface } from "node:readline";
+import { runProcess } from "../process-runner.js";
+import { createJsonRpcTransport, type JsonRpcTransport } from "../jsonrpc-transport.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { ApprovalDecision, ApprovalRequestInput, CliExecutor, ExecuteOptions, ExecuteResult, TokenUsage } from "../cli-executor.js";
 import { buildPlanModeInstruction } from "../../shared/slash-commands.js";
 import { emitStatus } from "../reasoning-status.js";
-
-// ── JSON-RPC types ──────────────────────────────────────────────────────
-
-interface PendingRpc {
-  resolve: (result: unknown) => void;
-  reject: (err: Error) => void;
-  method: string;
-}
 
 // ── Executor ────────────────────────────────────────────────────────────
 
@@ -60,27 +52,17 @@ export class CodexExecutor implements CliExecutor {
 
       const args = ["app-server", "--listen", "stdio://"];
       const spawnEnv = { ...process.env, ...options?.env };
-      console.log(`[codex] Spawning codex app-server (cwd: ${workingDir}, resume: ${resumeSessionId || "new"})`);
 
-      const proc = spawn("codex", args, {
+      const { proc, done: procDone } = runProcess({
+        bin: "codex",
+        args,
         cwd: workingDir,
-        env: spawnEnv,
-        stdio: ["pipe", "pipe", "pipe"],
+        env: spawnEnv as Record<string, string>,
+        label: "codex",
+        signal: options?.signal,
       });
 
-      const onAbort = () => {
-        console.log(`[codex] Aborted, killing pid=${proc.pid}`);
-        try { proc.kill("SIGTERM"); } catch { /* already exited */ }
-        setTimeout(() => { try { proc.kill("SIGKILL"); } catch { /* noop */ } }, 3_000);
-      };
-      if (options?.signal) {
-        if (options.signal.aborted) onAbort();
-        else options.signal.addEventListener("abort", onAbort, { once: true });
-      }
-
       // ── Per-run state ──
-      let nextId = 1;
-      const pending = new Map<number, PendingRpc>();
       let fullOutput = "";
       let threadId = "";
       let settled = false;
@@ -120,39 +102,37 @@ export class CodexExecutor implements CliExecutor {
         }
       }
 
-      // ── JSON-RPC primitives ──
-
-      function send(msg: Record<string, unknown>): void {
-        if (!proc.stdin || proc.stdin.destroyed) return;
-        proc.stdin.write(JSON.stringify(msg) + "\n");
-      }
+      // ── JSON-RPC transport (line framing + pending map + onRequest/onNotification) ──
+      // The transport owns the readline loop and routes each frame to the
+      // matching callback. We just plug in our domain handlers below.
+      const transport: JsonRpcTransport = createJsonRpcTransport({
+        stdin: proc.stdin,
+        stdout: proc.stdout,
+        label: "codex",
+        onRequest: (method, params, id) => handleServerRequest(method, params, id),
+        onNotification: (method, params) => handleNotification(method, params),
+      });
 
       function request(method: string, params?: unknown): Promise<unknown> {
-        const id = nextId++;
-        return new Promise((res, rej) => {
-          pending.set(id, { resolve: res, reject: rej, method });
-          send({ jsonrpc: "2.0", id, method, params });
-        });
+        return transport.request(method, params);
       }
 
       function notify(method: string, params?: unknown): void {
-        send({ jsonrpc: "2.0", method, ...(params !== undefined ? { params } : {}) });
+        transport.notify(method, params);
       }
 
-      function respond(id: unknown, result: unknown): void {
-        send({ jsonrpc: "2.0", id, result });
+      function respond(id: number | string, result: unknown): void {
+        transport.respond(id, result);
       }
 
-      function respondError(id: unknown, code: number, message: string): void {
-        send({ jsonrpc: "2.0", id, error: { code, message } });
+      function respondError(id: number | string, code: number, message: string): void {
+        transport.respondError(id, code, message);
       }
 
       // ── Server → client requests (auto-approve) ──
 
-      function handleServerRequest(raw: Record<string, unknown>): void {
-        const id = raw.id;
-        const method = raw.method as string;
-        const params = (raw.params ?? {}) as Record<string, unknown>;
+      function handleServerRequest(method: string, rawParams: unknown, id: number | string): void {
+        const params = (rawParams ?? {}) as Record<string, unknown>;
         switch (method) {
           case "item/commandExecution/requestApproval":
           case "execCommandApproval": {
@@ -179,7 +159,7 @@ export class CodexExecutor implements CliExecutor {
 
       // Bridge to the worker's approval pipeline. If no callback is wired,
       // fall back to the legacy auto-accept so daemon contexts keep working.
-      function routeApproval(id: unknown, input: ApprovalRequestInput): void {
+      function routeApproval(id: number | string, input: ApprovalRequestInput): void {
         if (!options?.onApprovalRequest) {
           respond(id, { decision: "accept" });
           return;
@@ -205,27 +185,10 @@ export class CodexExecutor implements CliExecutor {
         })();
       }
 
-      // ── JSON-RPC responses ──
-
-      function handleResponse(raw: Record<string, unknown>): void {
-        const id = typeof raw.id === "number" ? raw.id : Number(raw.id);
-        const p = pending.get(id);
-        if (!p) return;
-        pending.delete(id);
-
-        if (raw.error) {
-          const err = raw.error as { code?: number; message?: string };
-          p.reject(new Error(`${p.method}: ${err.message ?? "rpc error"} (code=${err.code ?? "?"})`));
-          return;
-        }
-        p.resolve(raw.result);
-      }
-
       // ── Notification handling ──
 
-      function handleNotification(raw: Record<string, unknown>): void {
-        const method = raw.method as string;
-        const params = (raw.params ?? {}) as Record<string, unknown>;
+      function handleNotification(method: string, rawParams: unknown): void {
+        const params = (rawParams ?? {}) as Record<string, unknown>;
 
         if (process.env.ROTOM_CODEX_DEBUG) {
           console.log(`[codex DEBUG] notification method=${method} params=${JSON.stringify(params).slice(0, 600)}`);
@@ -516,39 +479,11 @@ export class CodexExecutor implements CliExecutor {
       }
 
       // ── Line router ──
+      // (The transport above already routes server requests / notifications;
+      //  responses are matched against the transport's pending map and resolve
+      //  the corresponding `transport.request(...)` promises automatically.)
 
-      function handleLine(line: string): void {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-        let raw: Record<string, unknown>;
-        try {
-          raw = JSON.parse(trimmed);
-        } catch {
-          return;
-        }
-
-        const hasId = "id" in raw && raw.id !== null && raw.id !== undefined;
-        const hasMethod = typeof raw.method === "string";
-        const hasResult = "result" in raw;
-        const hasError = "error" in raw;
-
-        if (hasId && (hasResult || hasError)) {
-          handleResponse(raw);
-          return;
-        }
-        if (hasId && hasMethod) {
-          handleServerRequest(raw);
-          return;
-        }
-        if (hasMethod) {
-          handleNotification(raw);
-        }
-      }
-
-      const rl = createInterface({ input: proc.stdout! });
-      rl.on("line", handleLine);
-
-      proc.stderr!.on("data", (data: Buffer) => {
+      proc.stderr.on("data", (data: Buffer) => {
         const text = data.toString().trim();
         if (text) console.error(`[codex] stderr: ${text}`);
       });
@@ -558,10 +493,7 @@ export class CodexExecutor implements CliExecutor {
         settled = true;
 
         // Reject any leftover pending requests so dangling promises don't keep the event loop alive.
-        for (const [, p] of pending) {
-          p.reject(new Error("codex process exited"));
-        }
-        pending.clear();
+        transport.rejectPending(new Error("codex process exited"));
 
         // 最后一道防线:某些 codex 边角场景下进程干净退出但 turn/completed
         // 路径没走到(或没匹配上),pill 会一直停在 "Working"。这里在 exit
