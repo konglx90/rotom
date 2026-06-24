@@ -338,6 +338,7 @@ export function GroupChatArea({
 
       {showShareModal && (
         <ShareLinkModal
+          open
           groupId={selectedGroup.id}
           groupName={selectedGroup.name}
           onClose={() => setShowShareModal(false)}

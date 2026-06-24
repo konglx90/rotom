@@ -3,6 +3,7 @@ import { agentsApi } from '../../api/agents'
 import { domainsApi } from '../../api/domains'
 import type { Agent, Domain } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { AsyncBoundary } from '../../components/data/AsyncBoundary'
 import { useAgentsWithFilters } from '../../hooks/useAgents'
 import { FilterBar } from './FilterBar'
 import { StatsCards } from './StatsCards'
@@ -18,7 +19,7 @@ import styles from './AgentsView.module.css'
 type RightView = 'employees' | 'rules'
 
 export function AgentsView() {
-  const { agents, allAgents, loading, error, refetch, filters, filteredAgents } = useAgentsWithFilters()
+  const result = useAgentsWithFilters()
   const [viewMode, setViewMode] = useState<'table' | 'topology'>('table')
   const [showAddModal, setShowAddModal] = useState(false)
   const [profileAgent, setProfileAgent] = useState<Agent | null>(null)
@@ -42,6 +43,85 @@ export function AgentsView() {
   useEffect(() => {
     fetchDomains()
   }, [])
+
+  return (
+    <AsyncBoundary
+      data={result.agents}
+      loading={result.loading}
+      error={result.error}
+      onRetry={result.refetch}
+      loadingFallback={
+        <div className={styles.loading}>
+          <div className={styles.spinner}></div>
+          <p>加载员工数据...</p>
+        </div>
+      }
+      errorFallback={(err, retry) => (
+        <div className={styles.error}>
+          <p>❌ 加载失败: {typeof err === 'string' ? err : err.message}</p>
+          <Button variant="ghost" size="sm" onClick={retry}>重试</Button>
+        </div>
+      )}
+    >
+      {() => (
+        <AgentsViewBody
+          result={result}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          showAddModal={showAddModal}
+          setShowAddModal={setShowAddModal}
+          profileAgent={profileAgent}
+          setProfileAgent={setProfileAgent}
+          allDomains={allDomains}
+          fetchDomains={fetchDomains}
+          rightView={rightView}
+          setRightView={setRightView}
+          deptModal={deptModal}
+          setDeptModal={setDeptModal}
+        />
+      )}
+    </AsyncBoundary>
+  )
+}
+
+interface AgentsViewBodyProps {
+  result: ReturnType<typeof useAgentsWithFilters>
+  viewMode: 'table' | 'topology'
+  setViewMode: (m: 'table' | 'topology') => void
+  showAddModal: boolean
+  setShowAddModal: (v: boolean) => void
+  profileAgent: Agent | null
+  setProfileAgent: (a: Agent | null) => void
+  allDomains: Domain[]
+  fetchDomains: () => Promise<void>
+  rightView: RightView
+  setRightView: (v: RightView) => void
+  deptModal:
+    | { open: false }
+    | { open: true; mode: 'create' }
+    | { open: true; mode: 'edit'; domain: Domain }
+  setDeptModal: (s:
+    | { open: false }
+    | { open: true; mode: 'create' }
+    | { open: true; mode: 'edit'; domain: Domain }) => void
+}
+
+function AgentsViewBody({
+  result,
+  viewMode,
+  setViewMode,
+  showAddModal,
+  setShowAddModal,
+  profileAgent,
+  setProfileAgent,
+  allDomains,
+  fetchDomains,
+  rightView,
+  setRightView,
+  deptModal,
+  setDeptModal,
+}: AgentsViewBodyProps) {
+  const { agents, allAgents, refetch, filters, filteredAgents } = result
 
   const handleDelete = async (agent: Agent) => {
     if (!window.confirm(`确定要删除 ${agent.name} 吗？此操作不可恢复。`)) return
@@ -85,24 +165,6 @@ export function AgentsView() {
 
   const handleSelectRules = () => {
     setRightView('rules')
-  }
-
-  if (loading) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner}></div>
-        <p>加载员工数据...</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className={styles.error}>
-        <p>❌ 加载失败: {error}</p>
-        <Button variant="ghost" size="sm" onClick={refetch}>重试</Button>
-      </div>
-    )
   }
 
   const defaultDomainForAdd =
@@ -160,7 +222,7 @@ export function AgentsView() {
       </div>
 
       <AddAgentModal
-        isOpen={showAddModal}
+        open={showAddModal}
         onClose={() => setShowAddModal(false)}
         domains={allDomains}
         defaultDomain={defaultDomainForAdd}
@@ -172,7 +234,7 @@ export function AgentsView() {
 
       <AgentProfileModal
         agent={profileAgent}
-        isOpen={!!profileAgent}
+        open={!!profileAgent}
         onClose={() => setProfileAgent(null)}
         onSuccess={refetch}
       />

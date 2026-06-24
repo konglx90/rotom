@@ -1,29 +1,51 @@
 import { useState, useEffect } from "react";
 import { e2edApi, type E2edRequirement } from "../../api/e2ed";
+import { AsyncBoundary } from "../../components/data/AsyncBoundary";
 import s from "./E2edGroupsView.module.css";
 import shared from "./E2edShared.module.css";
 
 export function E2edGroupsView() {
-  const [reqs, setReqs] = useState<E2edRequirement[]>([]);
+  const [reqs, setReqs] = useState<E2edRequirement[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
+  const refetch = () => {
+    setLoading(true);
+    setError(null);
     e2edApi
       .list()
       .then((data) => {
         setReqs(data);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    refetch();
   }, []);
 
-  if (loading)
-    return (
-      <div className={shared.centerFill}>
-        <span className={shared.loadingText}>Loading...</span>
-      </div>
-    );
+  return (
+    <AsyncBoundary
+      data={reqs}
+      loading={loading}
+      error={error}
+      onRetry={refetch}
+      loadingFallback={
+        <div className={shared.centerFill}>
+          <span className={shared.loadingText}>Loading...</span>
+        </div>
+      }
+    >
+      {(data) => <E2edGroupsContent reqs={data} />}
+    </AsyncBoundary>
+  );
+}
 
+function E2edGroupsContent({ reqs }: { reqs: E2edRequirement[] }) {
   const activeReqs = reqs.filter((r) => r.status !== "CLOSED");
 
   return (

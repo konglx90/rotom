@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { issuesApi } from '../../../api/issues'
-import type { Agent, Issue } from '../../../api/types'
+import { issuesApi, type IssueMessage } from '../../../api/issues'
+import type { Agent, Issue, IssueEvent } from '../../../api/types'
+import { AsyncBoundary } from '../../../components/data/AsyncBoundary'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
 import shared from './_shared.module.css'
 import styles from './IssueDetail.module.css'
@@ -39,6 +40,62 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
   const { issue, events, messages, loading, reload } = useIssueData(issueId, refreshSignal)
   const edit = useIssueEdit(issue, reload)
 
+  return (
+    <AsyncBoundary
+      data={issue}
+      loading={loading}
+      emptyFallback={<div className={styles.issueEmpty}>Issue 未找到</div>}
+      loadingFallback={<div className={styles.issueEmpty}>加载中...</div>}
+    >
+      {(data) => (
+        <IssueDetailBody
+          issue={data}
+          events={events}
+          messages={messages}
+          edit={edit}
+          reload={reload}
+          issueId={issueId}
+          agents={agents}
+          groupMembers={groupMembers}
+          onBack={onBack}
+          standalone={standalone}
+          readOnly={readOnly}
+          onArtifactClick={onArtifactClick}
+        />
+      )}
+    </AsyncBoundary>
+  )
+}
+
+interface IssueDetailBodyProps {
+  issue: Issue
+  events: IssueEvent[]
+  messages: IssueMessage[]
+  edit: ReturnType<typeof useIssueEdit>
+  reload: () => Promise<void>
+  issueId: string
+  agents: Agent[]
+  groupMembers: string[]
+  onBack?: () => void
+  standalone: boolean
+  readOnly: boolean
+  onArtifactClick?: (path: string) => void
+}
+
+function IssueDetailBody({
+  issue,
+  events,
+  messages,
+  edit,
+  reload,
+  issueId,
+  agents,
+  groupMembers,
+  onBack,
+  standalone,
+  readOnly,
+  onArtifactClick,
+}: IssueDetailBodyProps) {
   // in_progress 期间用户已发送但 worker 还没消费的追加指令(chip 列表)。
   // 提升到 IssueDetail 层,让 ContinueInputBar(push)和 IssueDetailHeader
   // (中断时 flush + clear)都能访问。issue 翻终态时按下面 effect 处理。
@@ -97,10 +154,6 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
   // 把所有 status='pending' 的 approval_request 提取出来,渲染成悬浮在底部
   // 按钮上方的快捷确认条。信息流里的 ApprovalCard 同步保留,既能看到上下文
   // 也能用其两阶段 deny 输入完整 feedback。
-  //
-  // 必须放在 early return 之前,否则首次 loading=true 返回时这个 hook 不会注册,
-  // 等数据到达再次渲染时 hooks 数量会对不上(React 报 "Rendered more hooks than
-  // during the previous render")。
   const pendingApprovals = useMemo(() => {
     return events.filter(ev => {
       if (ev.event_type !== 'approval_request') return false
@@ -162,9 +215,6 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
     await reload()
     scrollToBottom()
   }, [reload, scrollToBottom])
-
-  if (loading) return <div className={styles.issueEmpty}>加载中...</div>
-  if (!issue) return <div className={styles.issueEmpty}>Issue 未找到</div>
 
   const artifacts: string[] = (() => {
     try { return JSON.parse(issue.artifacts || '[]') } catch { return [] }
