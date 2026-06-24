@@ -145,6 +145,22 @@
   margin-top: 2px;
 }
 
+/* 连续消息(同一 sender 连发)的头像占位:宽度对齐(30px)让 content 不左移,
+   但不渲染真头像。Slack/Discord 紧凑模式。 */
+.avatarPlaceholder {
+  width: 30px;
+  flex-shrink: 0;
+}
+
+/* 连续消息贴近上一条 + 隐藏 sender 行(头像占位 + 只显示 content)。 */
+.messageRow.continuation {
+  margin-top: -4px;
+}
+
+.messageRow.continuation .messageSender {
+  display: none;
+}
+
 /* 单列布局:头像固定最左,incoming/outgoing 都从左侧延伸。
    原来的 row-reverse 已删除,outgoing 现在也头像在左、气泡在右,
    靠 .messageBubble.outgoing 的绿色背景区分。 */

@@ -20,6 +20,9 @@ interface MessageRowProps {
   onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
   /** 右键气泡时触发,父组件负责弹自定义菜单。isLoading 消息父组件应自行过滤。 */
   onContextMenu?: (e: React.MouseEvent, msg: ChatMessage) => void
+  /** 连续消息(上一条来自同一 sender):隐藏头像和 sender 行,只显示 content。
+   *  Slack/Discord 风格紧凑模式,避免同一人连发多条时重复显示头像和名字。 */
+  isContinuation?: boolean
 }
 
 // Extract the last [status:thinking]...[/status:thinking] tag from message content.
@@ -47,6 +50,7 @@ export const MessageRow = memo(function MessageRow({
   onQuote,
   onCancelStream,
   onContextMenu,
+  isContinuation,
 }: MessageRowProps) {
   const isSystem = msg.from === 'system'
   const hasPrompt = Boolean(msg.composedPrompt)
@@ -63,8 +67,12 @@ export const MessageRow = memo(function MessageRow({
   }
 
   return (
-    <div className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''}`}>
-      <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={30} className={styles.messageAvatar} />
+    <div className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''} ${isContinuation ? styles.continuation : ''}`}>
+      {isContinuation ? (
+        <div className={styles.avatarPlaceholder} aria-hidden="true" />
+      ) : (
+        <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={30} className={styles.messageAvatar} />
+      )}
       <div
         className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''}`}
         onContextMenu={onContextMenu ? (e) => onContextMenu(e, msg) : undefined}

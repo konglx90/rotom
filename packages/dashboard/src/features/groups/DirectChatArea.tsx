@@ -112,7 +112,7 @@ export function DirectChatArea({
       <div ref={scrollContainerRef} className={styles.messagesArea} onScroll={handleMessagesScroll}>
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>与 {directTarget} 开始一对一对话</div>
-        ) : messages.map(msg => {
+        ) : messages.map((msg, idx) => {
           if (msg.truncated) {
             return (
               <div key={msg.id} className={styles.truncatedChip}>
@@ -120,6 +120,8 @@ export function DirectChatArea({
               </div>
             )
           }
+          const prev = messages[idx - 1]
+          const isContinuation = !!prev && !prev.truncated && prev.from === msg.from
           const hasPrompt = Boolean(msg.composedPrompt)
           // ⏹ 按钮条件:agent 正在流式响应中的 incoming 气泡。outgoing(用户自己
           // 发的)不显示;已完成(cancelled 或正常 end)的也不显示。
@@ -130,8 +132,12 @@ export function DirectChatArea({
             onCancelStream(rid, msg.from)
           }
           return (
-          <div key={msg.id} className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing}`}>
-            <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={30} className={styles.messageAvatar} />
+          <div key={msg.id} className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isContinuation ? styles.continuation : ''}`}>
+            {isContinuation ? (
+              <div className={styles.avatarPlaceholder} aria-hidden="true" />
+            ) : (
+              <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={30} className={styles.messageAvatar} />
+            )}
             <div
               className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing}`}
             >

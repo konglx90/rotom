@@ -431,10 +431,10 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                 {isPinned && (
                                   <span className={styles.pinnedMark} title="已置顶">📌</span>
                                 )}
-                                {group.name}
-                              </div>
-                              <div className={styles.groupMeta}>
-                                {`${group.member_count || 0} 位成员`}
+                                <span className={styles.groupNameText}>{group.name}</span>
+                                <span className={styles.memberCount}>
+                                  {`· ${group.member_count || 0} 位`}
+                                </span>
                               </div>
                             </div>
                             <div className={styles.moreWrap}>
