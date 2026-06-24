@@ -740,7 +740,7 @@ export function GroupChatView() {
                                 className={`${styles.processTab} ${processTab === 'schedules' ? styles.processTabActive : ''}`}
                                 onClick={() => setProcessTab('schedules')}
                               >
-                                定时任务
+                                Schedules
                               </button>
                             </div>
                             {!isVisitor && (processTab === 'issues' || processTab === 'notes') && (
