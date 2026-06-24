@@ -1,28 +1,210 @@
+/* 顶层容器:column 排列,toolbar 在上、panelsRow 在下 */
 .container {
   display: flex;
+  flex-direction: column;
   height: 100%;
   width: 100%;
-  gap: 0;
   max-width: 100%;
   margin: 0;
 }
 
-.containerZen {
-  height: 100%;
+/* workspace 包裹 modeSidebar + panelsRow,visitor/normal 态共用 */
+.workspace {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
 }
 
-/* Zen 模式下：聊天区和右侧面板 50/50 等分 */
-.containerZen .rightPanel {
+/* 最左侧 mode 切换条:垂直窄条,3 个布局模式按钮。
+   占主区高度,让 chat panel 顶部不被 toolbar 占用。 */
+.modeSidebar {
+  flex: 0 0 auto;
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 2px;
+  border-right: 1px solid var(--border-color-light);
+  background: var(--color-canvas-elevated);
+}
+
+.modeBtn {
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 6px 1px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--color-warm-dark);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1.2;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out);
+}
+
+.modeBtn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-ink);
+}
+
+.modeBtnActive {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  border-color: rgba(22, 51, 0, 0.16);
+}
+
+.modeBtnActive:hover {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+}
+
+.modeBtnIcons {
+  font-size: 12px;
+  line-height: 1.05;
+  text-align: center;
+  letter-spacing: 0;
+}
+
+.modeBtnLabel {
+  font-size: 9px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* 三栏水平并列容器 */
+.panelsRow {
   flex: 1;
-  width: auto;
-  flex-shrink: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+/* 单个 panel 外壳:width 由 inline style 控制(来自 useResizablePanels)。
+   内部直接挂 chatArea/IssuePanel/ArtifactPanel,它们各自的根容器会撑满。 */
+.panel {
+  flex: 0 0 auto;
+  height: 100%;
   min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-canvas-elevated);
+}
+
+/* 关键:panel 是 flex column,直接子项(chatArea / IssuePanel 根 / processWrap
+   等)默认 min-height:auto,会被内部内容撑大导致超 panel 高度、input 被挤出
+   视口、messagesArea 无法滚动。强制子项 min-height:0,flex:1 才能在 column
+   方向正确收敛。 */
+.panel > * {
+  min-height: 0;
+}
+
+.panel + .panel,
+.panel + .splitter,
+.splitter + .panel {
+  /* 防御性 border,实际边界由 splitter 自身的 background 承担 */
+}
+
+/* Chat | Issues、Issues | Artifacts 之间的可拖拽垂直 splitter(水平拖拽) */
+.splitter {
+  flex: 0 0 4px;
+  cursor: col-resize;
+  background: var(--border-color-light);
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+.splitter:hover,
+.splitter:active {
+  background: var(--color-wise-green);
+}
+
+.panelsEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  font-size: 13px;
+  color: var(--color-slate);
+  text-align: center;
+}
+
+.panelPlaceholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  font-size: 13px;
+  color: var(--color-slate);
+  text-align: center;
+}
+
+/* Process panel 内部结构:顶部 sub-tab(Issues/Notes/定时任务) + 下方 body。
+   body 里挂 IssuePanel/NotePanel/SchedulePanel,它们各自的根容器撑满。 */
+.processWrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.processTabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-color-light);
+  background: var(--color-canvas-elevated);
+}
+
+.processTab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-warm-dark);
+  transition: color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out);
+}
+
+.processTab:hover {
+  color: var(--color-ink);
+}
+
+.processTabActive {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-wise-green);
+  font-weight: 700;
+}
+
+.processBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {
-  .container {
-    flex-direction: column;
-    padding: var(--spacing-sm);
+  /* 移动端:水平三栏会撑爆宽度。允许横向滚动作为最低保证;真正的单栏切换
+     降级策略由后续 useMediaQuery JS 层实现(本次未做)。 */
+  .panelsRow {
+    overflow-x: auto;
   }
 }
 
@@ -186,57 +368,8 @@
   border-top: 1px solid var(--border-color-light);
 }
 
-/* Right Panel with Tabs */
-.rightPanel {
-  display: flex;
-  flex-direction: column;
-  width: 480px;
-  flex-shrink: 0;
-  background: var(--color-canvas-elevated);
-  border-left: 1px solid var(--border-color-light);
-}
-
-.rightPanelTabs {
-  display: flex;
-  border-bottom: 1px solid var(--border-color-light);
-  padding: 0 4px;
-  gap: 4px;
-}
-
-.tabBtn {
-  flex: 1;
-  padding: 6px 0;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.108px;
-  border: none;
-  background: transparent;
-  color: var(--color-warm-dark);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color var(--duration-base) var(--ease-out),
-              border-color var(--duration-base) var(--ease-out);
-}
-
-.tabBtn:hover {
-  color: var(--color-dark-green);
-}
-
-.activeTab {
-  flex: 1;
-  padding: 6px 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.108px;
-  border: none;
-  background: transparent;
-  color: var(--color-ink);
-  cursor: pointer;
-  border-bottom: 2px solid var(--color-wise-green);
-}
-
-
-/* ── Sessions panel (right-side tab) ─────────────────────────────────── */
+/* ── Sessions panel(原 right-side tab,现已迁出 main view,样式保留供
+     SessionPanel 子组件通过 css modules 共享导入,如未引用可后续清理) ── */
 .hint {
   padding: 24px 16px;
   font-size: 13px;

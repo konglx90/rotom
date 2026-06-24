@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { groupsApi } from '../../api/groups'
 import { issuesApi } from '../../api/issues'
 import type { Issue } from '../../api/types'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
-import { useZenMode } from '../../context/ZenModeContext'
 import { useVisitorMode } from '../../context/VisitorContext'
 import { extractMentions } from './types'
 import { useGroupChatWebSocket } from './useGroupChatWebSocket'
+import { useResizablePanels } from './_hooks/useResizablePanels'
+import type { PanelConfig } from './_hooks/useResizablePanels'
 import { pushHistory } from './messageHistory'
 import { DirectChatArea } from './DirectChatArea'
 import { GroupChatArea } from './GroupChatArea'
@@ -20,13 +21,59 @@ import { AddMemberModal } from './modals/AddMemberModal'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
 
+// 主面板布局:三类顶级 panel —— chat / process / artifact。
+//   - chat: 对话区
+//   - process: 过程区,内部 sub-tab 切 Issues/Notes/定时任务(Issues 为主)
+//   - artifact: 产物区
+//
+// 显示规则:固定 3 种组合模式,toolbar 切换,确保主区始终 2 个 panel 同屏。
+//   - chat+process(默认):对话 + 过程
+//   - chat+artifact:对话 + 产物
+//   - process+artifact:过程 + 产物
+type PanelId = 'chat' | 'process' | 'artifact'
+type PanelMode = 'chat-process' | 'chat-artifact' | 'process-artifact'
+type ProcessTab = 'issues' | 'notes' | 'schedules'
+
+const PANEL_ORDER: PanelId[] = ['chat', 'process', 'artifact']
+const MODE_PANELS: Record<PanelMode, PanelId[]> = {
+  'chat-process': ['chat', 'process'],
+  'chat-artifact': ['chat', 'artifact'],
+  'process-artifact': ['process', 'artifact'],
+}
+const PANEL_CONFIGS: PanelConfig[] = [
+  { id: 'chat', width: 720, min: 360 },
+  { id: 'process', width: 480, min: 320 },
+  { id: 'artifact', width: 560, min: 360 },
+]
+const PANEL_MODE_KEY = 'rotom-panel-mode'
+const PROCESS_TAB_KEY = 'rotom-process-tab'
+
+function loadPanelMode(): PanelMode {
+  try {
+    const raw = localStorage.getItem(PANEL_MODE_KEY)
+    if (raw === 'chat-process' || raw === 'chat-artifact' || raw === 'process-artifact') return raw
+    return 'chat-process'
+  } catch {
+    return 'chat-process'
+  }
+}
+
+function loadProcessTab(): ProcessTab {
+  try {
+    const raw = localStorage.getItem(PROCESS_TAB_KEY)
+    if (raw === 'issues' || raw === 'notes' || raw === 'schedules') return raw
+    return 'issues'
+  } catch {
+    return 'issues'
+  }
+}
+
 export function GroupChatView() {
   const navigate = useNavigate()
   const { groupId: urlGroupId, issueId: urlIssueId } = useParams<{
     groupId?: string
     issueId?: string
   }>()
-  const { zenMode } = useZenMode()
   const {
     agents,
     groups,
@@ -48,13 +95,20 @@ export function GroupChatView() {
 
   const [issues, setIssues] = useState<Issue[]>([])
   const [selectedIssueVersion, setSelectedIssueVersion] = useState(0)
-  const [rightTab, setRightTab] = useState<'issues' | 'artifacts' | 'notes' | 'schedules'>('issues')
+  // mode:当前布局模式(3 选 1),确保主区始终 2 个 panel 同屏。
+  // activePanels:由 mode 派生,不再独立 toggle。
+  // processTab:process panel 内部 sub-tab 切换 Issues/Notes/定时任务。
+  // artifactSelectedPath:Issue 详情点击 artifact 路径 → 联动 ArtifactPanel 选中。
+  const [mode, setMode] = useState<PanelMode>(loadPanelMode)
+  const [processTab, setProcessTab] = useState<ProcessTab>(loadProcessTab)
+  const { widths, onSplitterMouseDown } = useResizablePanels('rotom-panel-widths', PANEL_CONFIGS)
+  const [artifactSelectedPath, setArtifactSelectedPath] = useState<string | null>(null)
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
 
+  const activePanels = MODE_PANELS[mode]
+
   // 访客模式：URL 带 ?share=<token> 时,先用 groupId 验 token,失败显示错误页。
-  // 重复验证判断看 visitorResolvedGroupId —— validate 成功后 VisitorContext
-  // 会把它填上,空则代表还没验过(或已失败)。
   useEffect(() => {
     if (!visitorToken) return
     if (!selectedGroupId) return
@@ -62,8 +116,8 @@ export function GroupChatView() {
     validateVisitor(selectedGroupId)
   }, [visitorToken, selectedGroupId, visitorResolvedGroupId, validateVisitor])
 
-  // 访客直接访问 /dashboard/groups/:groupId 但 URL 没带 groupId (不应该发生,
-  // 防御一下):弹回 /dashboard/agents 让普通引导流程接管。
+  // 访客直接访问 /dashboard/groups/:groupId 但 URL 没带 groupId:
+  // 弹回 /dashboard/agents 让普通引导流程接管。
   useEffect(() => {
     if (visitorToken && !selectedGroupId) {
       navigate('/dashboard/agents', { replace: true })
@@ -118,10 +172,7 @@ export function GroupChatView() {
     directTarget,
   })
 
-  // React to global socket pushes. The SocketProvider tracks the latest
-  // `issue_changed` event; we filter by our current group/issue and refresh
-  // accordingly. Standalone IssuesListPage / IssueDetailPage subscribe the
-  // same way, so the deep-link routes auto-update without a GroupChatView.
+  // React to global socket pushes.
   useEffect(() => {
     if (!lastIssueChange) return
     if (lastIssueChange.groupId !== selectedGroupId) return
@@ -144,11 +195,6 @@ export function GroupChatView() {
     pushHistory(trimmed)
 
     if (isDirectMode && selectedGroupId) {
-      // 自动中断再发送:同一 agent 还在 streaming 时,先把它的在飞流打断,
-      // 否则旧流和新流会乱序到达(worker maxConcurrent 可能允许并发),
-      // 视觉上bubble 也会重叠。等 cancel 完成(master→worker 是同步 WS,
-      // <50ms)再发新 a2a_send。失败不阻塞 —— cancel 失败只意味着响应方
-      // 已经掉线或自然结束,新消息仍可正常发。
       const inFlight = getStreamingRequestIdForAgent(directTarget)
       if (inFlight) {
         await cancelStream(inFlight, directTarget)
@@ -186,13 +232,6 @@ export function GroupChatView() {
 
     if (!selectedGroupId) return
 
-    // Ensure current user is a group member. The master delivers group stream
-    // chunks via broadcastToGroup(groupId, ...) which only reaches agents
-    // listed in group_members; if the dashboard user isn't a member, every
-    // chunk is silently dropped until a2a_stream_end persists the final text.
-    // Awaiting here (not fire-and-forget) is required: the worker may start
-    // streaming back before a background addMembers would have committed,
-    // losing the live chunks.
     try {
       await groupsApi.addMembers(selectedGroupId, [myAgentName])
       if (selfJoinError?.groupId === selectedGroupId) {
@@ -204,8 +243,6 @@ export function GroupChatView() {
     }
     await loadGroups()
 
-    // Only treat @name as an @-trigger when name is an actual group member.
-    // Non-member @text is left in the message as plain text.
     const memberSet = new Set(groupMembers)
     const mentions = extractMentions(trimmed).filter((name) => memberSet.has(name))
     const targets = mentions.filter((name) => name !== myAgentName)
@@ -216,9 +253,6 @@ export function GroupChatView() {
       groupName: selectedGroup?.name,
     }
 
-    // 自动中断再发送:每个 @ 的 target,如果它当前正在 streaming(上一轮还没
-    // 回完),先把它的在飞流打断,再发新的 a2a_send。串行 await —— 并发 cancel
-    // 会让 worker 同时收到多个 abort,虽然能处理但日志会乱。
     for (const target of targets) {
       const inFlight = getStreamingRequestIdForAgent(target)
       if (inFlight) {
@@ -226,10 +260,6 @@ export function GroupChatView() {
       }
     }
 
-    // Always persist group messages via REST API (single DB insert per
-    // message). Without this, when @mentioning multiple agents the Dashboard
-    // sends one a2a_send per target, and each a2a_send handler in ws-hub
-    // would store the same message N times.
     groupsApi.sendMessage(selectedGroupId, myAgentName, trimmed, mentions).catch((err) => {
       console.error('Failed to persist group message:', err)
     })
@@ -266,8 +296,7 @@ export function GroupChatView() {
     ])
   }
 
-  // Reset messages on conversation change. The WebSocket hook also loads
-  // history, so this just guarantees we don't show stale messages briefly.
+  // Reset messages on conversation change.
   const lastConvKeyRef = useRef<string>('')
   useEffect(() => {
     const key = `${selectedGroupId}::${directTarget}`
@@ -289,8 +318,6 @@ export function GroupChatView() {
     }
   }
 
-  // 重试 self-join。self-join 失败时 banner 上点"重试"会再调 addMembers。
-  // 后端在 PR 1 已加兜底 addMembers,所以即便这里失败也不阻塞消息发送。
   const retrySelfJoin = useCallback(async () => {
     if (!selfJoinError) return
     const gid = selfJoinError.groupId
@@ -312,13 +339,6 @@ export function GroupChatView() {
     }
   }
 
-  /**
-   * Delete the currently active DM. We get the target groupId from
-   * localStorage (set by ChatContext.activateDmGroup whenever a DM thread is
-   * opened) since `selectedGroupId` is the public-group id and DM rows
-   * are filtered out of the sidebar's group list. After deletion, clear
-   * the active DM target and navigate back to the empty group page.
-   */
   const handleDeleteDm = async () => {
     const dmGroupId = localStorage.getItem('dm_active_group')
     if (!dmGroupId) return
@@ -377,8 +397,38 @@ export function GroupChatView() {
     }
   }
 
+  // activePanels / processTab 持久化。widths 由 useResizablePanels 单独管。
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_MODE_KEY, mode)
+    } catch {
+      /* ignore */
+    }
+  }, [mode])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PROCESS_TAB_KEY, processTab)
+    } catch {
+      /* ignore */
+    }
+  }, [processTab])
+
+  // Issue 详情点击 artifact 路径 → 切到含 artifact 的模式(优先保留 process)。
+  // 当前是 chat-process → 切到 process-artifact;当前是 chat-artifact 不变;
+  // 当前是 process-artifact 不变。
+  const handleArtifactClick = useCallback((path: string) => {
+    setArtifactSelectedPath(path)
+    setMode(prev => {
+      if (prev === 'chat-artifact' || prev === 'process-artifact') return prev
+      return 'process-artifact'
+    })
+  }, [])
+
+  const visibleOrder = PANEL_ORDER.filter(id => activePanels.includes(id))
+
   return (
-    <div className={`${styles.container} ${zenMode ? styles.containerZen : ''}`}>
+    <div className={styles.container}>
       {/* 访客 token 验证失败时,只展示错误页,不要渲染群内容。 */}
       {visitorToken && visitorError && (
         <div className={chatStyles.centerFill}>
@@ -401,142 +451,213 @@ export function GroupChatView() {
       )}
 
       {(!visitorToken || isVisitor) && (
-      <>
-      <AddMemberModal
-        open={showAddMemberModal}
-        groupMemberNames={groupMembers}
-        agents={agents}
-        onClose={() => setShowAddMemberModal(false)}
-        onAdd={handleAddMembers}
-      />
-
-      {/* Chat Area */}
-      <div className={chatStyles.chatArea}>
-        {isDirectMode ? (
-          <DirectChatArea
-            directTarget={directTarget}
-            myAgentName={myAgentName}
-            messages={messages}
-            connectionStatus={connectionStatus}
-            onSendMessage={handleSendMessage}
-            onCancelStream={cancelStream}
-            onNewDmConversation={() => {
-              /* sidebar handles new DM creation now */
-            }}
-            onShowConfig={openConfigModal}
-
-            onDeleteConversation={handleDeleteDm}
+        <div className={styles.workspace}>
+          <AddMemberModal
+            open={showAddMemberModal}
+            groupMemberNames={groupMembers}
+            agents={agents}
+            onClose={() => setShowAddMemberModal(false)}
+            onAdd={handleAddMembers}
           />
-        ) : selectedGroup ? (
-          <>
-            {selfJoinError && selfJoinError.groupId === selectedGroupId && (
-              <div className={chatStyles.banner} role="alert">
-                <span>{selfJoinError.message}</span>
-                <button onClick={retrySelfJoin} className={chatStyles.bannerButton}>
-                  重试
-                </button>
-                <button
-                  onClick={() => setSelfJoinError(null)}
-                  className={chatStyles.bannerButton}
-                  aria-label="忽略"
-                >
-                  忽略
-                </button>
-              </div>
+
+          {/* 最左侧 mode 切换条:垂直窄条,3 种布局模式。
+              放这里(而不是顶部)是为了让 panelsRow(尤其 chat)顶部不被
+              toolbar 占用,高度最大化。 */}
+          <div className={styles.modeSidebar}>
+            <button
+              type="button"
+              className={`${styles.modeBtn} ${mode === 'chat-process' ? styles.modeBtnActive : ''}`}
+              onClick={() => setMode('chat-process')}
+              title="对话 + 过程(Issues/Notes/定时任务)"
+            >
+              <span className={styles.modeBtnIcons}>💬<br/>📋</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.modeBtn} ${mode === 'chat-artifact' ? styles.modeBtnActive : ''}`}
+              onClick={() => setMode('chat-artifact')}
+              title="对话 + Artifacts"
+            >
+              <span className={styles.modeBtnIcons}>💬<br/>📦</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.modeBtn} ${mode === 'process-artifact' ? styles.modeBtnActive : ''}`}
+              onClick={() => setMode('process-artifact')}
+              title="过程 + Artifacts"
+            >
+              <span className={styles.modeBtnIcons}>📋<br/>📦</span>
+            </button>
+          </div>
+
+          {/* 主区:2 个 panel + 1 条 splitter */}
+          <div className={styles.panelsRow}>
+            {visibleOrder.length === 0 ? (
+              <div className={styles.panelsEmpty}>所有面板已隐藏,点击顶部按钮恢复</div>
+            ) : (
+              visibleOrder.map((id, idx) => {
+                const prev = visibleOrder[idx - 1]
+                // 最后一个 visible panel 用 flex:1 占满剩余空间,避免右侧留白。
+                // flex-basis 仍是 widths[id],splitter 拖拽时持久化的 widths 正常;
+                // 视觉上该 panel 在 widths 基础上自动 grow 填满容器。
+                const isLast = idx === visibleOrder.length - 1
+                return (
+                  <Fragment key={id}>
+                    {idx > 0 && prev && (
+                      <div
+                        className={styles.splitter}
+                        onMouseDown={onSplitterMouseDown(prev, id)}
+                        title="拖拽调整宽度"
+                      />
+                    )}
+                    <div
+                      className={styles.panel}
+                      style={{
+                        width: `${widths[id]}px`,
+                        flex: isLast ? `1 1 ${widths[id]}px` : `0 0 ${widths[id]}px`,
+                      }}
+                    >
+                      {id === 'chat' && (
+                        <div className={chatStyles.chatArea}>
+                          {isDirectMode ? (
+                            <DirectChatArea
+                              directTarget={directTarget}
+                              myAgentName={myAgentName}
+                              messages={messages}
+                              connectionStatus={connectionStatus}
+                              onSendMessage={handleSendMessage}
+                              onCancelStream={cancelStream}
+                              onNewDmConversation={() => {
+                                /* sidebar handles new DM creation now */
+                              }}
+                              onShowConfig={openConfigModal}
+                              onDeleteConversation={handleDeleteDm}
+                            />
+                          ) : selectedGroup ? (
+                            <>
+                              {selfJoinError && selfJoinError.groupId === selectedGroupId && (
+                                <div className={chatStyles.banner} role="alert">
+                                  <span>{selfJoinError.message}</span>
+                                  <button onClick={retrySelfJoin} className={chatStyles.bannerButton}>
+                                    重试
+                                  </button>
+                                  <button
+                                    onClick={() => setSelfJoinError(null)}
+                                    className={chatStyles.bannerButton}
+                                    aria-label="忽略"
+                                  >
+                                    忽略
+                                  </button>
+                                </div>
+                              )}
+                              <GroupChatArea
+                                selectedGroup={selectedGroup}
+                                agents={agents}
+                                myAgentName={myAgentName}
+                                messages={messages}
+                                connectionStatus={connectionStatus}
+                                onSendMessage={handleSendMessage}
+                                onCancelStream={cancelStream}
+                                onShowConfig={openConfigModal}
+                                onAddMembers={() => setShowAddMemberModal(true)}
+                                onArchiveGroup={handleArchiveGroup}
+                                onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
+                                  if (dir === null) {
+                                    await clearGroupMemberWorkingDir(gid, agentName)
+                                  } else {
+                                    await setGroupMemberWorkingDir(gid, agentName, dir)
+                                  }
+                                }}
+                              />
+                            </>
+                          ) : (
+                            <div className={chatStyles.emptyChat}>
+                              <div style={{ textAlign: 'center' }}>
+                                <p style={{ fontSize: 16, color: 'var(--color-navy)', marginBottom: 8 }}>
+                                  选择在线 Agent 或群开始对话
+                                </p>
+                                <p style={{ fontSize: 13, color: 'var(--color-slate)' }}>
+                                  左侧「一对一」直接聊天，或创建群聊 @ 成员
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {id === 'process' && (
+                        <div className={styles.processWrap}>
+                          <div className={styles.processTabs}>
+                            <button
+                              type="button"
+                              className={`${styles.processTab} ${processTab === 'issues' ? styles.processTabActive : ''}`}
+                              onClick={() => setProcessTab('issues')}
+                            >
+                              Issues
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.processTab} ${processTab === 'notes' ? styles.processTabActive : ''}`}
+                              onClick={() => setProcessTab('notes')}
+                            >
+                              Notes
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.processTab} ${processTab === 'schedules' ? styles.processTabActive : ''}`}
+                              onClick={() => setProcessTab('schedules')}
+                            >
+                              定时任务
+                            </button>
+                          </div>
+                          <div className={styles.processBody}>
+                            {!selectedGroup ? (
+                              <div className={styles.panelPlaceholder}>选择群后查看过程</div>
+                            ) : processTab === 'issues' ? (
+                              <IssuePanel
+                                selectedGroupId={selectedGroupId}
+                                selectedIssueId={selectedIssueId}
+                                selectedIssueVersion={selectedIssueVersion}
+                                issues={issues}
+                                agents={agents}
+                                groupMembers={groupMembers}
+                                myAgentName={myAgentName}
+                                setSelectedIssueId={setSelectedIssueId}
+                                onCreateIssue={handleCreateIssue}
+                                onCreateCollaboration={handleCreateCollaboration}
+                                readOnly={isVisitor}
+                                onArtifactClick={handleArtifactClick}
+                              />
+                            ) : processTab === 'notes' ? (
+                              <NotePanel
+                                selectedGroupId={selectedGroupId}
+                                myAgentName={myAgentName}
+                              />
+                            ) : (
+                              <SchedulePanel selectedGroupId={selectedGroupId} />
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {id === 'artifact' && (
+                        selectedGroup ? (
+                          <Suspense fallback={<div className={styles.panelPlaceholder}>加载中...</div>}>
+                            <LazyArtifactPanel
+                              groupId={selectedGroupId}
+                              selectedPath={artifactSelectedPath}
+                              onSelectedPathChange={setArtifactSelectedPath}
+                            />
+                          </Suspense>
+                        ) : (
+                          <div className={styles.panelPlaceholder}>选择群后查看 Artifacts</div>
+                        )
+                      )}
+                    </div>
+                  </Fragment>
+                )
+              })
             )}
-            <GroupChatArea
-              selectedGroup={selectedGroup}
-              agents={agents}
-              myAgentName={myAgentName}
-              messages={messages}
-              connectionStatus={connectionStatus}
-              onSendMessage={handleSendMessage}
-              onCancelStream={cancelStream}
-              onShowConfig={openConfigModal}
-              onAddMembers={() => setShowAddMemberModal(true)}
-              onArchiveGroup={handleArchiveGroup}
-
-              onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
-                if (dir === null) {
-                  await clearGroupMemberWorkingDir(gid, agentName)
-                } else {
-                  await setGroupMemberWorkingDir(gid, agentName, dir)
-                }
-              }}
-            />
-          </>
-        ) : (
-          <div className={chatStyles.emptyChat}>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 16, color: 'var(--color-navy)', marginBottom: 8 }}>
-                选择在线 Agent 或群开始对话
-              </p>
-              <p style={{ fontSize: 13, color: 'var(--color-slate)' }}>
-                左侧「一对一」直接聊天，或创建群聊 @ 成员
-              </p>
-            </div>
           </div>
-        )}
-      </div>
-
-      {/* Right Panel with Tabs */}
-      {selectedGroup && (
-        <div className={styles.rightPanel}>
-          <div className={styles.rightPanelTabs}>
-            <button
-              className={rightTab === 'issues' ? styles.activeTab : styles.tabBtn}
-              onClick={() => setRightTab('issues')}
-            >
-              Issues
-            </button>
-            <button
-              className={rightTab === 'artifacts' ? styles.activeTab : styles.tabBtn}
-              onClick={() => setRightTab('artifacts')}
-            >
-              Artifacts
-            </button>
-            <button
-              className={rightTab === 'notes' ? styles.activeTab : styles.tabBtn}
-              onClick={() => setRightTab('notes')}
-            >
-              Notes
-            </button>
-            <button
-              className={rightTab === 'schedules' ? styles.activeTab : styles.tabBtn}
-              onClick={() => setRightTab('schedules')}
-            >
-              Schedules
-            </button>
-          </div>
-          {rightTab === 'issues' ? (
-            <IssuePanel
-              selectedGroupId={selectedGroupId}
-              selectedIssueId={selectedIssueId}
-              selectedIssueVersion={selectedIssueVersion}
-              issues={issues}
-              agents={agents}
-              groupMembers={groupMembers}
-              myAgentName={myAgentName}
-              setSelectedIssueId={setSelectedIssueId}
-              onCreateIssue={handleCreateIssue}
-              onCreateCollaboration={handleCreateCollaboration}
-              readOnly={isVisitor}
-            />
-          ) : rightTab === 'notes' ? (
-            <NotePanel
-              selectedGroupId={selectedGroupId}
-              myAgentName={myAgentName}
-            />
-          ) : rightTab === 'schedules' ? (
-            <SchedulePanel selectedGroupId={selectedGroupId} />
-          ) : (
-            <Suspense fallback={<div className={chatStyles.placeholder}>加载中...</div>}>
-              <LazyArtifactPanel groupId={selectedGroupId} />
-            </Suspense>
-          )}
         </div>
-      )}
-      </>
       )}
     </div>
   )
