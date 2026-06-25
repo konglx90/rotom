@@ -11,6 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import styles from './MarkdownContent.module.css'
@@ -795,19 +796,62 @@ function AskBlock({
   )
 }
 
-// react-markdown's default <img> render is fine but lacks `loading="lazy"` and
-// the alt fallback. We don't add click-to-expand / lightbox here (out of scope
-// for v1) — `<img>` not wrapped in an anchor doesn't navigate on click, which
-// is what we want inside the dashboard SPA.
+// Inline image with click-to-expand lightbox. The CSS already gives `<img>`
+// `cursor: zoom-in`, so we honor that affordance by opening a fullscreen
+// overlay on click. ESC or backdrop click closes.
 function ImgRenderer({ src, alt }: { src?: string; alt?: string }) {
   // react-markdown v10 sometimes passes src as a string array; ignore that and
   // only honour the plain-string form (covers all real-world cases).
   const url = typeof src === 'string' ? src : undefined
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    if (!expanded) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpanded(false)
+    }
+    window.addEventListener('keydown', handler)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handler)
+      document.body.style.overflow = prev
+    }
+  }, [expanded])
+
   return (
-    <img
-      src={url}
-      alt={alt ?? ''}
-      loading="lazy"
-    />
+    <>
+      <img
+        src={url}
+        alt={alt ?? ''}
+        loading="lazy"
+        onClick={() => url && setExpanded(true)}
+      />
+      {expanded && url && createPortal(
+        <div
+          className={styles.lightbox}
+          onClick={() => setExpanded(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={alt ?? '图片预览'}
+        >
+          <img
+            src={url}
+            alt={alt ?? ''}
+            className={styles.lightboxImg}
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            className={styles.lightboxClose}
+            onClick={() => setExpanded(false)}
+            aria-label="关闭"
+          >
+            ✕
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }
