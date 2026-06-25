@@ -56,6 +56,10 @@ export const groupsApi = {
     return api.patch<{ ok: boolean }>(`/groups/${id}`, { archived })
   },
 
+  async updateName(id: string, name: string): Promise<{ ok: boolean }> {
+    return api.patch<{ ok: boolean }>(`/groups/${id}`, { name })
+  },
+
   async delete(id: string): Promise<{ ok: boolean }> {
     return api.delete<{ ok: boolean }>(`/groups/${id}`)
   },
