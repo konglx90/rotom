@@ -643,6 +643,41 @@ export const connectionMethods = {
         return;
       }
 
+      // ── Issue todos update (claude-code worker pushes TodoWrite snapshots)
+      //
+      // 与 issue_update 平行的 side-channel:只更新 issues.latest_todos_json
+      // 快照 + 可选追加一条 event_type='todos' 时间线事件,**不动 issue 状态**。
+      // todos 内容 hash 去重:相邻两次相同则不重复落 event(避免时间线被同一条
+      // todos 反复刷屏);快照列始终覆盖更新,保证 dashboard 取到的总是最新。
+      if (msg.type === "issue_todos_update") {
+        const conn = this.connections.get(agentId);
+        if (!conn) return;
+        const issue = this.db.getIssueById(msg.issueId);
+        if (!issue) {
+          this.logger.warn(`[mesh] issue_todos_update for unknown issue ${msg.issueId}`);
+          return;
+        }
+        const todos = Array.isArray(msg.todos) ? msg.todos : [];
+        const serialized = JSON.stringify(todos);
+        const previousSnapshot = issue.latest_todos_json ?? "";
+        const changed = previousSnapshot !== serialized;
+        this.db.updateIssueTodos(msg.issueId, todos);
+        if (changed) {
+          this.db.addIssueEvent({
+            issueId: msg.issueId,
+            eventType: "todos",
+            agentName: conn.name,
+            content: "",
+            metadata: { todos, count: todos.length },
+          });
+        }
+        this.notifyIssueChanged(msg.issueId, issue.group_id, "event_appended");
+        this.logger.info(
+          `[mesh] Issue ${msg.issueId} todos update from ${conn.name}: ${todos.length} item(s)${changed ? "" : " (no-change skip event)"}`,
+        );
+        return;
+      }
+
       // ── Issue approval request (codex etc. asks for human Accept/Deny) ─
       if (msg.type === "issue_approval_request") {
         const conn = this.connections.get(agentId);

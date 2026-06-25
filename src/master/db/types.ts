@@ -119,6 +119,10 @@ export interface IssueRow {
   // JSON 字符串(见 src/executor/cli-executor.ts),由 worker 透传过来。
   usage: string | null;
   model: string | null;
+  // 最新一次 TodoWrite 的 todos 快照(added in migration 028)。JSON 字符串,
+  // 形如 [{"content":"...","status":"pending|in_progress|completed","activeForm":"..."}]。
+  // 由 worker 收到 issue_todos_update 后覆盖式写入,dashboard 常驻面板读它。
+  latest_todos_json: string | null;
 }
 
 export interface IssueEventRow {

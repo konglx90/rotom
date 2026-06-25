@@ -122,6 +122,25 @@ export interface MessagePayload {
 }
 
 // ---------------------------------------------------------------------------
+// Todo item (Claude Code TodoWrite tool payload)
+// ---------------------------------------------------------------------------
+
+/**
+ * 单条 todo,镜像 Claude Code TodoWrite 工具的 input.todos 数组项结构。
+ * Worker 解析 stream-json 时整条数组透传给 master,master 落库到
+ * issues.latest_todos_json + 一条 event_type='todos' 的 issue_event。
+ */
+export interface TodoItem {
+  /** 任务描述,用户在 dashboard 上看到的主要文本。 */
+  content: string;
+  /** 状态:pending=待办 / in_progress=进行中 / completed=已完成。 */
+  status: "pending" | "in_progress" | "completed";
+  /** 进行时态的简短描述(Claude Code 会填,如 "Fixing authentication bug")。
+   *  可选,缺失时前端 fallback 到 content。 */
+  activeForm?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Offline message (pushed on reconnect)
 // ---------------------------------------------------------------------------
 
@@ -146,6 +165,7 @@ export type ClientMessage =
   | ClientUpdateInfoMessage
   | ClientDisconnectMessage
   | ClientIssueUpdateMessage
+  | ClientIssueTodosUpdateMessage
   | ClientIssueApprovalRequestMessage
   | ClientSessionViewResponse
   | ClientSessionDeleteResponse
@@ -275,6 +295,27 @@ export interface ClientIssueApprovalRequestMessage {
     multiSelect: boolean;
     options: Array<{ label: string; description: string }>;
   }>;
+}
+
+/**
+ * Agent → Master: claude (或其他支持 TodoWrite 概念的 CLI) 在干活期间
+ * 调用 TodoWrite 工具更新自己的 todo 列表。Worker 解析 stream-json 的
+ * tool_use 块提取 input.todos,完整数组透传给 master。
+ *
+ * Master 处理:
+ *   1. 覆盖式写入 issues.latest_todos_json(最新快照)
+ *   2. 与上一次内容比对,不同才追加一条 event_type='todos' 的 issue_event
+ *      (供时间线展示历史变化,做内容 hash 去重避免噪声)
+ *   3. notifyIssueChanged 推送给 dashboard
+ *
+ * 注意:issue_todos_update 不携带 status 字段(不像 issue_update),它
+ * 不会改 issue 状态,只是 side-channel 推送 todos 视图。
+ */
+export interface ClientIssueTodosUpdateMessage {
+  type: "issue_todos_update";
+  issueId: string;
+  /** 完整 todos 数组,worker 每次都发全量(claude 的 TodoWrite 本身就是全量)。 */
+  todos: TodoItem[];
 }
 
 // --- Session management (Agent → Master) ---
@@ -717,6 +758,8 @@ export function isClientMessage(x: unknown): x is ClientMessage {
       return true;
     case "issue_update":
       return typeof msg.issueId === "string" && typeof msg.status === "string";
+    case "issue_todos_update":
+      return typeof msg.issueId === "string" && Array.isArray(msg.todos);
     case "issue_approval_request":
       return typeof msg.issueId === "string"
         && typeof msg.approvalId === "string"

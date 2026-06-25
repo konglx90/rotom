@@ -45,6 +45,8 @@ export interface MeshDbSelf {
     issueId: string; eventType: string; agentName: string;
     content?: string; metadata?: Record<string, unknown>;
   }): void;
+  /** 覆盖式写入 issues.latest_todos_json。供 ws-hub 处理 issue_todos_update 时调用。 */
+  updateIssueTodos(issueId: string, todos: unknown[]): void;
   listGroups(): (GroupRow & { member_count: number })[];
   getRoundTracker(issueId: string, round: number): { agent_name: string; has_contributed: number }[];
   getScheduledTask(id: number): ScheduledTaskRow | undefined;

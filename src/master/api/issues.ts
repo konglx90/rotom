@@ -10,8 +10,40 @@ import { truncateTitle } from "../../shared/title.js";
 import { ISSUE_STATUSES } from "../../shared/constants.js";
 import { resolveGroupAgentWorkingDir } from "../group-paths.js";
 import { createLogger } from "../../shared/logger.js";
+import type { IssueRow } from "../db/types.js";
+import type { TodoItem } from "../../shared/protocol.js";
 
 const log = createLogger("mesh-api");
+
+/**
+ * 在 DB 行上附 latest_todos 字段(解析后的 TodoItem[])。dashboard 直接消费
+ * 这个字段渲染常驻面板;原 latest_todos_json 字段保留不动供审计 / 兼容。
+ *
+ * 解析失败(空字符串 / 非法 JSON)一律返回 undefined,dashboard 视作"未上报"。
+ */
+function withLatestTodos<T extends IssueRow>(row: T): T & { latest_todos?: TodoItem[] } {
+  if (!row.latest_todos_json) return { ...row, latest_todos: undefined };
+  try {
+    const parsed = JSON.parse(row.latest_todos_json) as unknown;
+    if (Array.isArray(parsed)) {
+      const todos: TodoItem[] = [];
+      for (const item of parsed) {
+        if (!item || typeof item !== "object") continue;
+        const r = item as Record<string, unknown>;
+        const content = typeof r.content === "string" ? r.content : "";
+        if (!content) continue;
+        const status: TodoItem["status"] =
+          r.status === "in_progress" ? "in_progress" :
+          r.status === "completed" ? "completed" :
+          "pending";
+        const activeForm = typeof r.activeForm === "string" && r.activeForm ? r.activeForm : undefined;
+        todos.push({ content, status, ...(activeForm ? { activeForm } : {}) });
+      }
+      return { ...row, latest_todos: todos.length > 0 ? todos : undefined };
+    }
+  } catch { /* fall through */ }
+  return { ...row, latest_todos: undefined };
+}
 
 function validateWorkingDir(input: unknown): { ok: true; path: string } | { ok: false; error: string } {
   if (typeof input !== "string") return { ok: false, error: "working_dir must be a string" };
@@ -52,7 +84,7 @@ export function registerIssueRoutes(
 ): void {
   apiRouter.get("/issues", (req, res) => {
     const status = req.query.status as string | undefined;
-    res.json(db.listAllIssues(status));
+    res.json(db.listAllIssues(status).map(withLatestTodos));
   });
 
   apiRouter.get("/groups/:groupId/issues", (req, res) => {
@@ -63,7 +95,7 @@ export function registerIssueRoutes(
     }
     const status = req.query.status as string | undefined;
     const type = req.query.type as string | undefined;
-    res.json(db.listIssuesByGroup(req.params.groupId, status, type));
+    res.json(db.listIssuesByGroup(req.params.groupId, status, type).map(withLatestTodos));
   });
 
   apiRouter.post("/groups/:groupId/issues", (req, res) => {
@@ -139,7 +171,7 @@ export function registerIssueRoutes(
       return;
     }
     const events = db.getIssueEvents(req.params.id);
-    res.json({ ...issue, events });
+    res.json({ ...withLatestTodos(issue), events });
   });
 
   apiRouter.put("/issues/:id", (req, res) => {
@@ -469,7 +501,7 @@ export function registerIssueRoutes(
       agentName,
     });
     if (hub) hub.notifyIssueChanged(issue.id, issue.group_id, "updated");
-    res.json(issue);
+    res.json(withLatestTodos(issue));
   });
 
   apiRouter.post("/issues/:id/approvals/:approvalId", (req, res) => {

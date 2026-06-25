@@ -107,6 +107,17 @@ export const issueMethods = {
   },
 
   /**
+   * 覆盖式写入 issues.latest_todos_json。每次 worker 解析到 TodoWrite tool_use
+   * 都调一次(全量替换);是否额外落 issue_event 由调用方(ws-hub)按内容 hash
+   * 去重决定,这里只管快照列。
+   */
+  updateIssueTodos(this: MeshDbSelf, id: string, todos: unknown[]): void {
+    this.db.prepare(
+      "UPDATE issues SET latest_todos_json = ?, updated_at = ? WHERE id = ?",
+    ).run(JSON.stringify(todos), new Date().toISOString(), id);
+  },
+
+  /**
    * 反查最新绑定到某个 sessionId 的 issue。
    * session_id 由 migration 013 加入,无 session_id 列的旧 DB 走不到这里。
    */

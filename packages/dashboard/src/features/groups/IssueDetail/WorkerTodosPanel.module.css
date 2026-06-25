@@ -1,0 +1,106 @@
+/* Worker Todo 面板 ——挂在 IssueDetailHeader 下方、IssueEventsTimeline 上方。
+ * 视觉规范按 DESIGN.md Wise 风格:Light Surface 背景、圆角 16px、ring shadow。
+ * 三态 badge 用 Wise Green / Bright Orange / Light Surface 区分。 */
+
+.panel {
+  margin: 8px 14px 4px;
+  padding: 10px 14px;
+  background: #f7f9f4;
+  border: 1px solid rgba(14, 15, 12, 0.06);
+  border-radius: 16px;
+  box-shadow: rgba(14, 15, 12, 0.05) 0 0 0 1px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0e0f0c;
+  letter-spacing: -0.06px;
+}
+
+.summary {
+  font-size: 10px;
+  color: #6b7264;
+  font-family: var(--font-mono, 'SF Mono', monospace);
+  margin-left: auto;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.04px;
+  white-space: nowrap;
+}
+
+.text {
+  color: #0e0f0c;
+  word-break: break-word;
+  min-width: 0;
+}
+
+/* completed:Wise Green 背景 + Dark Green 文字。
+ * 文本加删除线让"已完成"一眼可辨。 */
+.completed .badge {
+  background: #9fe870;
+  color: #163300;
+}
+.completed .text {
+  text-decoration: line-through;
+  color: #6b7264;
+}
+
+/* in_progress:Bright Orange 背景 + Near Black 文字。
+ * 整行加左侧色条强调"当前焦点"。 */
+.inProgress {
+  background: rgba(255, 192, 145, 0.18);
+  border-left: 3px solid #ffc091;
+  padding-left: 5px;
+}
+.inProgress .badge {
+  background: #ffc091;
+  color: #0e0f0c;
+}
+.inProgress .text {
+  font-weight: 600;
+}
+
+/* pending:Light Surface 背景 + Warm Dark 文字,低对比。 */
+.pending .badge {
+  background: #e8ebe6;
+  color: #454745;
+}
+.pending .text {
+  color: #454745;
+}

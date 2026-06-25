@@ -911,6 +911,12 @@ ${prompt}`;
         slashCommand,
         approvalPolicy: effectivePolicy,
         onApprovalRequest,
+        onTodos: (todos) => {
+          if (task.aborted) return;
+          // 单独走 issue_todos_update WS 消息,不混进 issue_update 的 progress
+          // 事件流——后者会产生 [tool:exec] 等气泡,todos 不该走那条路。
+          this.send({ type: "issue_todos_update", issueId, todos });
+        },
       });
 
       // 不管后续走 abort / completed / failed 哪条分支,先把本轮 sessionId

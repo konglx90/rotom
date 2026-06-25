@@ -232,6 +232,19 @@ export interface Issue {
   session_id?: string | null
   /** 该 issue 执行用的 CLI 后端(claude | codex | hermes | openclaw,migration 013)。 */
   cli_tool?: string | null
+  /** 最新一次 TodoWrite 工具调用的 todos 快照(migration 028)。worker 解析
+   *  Claude Code 的 TodoWrite tool_use 后通过 issue_todos_update WS 推送,
+   *  master 落 issues.latest_todos_json,API 层解析为对象返回。undefined
+   *  表示该 issue 还没上报过 todos(未开始 / 非 claude backend)。 */
+  latest_todos?: TodoItem[]
+}
+
+/** TodoWrite 单条 todo。镜像后端 src/shared/protocol.ts 的 TodoItem 接口。
+ *  activeForm 缺失时前端 fallback 到 content 渲染。 */
+export interface TodoItem {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+  activeForm?: string
 }
 
 /** Token 用量信息。后端 TokenUsage interface 的前端镜像（见 src/executor/cli-executor.ts）。
