@@ -157,19 +157,43 @@ export class ClaudeCodeExecutor implements CliExecutor {
       // 走 [tool-result:ask],要么直接吞掉）。
       const toolUseKinds = new Map<string, "exec" | "patch" | "ask" | "todo">();
 
+      // 把跨 chunk 的 NDJSON records 在 buffer 里累积,避免一条很长的 record
+      // (如 `Read` 1000 行 diff 后 user tool_result 有 77k 字符)被 stream chunk
+      // 边界切断 → split("\n") 切出半截 record → JSON.parse 失败 → 落到 catch
+      // 分支被原样 onOutput → 整条 77k 字符 raw record 塞进 message content
+      // 当成 narrative 渲染,前端无法折叠。
+      let stdoutBuffer = "";
+
       proc.stdout.on("data", (data: Buffer) => {
-        const lines = data.toString().split("\n").filter(Boolean);
+        stdoutBuffer += data.toString();
+        // 找最后一个 \n,把 buffer 切成 "已完成的 lines" + "残留的不完整 tail"。
+        // \r\n 也兼容(去掉 \r),NDJSON 通常用 \n,但 Windows/某些 tty 配置可能 \r\n。
+        const lastNl = stdoutBuffer.lastIndexOf("\n");
+        if (lastNl === -1) return; // 整个 buffer 还没攒出一条完整 line
+        const completed = stdoutBuffer.slice(0, lastNl);
+        stdoutBuffer = stdoutBuffer.slice(lastNl + 1);
+        const lines = completed.split("\n").map(l => l.endsWith("\r") ? l.slice(0, -1) : l).filter(Boolean);
         for (const line of lines) {
-          let parsed: Record<string, any>;
+          let parsed: Record<string, any> | null = null;
           try {
             parsed = JSON.parse(line);
-          } catch {
-            fullOutput += line;
-            onOutput(line);
+          } catch (err) {
+            // Catch 分支不再原样 onOutput —— 那会把半个或整个 raw record
+            // (含 user tool_result) 当 narrative 推到 message content,无法折叠。
+            // 偶尔的协议错误 warn 一下,丢掉这帧,不让它污染下游展示。
+            console.warn(
+              `[claude-code] skipping malformed NDJSON record (${line.length} chars): ` +
+              `${(err as Error).message}`,
+            );
             continue;
           }
+          handleRecord(parsed!);
+        }
+      });
 
-          switch (parsed.type) {
+      // 处理单个 NDJSON record。把 switch 提到独立函数,粘行切分路径复用。
+      function handleRecord(parsed: Record<string, any>): void {
+        switch (parsed.type) {
             case "system":
               if (parsed.session_id && !sessionId) {
                 sessionId = parsed.session_id;
@@ -283,8 +307,7 @@ export class ClaudeCodeExecutor implements CliExecutor {
               }
               break;
           }
-        }
-      });
+      }
 
       proc.stderr.on("data", (data: Buffer) => {
         const text = data.toString().trim();
@@ -294,6 +317,19 @@ export class ClaudeCodeExecutor implements CliExecutor {
       });
 
       proc.on("close", (code) => {
+        // Flush stdoutBuffer 残留的尾部(没有以 \n 结尾的最后一条 record)。
+        // 正常情况 on("data") 已经处理完所有完整行,这里只处理尾巴。
+        if (stdoutBuffer.length > 0) {
+          try {
+            handleRecord(JSON.parse(stdoutBuffer));
+          } catch (err) {
+            console.warn(
+              `[claude-code] skipping trailing NDJSON record (${stdoutBuffer.length} chars): ` +
+              `${(err as Error).message}`,
+            );
+          }
+          stdoutBuffer = "";
+        }
         // If resume was requested but claude returned a different session id
         // AND the run failed, the resume did not land — clear sessionId so
         // the caller can retry with a fresh session.

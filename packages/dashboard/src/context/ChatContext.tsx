@@ -62,6 +62,7 @@ interface ChatContextValue {
   updateGroupWorkingDir: (groupId: string, workingDir: string | null) => Promise<void>
   setGroupMemberWorkingDir: (groupId: string, agentName: string, workingDir: string) => Promise<void>
   clearGroupMemberWorkingDir: (groupId: string, agentName: string) => Promise<void>
+  updateGroupName: (groupId: string, name: string) => Promise<void>
   toggleGroupPinned: (groupId: string, pinned: boolean) => Promise<void>
   deleteGroup: (groupId: string) => Promise<void>
   toggleGroupArchived: (groupId: string, archived: boolean) => Promise<void>
@@ -295,6 +296,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   // Optimistic toggle: patch local state first so the pin reordering is
   // instant; reconcile with the server response so the canonical pinned_at
   // timestamp ends up matching what the next /groups fetch returns.
+  const updateGroupName = useCallback(
+    async (groupId: string, name: string) => {
+      setGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, name } : g)),
+      )
+      try {
+        await groupsApi.updateName(groupId, name)
+        await loadGroups()
+      } catch (error) {
+        console.error('Failed to update group name:', error)
+        await loadGroups()
+        const msg = error instanceof Error ? error.message : String(error)
+        window.alert(`更新群名称失败：${msg}`)
+      }
+    },
+    [loadGroups],
+  )
+
   const toggleGroupPinned = useCallback(
     async (groupId: string, pinned: boolean) => {
       const optimisticPinnedAt = pinned ? new Date().toISOString() : null
@@ -438,6 +457,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     activateDmGroup,
     selectGroup,
     createGroup,
+    updateGroupName,
     updateGroupWorkingDir,
     setGroupMemberWorkingDir,
     clearGroupMemberWorkingDir,

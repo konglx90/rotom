@@ -5,6 +5,7 @@ import { Avatar } from '../../ui/Avatar'
 import { useChatContext } from '../../../context/ChatContext'
 import { useZenMode } from '../../../context/ZenModeContext'
 import { getAvatarColor } from '../../../utils/avatar'
+import { GroupSettingsModal } from '../../../features/groups/modals/GroupSettingsModal'
 import styles from './AppSidebar.module.css'
 const NAV_TABS = [
   { id: 'agents', label: '员工管理', icon: '👥', path: '/dashboard/agents' },
@@ -93,6 +94,8 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     selectGroup,
     openCreateGroupModal,
     openConfigModal,
+    updateGroupName,
+    updateGroupWorkingDir,
     toggleGroupPinned,
     toggleGroupArchived,
     deleteGroup,
@@ -116,6 +119,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   // 位置在点击瞬间从按钮的 getBoundingClientRect 算出来,所以滚动/resize 必须关闭。
   const moreBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const [moreMenuPos, setMoreMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const [settingsGroupId, setSettingsGroupId] = useState<string | null>(null)
   const startStateRef = useRef<{ x: number; w: number } | null>(null)
   // Close more-menu dropdown on outside click
   useEffect(() => {
@@ -520,6 +524,18 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                   >
                                     🗄️ 归档
                                   </button>
+                                  <button
+                                    type="button"
+                                    className={styles.moreItem}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setMoreMenuGroup(null)
+                                      setMoreMenuPos(null)
+                                      setSettingsGroupId(group.id)
+                                    }}
+                                  >
+                                    ⚙️ 设置
+                                  </button>
                                   <div className={styles.moreDivider} />
                                   <button
                                     type="button"
@@ -575,6 +591,20 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
           </button>
         </div>
       </aside>
+      {settingsGroupId && (() => {
+        const g = groups.find(grp => grp.id === settingsGroupId)
+        if (!g) return null
+        return (
+          <GroupSettingsModal
+            open={true}
+            groupName={g.name}
+            groupWorkingDir={g.working_dir}
+            onClose={() => setSettingsGroupId(null)}
+            onSaveName={(name) => updateGroupName(g.id, name)}
+            onSaveWorkingDir={(dir) => updateGroupWorkingDir(g.id, dir)}
+          />
+        )
+      })()}
       <div
         className={`${styles.resizer} ${dragging ? styles.resizerActive : ''}`}
         onMouseDown={(e) => {
