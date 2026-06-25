@@ -104,9 +104,9 @@
 
 .md img {
   /* Inline images render as thumbnails — small enough not to dominate the
-     chat bubble, large enough to be recognizable. Click → open in new tab
-     for full size (browser default on `<img>` wrapped in markdown link).
-     Long screenshots / tall images still capped via `object-fit: contain`. */
+     chat bubble, large enough to be recognizable. Click opens the lightbox
+     overlay (see .lightbox below). Long screenshots / tall images still
+     capped via `object-fit: contain`. */
   max-width: 240px;
   max-height: 240px;
   width: auto;
@@ -116,6 +116,49 @@
   margin: 6px 0;
   object-fit: contain;
   cursor: zoom-in;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  padding: 24px;
+  cursor: zoom-out;
+}
+
+.lightboxImg {
+  max-width: 80vw;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  cursor: default;
+}
+
+.lightboxClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.lightboxClose:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .cursor {
