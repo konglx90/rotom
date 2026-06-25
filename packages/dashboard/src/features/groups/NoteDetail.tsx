@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Note } from '../../api/types'
 import { notesApi } from '../../api/notes'
-import { AsyncBoundary } from '../../components/data/AsyncBoundary'
+import { AsyncBoundary } from '../../components/async/AsyncBoundary'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import { MarkdownEditor } from '../../components/ui/MarkdownEditor'

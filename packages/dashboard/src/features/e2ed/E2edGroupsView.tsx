@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { e2edApi, type E2edRequirement } from "../../api/e2ed";
-import { AsyncBoundary } from "../../components/data/AsyncBoundary";
+import { AsyncBoundary } from "../../components/async/AsyncBoundary";
 import s from "./E2edGroupsView.module.css";
 import shared from "./E2edShared.module.css";
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { issuesApi, type IssueMessage } from '../../../api/issues'
 import type { Agent, Issue, IssueEvent } from '../../../api/types'
-import { AsyncBoundary } from '../../../components/data/AsyncBoundary'
+import { AsyncBoundary } from '../../../components/async/AsyncBoundary'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
 import shared from './_shared.module.css'
 import styles from './IssueDetail.module.css'
