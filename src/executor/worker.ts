@@ -12,6 +12,7 @@ import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { ApprovalDecision, ApprovalRequestInput, CliExecutor } from "./cli-executor.js";
 import { composePrompt, type ComposedPrompt } from "../shared/prompt-composer.js";
+import { isReadonlyCommand } from "../shared/readonly-allowlist.js";
 import { parseAgentProfile, type AgentProfile } from "../shared/agent-profile.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
 import type { TokenUsage } from "../shared/protocol.js";
@@ -878,6 +879,14 @@ ${prompt}`;
         // 给 master —— 否则 Dashboard 会渲染成"待确认"卡片,误导用户以为
         // agent 被阻塞,实际底层 claude 已经继续跑。审计/可见性可从 master
         // 日志 + claude session jsonl 拉(都是 fullOutput 的一部分)。
+        return Promise.resolve({ decision: "accept" } satisfies ApprovalDecision);
+      }
+      // r_allow + 只读 Bash:命中内置白名单直接 accept,不弹 dashboard 卡片。
+      // 安全契约(fail-closed):复合命令(管道/重定向/&&/;/`/$()/\\)及前导 env
+      // 赋值一律不命中,详见 src/shared/readonly-allowlist.ts。file_change/plan/
+      // ask 不查白名单,继续走 dashboard。
+      if (req.kind === "exec" && isReadonlyCommand(req.command)) {
+        console.log(`${this.tag} auto-approve readonly exec: ${req.command}`);
         return Promise.resolve({ decision: "accept" } satisfies ApprovalDecision);
       }
       // r_allow:Dashboard 侧能看到请求记录,挂起等待用户 Accept/Deny

@@ -115,7 +115,7 @@ function buildCwdLayer(cwd: string | null, mode: ComposeContext["mode"], approva
       ? `模式: chat(只读)。仅可 Read/Grep/Glob/Bash(只读);要写盘见 SKILL.md#写盘兜底话术。\n`
       : effectivePolicy === "rw_allow"
         ? `模式: ${mode},可写(rw_allow)。Write/Edit/写 Bash 自动放行,无需 dashboard 确认;只写本任务相关产出。\n`
-        : `模式: ${mode},可写(r_allow)。Write/Edit/写 Bash 会被挂起等 dashboard Accept/Deny;要免审批,建 issue 时用 --approval-policy rw_allow。\n`;
+        : `模式: ${mode},可写(r_allow)。写盘类(Write/Edit/写 Bash)会被挂起等 dashboard Accept/Deny;只读 Bash(ls/cat/grep/git status/git diff/git log/rotom status 等)自动放行不打扰;要完全免审批用 --approval-policy rw_allow。\n`;
   return {
     layer: "cwd",
     content:
