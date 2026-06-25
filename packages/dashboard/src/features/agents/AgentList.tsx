@@ -1,7 +1,7 @@
 import type { Agent } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { AsyncBoundary } from '../../components/data/AsyncBoundary'
+import { AsyncBoundary } from '../../components/async/AsyncBoundary'
 import { useAgents } from '../../hooks/useAgents'
 import styles from './AgentList.module.css'
 
