@@ -62,7 +62,7 @@ describe("ExecutorWorker.runIssueExecution — interrupt + queue 续跑保留 se
       // 起第一轮(无 resumeSessionId)。executor.execute() 的 promise 挂住,
       // 模拟 claude 正在跑。fire-and-forget —— runIssueExecution 是 async,
       // 它会 await execute() 直到我们手动 resolve。
-      void anyWorker.runIssueExecution(issueId, "原始任务", tmpHome, undefined, undefined, "rw_allow");
+      void anyWorker.issues.runIssueExecution(issueId, "原始任务", tmpHome, undefined, undefined, "rw_allow");
       await new Promise((r) => setImmediate(r));
 
       // 此时第一轮的 execute() 已挂在 calls[0]。模拟 master 推 issue_interrupt
