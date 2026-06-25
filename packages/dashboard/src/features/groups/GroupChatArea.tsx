@@ -7,6 +7,7 @@ import { ComposedPromptModal } from './modals/ComposedPromptModal'
 import { MessageRow } from './MessageRow'
 import { MessageContextMenu } from './MessageContextMenu'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
+import { useImageUpload } from './useImageUpload'
 import styles from './ChatArea.module.css'
 
 // 默认只渲染最近 N 条消息,避免长会话下 DOM 节点数失控(参考
@@ -40,6 +41,7 @@ export function GroupChatArea({
 }: GroupChatAreaProps) {
   const messagesAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   // 用户是否贴在底部。向上滚查看历史时为 false,流式新 token 不再抢焦点;
   // 用户主动发消息或回到底部时回到 true。ref 而非 state,避免每次滚动
   // 触发整棵子树协调。
@@ -51,6 +53,9 @@ export function GroupChatArea({
   const [mentionStartIndex, setMentionStartIndex] = useState(-1)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
   const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
+  const [isDragActive, setIsDragActive] = useState(false)
+  const dragCounterRef = useRef(0)
+  const { upload, uploading: isUploading } = useImageUpload(selectedGroup.id)
   const { isVisitor } = useVisitorMode()
   const handleShowPrompt = useCallback((msg: ChatMessage) => {
     setComposedPromptFor(msg)
@@ -241,6 +246,93 @@ export function GroupChatArea({
     isAtBottomRef.current = true
   }
 
+  // 上传一张图,把 ![name](url) 插到 textarea 当前光标处。多图串行避免 backend
+  // 同时间写同一文件目录的元数据抖动;压缩在浏览器端,顺序更稳。
+  const insertUpload = useCallback(async (file: File) => {
+    const result = await upload(file)
+    if (!result) return
+    const md = `\n![${file.name.replace(/[!\[\]()]/g, '')}](${result.url})\n`
+    setMessage(prev => {
+      const ta = inputRef.current
+      const idx = ta ? (ta.selectionStart ?? prev.length) : prev.length
+      return `${prev.slice(0, idx)}${md}${prev.slice(idx)}`
+    })
+    requestAnimationFrame(() => {
+      const ta = inputRef.current
+      if (!ta) return
+      ta.focus()
+      const pos = (ta.value.length)
+      ta.selectionStart = ta.selectionEnd = pos
+      ta.style.height = 'auto'
+      ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'
+    })
+  }, [upload])
+
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    // 串行:Canvas 压缩 + base64 编码都跑在主线程,并发会卡 UI
+    Array.from(files).reduce(
+      (p, file) => p.then(() => insertUpload(file)),
+      Promise.resolve(),
+    )
+    // 清空 value 让同一文件能再次选中(否则 onChange 不会触发)
+    e.target.value = ''
+  }, [insertUpload])
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+    const imageFiles: File[] = []
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const f = item.getAsFile()
+        if (f) imageFiles.push(f)
+      }
+    }
+    if (imageFiles.length === 0) return
+    e.preventDefault()
+    imageFiles.reduce(
+      (p, file) => p.then(() => insertUpload(file)),
+      Promise.resolve(),
+    )
+  }, [insertUpload])
+
+  // dragenter/dragleave counter:dragenter fires once per element entered, so
+  // dragging over a message row + the wrapping div would otherwise flip the
+  // state false prematurely. Counter pattern is the canonical fix.
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer?.types ?? []).includes('Files')) return
+    e.preventDefault()
+    dragCounterRef.current += 1
+    setIsDragActive(true)
+  }, [])
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounterRef.current -= 1
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0
+      setIsDragActive(false)
+    }
+  }, [])
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer?.types ?? []).includes('Files')) return
+    e.preventDefault()
+  }, [])
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer?.types ?? []).includes('Files')) return
+    e.preventDefault()
+    dragCounterRef.current = 0
+    setIsDragActive(false)
+    const files = Array.from(e.dataTransfer?.files ?? []).filter(f => f.type.startsWith('image/'))
+    if (files.length === 0) return
+    files.reduce(
+      (p, file) => p.then(() => insertUpload(file)),
+      Promise.resolve(),
+    )
+  }, [insertUpload])
+
   const isArchived = Boolean(selectedGroup.archived_at)
 
   return (
@@ -273,7 +365,15 @@ export function GroupChatArea({
         </div>
       )}
 
-      <div ref={messagesAreaRef} className={styles.messagesArea} onScroll={handleMessagesScroll}>
+      <div
+        ref={messagesAreaRef}
+        className={styles.messagesArea}
+        onScroll={handleMessagesScroll}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
         {messages.length === 0 ? (
           <div className={styles.emptyChat}>在群 {selectedGroup.name} 中开始对话吧</div>
         ) : visibleMessages.map((msg, idx) => {
@@ -300,10 +400,24 @@ export function GroupChatArea({
             )
           );
         })}
+        {isDragActive && (
+          <div className={styles.dropOverlay}>
+            <div className={styles.dropHint}>松手即可上传图片到群聊</div>
+          </div>
+        )}
       </div>
 
       {!isVisitor && (
         <div className={styles.inputArea}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className={styles.fileInputHidden}
+            onChange={handleFileInputChange}
+            disabled={isArchived || isUploading || connectionStatus !== 'connected'}
+          />
           <textarea ref={inputRef} rows={1} value={message}
           onChange={e => {
             if (isArchived) return;
@@ -311,6 +425,7 @@ export function GroupChatArea({
             e.target.style.height = 'auto';
             e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
           }}
+          onPaste={handlePaste}
           onKeyDown={e => {
             if (isArchived) return;
             if (showMentionDropdown && filteredMentionAgents.length > 0) {
@@ -342,9 +457,17 @@ export function GroupChatArea({
               e.currentTarget.style.height = 'auto';
             }
           }}
-          placeholder={connectionStatus === 'connected' && !selectedGroup.archived_at ? '输入消息... (Shift+Enter 换行, @ 提及成员)' : '等待连接...'}
+          placeholder={connectionStatus === 'connected' && !selectedGroup.archived_at ? '输入消息... (Shift+Enter 换行, @ 提及成员, 粘贴/拖入图片自动上传)' : '等待连接...'}
           disabled={connectionStatus !== 'connected'}
           className={styles.messageInput} />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isArchived || isUploading || connectionStatus !== 'connected'}
+          className={styles.uploadBtn}
+          title="上传图片"
+          aria-label="上传图片"
+        >{isUploading ? '…' : '📎'}</button>
         <button onClick={handleSend}
           disabled={isArchived || !message.trim() || connectionStatus !== 'connected'}
           className={styles.sendBtn}>发送</button>

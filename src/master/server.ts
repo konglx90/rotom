@@ -113,7 +113,10 @@ async function main(): Promise<void> {
 
   // HTTP + Express
   const app = express();
-  app.use(express.json({ limit: "1mb" }));
+  // 15mb to allow base64-encoded image uploads via /api/uploads (see
+  // uploads.ts MAX_UPLOAD_BYTES — kept in sync). Regular JSON endpoints
+  // don't approach this; the limit is a ceiling, not a default allocation.
+  app.use(express.json({ limit: "15mb" }));
 
   // Dashboard (static files)
   // Prod (running from dist/master): build:master copies React dashboard
