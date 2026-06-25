@@ -103,8 +103,19 @@
 }
 
 .md img {
-  max-width: 100%;
+  /* Inline images render as thumbnails — small enough not to dominate the
+     chat bubble, large enough to be recognizable. Click → open in new tab
+     for full size (browser default on `<img>` wrapped in markdown link).
+     Long screenshots / tall images still capped via `object-fit: contain`. */
+  max-width: 240px;
+  max-height: 240px;
+  width: auto;
+  height: auto;
   border-radius: 8px;
+  display: block;
+  margin: 6px 0;
+  object-fit: contain;
+  cursor: zoom-in;
 }
 
 .cursor {

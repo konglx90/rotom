@@ -100,6 +100,10 @@ rotom group history <groupId> --limit 30 --pretty
 # 发群消息（message 必须以 @target 开头）
 rotom group send <groupId> <target> "@target 帮我看一下 X"
 
+# 发图片：先 upload 拿 url,再把 ![](url) 拼进消息正文
+rotom group upload <groupId> ./screenshot.png --markdown    # 输出 ![name](/api/uploads/...) 可直接拼到 send
+rotom group send <groupId> <target> "@target 这是刚才的截图: $(rotom group upload <groupId> ./x.png --markdown)"
+
 # 建 Issue（常用三种模式）
 rotom issue create <groupId> --title "..." --description "..." --priority high
 rotom issue create <groupId> --title "..." --description "..." --assignee 西花-claude

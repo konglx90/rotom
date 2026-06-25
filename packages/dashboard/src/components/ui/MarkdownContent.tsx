@@ -407,7 +407,7 @@ export const MarkdownContent = memo(function MarkdownContent({
     return (
       <div className={styles.md}>
         {status && !hideStatus && <StreamingStatus content={status} done={!streaming} />}
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mentionComponents}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ ...mentionComponents, img: ImgRenderer }}>
           {content}
         </ReactMarkdown>
         {streaming && <span className={styles.cursor}>|</span>}
@@ -422,7 +422,7 @@ export const MarkdownContent = memo(function MarkdownContent({
         switch (part.type) {
           case 'text':
             return (
-              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={mentionComponents}>
+              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={{ ...mentionComponents, img: ImgRenderer }}>
                 {part.content}
               </ReactMarkdown>
             )
@@ -792,5 +792,22 @@ function AskBlock({
         </div>
       )}
     </details>
+  )
+}
+
+// react-markdown's default <img> render is fine but lacks `loading="lazy"` and
+// the alt fallback. We don't add click-to-expand / lightbox here (out of scope
+// for v1) — `<img>` not wrapped in an anchor doesn't navigate on click, which
+// is what we want inside the dashboard SPA.
+function ImgRenderer({ src, alt }: { src?: string; alt?: string }) {
+  // react-markdown v10 sometimes passes src as a string array; ignore that and
+  // only honour the plain-string form (covers all real-world cases).
+  const url = typeof src === 'string' ? src : undefined
+  return (
+    <img
+      src={url}
+      alt={alt ?? ''}
+      loading="lazy"
+    />
   )
 }

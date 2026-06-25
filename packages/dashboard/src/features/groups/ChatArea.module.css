@@ -560,6 +560,79 @@
   transform: scale(0.95);
 }
 
+/* Hidden file input — visual trigger is the matching .uploadBtn below.
+   visibility:hidden + position:absolute keeps it DOM-focusable for a11y
+   while removing it from layout flow. */
+.fileInputHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.uploadBtn {
+  padding: 10px 14px;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out);
+  flex-shrink: 0;
+}
+
+.uploadBtn:disabled {
+  background: rgba(14, 15, 12, 0.04);
+  color: var(--color-gray);
+  cursor: not-allowed;
+}
+
+.uploadBtn:hover:not(:disabled) {
+  background: var(--color-surface-alt, #f1f5f9);
+  border-color: var(--color-dark-green);
+  transform: scale(1.05);
+}
+
+.uploadBtn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* Drag-and-drop overlay. Filled overlay dims the message list so the user
+   gets unambiguous feedback that dropping now will attach an image — matches
+   Slack / Discord conventions. Pointer-events:none lets the drop event still
+   reach the underlying messagesArea (the actual drop target). */
+.dropOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(159, 232, 112, 0.18);
+  border: 2px dashed var(--color-dark-green);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.dropHint {
+  padding: 12px 24px;
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+}
+
 /* Mention dropdown */
 .mentionDropdown {
   position: absolute;
