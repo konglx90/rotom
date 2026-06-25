@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, useMatch } from 'react-router-dom'
 import { Avatar } from '../../ui/Avatar'
 import { useChatContext } from '../../../context/ChatContext'
@@ -111,16 +112,38 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   })
   const [dmExpanded, setDmExpanded] = useState(false)
   const [moreMenuGroup, setMoreMenuGroup] = useState<string | null>(null)
+  // Dropdown 通过 portal 渲染到 body 避开了 .groupList 的 overflow-y:auto,
+  // 位置在点击瞬间从按钮的 getBoundingClientRect 算出来,所以滚动/resize 必须关闭。
+  const moreBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const [moreMenuPos, setMoreMenuPos] = useState<{ top: number; left: number } | null>(null)
   const startStateRef = useRef<{ x: number; w: number } | null>(null)
   // Close more-menu dropdown on outside click
   useEffect(() => {
     if (!moreMenuGroup) return
-    const handleClick = () => setMoreMenuGroup(null)
+    const handleClick = () => {
+      setMoreMenuGroup(null)
+      setMoreMenuPos(null)
+    }
     // Use setTimeout so the trigger button's onClick runs first
     const id = setTimeout(() => document.addEventListener('mousedown', handleClick), 0)
     return () => {
       clearTimeout(id)
       document.removeEventListener('mousedown', handleClick)
+    }
+  }, [moreMenuGroup])
+
+  // 位置在点击瞬间锁死,滚动/缩放后按钮位置会变,直接关掉避免错位。
+  useEffect(() => {
+    if (!moreMenuGroup) return
+    const close = () => {
+      setMoreMenuGroup(null)
+      setMoreMenuPos(null)
+    }
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
     }
   }, [moreMenuGroup])
   const toggleNavCompact = () => {
@@ -439,18 +462,40 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                             </div>
                             <div className={styles.moreWrap}>
                               <button
+                                ref={(el) => { moreBtnRefs.current[group.id] = el }}
                                 type="button"
                                 className={styles.moreBtn}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  setMoreMenuGroup(prev => prev === group.id ? null : group.id)
+                                  if (moreMenuGroup === group.id) {
+                                    setMoreMenuGroup(null)
+                                    setMoreMenuPos(null)
+                                    return
+                                  }
+                                  const btn = moreBtnRefs.current[group.id]
+                                  if (btn) {
+                                    const rect = btn.getBoundingClientRect()
+                                    setMoreMenuPos({
+                                      top: rect.bottom + 4,
+                                      left: Math.max(8, rect.right - 140),
+                                    })
+                                  }
+                                  setMoreMenuGroup(group.id)
                                 }}
                                 title="更多操作"
                               >
                                 ···
                               </button>
-                              {moreMenuGroup === group.id && (
-                                <div className={styles.moreDropdown} onMouseDown={e => e.stopPropagation()}>
+                              {moreMenuGroup === group.id && moreMenuPos && createPortal(
+                                <div
+                                  className={styles.moreDropdown}
+                                  style={{
+                                    position: 'fixed',
+                                    top: moreMenuPos.top,
+                                    left: moreMenuPos.left,
+                                  }}
+                                  onMouseDown={e => e.stopPropagation()}
+                                >
                                   <button
                                     type="button"
                                     className={styles.moreItem}
@@ -458,6 +503,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                       e.stopPropagation()
                                       toggleGroupPinned(group.id, !isPinned)
                                       setMoreMenuGroup(null)
+                                      setMoreMenuPos(null)
                                     }}
                                   >
                                     {isPinned ? '📌 取消置顶' : '📌 置顶'}
@@ -469,6 +515,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                       e.stopPropagation()
                                       toggleGroupArchived(group.id, true)
                                       setMoreMenuGroup(null)
+                                      setMoreMenuPos(null)
                                     }}
                                   >
                                     🗄️ 归档
@@ -480,12 +527,14 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       setMoreMenuGroup(null)
+                                      setMoreMenuPos(null)
                                       deleteGroup(group.id)
                                     }}
                                   >
                                     🗑️ 删除群
                                   </button>
-                                </div>
+                                </div>,
+                                document.body
                               )}
                             </div>
                           </li>

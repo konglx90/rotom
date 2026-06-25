@@ -932,17 +932,13 @@
 }
 
 .moreDropdown {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  margin-top: 4px;
   min-width: 140px;
   background: var(--color-canvas-elevated);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-xl);
   padding: 4px;
-  z-index: 100;
+  z-index: 200;
 }
 
 .moreItem {
