@@ -27,6 +27,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ApprovalDecision, ApprovalRequestInput, AskUserQuestionItem, CliExecutor, ExecuteOptions, ExecuteResult, FileEditDiff, TokenUsage } from "../cli-executor.js";
+import type { TodoItem } from "../../shared/protocol.js";
 import { emitStatus } from "../reasoning-status.js";
 
 // Resolve the bundled hook script. After `tsc` the .cjs file is copied next
@@ -151,9 +152,10 @@ export class ClaudeCodeExecutor implements CliExecutor {
       let capturedUsage: TokenUsage | undefined;
       let capturedModel: string | undefined;
       // tool_use_id → tag bucket。assistant 阶段记下每个工具属于 exec 还是
-      // patch 类，user 阶段拿 tool_result 时按同一 id 决定是否要推
-      // [tool-result:exec]（patch 类没有配对的 result tag，直接吞掉）。
-      const toolUseKinds = new Map<string, "exec" | "patch" | "ask">();
+      // patch / ask / todo 类,user 阶段拿 tool_result 时按同一 id 决定是否要推
+      // [tool-result:exec]（patch / ask / todo 类没有配对的 result tag,要么单独
+      // 走 [tool-result:ask],要么直接吞掉）。
+      const toolUseKinds = new Map<string, "exec" | "patch" | "ask" | "todo">();
 
       proc.stdout.on("data", (data: Buffer) => {
         const lines = data.toString().split("\n").filter(Boolean);
@@ -182,6 +184,21 @@ export class ClaudeCodeExecutor implements CliExecutor {
                     fullOutput += block.text;
                     onOutput(block.text);
                   } else if (block.type === "tool_use" && typeof block.name === "string") {
+                    // TodoWrite:结构化上报,不走 [tool:exec] 卡片。dashboard
+                    // 会读 issue.latest_todos 单独渲染常驻面板,时间线也只出
+                    // 一条极轻量 chip 事件。把 id 登记为 "todo" kind,后续
+                    // tool_result 也跳过(避免截断 500 字的"Todos written"噪声)。
+                    if (block.name === "TodoWrite" && options?.onTodos) {
+                      const rawTodos = (block.input ?? {}) as { todos?: unknown };
+                      const todos = normalizeTodos(rawTodos.todos);
+                      if (todos) {
+                        if (typeof block.id === "string") {
+                          toolUseKinds.set(block.id, "todo");
+                        }
+                        try { options.onTodos(todos); } catch { /* swallow callback errors */ }
+                        continue;
+                      }
+                    }
                     const { kind, label } = describeToolUseForLog(
                       block.name,
                       (block.input ?? {}) as Record<string, unknown>,
@@ -207,6 +224,7 @@ export class ClaudeCodeExecutor implements CliExecutor {
             case "user":
               // claude 把 tool_result 包在 user 消息里回吐。patch 类（Edit/Write/
               // MultiEdit/NotebookEdit）dashboard 上只展示动作不展示结果，跳过；
+              // todo 类(TodoWrite)结果就是一句 "Todos written" 之类,完全不展示；
               // exec 类则截断后包成 [tool-result:exec] 与上一条 [tool:exec] 配对。
               if (parsed.message?.content) {
                 for (const block of parsed.message.content) {
@@ -219,6 +237,7 @@ export class ClaudeCodeExecutor implements CliExecutor {
                     emitStatus(onOutput, "Answered");
                     continue;
                   }
+                  if (kind === "todo") continue;
                   if (kind !== "exec") continue;
                   const text = flattenToolResultContent(block.content);
                   if (!text) continue;
@@ -573,6 +592,36 @@ function flattenToolResultContent(content: unknown): string {
     }
   }
   return parts.join("\n");
+}
+
+/**
+ * 把 Claude Code TodoWrite tool_use 的 input.todos 数组规范化成 TodoItem[]。
+ *
+ * claude 输出可能有两种异常需要兜底:
+ *  - tool_use 流式期间 input 字段可能还在拼接(早期 chunk),JSON 部分字段缺失
+ *  - 数组里的项 status 字段值不在三选一时,映射到最近的合法值
+ *
+ * 返回 null 表示这次输入还没凑齐(或者格式完全错乱),调用方应忽略不要触发回调。
+ * 这样能容忍流式过程中的"半成品" input,只在拿到完整 tool_use 时上报。
+ */
+function normalizeTodos(raw: unknown): TodoItem[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: TodoItem[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const content = typeof r.content === "string" ? r.content : "";
+    if (!content) continue;
+    const statusRaw = typeof r.status === "string" ? r.status : "pending";
+    const status: TodoItem["status"] =
+      statusRaw === "in_progress" ? "in_progress" :
+      statusRaw === "completed" ? "completed" :
+      "pending";
+    const activeForm = typeof r.activeForm === "string" && r.activeForm ? r.activeForm : undefined;
+    out.push({ content, status, ...(activeForm ? { activeForm } : {}) });
+  }
+  if (out.length === 0) return null;
+  return out;
 }
 
 const MAX_DIFF_CONTENT_BYTES = 50_000;

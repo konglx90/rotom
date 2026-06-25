@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense } from 'react'
-import type { IssueEvent } from '../../../api/types'
+import type { IssueEvent, TodoItem } from '../../../api/types'
 import type { ComposedPrompt } from '../../../api/groups'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
 import { StreamingStatus } from '../../../components/ui/StreamingStatus'
@@ -32,6 +32,7 @@ type TimelineItem =
   | { kind: 'approval'; event: IssueEvent }
   | { kind: 'append'; event: IssueEvent }
   | { kind: 'truncation'; event: IssueEvent }
+  | { kind: 'todos'; event: IssueEvent; todos: TodoItem[] }
   | { kind: 'progress'; agent: string; firstAt: string; content: string; events: IssueEvent[] }
   | { kind: 'single'; event: IssueEvent }
 
@@ -82,6 +83,14 @@ function groupEvents(events: IssueEvent[]): TimelineItem[] {
       out.push({ kind: 'truncation', event: ev })
       continue
     }
+    if (ev.event_type === 'todos') {
+      // todos 事件单成一类,绝不并入 progress bucket —— 后者会走 MarkdownContent
+      // 渲染气泡,todos 应该走轻量 system chip 风格,只展示统计摘要。
+      flush()
+      const todos = parseTodosMetadata(ev.metadata)
+      if (todos) out.push({ kind: 'todos', event: ev, todos })
+      continue
+    }
     const mergeable = ev.event_type === 'progress' || ev.event_type === 'output'
     if (!mergeable) {
       flush()
@@ -129,6 +138,31 @@ function parseComposedPrompt(metadataStr: string): ComposedPrompt | null {
     }
   } catch { /* ignore */ }
   return null
+}
+
+/** 从 issue_event.metadata 字符串里解析 todos 数组。仅用于 event_type='todos'
+ *  的事件;master 落库时 metadata 形如 { todos: [...], count: N }。
+ *  返回 null 表示 metadata 损坏,调用方应跳过该事件不渲染。 */
+function parseTodosMetadata(metadataStr: string): TodoItem[] | null {
+  if (!metadataStr) return null
+  try {
+    const parsed = JSON.parse(metadataStr) as { todos?: unknown }
+    if (!Array.isArray(parsed.todos)) return null
+    const out: TodoItem[] = []
+    for (const item of parsed.todos) {
+      if (!item || typeof item !== 'object') continue
+      const r = item as Record<string, unknown>
+      const content = typeof r.content === "string" ? r.content : ""
+      if (!content) continue
+      const status: TodoItem['status'] =
+        r.status === 'in_progress' ? 'in_progress' :
+        r.status === 'completed' ? 'completed' :
+        'pending'
+      const activeForm = typeof r.activeForm === "string" && r.activeForm ? r.activeForm : undefined
+      out.push({ content, status, ...(activeForm ? { activeForm } : {}) })
+    }
+    return out.length > 0 ? out : null
+  } catch { return null }
 }
 
 function formatTime(raw: string): string {
@@ -214,6 +248,27 @@ export function IssueEventsTimeline({ events, issueId, inProgress, onApprovalRes
               <span className={styles.systemChipAgent}>
                 已省略 {omitted} 条早期进展
               </span>
+            </div>
+          )
+        }
+
+        if (item.kind === 'todos') {
+          // todos 变化事件:渲染成轻量 chip(与 systemChip 同款容器),展示
+          // 三态摘要。完整列表常驻在 IssueDetailHeader 下方的 WorkerTodosPanel,
+          // 这里只是时间线上的历史轨迹标记,让用户能看出"todos 在这一刻变更过"。
+          // 内容相同的相邻事件已被 master 去重,前端无需再 dedupe。
+          const ev = item.event
+          const counts = item.todos.reduce(
+            (acc, t) => { acc[t.status] = (acc[t.status] ?? 0) + 1; return acc },
+            {} as Record<TodoItem['status'], number>,
+          )
+          return (
+            <div key={ev.id} className={styles.systemChip}>
+              <span className={styles.systemChipTag}>📋 todo</span>
+              <span className={styles.systemChipAgent}>
+                {counts.completed ?? 0} 完成 · {counts.in_progress ?? 0} 进行 · {counts.pending ?? 0} 待办
+              </span>
+              <span className={styles.bubbleTime}>{formatTime(ev.created_at)}</span>
             </div>
           )
         }

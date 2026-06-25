@@ -107,6 +107,7 @@ export class MeshDb extends MeshDbCore {
   declare listAllIssues: typeof issueMethods.listAllIssues;
   declare updateIssueStatus: typeof issueMethods.updateIssueStatus;
   declare updateIssueWorkingDir: typeof issueMethods.updateIssueWorkingDir;
+  declare updateIssueTodos: typeof issueMethods.updateIssueTodos;
   declare getLatestIssueBySessionId: typeof issueMethods.getLatestIssueBySessionId;
   declare getLatestIssueByCliTool: typeof issueMethods.getLatestIssueByCliTool;
   declare claimNextIssue: typeof issueMethods.claimNextIssue;

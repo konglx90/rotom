@@ -6,13 +6,13 @@
  * streams output back via the onOutput callback.
  */
 
-import type { TokenUsage } from "../shared/protocol.js";
+import type { TokenUsage, TodoItem } from "../shared/protocol.js";
 
 // Re-export TokenUsage from the shared protocol so executor implementations
 // can keep importing it from "../cli-executor.js". The canonical definition
 // lives in protocol.ts so master-side code can use it without depending on
 // the executor module.
-export type { TokenUsage } from "../shared/protocol.js";
+export type { TokenUsage, TodoItem } from "../shared/protocol.js";
 
 /**
  * What a CLI executor reports up to the worker when the underlying tool wants
@@ -114,6 +114,15 @@ export interface ExecuteOptions {
    * 内部仅用于日志/将来可能扩展更细的 hook 行为。
    */
   approvalPolicy?: "r_allow" | "rw_allow";
+  /**
+   * 可选 Todo 回调。当底层 CLI 在执行期间调用了 TodoWrite(claude code) 或
+   * 等价工具,executor 解析出完整 todos 数组后通过本回调上报。worker 转发
+   * 给 master 落 latest_todos_json + 一条 kind="todos" 时间线事件。
+   *
+   * 仅 claude-code backend 实现该回调;其他 backend(codex / hermes / openclaw /
+   * generic) 不调用,worker 端不传该字段即可。
+   */
+  onTodos?: (todos: TodoItem[]) => void;
 }
 
 export interface ExecuteResult {

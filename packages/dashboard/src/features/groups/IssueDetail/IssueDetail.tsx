@@ -12,6 +12,7 @@ import { IssueDetailHeader } from './IssueDetailHeader'
 import { IssueEditForm } from './IssueEditForm'
 import { IssueEventsTimeline } from './IssueEventsTimeline'
 import { PendingApprovalsBar } from './PendingApprovalsBar'
+import { WorkerTodosPanel } from './WorkerTodosPanel'
 import { useIssueData } from './useIssueData'
 import { useIssueEdit } from './useIssueEdit'
 import { displayDescription } from '../createIssueTitle'
@@ -284,6 +285,14 @@ function IssueDetailBody({
                 <MarkdownContent content={displayDescription(issue)} />
               </div>
             )
+          )}
+
+          {issue.latest_todos && issue.latest_todos.length > 0 && (
+            <WorkerTodosPanel
+              todos={issue.latest_todos}
+              agentName={issue.assigned_to || ''}
+              active={issue.status === 'in_progress' || issue.status === 'paused'}
+            />
           )}
 
           <IssueEventsTimeline
