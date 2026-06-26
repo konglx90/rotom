@@ -295,7 +295,7 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
           <div className={styles.previewHeader}>
             <div className={styles.previewHeaderTop}>
               <span className={styles.previewFileName} title={selectedFile.path}>{selectedFile.path}</span>
-              <Button variant="ghost" size="sm" onClick={() => { setSelectedFile(null); setContent(null); setOriginal(null); setMode('view') }}>
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedFile(null); setContent(null); setOriginal(null); setMode('view'); onSelectedPathChange?.(null) }}>
                 关闭
               </Button>
             </div>
