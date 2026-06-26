@@ -1,6 +1,6 @@
 {
   "name": "@alipay/rotom",
-  "version": "2.15.0",
+  "version": "2.16.0",
   "type": "module",
   "description": "Digital Employee Mesh — Enterprise agent collaboration network (rotom CLI)",
   "bin": {
