@@ -1,0 +1,22 @@
+/* 右下角通知容器。固定定位,z-index 与休息卡片同层(1100),但不同角避免冲突。
+   多卡片从下往上垂直堆叠(最新在底部,贴近角落)。 */
+
+.host {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column-reverse;  /* column-reverse 让新加入的卡片显示在底部 */
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;            /* 容器本身不拦截鼠标,卡片自己 pointer-events:auto */
+}
+
+@media (max-width: 480px) {
+  .host {
+    right: 12px;
+    bottom: 12px;
+    gap: 6px;
+  }
+}

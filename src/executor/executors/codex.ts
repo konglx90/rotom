@@ -649,6 +649,11 @@ async function startOrResumeThread(
         cwd,
         model: null,
         developerInstructions,
+        // 同 thread/start:codex 默认 read-only 沙箱挡 127.0.0.1 回环,
+        // rotom CLI 子命令全部 fetch failed。chat 路径默认走 resume
+        // (~/.rotom/sessions.json 缓存),不补这行修复永远不生效。
+        // 详见 docs/codex-sandbox-network-blocked.md。
+        sandbox: "danger-full-access",
       })) as Record<string, unknown> | undefined;
       const id = extractThreadId(res);
       if (id) return id;

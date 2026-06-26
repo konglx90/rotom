@@ -16,6 +16,8 @@ import { E2edGroupsView } from './features/e2ed/E2edGroupsView'
 import { E2edPipelineView } from './features/e2ed/E2edPipelineView'
 import { ConfigModal } from './features/groups/modals/ConfigModal'
 import { CreateGroupModal } from './features/groups/modals/CreateGroupModal'
+import { NotificationProvider } from './features/notifications/NotificationContext'
+import { NotificationHost } from './features/notifications/NotificationHost'
 import './styles/App.css'
 
 function ChatModalsHost() {
@@ -61,6 +63,7 @@ function App() {
       <VisitorProvider>
         <ChatProvider>
           <SocketProvider>
+            <NotificationProvider>
             <WorkSessionProvider>
               <AppShell>
               <Routes>
@@ -81,6 +84,8 @@ function App() {
               </AppShell>
               <ChatModalsHost />
             </WorkSessionProvider>
+            <NotificationHost />
+            </NotificationProvider>
           </SocketProvider>
         </ChatProvider>
       </VisitorProvider>
