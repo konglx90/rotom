@@ -119,6 +119,99 @@
   padding: 0;
 }
 
+/* 文件树紧凑化:行距收紧、字号保持可读(13px)、去掉每行 border-bottom
+   视觉噪点。深目录能在拖宽后的窄列里多看几层。 */
+.fileItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  border-bottom: none;
+  transition: background 0.15s;
+  font-size: 13px;
+  color: var(--color-navy);
+  line-height: 1.4;
+}
+
+.fileItem:hover {
+  background: rgba(159, 232, 112, 0.18);
+  color: var(--color-dark-green);
+}
+
+.fileItem.active {
+  background: var(--color-mint);
+  border-left: 3px solid var(--color-wise-green);
+  color: var(--color-dark-green);
+  font-weight: 600;
+  /* 抵消 border-left 占的 3px,避免文字位置抖动 */
+  padding-left: 9px;
+}
+
+.fileIcon {
+  flex-shrink: 0;
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+  line-height: 1;
+}
+
+.fileName {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileSize {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--color-slate);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+.dirChildren {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* 每层缩进 12px:深目录下累积缩进可控,文件名还能留出显示空间。
+     原值 18px,改 16,再收到 12。 */
+  padding-left: 12px;
+}
+
+/* 拖拽分隔条:2px 宽,hover/active 时显 Wise Green 强调。
+   default 状态几乎隐形,避免视觉噪点。 */
+.treeResizer {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 100%;
+  background: var(--border-color-light);
+  cursor: col-resize;
+  position: relative;
+  transition: background var(--duration-fast) var(--ease-out);
+  /* 扩大可点击区域:1px 不好抓 */
+}
+
+.treeResizer::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  top: 0;
+  bottom: 0;
+  /* 透明,只用于扩展命中区 */
+}
+
+.treeResizer:hover {
+  background: var(--color-wise-green);
+}
+
+.treeResizerActive {
+  background: var(--color-wise-green);
+}
+
 /* ── 左右分栏 ───────────────────────────────────────────
    左 treePane 固定宽度 + 全高;右 previewPane 拿剩余宽度 + 全高。
    两端各自独立滚动,互不挤占垂直空间。 */
@@ -188,57 +281,8 @@
   line-height: 1.5;
 }
 
-.fileItem {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--border-color-light);
-  transition: background 0.15s;
-  font-size: 13px;
-  color: var(--color-navy);
-}
-
-.fileItem:hover {
-  background: rgba(159, 232, 112, 0.18);
-  color: var(--color-dark-green);
-}
-
-.fileItem.active {
-  background: var(--color-mint);
-  border-left: 3px solid var(--color-wise-green);
-  color: var(--color-dark-green);
-  font-weight: 600;
-}
-
-.fileIcon {
-  flex-shrink: 0;
-  font-size: 14px;
-  width: 18px;
-  text-align: center;
-}
-
-.fileName {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.fileSize {
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--color-slate);
-}
-
-.dirChildren {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  padding-left: 18px;
-}
+/* old fileItem/fileIcon/fileName/fileSize/dirChildren 已合并到上方紧凑版,
+   删除防止 CSS 冲突。 */
 
 .artifactEmpty {
   display: flex;
