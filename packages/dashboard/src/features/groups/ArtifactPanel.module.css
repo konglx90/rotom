@@ -11,7 +11,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 4px 10px;
   border-bottom: 1px solid var(--border-color-light);
   flex-shrink: 0;
 }
@@ -19,7 +19,7 @@
 .artifactTitle {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--color-ink);
@@ -29,22 +29,163 @@
   flex-shrink: 0;
 }
 
-.rootHint {
-  padding: 8px 14px 8px;
+/* 顶部路径条:working_dir(默认)或 working_dir + 选中文件 = 绝对路径。
+   选中文件时把复制 / 关闭按钮挪到这里,省掉 previewHeader 顶那行。 */
+.pathBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
   font-size: 11px;
   color: var(--color-slate);
-  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color-light);
+  background: var(--color-canvas);
+}
+
+.pathBarPath {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* 让绝对路径里的目录段比文件名稍灰,视觉上有层次。这里简单处理整段一个色 */
+  direction: ltr;
+}
+
+.pathBarActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color-light);
+  background: var(--color-canvas);
+  flex-shrink: 0;
+}
+
+.searchInput {
+  flex: 1;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.searchInput::placeholder {
+  color: var(--color-slate);
+  opacity: 0.7;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--color-wise-green);
+  box-shadow: 0 0 0 2px rgba(159, 232, 112, 0.25);
+}
+
+/* type=search 的原生清除按钮不抢眼,把它显式化 */
+.searchInput::-webkit-search-cancel-button {
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.searchMeta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--color-slate);
+  font-family: var(--font-mono);
 }
 
 .fileTree {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* ── 左右分栏 ───────────────────────────────────────────
+   左 treePane 固定宽度 + 全高;右 previewPane 拿剩余宽度 + 全高。
+   两端各自独立滚动,互不挤占垂直空间。 */
+.splitLayout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.treePane {
+  flex: 0 0 240px;
+  width: 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-color-light);
+  background: var(--color-canvas-elevated);
+  overflow: hidden;
+}
+
+/* 折叠文件树:宽度收到 0(完全隐藏),把空间全让给预览。
+   用户在 artifactHeader 里点 ◀/▶ 切换。 */
+.treePaneCollapsed {
+  flex: 0 0 0;
+  width: 0;
+  border-right: none;
+}
+
+.previewPane {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.previewEmpty {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--color-slate);
+  font-size: 13px;
+  text-align: center;
+  background: var(--color-canvas);
+}
+
+.previewEmptyIcon {
+  font-size: 48px;
+  opacity: 0.45;
+  line-height: 1;
+}
+
+.previewEmptyHint {
+  font-size: 11px;
+  color: var(--color-slate);
+  opacity: 0.7;
+  max-width: 280px;
+  line-height: 1.5;
 }
 
 .fileItem {
@@ -115,13 +256,14 @@
   border-top: 1px solid var(--border-color-light);
   display: flex;
   flex-direction: column;
-  flex: 1 1 60%;
-  min-height: 280px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .editorWrap {
   flex: 1 1 auto;
-  min-height: 240px;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -129,37 +271,20 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 6px 12px;
+  padding: 4px 10px;
   background: var(--color-background);
   border-bottom: 1px solid var(--border-color-light);
+  flex-shrink: 0;
 }
 
-.previewHeaderTop {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
+/* previewHeader 现在只剩一行(diff/viewMode 工具栏)。
+   原来顶上的"文件名 + 复制 + 关闭"那行挪到了 pathBar,省一行。 */
 .previewHeaderBottom {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
   flex-wrap: wrap;
-}
-
-.previewFileName {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-navy);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
 }
 
 .previewContent {
@@ -171,6 +296,163 @@
   color: var(--color-ink);
   white-space: pre;
   background: var(--color-canvas);
+}
+
+/* ── Markdown 渲染预览 ───────────────────────────────────
+   ArtifactPanel 里 .md 文件渲染成 HTML 时的容器。MarkdownContent
+   本身的样式定义在 MarkdownContent.module.css,这里只管滚动 + 边距。 */
+.mdPreviewWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 20px;
+  background: var(--color-canvas);
+}
+
+/* ── 图片预览 ─────────────────────────────────────────── */
+.imagePreviewWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-canvas);
+}
+
+.imagePreviewMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-color-light);
+  background: var(--color-canvas-elevated);
+  flex-shrink: 0;
+}
+
+.imagePreviewName {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.imagePreviewSize {
+  color: var(--color-slate);
+}
+
+.imagePreviewHint {
+  margin-left: auto;
+  color: var(--color-slate);
+  opacity: 0.75;
+  font-size: 11px;
+}
+
+.imagePreviewStage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+  /* 棋盘格背景,让透明 PNG/SVG 可辨 */
+  background-image:
+    linear-gradient(45deg, rgba(14, 15, 12, 0.04) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(14, 15, 12, 0.04) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(14, 15, 12, 0.04) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(14, 15, 12, 0.04) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.imagePreviewImg {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  cursor: zoom-in;
+  border-radius: 6px;
+  box-shadow: var(--shadow-ring);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.imagePreviewImg:hover {
+  transform: scale(1.01);
+}
+
+/* ── Lightbox(点击放大) ─────────────────────────────── */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(14, 15, 12, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  cursor: zoom-out;
+}
+
+.lightboxImg {
+  max-width: 92vw;
+  max-height: 92vh;
+  object-fit: contain;
+  cursor: default;
+  border-radius: 4px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+}
+
+.lightboxClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.lightboxClose:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* ── MD 预览/源码 segmented toggle ──────────────────── */
+.viewModeToggle {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(14, 15, 12, 0.06);
+  border-radius: var(--radius-pill);
+  padding: 2px;
+  gap: 2px;
+}
+
+.viewModeBtn {
+  border: none;
+  background: transparent;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--color-warm-dark);
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.viewModeBtn:hover {
+  color: var(--color-ink);
+}
+
+.viewModeBtnActive {
+  background: var(--color-canvas-elevated);
+  color: var(--color-ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-ring);
 }
 
 .loadingText {
@@ -187,9 +469,38 @@
   flex-wrap: wrap;
 }
 
+.diffBaseSelect {
+  height: 26px;
+  max-width: 140px;
+  padding: 0 6px;
+  font-size: 12px;
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-navy);
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+  /* 让长分支名不撑爆 select */
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.diffBaseSelect:hover {
+  border-color: var(--border-color-hover);
+}
+
+.diffBaseSelect:focus {
+  outline: none;
+  border-color: var(--color-wise-green);
+  box-shadow: 0 0 0 2px rgba(159, 232, 112, 0.25);
+}
+
 .diffBaseInput {
   height: 26px;
-  width: 170px;
+  width: 130px;
   padding: 0 8px;
   font-size: 12px;
   border: 1px solid var(--border-color-light);
@@ -283,64 +594,4 @@
   color: var(--color-warm-dark);
   background: rgba(14, 15, 12, 0.04);
   font-weight: 600;
-}
-
-/* ── Debug (collapsible session inspector) ─────────────────────────── */
-.debugSection {
-  border-top: 1px dashed var(--border-color-light);
-  background: var(--color-background);
-  flex-shrink: 0;
-}
-
-.debugHeader {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 4px 14px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-slate);
-  text-align: left;
-  font-family: inherit;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.debugHeader:hover {
-  color: var(--color-navy);
-}
-
-.debugChevron {
-  display: inline-block;
-  width: 10px;
-  font-size: 9px;
-  color: var(--color-slate);
-  flex-shrink: 0;
-}
-
-.debugTitle {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  color: var(--color-slate);
-}
-
-.debugBadge {
-  margin-left: auto;
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  color: var(--color-slate);
-  opacity: 0.75;
-  font-weight: 500;
-}
-
-.debugBody {
-  max-height: 220px;
-  overflow-y: auto;
-  border-top: 1px solid var(--border-color-light);
-  padding: 8px 12px;
-  background: var(--color-canvas-elevated);
 }

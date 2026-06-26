@@ -144,7 +144,10 @@
   color: var(--color-slate);
 }
 
-/* 工作目录：放在元信息簇右侧，长路径可截断 */
+/* 工作目录 / session:两个块共用此类(label + code 视觉一致)。
+   原来设了 flex:1,但 session 块也用同一类,导致两者抢着 grow 反而平分
+   宽度,长路径被截断。改成自然宽度 + min-width:0,metaCluster 的 flex-wrap
+   会自动换行,长内容各自内部省略号截断。*/
 .issueWorkingDir {
   display: flex;
   align-items: center;
@@ -152,7 +155,7 @@
   font-size: 12px;
   color: var(--color-slate);
   min-width: 0;
-  flex: 1;
+  max-width: 100%;
 }
 
 .issueWorkingDirPath {
