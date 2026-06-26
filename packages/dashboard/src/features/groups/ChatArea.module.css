@@ -376,6 +376,72 @@
   word-break: break-word;
 }
 
+/* 长消息折叠:messageContentWrapper 是 messageContent 的相对定位父容器,
+ * 折叠态 .collapsed 通过 max-height + overflow 截断内容,::after 在底部
+ * 渲染一条 fade-out 渐变,让用户视觉上感知「这里还有更多」,配合
+ * 底部的「查看更多 / 收起」按钮完成展开折叠交互。
+ *
+ * 折叠态只对最终态启用,流式期间 MessageRow 用 inline 样式 / 状态强制
+ * 解除 collapsed(详见 MessageRow.tsx 的 collapsed 判定)。 */
+.messageContentWrapper {
+  position: relative;
+}
+
+.collapsed {
+  max-height: 480px;
+  overflow: hidden;
+}
+
+/* 渐变蒙层用 CSS 变量,outgoing 气泡的浅绿色背景需要换对应的渐变终点。
+ * 变量在 .messageBubble.incoming / .messageBubble.outgoing 里分别赋值。 */
+.collapsed::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 48px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--message-fade-end, var(--color-canvas-elevated, #ffffff))
+  );
+  pointer-events: none;
+}
+
+.messageBubble.outgoing {
+  --message-fade-end: var(--color-wise-green, #9fe870);
+}
+
+/* 「查看更多 / 收起」按钮:挂气泡底部、靠左对齐 messageContent。
+ * 视觉轻量,字号 11px / 半透明文字 + 上下小箭头,避免与 sender 行的
+ * 主动作按钮(💬 🔍 ⏹)视觉竞争。 */
+.collapseToggle {
+  margin-top: 6px;
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-slate, #6b7264);
+  opacity: 0.75;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 4px;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+.collapseToggle:hover,
+.collapseToggle:focus-visible {
+  opacity: 1;
+  background-color: rgba(14, 15, 12, 0.06);
+  outline: none;
+}
+.messageBubble.outgoing .collapseToggle:hover,
+.messageBubble.outgoing .collapseToggle:focus-visible {
+  background-color: rgba(14, 15, 12, 0.08);
+}
+
 .mention {
   color: var(--color-positive);
   font-weight: 700;
