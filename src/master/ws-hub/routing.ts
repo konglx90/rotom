@@ -10,6 +10,7 @@
 import { WebSocket } from "ws";
 import type { ServerMessage } from "../../shared/protocol.js";
 import { normalizeApprovalPolicy, type WSHubSelf } from "./hub.js";
+import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 
 export const routingMethods = {
   // ─────────────────────────────────────────────────────────────────────────
@@ -133,7 +134,7 @@ export const routingMethods = {
     if (!issue) return false;
     const agent = this.db.getAgentByName(agentName);
     if (!agent) return false;
-    return this.sendToAgent(agent.id, {
+    return this.sendToAgent(agent.id, enrichWorkerDispatch(this, {
       type: "issue_assigned",
       issueId: issue.id,
       groupId: issue.group_id,
@@ -142,7 +143,7 @@ export const routingMethods = {
       workingDir: issue.working_dir || undefined,
       slashCommand: issue.slash_command || undefined,
       approvalPolicy: normalizeApprovalPolicy(issue.approval_policy),
-    } as ServerMessage);
+    } as ServerMessage, agentName, issue.group_id));
   },
 
   /**
@@ -206,7 +207,7 @@ export const routingMethods = {
     if (!issue?.assigned_to) return false;
     const agent = this.db.getAgentByName(issue.assigned_to);
     if (!agent) return false;
-    return this.sendToAgent(agent.id, {
+    return this.sendToAgent(agent.id, enrichWorkerDispatch(this, {
       type: "issue_continue",
       issueId,
       groupId: issue.group_id,
@@ -216,7 +217,7 @@ export const routingMethods = {
       workingDir: issue.working_dir || undefined,
       slashCommand: issue.slash_command || undefined,
       approvalPolicy: normalizeApprovalPolicy(issue.approval_policy),
-    });
+    } as ServerMessage, issue.assigned_to, issue.group_id));
   },
 
   /**
@@ -231,7 +232,7 @@ export const routingMethods = {
     if (!issue?.assigned_to) return false;
     const agent = this.db.getAgentByName(issue.assigned_to);
     if (!agent) return false;
-    return this.sendToAgent(agent.id, {
+    return this.sendToAgent(agent.id, enrichWorkerDispatch(this, {
       type: "issue_append",
       issueId,
       groupId: issue.group_id,
@@ -241,7 +242,7 @@ export const routingMethods = {
       workingDir: issue.working_dir || undefined,
       slashCommand: issue.slash_command || undefined,
       approvalPolicy: normalizeApprovalPolicy(issue.approval_policy),
-    });
+    } as ServerMessage, issue.assigned_to, issue.group_id));
   },
 
   /** Broadcast to all connected agents that a new issue is available. */

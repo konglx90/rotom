@@ -26,8 +26,9 @@ import {
   RATE_LIMIT_WINDOW_MS,
   PROTOCOL_VERSION,
 } from "../../shared/constants.js";
-import { isClientMessage, type ClientMessage } from "../../shared/protocol.js";
+import { isClientMessage, type ClientMessage, type ServerMessage } from "../../shared/protocol.js";
 import { parseProfile, type WSHubSelf } from "./hub.js";
+import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 
 export const connectionMethods = {
   handleConnection(this: WSHubSelf, ws: WebSocket): void {
@@ -278,14 +279,14 @@ export const connectionMethods = {
 
         if (result.targetAgentId) {
           const enrichedConversation = this.enrichConversationWithCollaboration(msg.conversation, result.targetName);
-          const outMsg = {
+          const outMsg = enrichWorkerDispatch(this, {
             type: "a2a_message" as const,
             requestId: msg.requestId,
             from: { name: fromName, domain: fromDomain, status: "online" as const },
             payload: msg.payload,
             routeType,
             conversation: enrichedConversation,
-          };
+          } as ServerMessage, result.targetName, enrichedConversation?.groupId);
           delivered = this.sendToAgent(result.targetAgentId, outMsg);
 
           // Persist + (for group) broadcast. Group messages are also delivered to
@@ -381,14 +382,14 @@ export const connectionMethods = {
           const fromName = conn?.name || "unknown";
           const targetAgent = this.db.getAgentById(targetId);
           const enrichedConversation = this.enrichConversationWithCollaboration(conversation, targetAgent?.name);
-          const replyMsg: Record<string, unknown> = {
+          const replyMsg = enrichWorkerDispatch(this, {
             type: "a2a_message" as const,
             requestId: msg.requestId,
             from: { name: fromName, domain: conn?.domain, status: "online" as const },
             payload: msg.payload,
             routeType: "reply" as const,
             conversation: enrichedConversation,
-          };
+          } as ServerMessage, targetAgent?.name, enrichedConversation?.groupId) as unknown as Record<string, unknown>;
           if (msg.cwd) replyMsg.cwd = msg.cwd;
 
           // Persist to group history BEFORE sending (avoids race with history refresh)

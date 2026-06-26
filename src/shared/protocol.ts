@@ -470,6 +470,10 @@ export interface ServerA2AMessage {
   /** Cwd the sending agent was using. Filled in by master from the upstream
    *  ClientA2AReplyMessage / ClientA2AReplyEndMessage. */
   cwd?: string;
+  /** Master 在 dispatch 时从 agents.profile 注入,worker 收到后更新本地缓存
+   *  供 prompt-composer 渲染 agent-role 层。字段缺失时 worker 沿用启动时
+   *  从 executor.config.json 读到的兜底值。 */
+  agentProfile?: AgentProfile;
 }
 
 export interface ServerRouteResultMessage {
@@ -543,6 +547,10 @@ export interface ServerIssueAssignedMessage {
   /** 工具调用审批策略。默认 'r_allow'（写需人工审批，读放行）；
    *  'rw_allow' 时 worker 不挂审批回调，writes 也自动通过。 */
   approvalPolicy?: "r_allow" | "rw_allow";
+  /** Master dispatch 时从 agents.profile 注入;worker 收到后更新本地缓存,
+   *  供 prompt-composer 渲染 agent-role 层。字段缺失时沿用 executor.config.json
+   *  的兜底值。 */
+  agentProfile?: AgentProfile;
 }
 
 export interface ServerIssueUpdateAckMessage {
@@ -584,6 +592,10 @@ export interface ServerCollaborationStartedMessage {
   round: number;
   /** 群默认 workingDir，agent 执行时若有则作为 cwd 优先于自身 workingDir。 */
   workingDir?: string;
+  /** Master dispatch 时从 agents.profile 注入;worker 收到后更新本地缓存,
+   *  供 prompt-composer 渲染 agent-role 层。字段缺失时沿用 executor.config.json
+   *  的兜底值。 */
+  agentProfile?: AgentProfile;
 }
 
 /** 协作结论广播 */
@@ -682,6 +694,8 @@ export interface ServerIssueContinueMessage {
   slashCommand?: string;
   /** 见 ServerIssueAssignedMessage.approvalPolicy。 */
   approvalPolicy?: "r_allow" | "rw_allow";
+  /** 见 ServerIssueAssignedMessage.agentProfile。 */
+  agentProfile?: AgentProfile;
 }
 
 /**
@@ -702,6 +716,8 @@ export interface ServerIssueAppendMessage {
   slashCommand?: string;
   /** 见 ServerIssueAssignedMessage.approvalPolicy。 */
   approvalPolicy?: "r_allow" | "rw_allow";
+  /** 见 ServerIssueAssignedMessage.agentProfile。 */
+  agentProfile?: AgentProfile;
 }
 
 // --- Session management (Master → Agent) ---

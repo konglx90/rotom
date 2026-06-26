@@ -36,6 +36,9 @@ const DEFAULTS = {
 } as const
 
 const POSTPONE_MIN = 5
+// 休息到点响铃总时长上限:超时后 reminder modal 仍显示但不再鸣响,
+// 避免长时间无人响应时无限响铃。
+const REMINDER_SOUND_LIMIT_MS = 60_000
 
 const LS = {
   soundEnabled: 'work_session_sound_enabled',
@@ -231,10 +234,19 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
 
   // 休息触发:每秒检查 now vs nextBreakAt。到点开 reminder,真正进入休息由
   // 用户在 modal 里点「开始休息」确认;这样允许推迟。
+  // 响铃总时长受 REMINDER_SOUND_LIMIT_MS 限制,超时后不再鸣响(reminder 仍开)。
+  // 推迟或进入休息会清空计数,下次到点重新开始计时。
+  const reminderSoundStartedAtRef = useRef<number | null>(null)
   useEffect(() => {
-    if (breakInProgress) return
-    if (now >= nextBreakAt) {
-      setReminderOpen(true)
+    if (breakInProgress || now < nextBreakAt) {
+      reminderSoundStartedAtRef.current = null
+      return
+    }
+    if (reminderSoundStartedAtRef.current === null) {
+      reminderSoundStartedAtRef.current = now
+    }
+    setReminderOpen(true)
+    if (now - reminderSoundStartedAtRef.current < REMINDER_SOUND_LIMIT_MS) {
       playSound()
     }
   }, [now, nextBreakAt, breakInProgress, playSound])
