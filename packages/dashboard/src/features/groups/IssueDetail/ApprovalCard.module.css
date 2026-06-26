@@ -143,8 +143,32 @@
 
 .approvalActions {
   display: flex;
+  align-items: center;
   gap: 6px;
   margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+/* 提示用户右侧 DiffEditor 可编辑 + 改完走"应用修改并拒绝" */
+.diffEditHint {
+  font-size: 11px;
+  color: var(--color-warm-dark);
+  background: var(--color-accent-cyan);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  margin: 4px 0 6px;
+  border-left: 3px solid var(--color-wise-green);
+}
+
+/* 修改内容超 2000 字符会被截断,提示用户 */
+.tweakOverflowWarn {
+  font-size: 11px;
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  cursor: help;
 }
 
 .approvalFeedback {

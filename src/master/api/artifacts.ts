@@ -1,8 +1,29 @@
 import { type Router as ExpressRouter } from "express";
 import path from "node:path";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import type { MeshDb } from "../db.js";
 import { resolveGroupArtifactRoot } from "../group-paths.js";
+
+/** Walk up from `startPath` looking for a `.git` directory. Returns the repo
+ *  root or null if we hit the filesystem root without finding one. Shared
+ *  by /original, /diff and /refs so they don't each re-implement the walk.
+ *
+ *  `startPath` can be either a file or directory path: we check it first
+ *  (in case the caller already points at the repo root) before walking up. */
+function findGitRoot(startPath: string): string | null {
+  let cursor = fs.existsSync(startPath) && fs.statSync(startPath).isFile()
+    ? path.dirname(startPath)
+    : startPath;
+  const stopAt = path.parse(cursor).root;
+  while (cursor && cursor !== stopAt) {
+    if (fs.existsSync(path.join(cursor, ".git"))) return cursor;
+    const parent = path.dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  return null;
+}
 
 export function registerArtifactRoutes(
   apiRouter: ExpressRouter,
@@ -124,24 +145,12 @@ export function registerArtifactRoutes(
       res.status(403).json({ error: "Invalid path" });
       return;
     }
-    let cursor = path.dirname(resolved);
-    let repoRoot: string | null = null;
-    const stopAt = path.parse(cursor).root;
-    while (cursor && cursor !== stopAt) {
-      if (fs.existsSync(path.join(cursor, ".git"))) {
-        repoRoot = cursor;
-        break;
-      }
-      const parent = path.dirname(cursor);
-      if (parent === cursor) break;
-      cursor = parent;
-    }
+    const repoRoot = findGitRoot(resolved);
     if (!repoRoot) {
       res.json({ path: filePath, base, repoRoot: null, content: "", note: "目标文件不在 git 仓库中。" });
       return;
     }
     const relInRepo = path.relative(repoRoot, resolved);
-    const { spawnSync } = require("node:child_process") as typeof import("node:child_process");
     const result = spawnSync("git", ["show", `${base}:${relInRepo}`], {
       cwd: repoRoot,
       encoding: "utf-8",
@@ -192,24 +201,12 @@ export function registerArtifactRoutes(
       res.status(404).json({ error: "File not found" });
       return;
     }
-    let cursor = path.dirname(resolved);
-    let repoRoot: string | null = null;
-    const stopAt = path.parse(cursor).root;
-    while (cursor && cursor !== stopAt) {
-      if (fs.existsSync(path.join(cursor, ".git"))) {
-        repoRoot = cursor;
-        break;
-      }
-      const parent = path.dirname(cursor);
-      if (parent === cursor) break;
-      cursor = parent;
-    }
+    const repoRoot = findGitRoot(resolved);
     if (!repoRoot) {
       res.json({ path: filePath, base, repoRoot: null, diff: "", note: "目标文件不在 git 仓库中，无法计算 diff。" });
       return;
     }
     const relInRepo = path.relative(repoRoot, resolved);
-    const { spawnSync } = require("node:child_process") as typeof import("node:child_process");
     const result = spawnSync("git", ["diff", "--no-color", base, "--", relInRepo], {
       cwd: repoRoot,
       encoding: "utf-8",
@@ -232,6 +229,56 @@ export function registerArtifactRoutes(
       repoRoot,
       relInRepo,
       diff: result.stdout,
+    });
+  });
+
+  // List git refs (branches + tags) for the group's artifact root, used by the
+  // dashboard to populate the diff-base dropdown. Walks up from the group dir
+  // to find the nearest .git; returns empty lists (with a note) when not in a
+  // repo. The HEAD branch name is included so the UI can mark it as default.
+  apiRouter.get("/artifacts/:groupId/refs", (req, res) => {
+    const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
+    if (!fs.existsSync(groupDir)) {
+      res.json({ refs: [], heads: [], tags: [], head: "", note: "群产物目录不存在。" });
+      return;
+    }
+    const repoRoot = findGitRoot(groupDir);
+    if (!repoRoot) {
+      res.json({ refs: [], heads: [], tags: [], head: "", note: "目标目录不在 git 仓库中。" });
+      return;
+    }
+    const listResult = spawnSync(
+      "git",
+      ["for-each-ref", "--format=%(refname:short)", "refs/heads/", "refs/tags/"],
+      { cwd: repoRoot, encoding: "utf-8", maxBuffer: 1024 * 1024, timeout: 5000 },
+    );
+    if (listResult.error) {
+      res.status(500).json({ error: `git for-each-ref failed: ${listResult.error.message}` });
+      return;
+    }
+    if (listResult.status !== 0 && listResult.status !== null) {
+      res.status(500).json({
+        error: `git for-each-ref exited ${listResult.status}`,
+        stderr: listResult.stderr,
+      });
+      return;
+    }
+    const all = listResult.stdout
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const headResult = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: repoRoot,
+      encoding: "utf-8",
+      timeout: 3000,
+    });
+    const head = headResult.stdout?.trim() || "";
+    res.json({
+      refs: all,
+      heads: all.filter((r) => !r.startsWith("tags/")),
+      tags: all.filter((r) => r.startsWith("tags/")).map((r) => r.replace(/^tags\//, "")),
+      head,
+      repoRoot,
     });
   });
 }

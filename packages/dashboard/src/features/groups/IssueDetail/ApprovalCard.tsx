@@ -36,6 +36,11 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
   // submissions fall back to the legacy generic reason.
   const [denyStage, setDenyStage] = useState<'idle' | 'composing'>('idle')
   const [denyFeedback, setDenyFeedback] = useState('')
+  // 用户在 DiffEditor modified 侧手改的内容,按 hunk index 索引。Approach F:
+  // codex/claude 都不接受外部覆写 file_change,所以无法"accept with tweaks"。
+  // 这里收集用户修改 → 走 deny + feedback 通道回传给 agent,agent 拿到后
+  // 自己根据反馈重新生成。比让用户手敲 feedback 友好。
+  const [editedHunks, setEditedHunks] = useState<Record<number, string>>({})
   const { ready: monacoReady } = useMonaco()
 
   const meta = (() => {
@@ -82,6 +87,42 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
     } finally {
       setLoading(null)
     }
+  }
+
+  // 把用户在 DiffEditor modified 侧的编辑格式化成 agent 可读的 feedback。
+  // 2000 字符是后端硬上限(issues.ts slice(0,2000)),客户端留 200 字符做
+  // 头部/分隔,实际 payload 容量约 1800。超了截断并提示用户。
+  const FEEDBACK_HARD_LIMIT = 2000
+  const FEEDBACK_SOFT_LIMIT = 1800
+
+  const buildTweakFeedback = (): { text: string; truncated: boolean } => {
+    const editedIndices = Object.keys(editedHunks).map(Number).sort((a, b) => a - b)
+    if (editedIndices.length === 0 || !diff) return { text: '', truncated: false }
+    const header = '用户在审批时调整了你的提议(原 file_change 已被拒绝,请基于以下修改后的内容重新尝试):\n\n'
+    const fileLabel = files[0] ? `[${files[0]}] ` : ''
+    const parts: string[] = []
+    for (const idx of editedIndices) {
+      const label = diff.hunks.length > 1 ? `${fileLabel}Edit ${idx + 1}` : fileLabel.trim() || '修改后'
+      parts.push(`### ${label}\n\`\`\`\n${editedHunks[idx]}\n\`\`\``)
+    }
+    const full = header + parts.join('\n\n')
+    if (full.length <= FEEDBACK_HARD_LIMIT) return { text: full, truncated: false }
+    // 截断到软上限,保留 header 和尾部标注
+    const note = `\n\n[... 内容过长(总 ${full.length} 字符),仅保留前 ${FEEDBACK_SOFT_LIMIT} 字符,请基于此重新生成完整修改 ...]`
+    const body = full.slice(0, Math.max(0, FEEDBACK_SOFT_LIMIT - note.length))
+    return { text: body + note, truncated: true }
+  }
+
+  const hasEdits = Object.keys(editedHunks).length > 0
+
+  // 实时算 feedback 长度,超软上限就在按钮旁边提示,免得用户点了才知道被截断
+  const currentFeedbackSize = hasEdits ? buildTweakFeedback().text.length : 0
+  const willTruncate = currentFeedbackSize > FEEDBACK_HARD_LIMIT
+
+  const handleDenyWithTweaks = async () => {
+    const { text } = buildTweakFeedback()
+    if (!text) return
+    await resolve('deny', text)
   }
 
   const toggleAskChoice = (qIdx: number, multi: boolean, label: string) => {
@@ -153,6 +194,11 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
           <ul className={styles.approvalFileList}>
             {files.map((f, i) => <li key={i}>{f}</li>)}
           </ul>
+          {isPending && diff && diff.hunks.length > 0 && (
+            <div className={styles.diffEditHint}>
+              右侧内容可直接编辑。改完点下方「应用修改并拒绝」把修改作为 feedback 回传给 agent。
+            </div>
+          )}
           {diff && diff.hunks.length > 0 && diff.hunks.map((hunk, i) => (
             <div key={i} className={styles.diffSection}>
               {diff.hunks.length > 1 && (
@@ -164,10 +210,25 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
                     height={Math.min(Math.max(hunk.old_string.split('\n').length, hunk.new_string.split('\n').length) * 18 + 40, 300)}
                     language={files[0] ? detectLanguage(files[0]) : 'plaintext'}
                     original={hunk.old_string}
-                    modified={hunk.new_string}
+                    modified={editedHunks[i] ?? hunk.new_string}
                     theme="vs"
+                    onMount={(editor) => {
+                      // @monaco-editor/react 的 DiffEditor 没有 onChange prop,
+                      // 通过 modified editor 的 model content change 监听用户编辑。
+                      const modifiedEditor = editor.getModifiedEditor()
+                      modifiedEditor.onDidChangeModelContent(() => {
+                        const value = modifiedEditor.getValue()
+                        setEditedHunks((prev) => {
+                          const next = { ...prev }
+                          if (value === hunk.new_string) delete next[i]
+                          else next[i] = value
+                          return next
+                        })
+                      })
+                    }}
                     options={{
-                      readOnly: true,
+                      // pending 时打开 modified 侧编辑(original 侧 Monaco 永远只读)
+                      readOnly: !isPending,
                       minimap: { enabled: false },
                       fontSize: 11,
                       renderSideBySide: true,
@@ -307,6 +368,22 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
           >
             Deny
           </Button>
+          {hasEdits && kind === 'file_change' && (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={loading !== null}
+              onClick={handleDenyWithTweaks}
+              title="拒绝原提议,并把你在右侧编辑器里的修改作为 feedback 回传给 agent 重新生成"
+            >
+              {loading === 'deny' ? '处理中…' : '应用修改并拒绝'}
+            </Button>
+          )}
+          {willTruncate && (
+            <span className={styles.tweakOverflowWarn} title={`feedback 总长 ${currentFeedbackSize} 字符,后端会截到 2000`}>
+              ⚠ 将截断
+            </span>
+          )}
         </div>
       )}
       {isPending && kind !== 'ask' && denyStage === 'composing' && (

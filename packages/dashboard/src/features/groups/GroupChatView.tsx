@@ -24,6 +24,8 @@ import { AddMemberModal } from './modals/AddMemberModal'
 import { MemberListModal } from './modals/MemberListModal'
 import { ShareLinkModal } from './ShareLinkModal'
 import { ModeSidebarClock } from './ModeSidebarClock'
+import { SessionPanel } from './SessionPanel'
+import { Modal } from '../../components/ui/Modal/Modal'
 import { Button } from '../../components/ui/Button'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
@@ -112,6 +114,7 @@ export function GroupChatView() {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
+  const [showDebugModal, setShowDebugModal] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
   // 创建对话框状态从 IssuePanel/NotePanel 上移到 process panel 顶部 tabs 行,
   // 让 tabs 行与 chat header 等高对齐。kind 区分走 Issue/协作 还是 Note 流程。
@@ -495,6 +498,18 @@ export function GroupChatView() {
             />
           )}
 
+          {/* Sessions 调试 modal:从 ArtifactPanel 底部搬过来,腾出垂直空间。 */}
+          {showDebugModal && selectedGroup && (
+            <Modal
+              open
+              title={`🔧 Sessions · ${selectedGroup.name}`}
+              onClose={() => setShowDebugModal(false)}
+              size="lg"
+            >
+              <SessionPanel groupId={selectedGroup.id} />
+            </Modal>
+          )}
+
           {createDialog?.kind === 'issue' && selectedGroupId && (
             <CreateIssueDialog
               open
@@ -576,6 +591,18 @@ export function GroupChatView() {
 
             {/* 分隔线:布局切换 与 对话动作 两组按钮之间。 */}
             <div className={styles.modeSidebarDivider} />
+
+            {/* Debug:sessions 弹窗。从 ArtifactPanel 底部移到这里,避免占垂直空间。 */}
+            {selectedGroup && (
+              <button
+                type="button"
+                className={styles.modeBtn}
+                onClick={() => setShowDebugModal(true)}
+                title="Sessions 调试"
+              >
+                <span className={styles.modeBtnIcons}>{'\u{1F527}'}</span>
+              </button>
+            )}
 
             {/* 对话动作:按 isDirectMode 切换。Group 模式才显示成员/拉人/分享。 */}
             {isDirectMode ? (

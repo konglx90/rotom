@@ -10,6 +10,19 @@ export interface ArtifactDiff {
   note?: string
 }
 
+export interface ArtifactRefs {
+  /** 全部分支+tag 原始列表(for-each-ref 输出,带 `tags/` 前缀)。 */
+  refs: string[]
+  /** 仅分支(refname 不以 `tags/` 开头)。 */
+  heads: string[]
+  /** 仅 tag(已剥离 `tags/` 前缀)。 */
+  tags: string[]
+  /** 当前 HEAD 分支名(可能为空)。 */
+  head: string
+  repoRoot?: string | null
+  note?: string
+}
+
 export const artifactsApi = {
   async list(groupId: string): Promise<ArtifactListing> {
     return api.get<ArtifactListing>(`/artifacts/${groupId}`)
@@ -29,5 +42,9 @@ export const artifactsApi = {
     return api.get<ArtifactDiff>(
       `/artifacts/${groupId}/diff?path=${encodeURIComponent(filePath)}&base=${encodeURIComponent(base)}`,
     )
+  },
+
+  async listRefs(groupId: string): Promise<ArtifactRefs> {
+    return api.get<ArtifactRefs>(`/artifacts/${groupId}/refs`)
   },
 }
