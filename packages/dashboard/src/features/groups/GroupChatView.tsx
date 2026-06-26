@@ -23,6 +23,7 @@ import { CreateNoteDialog } from './CreateNoteDialog'
 import { AddMemberModal } from './modals/AddMemberModal'
 import { MemberListModal } from './modals/MemberListModal'
 import { ShareLinkModal } from './ShareLinkModal'
+import { ModeSidebarClock } from './ModeSidebarClock'
 import { Button } from '../../components/ui/Button'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
@@ -636,6 +637,10 @@ export function GroupChatView() {
                 )}
               </>
             )}
+
+            {/* 工作时长 + 休息倒计时:推到 modeSidebar 底部,与上方动作按钮留白分隔 */}
+            <div className={styles.modeSidebarSpacer} />
+            <ModeSidebarClock />
           </div>
 
           {/* 主区:2 个 panel + 1 条 splitter */}
