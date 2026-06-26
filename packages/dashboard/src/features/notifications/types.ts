@@ -35,11 +35,11 @@ export interface NotificationApi {
   clear: () => void
 }
 
-/** 各类型默认自动消失时长(毫秒)。error 默认不消失。 */
+/** 各类型默认自动消失时长(毫秒)。error 默认不消失(需用户手动关)。 */
 export const DEFAULT_DURATION_MS: Record<NotificationKind, number> = {
-  success: 3000,
-  info: 4000,
-  warning: 5000,
+  success: 5000,
+  info: 7000,
+  warning: 8000,
   error: 0,
 }
 

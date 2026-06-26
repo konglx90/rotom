@@ -1,16 +1,20 @@
-/* 单张通知卡片:纯色背景(按类型区分) + 白字 + 图标 + 标题 + 描述 + 操作。
-   尺寸 / 圆角 / 阴影 / 入场动画沿用休息卡片(BreakOverlay)的 token。 */
+/* 单张通知卡片:纯色背景(按类型区分) + 白字 + APNG 猫动画 + 标题 + 描述 + 操作。
+   尺寸 / 圆角 / 阴影 / 入场动画 / float 浮动 沿用休息卡片(BreakOverlay)的 token。 */
 
 .card {
   position: relative;
   width: 200px;
-  padding: 12px 16px 14px;
+  /* min-height 对齐休息卡片(BreakOverlay)的整体高度,让通知卡片视觉上同尺寸。
+     休息卡片 = padding 12/14 + sprite 120 + label ~13 + timer 36 + button 28 + gap×3 ≈ 240px。 */
+  min-height: 240px;
+  padding: 14px 16px 16px;
   border-radius: 16px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
   color: #ffffff;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: center;  /* 内容整体垂直居中,无 actions 时尤其明显 */
+  gap: 14px;
   animation: slideIn 280ms cubic-bezier(0.16, 1, 0.3, 1);
   /* 退场:leave 类切换时触发 */
   transition: opacity 200ms ease-in, transform 200ms ease-in;
@@ -40,22 +44,22 @@
 .warning { background: #d4a017; }
 .info    { background: #3d6a9e; }
 
-.row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+/* APNG 动画:266×200 源图缩到 120×90。比休息卡片的 160×120 略小,
+   给标题/描述/按钮留出空间。沿用 float + drop-shadow 让猫"飘"起来。 */
+.sprite {
+  width: 120px;
+  height: 90px;
+  object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  animation: float 4s ease-in-out infinite;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+  /* 居中显示 */
+  align-self: center;
 }
 
-.icon {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  line-height: 20px;
-  text-align: center;
-  font-size: 0.95rem;
-  font-weight: 700;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.22);
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
 }
 
 .body {
@@ -63,34 +67,39 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
 }
 
 .title {
-  font-size: 0.92rem;
-  font-weight: 600;
-  line-height: 1.35;
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.3;
   word-break: break-word;
+  letter-spacing: -0.01em;
+  text-align: center;
 }
 
 .description {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   line-height: 1.4;
-  opacity: 0.88;
+  opacity: 0.9;
   word-break: break-word;
+  text-align: center;
 }
 
 .closeBtn {
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: 50%;
   background: transparent;
   color: rgba(255, 255, 255, 0.7);
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -112,14 +121,14 @@
 .actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 6px;
-  margin-top: 4px;
 }
 
 .action {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.5);
   background: transparent;
@@ -154,6 +163,7 @@
     width: 160px;
     padding: 10px 12px 12px;
   }
+  .sprite { width: 96px; height: 72px; }
   .title { font-size: 0.85rem; }
   .description { font-size: 0.74rem; }
 }
