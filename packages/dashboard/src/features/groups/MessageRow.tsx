@@ -1,5 +1,5 @@
-import { memo } from 'react'
-import { Reply, Search, Square } from 'lucide-react'
+import { memo, useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronUp, Reply, Search, Square } from 'lucide-react'
 import type { Agent } from '../../api/types'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
@@ -7,6 +7,13 @@ import { StreamingStatus } from '../../components/ui/StreamingStatus'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import type { ChatMessage } from './types'
 import styles from './ChatArea.module.css'
+
+// 长度阈值:超过任一阈值的气泡默认折叠,「查看更多」展开。
+// 阈值调高 —— 只对真正长的消息折叠,短的保持原样。agent 跑活的
+// 短反馈 / 中间产物留在 chat 里一眼看完,重的长内容才让用户主动
+// 展开(或者直接去 issue 详情页看完整内容)。
+const COLLAPSE_CHAR_THRESHOLD = 2400
+const COLLAPSE_LINE_THRESHOLD = 48
 
 interface MessageRowProps {
   msg: ChatMessage
@@ -65,6 +72,24 @@ export const MessageRow = memo(function MessageRow({
     const rid = msg.id.startsWith('stream_') ? msg.id.slice('stream_'.length) : msg.id
     onCancelStream(rid, msg.from)
   }
+
+  // 长消息折叠逻辑。
+  //  - 流式期间强制展开(用户需要看到 agent 实时写的每行)
+  //  - 长度超过阈值且非流式时,默认折叠
+  //  - 用户一旦点过「查看更多 / 收起」,记住状态直到消息 id 变化
+  //    (新消息重新走默认折叠流程)
+  // 估算长度按字符数 + 显式换行数双阈值,避免单行超长和多行短行两个
+  // 极端情况都漏掉。loading dots 和纯空白不参与估算。
+  const isLong = useMemo(() => {
+    if (msg.isLoading) return false
+    const trimmed = msg.content.trim()
+    if (!trimmed) return false
+    const lineCount = (msg.content.match(/\n/g) || []).length + 1
+    return msg.content.length > COLLAPSE_CHAR_THRESHOLD || lineCount > COLLAPSE_LINE_THRESHOLD
+  }, [msg.content, msg.isLoading])
+  const [userExpanded, setUserExpanded] = useState(false)
+  useEffect(() => { setUserExpanded(false) }, [msg.id])
+  const collapsed = isLong && !userExpanded && !msg.streaming
 
   return (
     <div className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''} ${isContinuation ? styles.continuation : ''}`}>
@@ -174,28 +199,50 @@ export const MessageRow = memo(function MessageRow({
             </span>
           </div>
         </div>
-        <div className={styles.messageContent}>
-          {msg.isLoading ? (
-            <div className={styles.loadingDots}>
-              <span className={styles.dot}></span>
-              <span className={styles.dot}></span>
-              <span className={styles.dot}></span>
+        <div className={`${styles.messageContentWrapper} ${collapsed ? styles.collapsed : ''}`}>
+          <div className={styles.messageContent}>
+            {msg.isLoading ? (
+              <div className={styles.loadingDots}>
+                <span className={styles.dot}></span>
+                <span className={styles.dot}></span>
+                <span className={styles.dot}></span>
+              </div>
+            ) : (
+              <MarkdownContent
+                content={msg.content}
+                streaming={msg.streaming}
+                mentionMembers={groupMembers}
+                mentionClassName={styles.mention}
+                hideStatus={true}
+              />
+            )}
+          </div>
+          {msg.cancelled && (
+            <div className={styles.messageCancelledFooter}>
+              <span className={styles.cancelledIcon}>⏹</span>
+              <span>已中断 · {msg.cancelledAt?.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}</span>
             </div>
-          ) : (
-            <MarkdownContent
-              content={msg.content}
-              streaming={msg.streaming}
-              mentionMembers={groupMembers}
-              mentionClassName={styles.mention}
-              hideStatus={true}
-            />
           )}
         </div>
-        {msg.cancelled && (
-          <div className={styles.messageCancelledFooter}>
-            <span className={styles.cancelledIcon}>⏹</span>
-            <span>已中断 · {msg.cancelledAt?.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai' })}</span>
-          </div>
+        {isLong && !msg.streaming && !msg.isLoading && (
+          <button
+            type="button"
+            className={styles.collapseToggle}
+            onClick={() => setUserExpanded(v => !v)}
+            aria-expanded={!collapsed}
+          >
+            {collapsed ? (
+              <>
+                <ChevronDown size={12} />
+                <span>查看更多</span>
+              </>
+            ) : (
+              <>
+                <ChevronUp size={12} />
+                <span>收起</span>
+              </>
+            )}
+          </button>
         )}
       </div>
     </div>
