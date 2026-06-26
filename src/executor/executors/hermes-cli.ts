@@ -240,6 +240,53 @@ export class HermesCliExecutor implements CliExecutor {
       // 在 dashboard 顶部以 shimmer pill 形式展示。完全对齐 codex-rs/tui 的
       // extract_first_bold + set_status_header 模式。
       const reasoningStatus = createReasoningStatusBuffer((tag) => onOutput(tag));
+
+      // ── Chunk coalescing ────────────────────────────────────────────
+      // hermes ACP 把 agent_message_chunk / agent_thought_chunk 切得超细(英文
+      // 逐词、中文甚至逐字)。原代码对每个 chunk 都直接 onOutput,worker 侧每
+      // 个 chunk 触发一次 sendUpdate("in_progress", chunk),master 侧落一行
+      // progress 事件 + 广播 notifyIssueChanged。实测一个 80s 的 issue 累积
+      // 2840 条 progress 事件,其中 2207 条长度 ≤5 字节("The"/" user"/...)。
+      // 这里用 200ms 时间窗口把相邻 chunk 合并成一次 onOutput,DB / WS 事件
+      // 密度从 ~35 条/s 降到 ~5 条/s。
+      //
+      // message 和 thought 两个 buffer 互斥(inThinking 状态机保证同一时刻只
+      // 在一个模式),flush 时按 inThinking 决定 flush 哪个。
+      // 边界事件(thinking 开闭 / tool_call / turn_end / 进程退出)立即 flush,
+      // 保证结构化标记 ([thinking]/[tool:exec]/[status:thinking]) 不被跨界
+      // 合并、不乱序。
+      const FLUSH_INTERVAL_MS = 200;
+      let messageBuffer = "";
+      let thoughtBuffer = "";
+      let flushTimer: NodeJS.Timeout | null = null;
+
+      function doFlush(): void {
+        if (inThinking) {
+          if (thoughtBuffer) {
+            onOutput(thoughtBuffer);
+            thoughtBuffer = "";
+          }
+        } else {
+          if (messageBuffer) {
+            onOutput(messageBuffer);
+            messageBuffer = "";
+          }
+        }
+      }
+      function flushNow(): void {
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        doFlush();
+      }
+      function scheduleFlush(): void {
+        if (flushTimer) return;
+        flushTimer = setTimeout(() => {
+          flushTimer = null;
+          doFlush();
+        }, FLUSH_INTERVAL_MS);
+      }
       // 新版 hermes ACP 在 session/resume 里会同步 replay 整段对话历史
       // （user/assistant/thought chunks，跟 live chunk 类型完全相同）。
       // hermes 是 await 完 replay 才返回 session/resume 的 RPC 响应，所以
@@ -254,6 +301,9 @@ export class HermesCliExecutor implements CliExecutor {
       // 前端解析器会把每个 chunk 渲染成独立的 "💭 思考" 折叠块。
       function closeThinkingIfOpen(): void {
         if (inThinking) {
+          // 把还在 thoughtBuffer 里的内容先 flush 出去,再 emit 关闭标签,
+          // 否则 [thinking] 内容会被 200ms 延迟到 [/thinking] 之后。
+          flushNow();
           onOutput(`[/thinking]`);
           inThinking = false;
         }
@@ -289,6 +339,10 @@ export class HermesCliExecutor implements CliExecutor {
       function finish(exitCode: number): void {
         if (settled) return;
         settled = true;
+        // 进程退出前必须把还在 buffer 里的 chunk emit 出去,否则用户会丢失
+        // 最后一批 message / thought 内容。closeThinkingIfOpen 里也会 flushNow,
+        // 但只在 inThinking=true 时触发;message 模式退出时靠这一行兜底。
+        flushNow();
         closeThinkingIfOpen();
         // Fallback terminal status: if the process died without us ever
         // seeing a turn_end (e.g. spawn error, model 400, broken pipe),
@@ -516,13 +570,14 @@ export class HermesCliExecutor implements CliExecutor {
               if (!providerError.matched) {
                 fullOutput += text;
               }
-              onOutput(text);
+              messageBuffer += text;
               // 模型已经从「思考」切到「回答」,状态 pill 切回 "Working"。
               // 当 sniffer 已经标记失败时,跳过这条 emit,保留上面 "Failed"
               // 作为最后一个状态,避免 dashboard pill 被覆盖回 "Working"。
               if (!providerError.matched) {
                 emitStatusDedup("Working");
               }
+              scheduleFlush();
             }
             break;
           }
@@ -531,18 +586,26 @@ export class HermesCliExecutor implements CliExecutor {
             const text = content?.text as string | undefined;
             if (text) {
               if (!inThinking) {
+                // 切到 thinking:先 flush message buffer(可能还有未发的正文),
+                // 再 emit 开始标签,否则 [thinking] 会插到正文前面。
+                flushNow();
                 onOutput(`[thinking]`);
                 inThinking = true;
               }
-              onOutput(text);
+              thoughtBuffer += text;
               // 把 chunk 累加到 reasoningStatus,首次抽出 **Header** 时自动
-              // emit 一个 [status:thinking] 标签。
+              // emit 一个 [status:thinking] 标签(reasoningStatus 自己 emit,
+              // 不走我们的 buffer,标签会立即出现,与 chunk 频率解耦)。
               reasoningStatus.append(text);
+              scheduleFlush();
             }
             break;
           }
           case "tool_call": {
             closeThinkingIfOpen();
+            // flush message buffer:确保前面的 message 内容先 emit,
+            // 否则 [tool:exec] 卡片会跑到正文前面,前端顺序乱。
+            flushNow();
             const u = update as Record<string, unknown>;
             const toolCallId = u.toolCallId as string;
             const title = u.title as string;
@@ -584,6 +647,9 @@ export class HermesCliExecutor implements CliExecutor {
 
             // Completed — emit deferred tool use if needed
             closeThinkingIfOpen();
+            // tool_call_update 完成时同样需要先 flush message buffer,
+            // 保证 [tool:exec] / [tool-result:exec] 不跑在正文前面。
+            flushNow();
             const pt = pendingTools.get(toolCallId);
             pendingTools.delete(toolCallId);
 
@@ -611,6 +677,8 @@ export class HermesCliExecutor implements CliExecutor {
             // last `[status:thinking]` tag) settles to a non-Working label
             // instead of leaving "Working" stuck above the finished reply.
             closeThinkingIfOpen();
+            // flush 最后一批 message 内容,确保用户看到完整回答后 pill 才翻 "Answered"。
+            flushNow();
             turnEndSeen = true;
             emitStatus(onOutput, "Answered");
             break;

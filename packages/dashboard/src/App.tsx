@@ -1,6 +1,7 @@
 import { Navigate, Routes, Route } from 'react-router-dom'
 import { ChatProvider, useChatContext } from './context/ChatContext'
 import { SocketProvider } from './context/SocketContext'
+import { WorkSessionProvider } from './context/WorkSessionContext'
 import { ZenModeProvider } from './context/ZenModeContext'
 import { VisitorProvider, useVisitorMode } from './context/VisitorContext'
 import { AppShell } from './components/layout/AppShell/AppShell'
@@ -60,7 +61,8 @@ function App() {
       <VisitorProvider>
         <ChatProvider>
           <SocketProvider>
-            <AppShell>
+            <WorkSessionProvider>
+              <AppShell>
               <Routes>
                 <Route path="/dashboard/agents" element={<div className="container-full"><AgentsView /></div>} />
                 <Route path="/dashboard/kanban" element={<RequireAgent><div className="container-full"><KanbanView /></div></RequireAgent>} />
@@ -76,8 +78,9 @@ function App() {
                 <Route path="/dashboard" element={<Navigate to="/dashboard/agents" replace />} />
                 <Route path="*" element={<Navigate to="/dashboard/agents" replace />} />
               </Routes>
-            </AppShell>
-            <ChatModalsHost />
+              </AppShell>
+              <ChatModalsHost />
+            </WorkSessionProvider>
           </SocketProvider>
         </ChatProvider>
       </VisitorProvider>

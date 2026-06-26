@@ -119,6 +119,98 @@
   line-height: 1.2;
 }
 
+/* 把 ModeSidebarClock 推到 modeSidebar 底部,与上方动作按钮拉开距离 */
+.modeSidebarSpacer {
+  flex: 1 1 auto;
+  min-height: 4px;
+}
+
+/* modeSidebar 底部的工作时长 + 休息倒计时 widget。
+   44px 列宽内嵌入,两行紧凑布局,点击打开设置。 */
+.modeClock {
+  flex: 0 0 auto;
+  width: 38px;
+  margin: 0 auto;
+  padding: 5px 2px;
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas-elevated);
+  color: var(--color-warm-dark);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out);
+}
+
+.modeClock:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-ink);
+}
+
+.modeClockRow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  line-height: 1.05;
+}
+
+.modeClockIcon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.modeClockValue {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+/* 距下次休息 ≤10min:橙色边框 + 文字 */
+.modeClockUrgent {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.modeClockUrgent:hover {
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--color-warning);
+}
+
+/* 已超时未休息:脉冲提示 */
+.modeClockOverdue {
+  border-color: var(--color-error);
+  color: var(--color-error);
+  animation: modeClockPulse 1.5s infinite;
+}
+
+.modeClockOverdue:hover {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--color-error);
+}
+
+@keyframes modeClockPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* 休息进行中:绿色背景,鼓励真的离开 */
+.modeClockBreak {
+  border-color: var(--color-wise-green);
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+}
+
+.modeClockBreak:hover {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+}
+
 /* 三栏水平并列容器 */
 .panelsRow {
   flex: 1;
