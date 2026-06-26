@@ -11,6 +11,7 @@ import { useChatContext } from './ChatContext'
 import { useSocket } from './SocketContext'
 import { issuesApi } from '../api/issues'
 import { BreakReminderModal } from '../features/groups/modals/BreakReminderModal'
+import { BreakOverlay } from '../features/groups/BreakOverlay'
 
 // 工作会话三件套:页面工作时间统计 + 休息倒计时 + 任务完成声音。
 //
@@ -364,6 +365,7 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
         onStartBreak={triggerBreakNow}
         onPostpone={() => postponeBreak()}
       />
+      <BreakOverlay />
     </WorkSessionContext.Provider>
   )
 }

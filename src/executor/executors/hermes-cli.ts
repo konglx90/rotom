@@ -255,7 +255,7 @@ export class HermesCliExecutor implements CliExecutor {
       // 边界事件(thinking 开闭 / tool_call / turn_end / 进程退出)立即 flush,
       // 保证结构化标记 ([thinking]/[tool:exec]/[status:thinking]) 不被跨界
       // 合并、不乱序。
-      const FLUSH_INTERVAL_MS = 200;
+      const FLUSH_INTERVAL_MS = 500;
       let messageBuffer = "";
       let thoughtBuffer = "";
       let flushTimer: NodeJS.Timeout | null = null;
