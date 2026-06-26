@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import { artifactsApi, type ArtifactRefs } from '../../api/artifacts'
@@ -21,6 +21,13 @@ interface ArtifactPanelProps {
 
 /** Depth at which directories are expanded by default on first load. */
 const DEFAULT_EXPAND_DEPTH = 1
+
+/** 文件树宽度约束:深目录需要更宽才不截断文件名,但也不能把预览挤没了。
+ *  用户拖动分隔条后宽度持久化到 localStorage,下次进面板恢复。 */
+const TREE_WIDTH_DEFAULT = 260
+const TREE_WIDTH_MIN = 180
+const TREE_WIDTH_MAX = 520
+const TREE_WIDTH_STORAGE_KEY = 'rotom-artifact-tree-width'
 
 /** 按文件名过滤文件树:目录命中(自身或任一后代)则保留并裁掉不命中的
  *  子节点;文件命中则保留。空 query 返回原数组。大小写不敏感。 */
@@ -220,7 +227,7 @@ function FileTreeNode({
     <li>
       <div
         className={`${styles.fileItem} ${isActive ? styles.active : ''}`}
-        style={{ paddingLeft: 14 + depth * 18 }}
+        style={{ paddingLeft: 10 + depth * 12 }}
         onClick={() => {
           if (isDir) {
             setExpanded(!effectivelyExpanded)
@@ -271,6 +278,45 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
   const [mode, setMode] = useState<'view' | 'diff'>('view')
   // 文件树折叠态:折叠后只剩窄条(图标列),把空间让给预览。预览全屏看代码时有用。
   const [treeCollapsed, setTreeCollapsed] = useState(false)
+  // 文件树宽度:可拖拽分隔条调整,持久化到 localStorage。深目录默认 260,
+  // 用户拖宽后下次进面板保留。treeCollapsed=true 时强制 0(分隔条也隐藏)。
+  const [treeWidth, setTreeWidth] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem(TREE_WIDTH_STORAGE_KEY)
+      const n = raw ? Number(raw) : NaN
+      return Number.isFinite(n) && n >= TREE_WIDTH_MIN && n <= TREE_WIDTH_MAX ? n : TREE_WIDTH_DEFAULT
+    } catch {
+      return TREE_WIDTH_DEFAULT
+    }
+  })
+  const [treeDragging, setTreeDragging] = useState(false)
+  const treeDragStartRef = useRef<{ x: number; w: number } | null>(null)
+
+  useEffect(() => {
+    if (!treeDragging) return
+    const onMove = (e: MouseEvent) => {
+      const start = treeDragStartRef.current
+      if (!start) return
+      const next = Math.max(
+        TREE_WIDTH_MIN,
+        Math.min(TREE_WIDTH_MAX, start.w + (e.clientX - start.x)),
+      )
+      setTreeWidth(next)
+      // 同步写盘:localStorage 单 key 写很快,不必搞 debounce
+      try { localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(next)) } catch { /* ignore */ }
+    }
+    const onUp = () => setTreeDragging(false)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [treeDragging])
   // MD 文件默认渲染成 HTML,viewMode='source' 时回退到 Monaco markdown 高亮。
   // 切换非 MD 文件时自动重置回 preview(对 MD 无影响,对后续切回 MD 生效)。
   const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview')
@@ -440,10 +486,13 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
         </div>
       )}
 
-      {/* 左右分栏:左文件树(固定宽度),右预览(flex:1)。两者各拿全高,
+      {/* 左右分栏:左文件树(可拖拽宽度),右预览(flex:1)。两者各拿全高,
           避免纵向挤。窄面板下文件树可折叠成只显示图标。 */}
       <div className={styles.splitLayout}>
-        <div className={`${styles.treePane} ${treeCollapsed ? styles.treePaneCollapsed : ''}`}>
+        <div
+          className={`${styles.treePane} ${treeCollapsed ? styles.treePaneCollapsed : ''}`}
+          style={treeCollapsed ? undefined : { width: `${treeWidth}px`, flex: `0 0 ${treeWidth}px` }}
+        >
           {files.length > 0 && (
             <div className={styles.searchRow}>
               <input
@@ -498,6 +547,24 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
             </ul>
           )}
         </div>
+
+        {/* 拖拽分隔条:mouseDown 记起点,mousemove 由 useEffect 接管。
+            双击恢复默认宽度。treeCollapsed 时隐藏(没东西可拖)。 */}
+        {!treeCollapsed && (
+          <div
+            className={`${styles.treeResizer} ${treeDragging ? styles.treeResizerActive : ''}`}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              treeDragStartRef.current = { x: e.clientX, w: treeWidth }
+              setTreeDragging(true)
+            }}
+            onDoubleClick={() => {
+              setTreeWidth(TREE_WIDTH_DEFAULT)
+              try { localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(TREE_WIDTH_DEFAULT)) } catch { /* ignore */ }
+            }}
+            title="拖拽调整目录树宽度,双击恢复默认"
+          />
+        )}
 
         <div className={styles.previewPane}>
       {selectedFile && (
