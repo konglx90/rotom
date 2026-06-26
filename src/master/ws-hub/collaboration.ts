@@ -18,6 +18,7 @@
 
 import type { ServerMessage } from "../../shared/protocol.js";
 import type { WSHubSelf } from "./hub.js";
+import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 
 export const collaborationMethods = {
   /**
@@ -222,14 +223,14 @@ export const collaborationMethods = {
     let queued = false;
     if (result.targetAgentId) {
       const enrichedConversation = this.enrichConversationWithCollaboration(conversation);
-      const wireMsg = {
+      const wireMsg = enrichWorkerDispatch(this, {
         type: "a2a_message" as const,
         requestId,
         from: { name: opts.fromName, domain: fromAgent.domain || undefined, status: "online" as const },
         payload: { message: opts.message },
         routeType: "exact" as const,
         conversation: enrichedConversation,
-      };
+      } as ServerMessage, result.targetName, enrichedConversation?.groupId);
       delivered = this.sendToAgent(result.targetAgentId, wireMsg);
 
       if (opts.groupId) {

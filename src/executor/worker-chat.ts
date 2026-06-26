@@ -13,16 +13,15 @@ import type { ExecutorWorker } from "./worker.js";
 export class ChatHandler {
   constructor(private readonly worker: ExecutorWorker) {}
 
-  async handleChatReply(requestId: string, content: string, fromName: string, conversation: any): Promise<void> {
+  async handleChatReply(requestId: string, content: string, fromName: string, conversation: any, cwdOverride?: string): Promise<void> {
     const taskKey = `chat:${requestId}`;
     if (this.worker.activeTasks.has(taskKey)) return;
 
     const groupId: string = conversation?.id ?? conversation?.groupId ?? "";
-    // cwd 走本机派生:<workingDirMap[groupId]> 或 <base>/<groupId>。
-    // 故意忽略 conversation.workingDir —— 那是 master DB 里存的绝对路径,
-    // 多机部署下推到非 master executor 时目录不存在,会导致 spawn 失败。
-    // 详见 resolveIssueCwd 上方"跨机器部署安全"注释。
-    const resolveChatCwd = (): string => this.worker.resolveIssueCwd(groupId || undefined);
+    // cwd 优先用 master 推送(Dashboard 群工作目录 / per-agent override);
+    // 本机不存在或未推送时回落本地派生(<workingDirMap[groupId]> 或 <base>/<groupId>)。
+    // 旧的 conversation.workingDir 仍忽略(那是展示元数据,与 spawn 无关)。
+    const resolveChatCwd = (): string => this.worker.resolveIssueCwd(groupId || undefined, cwdOverride);
 
     if (this.worker.activeTasks.size >= this.worker.maxConcurrent) {
       this.worker.sendChatEnd(requestId, `[系统] 当前任务繁忙，请稍后再试`, conversation, resolveChatCwd());
@@ -186,6 +185,7 @@ export class ChatHandler {
   async handleCollaborationStarted(
     issueId: string, title: string, collaborationGoal: string,
     participants: string[], round: number, maxRounds: number, groupId: string,
+    cwdOverride?: string,
   ): Promise<void> {
     const taskKey = `collab-${issueId}`;
     if (this.worker.activeTasks.has(taskKey)) return;
@@ -213,8 +213,8 @@ export class ChatHandler {
         `4) 不要替别人代答；等他们的真实回复`,
       ].join("\n");
 
-      // cwd 按 groupId 派生
-      const cwd = this.worker.resolveIssueCwd(groupId);
+      // cwd 优先用 master 推送;本机不存在则回落派生
+      const cwd = this.worker.resolveIssueCwd(groupId, cwdOverride);
       // collab 模式也没有 activeIssues(group-basic 层折叠),只拼 rotom-cli +
       // agent-role + cwd + task 四层。
       const composed = composePrompt({

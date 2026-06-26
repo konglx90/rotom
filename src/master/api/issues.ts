@@ -9,9 +9,10 @@ import { parseSlashCommand } from "../../shared/slash-commands.js";
 import { truncateTitle } from "../../shared/title.js";
 import { ISSUE_STATUSES } from "../../shared/constants.js";
 import { resolveGroupAgentWorkingDir } from "../group-paths.js";
+import { enrichWorkerDispatch } from "../ws-hub/dispatch-enrich.js";
 import { createLogger } from "../../shared/logger.js";
 import type { IssueRow } from "../db/types.js";
-import type { TodoItem } from "../../shared/protocol.js";
+import type { ServerMessage, TodoItem } from "../../shared/protocol.js";
 
 const log = createLogger("mesh-api");
 
@@ -659,7 +660,7 @@ export function registerIssueRoutes(
       const firstParticipant = participants[0];
       const agent = db.getAgentByName(firstParticipant);
       if (agent) {
-        const sent = hub.sendToAgent(agent.id, {
+        const sent = hub.sendToAgent(agent.id, enrichWorkerDispatch({ db }, {
           type: "collaboration_started",
           issueId: id,
           groupId: req.params.groupId,
@@ -669,7 +670,7 @@ export function registerIssueRoutes(
           maxRounds: maxRounds || 3,
           owner: owner || undefined,
           round: 1,
-        });
+        } as ServerMessage, firstParticipant, req.params.groupId));
         log.info(`Collaboration notify ${firstParticipant} (agentId=${agent.id}): sent=${sent}`);
       } else {
         log.warn(`Collaboration first participant "${firstParticipant}" not found in DB`);

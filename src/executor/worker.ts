@@ -94,8 +94,11 @@ export class ExecutorWorker {
   readonly workingDir: string;
   readonly maxConcurrent: number;
   readonly cliTool: string;
-  /** agents.profile 解析后缓存,供 composePrompt() 渲染 agent-role 层。 */
-  readonly agentProfile: AgentProfile | null;
+  /** agents.profile 解析后缓存,供 composePrompt() 渲染 agent-role 层。
+   *  初始值来自 executor.config.json,运行时收到带 agentProfile 字段的
+   *  WS 消息(issue_assigned/continue/append、a2a_message、collaboration_started)
+   *  时由 setAgentProfile() 更新 —— 这是 Dashboard 编辑后下一条消息即生效的入口。 */
+  agentProfile: AgentProfile | null;
 
   // ── Subsystems (constructed after the fields above are initialized) ──
   readonly sessions: SessionStore;
@@ -149,7 +152,13 @@ export class ExecutorWorker {
    * 跨机器部署安全:每台 executor 用自己的 this.workingDir,各机器各自的
    * `<base>/<groupId>` 物理隔离;master 推送的 workingDir 永远不会被用到这里。
    */
-  resolveIssueCwd(groupId: string | undefined): string {
+  resolveIssueCwd(groupId: string | undefined, override?: string): string {
+    // 0. master 推送的 cwd(Dashboard 配置的群工作目录)优先 —— 跨机器部署时
+    //    若本机不存在该路径则静默回落本地派生,保证 worker 永远能 spawn。
+    if (override && fs.existsSync(override)) {
+      fs.mkdirSync(override, { recursive: true });
+      return override;
+    }
     // 1. per-group override
     if (groupId && this.config.workingDirMap?.[groupId]) {
       const mapped = this.config.workingDirMap[groupId];
@@ -164,6 +173,23 @@ export class ExecutorWorker {
     }
     // 3. 兜底
     return this.workingDir;
+  }
+
+  /**
+   * 更新本地缓存的 agentProfile —— master 在 dispatch 时通过 WS 消息字段
+   * `agentProfile` 推送 Dashboard 编辑后的最新值。worker 收到后调用本方法,
+   * 下一次 composePrompt() 就会渲染新角色信息。
+   *
+   * JSON.stringify 比对避免无变化时刷日志。空 profile 也会更新(用户可能
+   * 在 Dashboard 清空了字段,需如实下沉)。
+   */
+  setAgentProfile(p: AgentProfile | null): void {
+    if (JSON.stringify(p) === JSON.stringify(this.agentProfile)) return;
+    this.agentProfile = p;
+    const sig = p
+      ? `position=${p.position ?? "-"}, responsibilities=${p.responsibilities ? "(set)" : "-"}, tech_stack=${p.tech_stack ?? "-"}, category=${p.category ?? "-"}`
+      : "(null)";
+    console.log(`${this.tag} agentProfile updated (${sig})`);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────
@@ -198,10 +224,11 @@ export class ExecutorWorker {
 
     // Issue assignment
     if (msg.type === "issue_assigned") {
-      const { issueId, title, description, groupId, slashCommand, approvalPolicy } = msg as any;
+      const { issueId, title, description, groupId, slashCommand, approvalPolicy, agentProfile, cwd: overrideCwd } = msg as any;
+      if (agentProfile) this.setAgentProfile(agentProfile);
       console.log(`${this.tag} Issue assigned: "${title}" (${issueId}, group=${groupId ?? "(none)"})${slashCommand ? ` [${slashCommand}]` : ""}${approvalPolicy ? ` [${approvalPolicy}]` : ""}`);
-      // cwd 按 groupId 派生(<base>/<groupId>),完全本机解析,与 master 无关
-      const cwd = this.resolveIssueCwd(groupId);
+      // cwd 优先用 master 推送(Dashboard 群工作目录);本机不存在则回落派生
+      const cwd = this.resolveIssueCwd(groupId, overrideCwd);
       this.issues.executeIssue(issueId, title, description || "", cwd, slashCommand, approvalPolicy);
     }
 
@@ -283,10 +310,13 @@ export class ExecutorWorker {
       const groupId = (msg as any).groupId as string | undefined;
       const slashCommand = (msg as any).slashCommand as string | undefined;
       const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
+      const agentProfile = (msg as any).agentProfile as AgentProfile | undefined;
+      const overrideCwd = (msg as any).cwd as string | undefined;
+      if (agentProfile) this.setAgentProfile(agentProfile);
       if (!issueId || !prompt) return;
       console.log(`${this.tag} Issue continue: "${title ?? "(no title)"}" (${issueId}, session=${sessionId ?? "(none)"}${slashCommand ? `, slash=${slashCommand}` : ""}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
-      // cwd 按 groupId 派生
-      const cwd = this.resolveIssueCwd(groupId);
+      // cwd 优先用 master 推送;本机不存在则回落派生
+      const cwd = this.resolveIssueCwd(groupId, overrideCwd);
       const issueHeader =
         `[当前群活跃 issue]
 ` +
@@ -322,6 +352,9 @@ ${prompt}`;
       const groupId = (msg as any).groupId as string | undefined;
       const slashCommand = (msg as any).slashCommand as string | undefined;
       const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
+      const agentProfile = (msg as any).agentProfile as AgentProfile | undefined;
+      const overrideCwd = (msg as any).cwd as string | undefined;
+      if (agentProfile) this.setAgentProfile(agentProfile);
       if (!issueId || !prompt) return;
       const issueHeader =
         `[当前群活跃 issue]
@@ -340,8 +373,8 @@ ${prompt}`;
         console.log(`${this.tag} Issue append queued: ${issueId} (queue=${queue.length})`);
       } else {
         console.log(`${this.tag} Issue append (idle, run now): ${issueId} (session=${sessionId ?? "(none)"}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
-        // cwd 按 groupId 派生
-        const cwd = this.resolveIssueCwd(groupId);
+        // cwd 优先用 master 推送;本机不存在则回落派生
+        const cwd = this.resolveIssueCwd(groupId, overrideCwd);
         const composed = composePrompt({
           mode: "issue",
           agentName: this.config.name,
@@ -378,7 +411,8 @@ ${prompt}`;
 
     // Chat message reply
     if (msg.type === "a2a_message") {
-      const { requestId, from, payload, conversation } = msg as any;
+      const { requestId, from, payload, conversation, agentProfile, cwd: overrideCwd } = msg as any;
+      if (agentProfile) this.setAgentProfile(agentProfile as AgentProfile);
       const content = payload?.message || "";
       const fromName = from?.name || "unknown";
 
@@ -388,16 +422,16 @@ ${prompt}`;
       const isMentioned = content.includes(`@${this.config.name}`);
       if (!isGroup || isMentioned) {
         console.log(`${this.tag} Chat from ${fromName}: ${content.slice(0, 80)}...`);
-        this.chat.handleChatReply(requestId, content, fromName, conversation);
+        this.chat.handleChatReply(requestId, content, fromName, conversation, overrideCwd);
       }
     }
 
     // Collaboration started notification
     if (msg.type === "collaboration_started") {
-      const { issueId, title, collaborationGoal, participants, maxRounds, round, groupId } = msg as any;
+      const { issueId, title, collaborationGoal, participants, maxRounds, round, groupId, agentProfile, cwd: overrideCwd } = msg as any;
+      if (agentProfile) this.setAgentProfile(agentProfile as AgentProfile);
       console.log(`${this.tag} Collaboration started: "${title}" round=${round}/${maxRounds}`);
-      // cwd 按 groupId 派生
-      this.chat.handleCollaborationStarted(issueId, title, collaborationGoal, participants, round, maxRounds, groupId);
+      this.chat.handleCollaborationStarted(issueId, title, collaborationGoal, participants, round, maxRounds, groupId, overrideCwd);
     }
 
     // Collaboration concluded notification
