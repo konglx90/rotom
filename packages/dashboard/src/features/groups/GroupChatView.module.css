@@ -356,6 +356,14 @@
   }
 }
 
+/* 横屏 iPad(1024–1366px):panel min 之和可能超过可用宽度,
+   允许横向滚动兜底,避免最后一个 panel 被 overflow:hidden 截掉。 */
+@media (max-width: 1100px) {
+  .panelsRow {
+    overflow-x: auto;
+  }
+}
+
 /* Form fields (used inside Modal) */
 .formField {
   margin-bottom: var(--spacing-md);

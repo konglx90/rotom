@@ -194,6 +194,7 @@ export function MessagesView() {
         <Button variant="ghost" size="sm" onClick={handleReset}>重置</Button>
       </div>
 
+      <div className={styles.tableWrap}>
       <table className={styles.table}>
         <thead>
           <tr>
@@ -250,6 +251,7 @@ export function MessagesView() {
           })}
         </tbody>
       </table>
+      </div>
       {filters.mentionFilter && filteredMessages.length < messages.length && (
         <div className={styles.filteredNotice}>
           已筛选: 显示 {filteredMessages.length}/{messages.length} 条

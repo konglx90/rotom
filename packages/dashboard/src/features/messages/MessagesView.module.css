@@ -90,6 +90,11 @@
   overflow: hidden;
 }
 
+/* 横屏 iPad 等窄屏:表格列固定宽度之和超过容器,允许横向滚动避免撑破布局。 */
+.tableWrap {
+  overflow-x: auto;
+}
+
 .table th {
   text-align: left;
   padding: 14px 16px;

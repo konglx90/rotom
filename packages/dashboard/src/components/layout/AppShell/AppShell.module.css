@@ -194,3 +194,16 @@
     padding: 0;
   }
 }
+
+/* 横屏 iPad(1024–1366px):收紧主区 padding,给 panel / 表格多让点宽度。
+   fullBleed 路由(groups)本来就是 0,这里只影响 agents/kanban/messages 等。
+   .mainFullBleed 必须显式覆盖,否则同特异性下媒体查询里的 .main 会赢,
+   导致 groups 路由的 modeSidebar / panelsRow 四周出现 16px 白边。 */
+@media (max-width: 1366px) {
+  .main {
+    padding: var(--spacing-md);
+  }
+  .mainFullBleed {
+    padding: 0;
+  }
+}
