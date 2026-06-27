@@ -178,14 +178,12 @@ function pairExecCalls(raw: RawPart[]): Part[] {
     if (cur.type === 'tool-exec') {
       let result: string | undefined
       let streaming = cur.unclosed
-      let consumed = i
       for (let j = i + 1; j < raw.length; j++) {
         const next = raw[j]
         if (next.type === 'tool-result-exec' && !consumedResults.has(j)) {
           result = next.content
           streaming = streaming || next.unclosed
           consumedResults.add(j)
-          consumed = j
           break
         }
         // Parallel `tool-exec` chunks don't break the search — that's the bug
@@ -195,7 +193,11 @@ function pairExecCalls(raw: RawPart[]): Part[] {
         if (next.type === 'text' && next.content.trim() !== '') break
       }
       out.push({ type: 'tool-call', command: cur.content, result, streaming })
-      i = consumed
+      // 不要 i = consumed:那会跳过 exec→result 之间的 parallel tool-exec
+      // chunks(Claude Code 并行读多个文件时 [tool:exec]A[/tool:exec][tool:exec]B[/tool:exec]
+      // 后跟两个 result),被跳过的 exec 不进 out,其 result 变孤儿渲染成
+      // 「已省略命令记录」。consumedResults Set 已经保证 result 不被重复配对,
+      // 让 for-loop 正常 i++ 即可。
     } else if (cur.type === 'tool-result-exec') {
       if (!consumedResults.has(i)) {
         consumedResults.add(i)
@@ -208,21 +210,19 @@ function pairExecCalls(raw: RawPart[]): Part[] {
     } else if (cur.type === 'tool-ask') {
       let answer: string | undefined
       let streaming = cur.unclosed
-      let consumed = i
       for (let j = i + 1; j < raw.length; j++) {
         const next = raw[j]
         if (next.type === 'tool-result-ask' && !consumedResults.has(j)) {
           answer = next.content
           streaming = streaming || next.unclosed
           consumedResults.add(j)
-          consumed = j
           break
         }
         if (next.type === 'tool-exec' || next.type === 'tool-patch') break
         if (next.type === 'text' && next.content.trim() !== '') break
       }
       out.push({ type: 'tool-ask', question: cur.content, answer, streaming })
-      i = consumed
+      // 同 tool-exec 分支:不要 i = consumed,否则 parallel ask 会被跳过。
     } else if (cur.type === 'tool-result-ask') {
       if (!consumedResults.has(i)) {
         consumedResults.add(i)
