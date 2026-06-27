@@ -54,6 +54,9 @@ const PANEL_CONFIGS: PanelConfig[] = [
   { id: 'process', width: 480, min: 320 },
   { id: 'artifact', width: 560, min: 360 },
 ]
+const PANEL_MIN_BY_ID: Record<string, number> = Object.fromEntries(
+  PANEL_CONFIGS.map((c) => [c.id, c.min]),
+)
 const PANEL_MODE_KEY = 'rotom-panel-mode'
 const PROCESS_TAB_KEY = 'rotom-process-tab'
 
@@ -694,7 +697,8 @@ export function GroupChatView() {
                       className={styles.panel}
                       style={{
                         width: `${widths[id]}px`,
-                        flex: isLast ? `1 1 ${widths[id]}px` : `0 0 ${widths[id]}px`,
+                        flex: isLast ? `1 1 ${widths[id]}px` : `0 1 ${widths[id]}px`,
+                        minWidth: `${PANEL_MIN_BY_ID[id] ?? 0}px`,
                       }}
                     >
                       {id === 'chat' && (

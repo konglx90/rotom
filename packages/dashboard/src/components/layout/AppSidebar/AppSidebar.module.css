@@ -727,6 +727,17 @@
   }
 }
 
+/* 横屏 iPad(1024–1100px):侧边栏默认 280px 占比偏大,封顶 240px
+   给主区多让点空间。max-width 覆盖 inline width,用户拖到更窄时不影响。 */
+@media (max-width: 1100px) {
+  .sidebarWrap {
+    max-width: 240px;
+  }
+  .sidebar {
+    max-width: 240px;
+  }
+}
+
 /* ── Archive button ──────────────────────────────────────── */
 .archiveBtn {
   flex-shrink: 0;
