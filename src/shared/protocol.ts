@@ -17,8 +17,8 @@ export type RealPerson = typeof REAL_PERSONS[number];
 
 export interface AgentProfile {
   position?: string;
-  responsibilities?: string;
-  tech_stack?: string;
+  /** 简介自由文本。 */
+  bio?: string;
   /** Agent 类别: "真人" | 默认（普通 agent） */
   category?: string;
 }

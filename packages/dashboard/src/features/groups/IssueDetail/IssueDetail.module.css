@@ -15,6 +15,15 @@
   overflow-y: auto;
 }
 
+/* Todo 列表固定在 IssueDetailHeader 下方、.issueBody 上方,不随滚动消失。
+   背景色与页面一致,底部用 shadow 与滚动内容形成视觉分隔。 */
+.todosSticky {
+  flex-shrink: 0;
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--border-color-light);
+  z-index: 5;
+}
+
 .issueEmpty {
   display: flex;
   align-items: center;

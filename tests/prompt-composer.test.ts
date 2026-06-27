@@ -97,17 +97,15 @@ describe("composePrompt", () => {
       agentProfile: {
         category: "AI",
         position: "Backend",
-        responsibilities: "API",
-        tech_stack: "Node",
+        bio: "API",
       },
     });
     const out = composePrompt(ctx);
     const role = out.layers.find((l) => l.layer === "agent-role")!;
-    assert.strictEqual(role.source, "agents.profile JSON (edit via rotom agent profile set)");
+    assert.strictEqual(role.source, "agents.profile JSON (edit via Dashboard 员工介绍)");
     assert.ok(role.content.includes("category: AI"));
     assert.ok(role.content.includes("position: Backend"));
-    assert.ok(role.content.includes("responsibilities: API"));
-    assert.ok(role.content.includes("tech_stack: Node"));
+    assert.ok(role.content.includes("bio: API"));
     assert.ok(!role.content.includes("(未填)"), "应不输出 (未填) 占位");
   });
 
@@ -117,8 +115,7 @@ describe("composePrompt", () => {
     const role = out.layers.find((l) => l.layer === "agent-role")!;
     assert.ok(role.content.includes("category: AI"));
     assert.ok(!role.content.includes("position"));
-    assert.ok(!role.content.includes("responsibilities"));
-    assert.ok(!role.content.includes("tech_stack"));
+    assert.ok(!role.content.includes("bio"));
   });
 
   it("三种 mode 的 task.source 不同", () => {

@@ -19,6 +19,8 @@
   align-items: baseline;
   gap: 10px;
   flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
 }
 
 .title {
@@ -35,6 +37,17 @@
   margin-left: auto;
 }
 
+.chevron {
+  font-size: 9px;
+  color: #6b7264;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.chevronCollapsed {
+  transform: rotate(-90deg);
+}
+
 .list {
   list-style: none;
   padding: 0;
@@ -42,6 +55,12 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.listCollapsed {
+  display: none;
 }
 
 .item {

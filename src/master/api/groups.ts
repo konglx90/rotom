@@ -241,6 +241,32 @@ export function registerGroupRoutes(
     res.json({ ok: true, removed });
   });
 
+  // Set or update the per-(group, agent) profile override.
+  // Body: { position?, bio?, category? } — fields with undefined/null are
+  // dropped from the override (not stored). An empty body clears the override.
+  // Stored as JSON in group_member_settings.profile; dispatch-enrich merges it
+  // onto the agent's global profile (group-level fields win).
+  apiRouter.put("/groups/:id/members/:agentName/profile", (req, res) => {
+    const group = db.getGroupById(req.params.id);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot modify settings" }); return; }
+    const agentName = String(req.params.agentName);
+    const members = db.getGroupMembers(req.params.id);
+    if (!members.some(m => m.agent_name === agentName)) {
+      res.status(404).json({ error: `Agent "${agentName}" is not a member of this group` });
+      return;
+    }
+    const body = req.body ?? {};
+    const profile: Record<string, string> = {};
+    if (typeof body.position === "string" && body.position.trim()) profile.position = body.position.trim();
+    if (typeof body.bio === "string" && body.bio.trim()) profile.bio = body.bio.trim();
+    if (typeof body.category === "string" && body.category.trim()) profile.category = body.category.trim();
+    const profileJson = Object.keys(profile).length > 0 ? JSON.stringify(profile) : null;
+    db.upsertGroupMemberProfile(req.params.id, agentName, profileJson);
+    log.info(`Group ${req.params.id} member ${agentName} profile → ${profileJson ?? "(cleared)"}`);
+    res.json({ ok: true, profile });
+  });
+
   apiRouter.get("/groups/:id/messages", (req, res) => {
     const group = db.getGroupById(req.params.id);
     if (!group) {

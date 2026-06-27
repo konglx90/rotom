@@ -101,7 +101,7 @@ pnpm master:start            # 守护进程方式启动（默认端口 28800）
       "cliTool": "claude",
       "workingDir": "/Users/me/work/projectA",
       "maxConcurrent": 2,
-      "profile": { "position": "前端工程师", "tech_stack": "React, TypeScript" }
+      "profile": { "position": "前端工程师", "bio": "负责前端架构" }
     }
   ]
 }

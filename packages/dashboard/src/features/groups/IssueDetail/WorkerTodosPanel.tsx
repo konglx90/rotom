@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { TodoItem } from '../../../api/types'
 import styles from './WorkerTodosPanel.module.css'
 
@@ -26,6 +27,7 @@ const STATUS_LABEL: Record<TodoItem['status'], string> = {
  * 折叠规则见 WorkerTodosPanelProps.active。空列表由父组件保证不渲染。
  */
 export function WorkerTodosPanel({ todos, agentName, active }: WorkerTodosPanelProps) {
+  const [collapsed, setCollapsed] = useState(false)
   if (todos.length === 0) return null
 
   const counts = todos.reduce(
@@ -41,13 +43,14 @@ export function WorkerTodosPanel({ todos, agentName, active }: WorkerTodosPanelP
 
   return (
     <div className={styles.panel}>
-      <div className={styles.header}>
+      <div className={styles.header} onClick={() => setCollapsed(v => !v)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(v => !v) } }}>
         <span className={styles.title}>📋 {agentName ? `${agentName} 的 Todo` : 'Todo 列表'}</span>
         <span className={styles.summary}>
           {completed} 完成 · {inProgress} 进行 · {pending} 待办
         </span>
+        <span className={styles.chevron + ' ' + (collapsed ? styles.chevronCollapsed : '')}>▼</span>
       </div>
-      <ul className={styles.list}>
+      <ul className={styles.list + ' ' + (collapsed ? styles.listCollapsed : '')}>
         {todos.map((todo, idx) => (
           <li key={idx} className={`${styles.item} ${statusClass(todo.status)}`}>
             <span className={styles.badge}>{STATUS_LABEL[todo.status]}</span>

@@ -26,6 +26,8 @@ export interface GroupMemberRow {
   agent_name: string;
   joined_at: string;
   working_dir: string | null;
+  /** 群级别 profile 覆盖, JSON 字符串({position?,bio?,category?}), NULL = 不覆盖。 */
+  profile: string | null;
 }
 
 export interface GroupMessageRow {
@@ -180,12 +182,12 @@ export const groupMethods = {
   listGroupsWithMembers(this: MeshDbSelf): (GroupRow & { member_count: number; members: GroupMemberRow[] })[] {
     const groups = this.listGroups();
     const rows = this.db.prepare(`
-      SELECT gm.group_id, gm.agent_name, gm.joined_at, gms.working_dir
+      SELECT gm.group_id, gm.agent_name, gm.joined_at, gms.working_dir, gms.profile
       FROM group_members gm
       LEFT JOIN group_member_settings gms
         ON gms.group_id = gm.group_id AND gms.agent_name = gm.agent_name
       ORDER BY gm.joined_at
-    `).all() as { group_id: string; agent_name: string; joined_at: string; working_dir: string | null }[];
+    `).all() as { group_id: string; agent_name: string; joined_at: string; working_dir: string | null; profile: string | null }[];
     const byGroup = new Map<string, GroupMemberRow[]>();
     for (const r of rows) {
       let list = byGroup.get(r.group_id);
@@ -193,7 +195,7 @@ export const groupMethods = {
         list = [];
         byGroup.set(r.group_id, list);
       }
-      list.push({ agent_name: r.agent_name, joined_at: r.joined_at, working_dir: r.working_dir });
+      list.push({ agent_name: r.agent_name, joined_at: r.joined_at, working_dir: r.working_dir, profile: r.profile });
     }
     return groups.map((g) => ({ ...g, members: byGroup.get(g.id) ?? [] }));
   },
@@ -263,7 +265,7 @@ export const groupMethods = {
 
   getGroupMembers(this: MeshDbSelf, groupId: string): GroupMemberRow[] {
     return this.db.prepare(`
-      SELECT gm.agent_name, gm.joined_at, gms.working_dir
+      SELECT gm.agent_name, gm.joined_at, gms.working_dir, gms.profile
       FROM group_members gm
       LEFT JOIN group_member_settings gms
         ON gms.group_id = gm.group_id AND gms.agent_name = gm.agent_name
@@ -276,13 +278,36 @@ export const groupMethods = {
     const row = this.db.prepare(
       "SELECT working_dir FROM group_member_settings WHERE group_id = ? AND agent_name = ?",
     ).get(groupId, agentName) as { working_dir: string } | undefined;
-    return row?.working_dir ?? null;
+    // working_dir 列是 NOT NULL(migration 020);空串表示"只设了 profile,没有
+    // working_dir 覆盖",归一化为 null 让上层 falsy 判断正常工作。
+    const v = row?.working_dir;
+    return v && v.length > 0 ? v : null;
   },
 
-  listGroupMemberSettings(this: MeshDbSelf, groupId: string): { agent_name: string; working_dir: string; updated_at: string }[] {
+  listGroupMemberSettings(this: MeshDbSelf, groupId: string): { agent_name: string; working_dir: string; updated_at: string; profile: string | null }[] {
     return this.db.prepare(
-      "SELECT agent_name, working_dir, updated_at FROM group_member_settings WHERE group_id = ? ORDER BY agent_name",
-    ).all(groupId) as { agent_name: string; working_dir: string; updated_at: string }[];
+      "SELECT agent_name, working_dir, updated_at, profile FROM group_member_settings WHERE group_id = ? ORDER BY agent_name",
+    ).all(groupId) as { agent_name: string; working_dir: string; updated_at: string; profile: string | null }[];
+  },
+
+  getGroupMemberProfile(this: MeshDbSelf, groupId: string, agentName: string): string | null {
+    const row = this.db.prepare(
+      "SELECT profile FROM group_member_settings WHERE group_id = ? AND agent_name = ?",
+    ).get(groupId, agentName) as { profile: string | null } | undefined;
+    return row?.profile ?? null;
+  },
+
+  upsertGroupMemberProfile(this: MeshDbSelf, groupId: string, agentName: string, profileJson: string | null): void {
+    // 群级别 profile 覆盖单独存一列。若该 (group, agent) 还没有 settings 行,
+    // INSERT 一行 working_dir=''(NOT NULL 兜底,getGroupMemberSetting 归一化为
+    // null 表示无覆盖)再写 profile; 若已有行, UPDATE profile 列(不动 working_dir)。
+    this.db.prepare(`
+      INSERT INTO group_member_settings (group_id, agent_name, working_dir, profile, updated_at)
+      VALUES (?, ?, '', ?, ?)
+      ON CONFLICT(group_id, agent_name) DO UPDATE SET
+        profile     = excluded.profile,
+        updated_at  = excluded.updated_at
+    `).run(groupId, agentName, profileJson, new Date().toISOString());
   },
 
   upsertGroupMemberSetting(this: MeshDbSelf, groupId: string, agentName: string, workingDir: string): void {

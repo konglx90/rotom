@@ -15,8 +15,7 @@ interface AgentProfileModalProps {
 
 export function AgentProfileModal({ agent, open, onClose, onSuccess }: AgentProfileModalProps) {
   const [position, setPosition] = useState('');
-  const [responsibilities, setResponsibilities] = useState('');
-  const [techStack, setTechStack] = useState('');
+  const [bio, setBio] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   // List endpoint omits the plaintext token, so fetch it on open.
@@ -32,8 +31,7 @@ export function AgentProfileModal({ agent, open, onClose, onSuccess }: AgentProf
   useEffect(() => {
     if (!agent) return;
     setPosition(agent.profile?.position || '');
-    setResponsibilities(agent.profile?.responsibilities || '');
-    setTechStack(agent.profile?.tech_stack || '');
+    setBio(agent.profile?.bio || '');
     setAvatarUrl(agent.avatar_url ?? null);
     setAvatarPreview(null);
     setAvatarFile(null);
@@ -63,8 +61,7 @@ export function AgentProfileModal({ agent, open, onClose, onSuccess }: AgentProf
 
     const profile: AgentProfile = {};
     if (position.trim()) profile.position = position.trim();
-    if (responsibilities.trim()) profile.responsibilities = responsibilities.trim();
-    if (techStack.trim()) profile.tech_stack = techStack.trim();
+    if (bio.trim()) profile.bio = bio.trim();
 
     // Handle avatar upload first if a file was selected
     let finalAvatarUrl = avatarUrl;
@@ -282,25 +279,14 @@ export function AgentProfileModal({ agent, open, onClose, onSuccess }: AgentProf
         </div>
 
         <div className={styles.field}>
-          <label>负责</label>
+          <label>简介</label>
           <textarea
-            value={responsibilities}
-            onChange={(e) => setResponsibilities(e.target.value)}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
             placeholder="如：负责保险业务前端架构和核心模块开发"
             rows={3}
             disabled={loading || uploading}
             style={{ width: '100%', resize: 'vertical', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px' }}
-          />
-        </div>
-
-        <div className={styles.field}>
-          <label>技术栈</label>
-          <input
-            type="text"
-            value={techStack}
-            onChange={(e) => setTechStack(e.target.value)}
-            placeholder="如：React, TypeScript, Node.js"
-            disabled={loading || uploading}
           />
         </div>
 

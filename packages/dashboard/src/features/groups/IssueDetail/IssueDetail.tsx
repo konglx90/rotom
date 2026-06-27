@@ -202,6 +202,13 @@ function IssueDetailBody({
   const dockRef = useRef<HTMLDivElement>(null)
   const [dockHeight, setDockHeight] = useState(0)
 
+  // 记录用户是否停留在底部附近。点击 apply patch / 批准 / 拒绝等操作会触发
+  // reload → events 重渲染 → content 高度变化 → RO 触发。此时若用户已经向上
+  // 滚动阅读历史,强制 scrollToBottom 会打断阅读;只有「贴底」时才跟随新内容
+  // 滚动,显式的 scrollToBottom(handleSubmitted 等)不受此约束。
+  const isNearBottomRef = useRef(true)
+  const NEAR_BOTTOM_THRESHOLD = 80
+
   const scrollToBottom = useCallback(() => {
     // 双 rAF 等 React commit + 浏览器 layout 完成,再把滚动容器拉到底。
     // 直接写 scrollTop = scrollHeight 比 scrollIntoView 准:sentinel 是零高度,
@@ -214,10 +221,25 @@ function IssueDetailBody({
     })
   }, [])
 
+  // 监听用户手动滚动:更新 isNearBottomRef。RO 触发时据此决定是否跟随。
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!body) return
+    const onScroll = () => {
+      const distance = body.scrollHeight - body.scrollTop - body.clientHeight
+      isNearBottomRef.current = distance <= NEAR_BOTTOM_THRESHOLD
+    }
+    body.addEventListener('scroll', onScroll, { passive: true })
+    return () => body.removeEventListener('scroll', onScroll)
+  }, [])
+
   useEffect(() => {
     const content = contentRef.current
     if (!content) return
-    const ro = new ResizeObserver(() => scrollToBottom())
+    const ro = new ResizeObserver(() => {
+      // 用户主动向上阅读时,新内容到达不强制跳底,保持当前视线位置。
+      if (isNearBottomRef.current) scrollToBottom()
+    })
     ro.observe(content)
     scrollToBottom()
     return () => ro.disconnect()
@@ -298,6 +320,16 @@ function IssueDetailBody({
         readOnly={readOnly}
       />
 
+      {issue.latest_todos && issue.latest_todos.length > 0 && (
+        <div className={styles.todosSticky}>
+          <WorkerTodosPanel
+            todos={issue.latest_todos}
+            agentName={issue.assigned_to || ''}
+            active={issue.status === 'in_progress' || issue.status === 'paused'}
+          />
+        </div>
+      )}
+
       <div
         ref={bodyRef}
         className={styles.issueBody}
@@ -314,13 +346,6 @@ function IssueDetailBody({
             )
           )}
 
-          {issue.latest_todos && issue.latest_todos.length > 0 && (
-            <WorkerTodosPanel
-              todos={issue.latest_todos}
-              agentName={issue.assigned_to || ''}
-              active={issue.status === 'in_progress' || issue.status === 'paused'}
-            />
-          )}
 
           <IssueEventsTimeline
             events={events}

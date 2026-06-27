@@ -57,7 +57,7 @@ export interface ComposeContext {
 // ── Layer builders ──────────────────────────────────────────────────────
 
 const SOURCE_ROTOM_CLI = "src/shared/rotom-cli-prompt.ts (constant)";
-const SOURCE_AGENT_PROFILE = "agents.profile JSON (edit via rotom agent profile set)";
+const SOURCE_AGENT_PROFILE = "agents.profile JSON (edit via Dashboard 员工介绍)";
 const SOURCE_GROUP_BASIC = "groups + active_issues (runtime, from master enrichConversationWithCollaboration)";
 const SOURCE_CWD = "<worker.executor>.resolveIssueCwd(groupId)";
 
@@ -70,8 +70,7 @@ function buildAgentRoleLayer(profile: AgentProfile | null): PromptLayer | null {
   const fields: Array<[string, string | undefined]> = [
     ["category", profile.category],
     ["position", profile.position],
-    ["responsibilities", profile.responsibilities],
-    ["tech_stack", profile.tech_stack],
+    ["bio", profile.bio],
   ];
   const present = fields.filter(([, v]) => typeof v === "string" && v.length > 0);
   if (present.length === 0) return null;

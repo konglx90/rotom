@@ -17,8 +17,7 @@ export function parseAgentProfile(json: string | null | undefined): AgentProfile
     const out: AgentProfile = {};
     if (typeof obj.category === "string") out.category = obj.category;
     if (typeof obj.position === "string") out.position = obj.position;
-    if (typeof obj.responsibilities === "string") out.responsibilities = obj.responsibilities;
-    if (typeof obj.tech_stack === "string") out.tech_stack = obj.tech_stack;
+    if (typeof obj.bio === "string") out.bio = obj.bio;
     return out;
   } catch {
     return null;

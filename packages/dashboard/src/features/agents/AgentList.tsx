@@ -105,11 +105,11 @@ function AgentCard({ agent }: AgentCardProps) {
         <p className={styles.description}>{agent.description}</p>
       )}
 
-      {agent.profile && (agent.profile.position || agent.profile.tech_stack) && (
+      {agent.profile && (agent.profile.position || agent.profile.bio) && (
         <div className={styles.profileTags}>
           {agent.profile.position && <Badge tone="tag">{agent.profile.position}</Badge>}
-          {agent.profile.tech_stack && (
-            <Badge tone="tag" className={styles.techBadge}>{agent.profile.tech_stack}</Badge>
+          {agent.profile.bio && (
+            <Badge tone="tag" className={styles.techBadge}>{agent.profile.bio}</Badge>
           )}
         </div>
       )}

@@ -19,8 +19,7 @@ interface AgentConfig {
   description?: string;
   profile?: {
     position?: string;
-    responsibilities?: string;
-    tech_stack?: string;
+    bio?: string;
     category?: string;
   };
 }
@@ -30,8 +29,7 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
   const [domain, setDomain] = useState(defaultDomain ?? '');
   const [category, setCategory] = useState('');
   const [position, setPosition] = useState('');
-  const [responsibilities, setResponsibilities] = useState('');
-  const [techStack, setTechStack] = useState('');
+  const [bio, setBio] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [result, setResult] = useState<{ success: boolean; config?: AgentConfig; error?: string } | null>(null);
@@ -54,8 +52,7 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
       const profileObj: Record<string, string> = {};
       if (category) profileObj.category = category;
       if (position.trim()) profileObj.position = position.trim();
-      if (responsibilities.trim()) profileObj.responsibilities = responsibilities.trim();
-      if (techStack.trim()) profileObj.tech_stack = techStack.trim();
+      if (bio.trim()) profileObj.bio = bio.trim();
 
       const response = await fetch('/api/agents', {
         method: 'POST',
@@ -131,8 +128,7 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
     setDomain('');
     setCategory('');
     setPosition('');
-    setResponsibilities('');
-    setTechStack('');
+    setBio('');
     setResult(null);
     onClose();
   };
@@ -203,23 +199,12 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
           </div>
 
           <div className={styles.field}>
-            <label>负责</label>
+            <label>简介</label>
             <input
               type="text"
-              value={responsibilities}
-              onChange={(e) => setResponsibilities(e.target.value)}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
               placeholder="如：负责保险业务前端架构和核心模块开发"
-              disabled={loading}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label>技术栈</label>
-            <input
-              type="text"
-              value={techStack}
-              onChange={(e) => setTechStack(e.target.value)}
-              placeholder="如：React, TypeScript, Node.js"
               disabled={loading}
             />
           </div>
@@ -264,7 +249,7 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
                 </div>
                 <div className={styles.info}>
                   对方粘贴配置后启动 Gateway 即可自动连接。<br />
-                  profile 中的岗位、负责、技术栈会帮助其他数字员工了解该员工角色。
+                  profile 中的岗位、简介会帮助其他数字员工了解该员工角色。
                 </div>
               </div>
 
