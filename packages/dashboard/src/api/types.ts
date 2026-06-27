@@ -7,8 +7,8 @@ export interface ApiResponse<T> {
 // Agent Profile
 export interface AgentProfile {
   position?: string
-  responsibilities?: string
-  tech_stack?: string
+  /** 简介（自由文本）。 */
+  bio?: string
   /** Agent 类别: "真人" | 默认（普通 agent） */
   category?: string
 }
@@ -182,6 +182,9 @@ export interface GroupMember {
   joined_at: string
   /** Per-(group, agent) override; null = inherit from groups.working_dir. */
   working_dir: string | null
+  /** Per-(group, agent) profile override JSON string ({position?,bio?,category?});
+   *  null = no override, use agent's global profile. */
+  profile: string | null
 }
 
 export interface CreateGroupDto {

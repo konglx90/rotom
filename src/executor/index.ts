@@ -36,8 +36,7 @@ interface SingleWorkerConfig {
   profile?: {
     category?: string;
     position?: string;
-    responsibilities?: string;
-    tech_stack?: string;
+    bio?: string;
   };
   workingDir?: string;
   maxConcurrent?: number;

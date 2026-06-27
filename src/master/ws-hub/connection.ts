@@ -162,12 +162,12 @@ export const connectionMethods = {
         // Update online status
         this.db.setAgentOnline(agentId, msg.instance);
 
-        // Agent-owned fields: accept description and profile from agent
+        // Agent-owned: description is accepted from agent auth.
+        // profile is NOT accepted here — DB is the authoritative source,
+        // updated only via PUT /agents/:id and update_info messages.
+        // Otherwise worker restarts would clobber Dashboard-edited position/bio.
         if (msg.description) {
           this.db.updateAgentMeta(agentId, { description: msg.description });
-        }
-        if (msg.profile) {
-          this.db.updateAgentMeta(agentId, { profile: JSON.stringify(msg.profile) });
         }
         // Master-owned: domain is IGNORED from agent auth — use DB value
 

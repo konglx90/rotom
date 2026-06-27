@@ -488,6 +488,7 @@ export function GroupChatView() {
                   await setGroupMemberWorkingDir(gid, agentName, dir)
                 }
               }}
+              onProfilesChanged={loadGroups}
             />
           )}
 

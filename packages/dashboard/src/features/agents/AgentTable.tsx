@@ -84,13 +84,13 @@ export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps)
                 <td className={styles.detailCell}>
                   <div className={styles.detailRow}>
                     {agent.profile?.position && <span className={styles.detailTag}>💼 {agent.profile.position}</span>}
-                    {agent.profile?.tech_stack && <span className={styles.detailTag}>🛠 {agent.profile.tech_stack}</span>}
-                    {!agent.profile?.position && !agent.profile?.tech_stack && agent.description && <span className={styles.detailDesc}>{agent.description}</span>}
+                    {agent.profile?.bio && <span className={styles.detailTag}>📝 {agent.profile.bio}</span>}
+                    {!agent.profile?.position && !agent.profile?.bio && agent.description && <span className={styles.detailDesc}>{agent.description}</span>}
                   </div>
-                  {agent.description && (agent.profile?.position || agent.profile?.tech_stack) && (
+                  {agent.description && (agent.profile?.position || agent.profile?.bio) && (
                     <div className={styles.detailDesc}>{agent.description}</div>
                   )}
-                  {!agent.description && !agent.profile?.position && !agent.profile?.tech_stack && <span className={styles.detailDesc}>-</span>}
+                  {!agent.description && !agent.profile?.position && !agent.profile?.bio && <span className={styles.detailDesc}>-</span>}
                 </td>
                 <td className={styles.endpoint}>
                   {agent.endpoint ? (

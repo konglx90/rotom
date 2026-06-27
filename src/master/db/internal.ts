@@ -95,6 +95,8 @@ export class MeshDb extends MeshDbCore {
   declare listGroupMemberSettings: typeof groupMethods.listGroupMemberSettings;
   declare upsertGroupMemberSetting: typeof groupMethods.upsertGroupMemberSetting;
   declare clearGroupMemberSetting: typeof groupMethods.clearGroupMemberSetting;
+  declare getGroupMemberProfile: typeof groupMethods.getGroupMemberProfile;
+  declare upsertGroupMemberProfile: typeof groupMethods.upsertGroupMemberProfile;
   declare addGroupMessage: typeof groupMethods.addGroupMessage;
   declare addChatMessagePrompt: typeof groupMethods.addChatMessagePrompt;
   declare getChatMessagePrompt: typeof groupMethods.getChatMessagePrompt;

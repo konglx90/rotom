@@ -40,8 +40,7 @@ export interface WorkerConfig {
   profile?: {
     category?: string;
     position?: string;
-    responsibilities?: string;
-    tech_stack?: string;
+    bio?: string;
   };
   /**
    * 工作目录 —— 必填,本机可读。Agent 的实际 spawn cwd 是
@@ -226,7 +225,7 @@ export class ExecutorWorker {
     if (JSON.stringify(p) === JSON.stringify(this.agentProfile)) return;
     this.agentProfile = p;
     const sig = p
-      ? `position=${p.position ?? "-"}, responsibilities=${p.responsibilities ? "(set)" : "-"}, tech_stack=${p.tech_stack ?? "-"}, category=${p.category ?? "-"}`
+      ? `position=${p.position ?? "-"}, bio=${p.bio ? "(set)" : "-"}, category=${p.category ?? "-"}`
       : "(null)";
     console.log(`${this.tag} agentProfile updated (${sig})`);
   }

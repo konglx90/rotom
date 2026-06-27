@@ -92,6 +92,17 @@ export const groupsApi = {
     )
   },
 
+  async setMemberProfile(
+    groupId: string,
+    agentName: string,
+    profile: { position?: string; bio?: string; category?: string },
+  ): Promise<{ ok: boolean; profile: { position?: string; bio?: string; category?: string } }> {
+    return api.put<{ ok: boolean; profile: { position?: string; bio?: string; category?: string } }>(
+      `/groups/${groupId}/members/${encodeURIComponent(agentName)}/profile`,
+      profile,
+    )
+  },
+
   async getMessages(groupId: string): Promise<GroupMessage[]> {
     return api.get<GroupMessage[]>(`/groups/${groupId}/messages`)
   },
