@@ -13,7 +13,7 @@ export function IssueDetailPage() {
   const { groupId = '', issueId = '' } = useParams<{ groupId: string; issueId: string }>()
   const navigate = useNavigate()
   const { agents, groups } = useChatContext()
-  const { lastIssueChange, lastIssueUsageProgress, status: wsStatus, subscribeIssueDetail, unsubscribeIssueDetail } = useSocket()
+  const { lastIssueChange } = useSocket()
   const { isVisitor, validate: validateVisitor, error: visitorError, token: visitorToken, groupId: visitorResolvedGroupId } = useVisitorMode()
 
   const [fallbackGroup, setFallbackGroup] = useState<Group | null>(null)
@@ -56,22 +56,6 @@ export function IssueDetailPage() {
     setRefreshSignal(v => v + 1)
   }, [lastIssueChange, issueId])
 
-  // 订阅当前 issueId 的实时 usage 推送(Master 只转发给订阅者,不广播)。
-  // 依赖 wsStatus:重连成功后 SocketContext 会在 onopen 自动重发订阅,但
-  // 万一漏了这里再补一次也是幂等的。issueId 切换时旧订阅先 unsubscribe。
-  // 访客模式 readOnly 不订阅(无权访问 usage)。
-  useEffect(() => {
-    if (!issueId || isVisitor) return
-    if (wsStatus !== 'connected') return
-    subscribeIssueDetail(issueId)
-    return () => { unsubscribeIssueDetail(issueId) }
-  }, [issueId, wsStatus, isVisitor, subscribeIssueDetail, unsubscribeIssueDetail])
-
-  // 派生 liveUsage:当前 issueId 的最新累积 usage,没匹配则 undefined(IssueStatusBar 降级到 issue.usage)。
-  const liveUsage = lastIssueUsageProgress && lastIssueUsageProgress.issueId === issueId
-    ? lastIssueUsageProgress.usage
-    : undefined
-
   // 访客 token 验证失败 → 错误页
   if (visitorToken && visitorError) {
     return (
@@ -111,7 +95,6 @@ export function IssueDetailPage() {
         standalone
         readOnly={isVisitor}
         onArtifactClick={setArtifactSelectedPath}
-        liveUsage={liveUsage}
       />
       {artifactSelectedPath !== null && (
         <div className={styles.artifactDrawer}>

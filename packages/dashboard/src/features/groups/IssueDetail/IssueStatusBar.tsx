@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Issue, TokenUsage } from '../../../api/types'
 import { useIssueElapsed } from '../../../hooks/useIssueElapsed'
 import { formatDurationCompact } from '../../../utils/formatDuration'
+import type { IssueActivity } from './IssueDetail'
 import styles from './IssueStatusBar.module.css'
 
 // IssueStatusBar —— 输入框上方那一行,把「是不是还在跑」和 token 用量 / 耗时
@@ -9,15 +10,16 @@ import styles from './IssueStatusBar.module.css'
 // 在底部输入框,看不到 header 状态变化,所以挪到底部,且 in_progress 时左
 // 侧状态点会呼吸 + 文案变成「执行中」,一眼能感知。
 //
-// 左:状态点 + 状态文案 + agent 名(已指派时)
+// 左:状态点 + 状态文案(优先用 activity.statusLabel,降级到 issue.status 默认) +
+//      agent 名 + 「Xs 前」活动指示(in_progress 时)
 // 右:model + ↑输入/↓输出 tokens + cost + ⏱耗时(in_progress 时每秒 tick)
 interface IssueStatusBarProps {
   issue: Issue
-  /** 执行过程中累积 token usage 的实时快照(WS issue_usage_progress)。
-   *  命中当前 issueId 时优先于 issue.usage 显示,让 token 数字在 in_progress
-   *  期间实时变化。undefined(IssuePanel 嵌入态 / 没订阅 / 不在 in_progress)
-   *  时降级到 issue.usage(终态值)。 */
+  /** 执行过程中累积 token usage 的实时快照(WS issue_usage_progress)。 */
   liveUsage?: TokenUsage
+  /** 从 events 派生的活动指示:最后一条 progress 事件的时间戳 + 状态文案。
+   *  用来显示「思考中 · 3s 前」这种实时活动信号,让用户判断 CLI 是否卡住。 */
+  activity?: IssueActivity | null
 }
 
 interface StatusVisual {
@@ -37,10 +39,32 @@ function getStatusVisual(status: Issue['status']): StatusVisual {
   }
 }
 
-export function IssueStatusBar({ issue, liveUsage }: IssueStatusBarProps) {
+export function IssueStatusBar({ issue, liveUsage, activity }: IssueStatusBarProps) {
   const elapsedMs = useIssueElapsed(issue.started_at, issue.completed_at)
   const elapsedLabel = elapsedMs == null ? '—' : formatDurationCompact(elapsedMs)
   const visual = getStatusVisual(issue.status)
+
+  // 活动指示:in_progress / paused 时每秒本地 tick,算「距上次活动 Xs」。
+  // events 通过 issue_changed reload 拿,CLI 持续输出时 activity.lastAt 实时
+  // 刷新;CLI 卡住时 lastAt 不变,但本地 tick 让 elapsed 持续增长——这正是
+  // 「疑似卡住」的信号。终态(completed/failed/cancelled)不显示活动指示,
+  // 因为已经不跑了。
+  const isActive = issue.status === 'in_progress' || issue.status === 'paused'
+  const activityElapsedMs = useActivityElapsed(isActive ? activity?.lastAt : null)
+  const activityLabel = activityElapsedMs == null ? null : formatActivityAgo(activityElapsedMs)
+  // 阈值变色:>30s 警告(黄),>60s 危险(红)。配合 spinner 呼吸,用户一眼能看出
+  // 「还在动」vs「疑似卡了」。
+  const activityClass = activityElapsedMs == null
+    ? ''
+    : activityElapsedMs >= 60_000
+      ? styles.activityDanger
+      : activityElapsedMs >= 30_000
+        ? styles.activityWarn
+        : styles.activityFresh
+
+  // 状态文案:优先用 activity.statusLabel(从 events 提取的具体状态,如「思考中」
+  // 「执行命令」),降级到 issue.status 的默认文案(「执行中」「待继续」)。
+  const statusLabel = isActive && activity?.statusLabel ? activity.statusLabel : visual.label
 
   const persistedUsage = useMemo<TokenUsage | null>(() => {
     if (!issue.usage) return null
@@ -79,13 +103,21 @@ export function IssueStatusBar({ issue, liveUsage }: IssueStatusBarProps) {
           className={`${styles.statusDot} ${styles[`dot_${visual.dotClass}`]}`}
           data-spin={visual.spin}
         />
-        <span className={styles.statusLabel}>{visual.label}</span>
+        <span className={styles.statusLabel}>{statusLabel}</span>
         {issue.assigned_to && (
           <>
             <span className={styles.sep}>·</span>
             <code className={styles.agentName} title={`当前指派: ${issue.assigned_to}`}>
               {issue.assigned_to}
             </code>
+          </>
+        )}
+        {activityLabel && (
+          <>
+            <span className={styles.sep}>·</span>
+            <span className={`${styles.activity} ${activityClass}`} title={`距上次 CLI 输出: ${activityLabel}\n> 30s 疑似卡住,> 60s 建议中断检查`}>
+              {activityLabel}
+            </span>
           </>
         )}
       </div>
@@ -99,19 +131,25 @@ export function IssueStatusBar({ issue, liveUsage }: IssueStatusBarProps) {
               {usage.inputTokens != null && (
                 <span className={styles.tokenIn} title="输入 tokens">
                   <span className={styles.arrow}>↑</span>
-                  {formatTokens(usage.inputTokens)}
+                  <span key={usage.inputTokens} className={styles.tokenValue}>
+                    {formatTokens(usage.inputTokens)}
+                  </span>
                 </span>
               )}
               {usage.outputTokens != null && (
                 <span className={styles.tokenOut} title="输出 tokens">
                   <span className={styles.arrow}>↓</span>
-                  {formatTokens(usage.outputTokens)}
+                  <span key={usage.outputTokens} className={styles.tokenValue}>
+                    {formatTokens(usage.outputTokens)}
+                  </span>
                 </span>
               )}
             </span>
             {usage.totalCostUsd != null && usage.totalCostUsd > 0 && (
               <span className={styles.cost} title="总成本 (USD)">
-                ${formatCost(usage.totalCostUsd)}
+                $<span key={usage.totalCostUsd} className={styles.tokenValue}>
+                  {formatCost(usage.totalCostUsd)}
+                </span>
               </span>
             )}
           </>
@@ -126,7 +164,19 @@ export function IssueStatusBar({ issue, liveUsage }: IssueStatusBarProps) {
   )
 }
 
-// ↓↓↓ 从 UsageBadge 搬过来的格式化函数,保留同一套规则避免两处不一致。 ↓↓↓
+// 每秒 tick 算 now - lastAt 的毫秒数。lastAt 为 null 时返回 null(不显示)。
+// 跟 useIssueElapsed 同样的模式,但不区分 completed(活动指示只关心「距上次
+// 输出多久」,不关心总耗时)。组件卸载自动 clearInterval。
+function useActivityElapsed(lastAt: string | null | undefined): number | null {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!lastAt) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [lastAt])
+  if (!lastAt) return null
+  return Math.max(0, now - new Date(lastAt).getTime())
+}
 
 /** 1247 -> "1.2k", 1254000 -> "1.3M" */
 function formatTokens(n: number): string {
@@ -146,4 +196,17 @@ function shortModel(model: string): string {
   const stripped = model.replace(/^(claude|anthropic|openai|gpt|gemini)-/i, '')
   if (stripped.length <= 22) return stripped
   return stripped.slice(0, 21) + '…'
+}
+
+// 每秒 tick 算 now - lastAt 的毫秒数。lastAt 为 null 时返回 null(不显示)。
+// 跟 useIssueElapsed 同样的模式,但不区分 completed(活动指示只关心「距上次
+// 输出多久」,不关心总耗时)。组件卸载自动 clearInterval。
+// (重复定义已清理,实际函数在上方)
+function formatActivityAgo(ms: number): string {
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return `${s}s 前`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m 前`
+  const h = Math.floor(m / 60)
+  return `${h}h 前`
 }

@@ -88,7 +88,11 @@ export const issueMethods = {
     if (extra?.cliTool !== undefined) { sets.push("cli_tool = ?"); values.push(extra.cliTool); }
     if (extra?.usage !== undefined) { sets.push("usage = ?"); values.push(extra.usage); }
     if (extra?.model !== undefined) { sets.push("model = ?"); values.push(extra.model); }
-    if (status === "in_progress") { sets.push("started_at = ?"); values.push(now); }
+    // started_at 只在第一次进 in_progress 时写,后续 progress 事件不覆盖——
+    // 否则最后一次 in_progress(带 result)会把 started_at 推到接近完成时间,
+    // 导致总耗时显示成 0。COALESCE 保留已有值,paused → in_progress 续跑时
+    // 也保留首次开始时间(总耗时含 paused 段,反映"从开始到结束"的真实时长)。
+    if (status === "in_progress") { sets.push("started_at = COALESCE(started_at, ?)"); values.push(now); }
     if (status === "completed" || status === "failed" || status === "cancelled") { sets.push("completed_at = ?"); values.push(now); }
     values.push(id);
     this.db.prepare(`UPDATE issues SET ${sets.join(", ")} WHERE id = ?`).run(...values);
@@ -250,40 +254,80 @@ export const issueMethods = {
   //   - progress(worker 流式输出)条数最多,保留**最早 headKeep 条 + 最新
   //     tailKeep 条**,中间被省略的部分用 event_type='progress_truncated' 的
   //     虚拟事件标注,前端渲染成「已省略 N 条早期进展」chip。
-  getIssueEvents(this: MeshDbSelf, issueId: string, headKeep = 5, tailKeep = 145): IssueEventRow[] {
+  getIssueEvents(this: MeshDbSelf, issueId: string, headKeep = 5, tailKeep = 300): IssueEventRow[] {
     const nonProgress = this.db.prepare(
       "SELECT * FROM issue_events WHERE issue_id = ? AND event_type != 'progress' ORDER BY created_at ASC, id ASC",
     ).all(issueId) as IssueEventRow[];
 
-    const progressCountRow = this.db.prepare(
-      "SELECT COUNT(*) AS c FROM issue_events WHERE issue_id = ? AND event_type = 'progress'",
-    ).get(issueId) as { c: number };
+    // 拉全部 progress 在 JS 层过滤纯 status-only 噪声。典型 /plan 任务里
+    // 60% 的 progress chunk 是 [status:thinking]Working/Running/Done[/status:thinking]
+    // 重复几百次 —— hoistStatus 只取 bucket 内最后一个 status 渲染 pill,
+    // 中间的全是冗余。过滤掉它们让 head/tail 截断预算花在有意义的 exec/result/text
+    // 上,大幅减少「已省略 N 条早期进展」的 N。保留最后一条 status-only
+    // 事件,确保 hoistStatus 能取到最终状态(Done/Answered)而不是过时的 Running。
+    const allProgress = this.db.prepare(
+      "SELECT * FROM issue_events WHERE issue_id = ? AND event_type = 'progress' ORDER BY id ASC",
+    ).all(issueId) as IssueEventRow[];
 
-    const progressCount = progressCountRow.c;
+    const STATUS_OPEN = "[status:thinking]";
+    const STATUS_CLOSE = "[/status:thinking]";
+    const isStatusOnly = (c: string): boolean => {
+      if (!c.startsWith(STATUS_OPEN)) return false;
+      const closeIdx = c.indexOf(STATUS_CLOSE, STATUS_OPEN.length);
+      if (closeIdx === -1) return false;
+      return c.slice(closeIdx + STATUS_CLOSE.length).trim() === "";
+    };
 
-    // progress 总数不超过 head+tail,直接全拿,不需要 marker。
-    if (progressCount <= headKeep + tailKeep) {
-      const allProgress = this.db.prepare(
-        "SELECT * FROM issue_events WHERE issue_id = ? AND event_type = 'progress' ORDER BY created_at ASC, id ASC",
-      ).all(issueId) as IssueEventRow[];
-      return mergeIssueEvents([...nonProgress, ...allProgress]);
+    let lastStatusId = -1;
+    for (let i = allProgress.length - 1; i >= 0; i--) {
+      if (isStatusOnly(allProgress[i].content || "")) {
+        lastStatusId = allProgress[i].id;
+        break;
+      }
     }
 
-    const head = this.db.prepare(
-      "SELECT * FROM issue_events WHERE issue_id = ? AND event_type = 'progress' ORDER BY id ASC LIMIT ?",
-    ).all(issueId, headKeep) as IssueEventRow[];
+    const filtered = allProgress.filter(ev =>
+      !isStatusOnly(ev.content || "") || ev.id === lastStatusId,
+    );
 
-    const tail = this.db.prepare(
-      "SELECT * FROM issue_events WHERE issue_id = ? AND event_type = 'progress' ORDER BY id DESC LIMIT ?",
-    ).all(issueId, tailKeep).reverse() as IssueEventRow[];
+    const progressCount = filtered.length;
 
-    const omitted = progressCount - head.length - tail.length;
+    // 过滤后的有意义事件数不超过 head+tail,直接全返回,不需要 marker。
+    if (progressCount <= headKeep + tailKeep) {
+      return mergeIssueEvents([...nonProgress, ...filtered]);
+    }
+
+    const head = filtered.slice(0, headKeep);
+    const tail = filtered.slice(filtered.length - tailKeep);
+
+    // 截断后 tail 的开头可能落在某条 [tool-result:exec] 上 —— 它配对的
+    // [tool:exec] 在被丢掉的中间段,Dashboard 拿到这条孤儿 result 会渲染成
+    // "(unknown)" 命令卡片(整段子代理输出挂在一条无名的命令下)。从 tail
+    // 头部开始丢弃 result chunk,直到遇到第一条 [tool:exec](之后 tail 内部
+    // FIFO 配对就能正常工作)。status-thinking / 纯文本等非 result chunk
+    // 不影响配对,保留。被丢的 result 计入 omitted,marker 仍提示"已省略"。
+    //
+    // 用 startsWith 而不是 includes:executor 每条 progress chunk 都以单个
+    // tag 开头([tool:exec] / [tool-result:exec] / [status:thinking] / 纯文本),
+    // 起始位置 0 的 tag 一定是真 tag。而 includes 会被 result 内容里出现的
+    // 字面量 "[tool:exec]"(比如 grep 命令把源码里的 tag 字符串匹配出来)
+    // 误判成 exec chunk,导致孤儿 result 没被丢掉。
+    let seenExec = false;
+    const trimmedTail: IssueEventRow[] = [];
+    for (const ev of tail) {
+      const c = ev.content || "";
+      if (!seenExec && c.startsWith("[tool:exec]")) seenExec = true;
+      if (!seenExec && c.startsWith("[tool-result:exec]")) continue;
+      trimmedTail.push(ev);
+    }
+
+    const omitted = progressCount - head.length - trimmedTail.length;
 
     // marker 插在 head 最后一条之后、tail 第一条之前。
     // created_at 取 head 末尾 +1ms,确保排序落在 head 和 tail 之间。
     const markerTime = head.length > 0
       ? new Date(Date.parse(head[head.length - 1].created_at) + 1).toISOString()
-      : (tail[0]?.created_at ?? new Date().toISOString());
+      : (trimmedTail[0]?.created_at ?? new Date().toISOString());
 
     const marker: IssueEventRow = {
       id: -1,
@@ -296,7 +340,7 @@ export const issueMethods = {
       reply_to_id: null,
     };
 
-    return mergeIssueEvents([...nonProgress, ...head, marker, ...tail]);
+    return mergeIssueEvents([...nonProgress, ...head, marker, ...trimmedTail]);
   },
 
   /** Get a single issue event by its ID. */

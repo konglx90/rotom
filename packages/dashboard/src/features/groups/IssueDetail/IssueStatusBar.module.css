@@ -58,6 +58,29 @@
   white-space: nowrap;
 }
 
+/* 活动指示「Xs 前」:跟在状态文案 + agent 名后面。三态颜色:
+ *   fresh(<30s) 绿,正常输出中
+ *   warn(30-60s) 琥珀,疑似等 API / 长命令
+ *   danger(>60s) 红,建议中断检查
+ * tabular-nums 防数字跳变抖动。 */
+.activity {
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.activityFresh  { color: #16a34a; background: rgba(22, 163, 74, 0.10); }
+.activityWarn   { color: #d97706; background: rgba(217, 119, 6, 0.14); }
+.activityDanger { color: #dc2626; background: rgba(220, 38, 38, 0.14); animation: activityPulse 1.6s ease-in-out infinite; }
+
+@keyframes activityPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+
 .agentName {
   font-family: inherit;
   color: var(--color-navy);
@@ -102,6 +125,19 @@
 .arrow {
   font-size: 10px;
   opacity: 0.8;
+}
+
+/* 数字变化时滚动入场:新值从下方滑入,短暂高亮。key 改变触发 remount,
+ * CSS animation 自动重播。只包数字本身(arrow / $ 符号不动),避免整体闪烁。 */
+.tokenValue {
+  display: inline-block;
+  animation: tokenTick 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes tokenTick {
+  0%   { transform: translateY(8px);  opacity: 0; }
+  55%  { transform: translateY(-1px); opacity: 1; }
+  100% { transform: translateY(0);    opacity: 1; }
 }
 
 .cost {

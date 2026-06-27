@@ -93,6 +93,11 @@ export class ClaudeCodeExecutor implements CliExecutor {
         "--output-format", "stream-json",
         "--input-format", "stream-json",
         "--verbose",
+        // --include-partial-messages:让 claude 输出 stream_event 类型(message_start /
+        // message_delta / content_block_*)。**只有 message_delta 携带真实 usage**,
+        // assistant 事件本身的 usage 是 {input:0, output:0} 占位。不加这个 flag
+        // 执行过程中拿不到 token 数,只能在 result 终态一次性拿到。
+        "--include-partial-messages",
         // 默认 bypassPermissions：让 PreToolUse hook 完整接管审批决策；hook 不存在
         // 时由 claude 自行放行，符合后台无人值守语义。
         // 当 slashCommand === "/plan" 时切到 claude 原生 plan 模式：claude 会先
@@ -200,30 +205,40 @@ export class ClaudeCodeExecutor implements CliExecutor {
               }
               break;
 
-            case "assistant":
-              // assistant 事件的 message.usage 是**当前轮** token(input +
-              // output + cache 读写),不是跨多轮累积。worker 端做累积。
-              // 字段映射与下方 result 分支(line 290-296)保持一致,避免两
-              // 处不同步。终态时 worker 用 result.usage 覆盖内存累积值,
-              // 保证 reload 后看到的 issue.usage 与最后一次推送一致。
-              if (parsed.message?.usage && options?.onUsage) {
-                const u = parsed.message.usage as Record<string, unknown>;
-                const increment: TokenUsage = {
-                  inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
-                  outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
-                  cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
-                  cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
-                };
-                // 至少有一个有效字段才推,避免空对象打爆节流队列
-                if (
-                  increment.inputTokens != null
-                  || increment.outputTokens != null
-                  || increment.cacheReadTokens != null
-                  || increment.cacheCreationTokens != null
-                ) {
-                  try { options.onUsage(increment); } catch { /* swallow callback errors */ }
+            case "stream_event":
+              // --include-partial-messages 输出的流式事件(message_start /
+              // content_block_delta / message_delta / message_stop)。只关心
+              // message_delta —— 它携带当前轮累积 usage(每轮 assistant 回复
+              // 结束时触发一次,field 与 result.usage 一致但增量推送)。
+              // content_block_delta 等文本流事件不处理(assistant 事件本身
+              // 已带完整 content,executor 一次性 onOutput)。
+              if (parsed.event?.type === "message_delta" && options?.onUsage) {
+                const u = (parsed.event as Record<string, any>).usage as Record<string, unknown> | undefined;
+                if (u && typeof u === "object") {
+                  const increment: TokenUsage = {
+                    inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
+                    outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
+                    cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
+                    cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
+                  };
+                  // 至少有一个非零字段才推,避免 0/0 占位打爆节流队列
+                  if (
+                    (increment.inputTokens ?? 0) > 0
+                    || (increment.outputTokens ?? 0) > 0
+                    || (increment.cacheReadTokens ?? 0) > 0
+                    || (increment.cacheCreationTokens ?? 0) > 0
+                  ) {
+                    try { options.onUsage(increment); } catch { /* swallow callback errors */ }
+                  }
                 }
               }
+              break;
+
+            case "assistant":
+              // assistant 事件的 message.usage 是 {input:0, output:0} 占位,
+              // 真实 token 在 stream_event/message_delta 里(见上)。这里
+              // 不再读 usage,避免推 0 值。result 事件终态时仍 capture
+              // capturedUsage 用于 ExecuteResult.usage 落 DB。
               if (parsed.message?.content) {
                 emitStatus(onOutput, "Working");
                 for (const block of parsed.message.content) {
