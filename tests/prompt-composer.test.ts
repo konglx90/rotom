@@ -290,32 +290,16 @@ describe("composePrompt", () => {
     assert.ok(!c.content.includes("不得调用 Write/Edit"));
   });
 
-  it("cwd 层 issue 模式 rw_allow: 单行可写,无需 dashboard", () => {
-    const ctx = baseCtx({ mode: "issue", cwd: "/Users/kong/work", approvalPolicy: "rw_allow" });
+
+  it("cwd 层 issue 模式 rw_allow(默认): 单行可写, 无需 dashboard 确认", () => {
+    const ctx = baseCtx({ mode: "issue", cwd: "/Users/kong/work" });
     const out = composePrompt(ctx);
     const c = out.layers.find((l) => l.layer === "cwd")!;
     assert.ok(c.content.includes("/Users/kong/work"));
     assert.ok(c.content.includes("rw_allow"));
     assert.ok(c.content.includes("无需 dashboard 确认"));
     assert.ok(!c.content.includes("只读"));
-  });
-
-  it("cwd 层 issue 模式 r_allow(默认): 单行可写 + 写盘挂起 + 只读 Bash 自动放行 + rw_allow 提示", () => {
-    const ctx = baseCtx({ mode: "issue", cwd: "/Users/kong/work" });
-    const out = composePrompt(ctx);
-    const c = out.layers.find((l) => l.layer === "cwd")!;
-    assert.ok(c.content.includes("/Users/kong/work"));
-    assert.ok(c.content.includes("r_allow"));
-    // 写类仍挂起审批
-    assert.ok(c.content.includes("Accept/Deny"));
-    // 只读 Bash 自动放行(新文案核心语义)
-    assert.ok(c.content.includes("只读 Bash"));
-    assert.ok(c.content.includes("自动放行"));
-    // 列举若干典型只读命令,引导 agent
-    assert.ok(c.content.includes("git status"));
-    assert.ok(c.content.includes("rotom status"));
-    // 仍提示 rw_allow 免审批兜底
-    assert.ok(c.content.includes("--approval-policy rw_allow"));
+    assert.ok(!c.content.includes("Accept/Deny"));
   });
 
   it("cwd 层 collab 模式 + r_allow: 同 issue,既有挂起语义也有只读 Bash 放行语义", () => {

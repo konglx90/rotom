@@ -201,6 +201,29 @@ export class ClaudeCodeExecutor implements CliExecutor {
               break;
 
             case "assistant":
+              // assistant 事件的 message.usage 是**当前轮** token(input +
+              // output + cache 读写),不是跨多轮累积。worker 端做累积。
+              // 字段映射与下方 result 分支(line 290-296)保持一致,避免两
+              // 处不同步。终态时 worker 用 result.usage 覆盖内存累积值,
+              // 保证 reload 后看到的 issue.usage 与最后一次推送一致。
+              if (parsed.message?.usage && options?.onUsage) {
+                const u = parsed.message.usage as Record<string, unknown>;
+                const increment: TokenUsage = {
+                  inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
+                  outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
+                  cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
+                  cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
+                };
+                // 至少有一个有效字段才推,避免空对象打爆节流队列
+                if (
+                  increment.inputTokens != null
+                  || increment.outputTokens != null
+                  || increment.cacheReadTokens != null
+                  || increment.cacheCreationTokens != null
+                ) {
+                  try { options.onUsage(increment); } catch { /* swallow callback errors */ }
+                }
+              }
               if (parsed.message?.content) {
                 emitStatus(onOutput, "Working");
                 for (const block of parsed.message.content) {

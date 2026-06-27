@@ -107,7 +107,7 @@ export interface ExecuteOptions {
   slashCommand?: string;
   /**
    * 工具调用审批策略。worker 端按 issue.approval_policy 取值：
-   *   'r_allow'  (默认) → worker 仍会传 onApprovalRequest，写类工具需人工审批
+   *   'rw_allow' (默认) → worker 不会传 onApprovalRequest, 写盘直接放行，写类工具需人工审批
    *   'rw_allow'         → worker 不传 onApprovalRequest；claude 走纯 bypass，
    *                        codex 内部 auto-accept exec/file_change
    * executor 主要消费的是 onApprovalRequest 是否传入；本字段透传到 executor
@@ -123,6 +123,20 @@ export interface ExecuteOptions {
    * generic) 不调用,worker 端不传该字段即可。
    */
   onTodos?: (todos: TodoItem[]) => void;
+  /**
+   * 可选 token usage 增量回调。底层 CLI 在执行过程中每收到一条 assistant
+   * 消息就会触发一次,executor 把该消息的 usage(单轮 input/output/cache
+   * tokens)传出来。worker 端做累积 + 1s 节流后,通过 issue_usage_progress
+   * WS 推给订阅了该 issue 详情的 dashboard 客户端(不落 DB)。
+   *
+   * 与 ExecuteResult.usage 的区别:onUsage 给的是**单轮增量**(执行过程中),
+   * result.usage 给的是**终态累积值**(claude 的 result 事件汇总)。worker
+   * 在 issue 翻终态时用 result.usage 覆盖内存累积,保证 reload 前后一致。
+   *
+   * 当前仅 claude-code backend 实现;codex / hermes / openclaw 暂不调用,
+   * 前端降级到终态值。
+   */
+  onUsage?: (increment: TokenUsage) => void;
 }
 
 export interface ExecuteResult {

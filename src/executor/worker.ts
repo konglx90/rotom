@@ -19,6 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import type { CliExecutor } from "./cli-executor.js";
+import type { TokenUsage } from "../shared/protocol.js";
 import { composePrompt } from "../shared/prompt-composer.js";
 import { parseAgentProfile, type AgentProfile } from "../shared/agent-profile.js";
 import { SessionStore } from "./session-store.js";
@@ -69,6 +70,28 @@ export interface WorkerConfig {
 
 // ── Worker ──────────────────────────────────────────────────────────────
 
+/** issue_usage_progress 推送节流窗口:执行过程中每秒最多推一次累积 usage。 */
+const USAGE_THROTTLE_MS = 1000;
+
+/**
+ * 累积两份 TokenUsage 字段。各字段独立 sum,undefined 的字段保留另一份的值。
+ * 用于把 executor 的单轮增量累积成跨轮总量。
+ */
+function mergeTokenUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
+  return {
+    inputTokens: sumIfNum(a.inputTokens, b.inputTokens),
+    outputTokens: sumIfNum(a.outputTokens, b.outputTokens),
+    cacheReadTokens: sumIfNum(a.cacheReadTokens, b.cacheReadTokens),
+    cacheCreationTokens: sumIfNum(a.cacheCreationTokens, b.cacheCreationTokens),
+    // 成本不累积(result 终态覆盖时会一次性给准确值,中间累积无意义)
+    totalCostUsd: b.totalCostUsd ?? a.totalCostUsd,
+  };
+}
+function sumIfNum(x?: number, y?: number): number | undefined {
+  if (typeof x === "number" && typeof y === "number") return x + y;
+  return x ?? y;
+}
+
 export class ExecutorWorker {
   // ── Shared mutable state (touched by handlers + WS router) ────────
   // activeTasks key shape: issueId | `chat:${requestId}` | `collab-${issueId}`
@@ -85,6 +108,22 @@ export class ExecutorWorker {
   // 已入队但尚未消费的「追加指令」。user 在 in_progress 期间提交的 prompt
   // 先攒在这里,当前一轮 CLI 收尾时(runIssueExecution 的 finally)合并起一轮新执行。
   pendingAppends = new Map<string, string[]>();
+  /**
+   * Token usage 累积器:每个正在执行的 issue 一条。executor 的 onUsage
+   * 回调给的是**单轮增量**,这里 sum 起来做累积值,leading+trailing 1s 节流
+   * 后通过 issue_usage_progress 推给 master(由 master 转发给订阅了该 issue
+   * 详情的 dashboard 客户端,不落 DB)。
+   *
+   * 终态时(runIssueExecution 的 finally)由 flushIssueUsage 强制推一次,
+   * 并用 result.usage 覆盖累积值——保证 reload 后看到的 issue.usage 与最后
+   * 一次推送一致(避免 assistant 增量与 result 终态口径不一致导致数字跳变)。
+   */
+  private usageAccumulators = new Map<string, {
+    accumulated: TokenUsage;
+    lastPushAt: number;
+    trailingTimer?: NodeJS.Timeout;
+    dirty: boolean;
+  }>();
   /** WS socket — assigned by WorkerConnection.connect(). Null until first connect. */
   ws!: WebSocket;
   stopped = false;
@@ -585,6 +624,80 @@ ${prompt}`;
     if (cwd) msg.cwd = cwd;
     if (composedPrompt) msg.composedPrompt = composedPrompt;
     this.send(msg);
+  }
+
+  /**
+   * 执行过程中 executor 上报单轮 token usage 增量。merge 到累积值后做
+   * leading+trailing 1s 节流推送:
+   *   - leading:距上次推送 ≥ 1000ms 立即推
+   *   - trailing:否则排一个 setTimeout 在窗口尾再推一次(只在 dirty 时推,
+   *     避免和 leading 重叠推同一份数据)
+   *
+   * 不调 onUsage 的 backend(codex/hermes/openclaw)→ 本方法不被调,前端
+   * 自然降级到终态 issue.usage,无副作用。
+   */
+  reportIssueUsage(issueId: string, increment: TokenUsage): void {
+    let entry = this.usageAccumulators.get(issueId);
+    if (!entry) {
+      entry = { accumulated: {}, lastPushAt: 0, dirty: false };
+      this.usageAccumulators.set(issueId, entry);
+    }
+    entry.accumulated = mergeTokenUsage(entry.accumulated, increment);
+    entry.dirty = true;
+
+    const now = Date.now();
+    if (now - entry.lastPushAt >= USAGE_THROTTLE_MS) {
+      // leading 窗口已过,直接推
+      this.pushAccumulatedUsage(issueId, entry);
+      return;
+    }
+    // 还在节流窗口内,排一个 trailing(若未排)。setTimeout 触发时再 check
+    // dirty:可能 leading 已经推过相同值,trailing 无需再推。
+    if (!entry.trailingTimer) {
+      const wait = USAGE_THROTTLE_MS - (now - entry.lastPushAt);
+      entry.trailingTimer = setTimeout(() => {
+        const e = this.usageAccumulators.get(issueId);
+        if (!e) return;
+        e.trailingTimer = undefined;
+        if (!e.dirty) return;
+        this.pushAccumulatedUsage(issueId, e);
+      }, Math.max(0, wait));
+      // trailing 不应阻止 Node 退出(虽然 worker 是常驻进程,但语义上对)
+      entry.trailingTimer.unref?.();
+    }
+  }
+
+  /**
+   * issue 翻终态时强制 flush 一次累积 usage,确保最后一次推送不丢。
+   * override 给定时(通常是 ExecuteResult.usage 终态值)直接覆盖累积值,
+   * 保证 reload 后看到的 issue.usage 与最后一次推送口径一致。
+   *
+   * 必须在 runIssueExecution 的 finally 块调用,覆盖正常完成 / abort / catch
+   * 所有路径。flush 后清掉 entry,避免内存泄漏。
+   */
+  flushIssueUsage(issueId: string, override?: TokenUsage): void {
+    const entry = this.usageAccumulators.get(issueId);
+    if (!entry) {
+      // 整个执行过程 executor 从未调过 onUsage(例如 backend 不支持),
+      // 但终态 result.usage 仍有值 → 仍要推一次,让前端拿到终态数字。
+      if (override) {
+        this.send({ type: "issue_usage_progress", issueId, usage: override });
+      }
+      return;
+    }
+    if (entry.trailingTimer) {
+      clearTimeout(entry.trailingTimer);
+      entry.trailingTimer = undefined;
+    }
+    if (override) entry.accumulated = override;
+    this.pushAccumulatedUsage(issueId, entry);
+    this.usageAccumulators.delete(issueId);
+  }
+
+  private pushAccumulatedUsage(issueId: string, entry: { accumulated: TokenUsage; lastPushAt: number; dirty: boolean }): void {
+    this.send({ type: "issue_usage_progress", issueId, usage: entry.accumulated });
+    entry.lastPushAt = Date.now();
+    entry.dirty = false;
   }
 
   sendChatChunk(requestId: string, delta: string): void {

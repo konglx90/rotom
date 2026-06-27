@@ -113,7 +113,7 @@ Issue / collaboration:
     description 以已注册的 slash command 开头时（如 "/plan ..."）将以对应模式执行。
     /plan：Claude 走 --permission-mode plan；Codex 注入 developerInstructions。
     --assignee 创建后立即把 issue 指派给指定 agent（不会自动起跑）。
-    --approval-policy r_allow（默认,写类工具人工审批) / rw_allow（读写都默认通过)。
+    --approval-policy rw_allow（默认,读写都默认通过) / r_allow（读默认通过,写需人工审批)。
     --run 创建+指派后立即派发执行；必须同时给 --assignee，且 agent 必须在线。
           --run 的 prompt 直接用 --description;若只传 --title 则 fallback 到 title。
   issue update <issueId> [--title T] [--description D] [--priority low|medium|high|critical]

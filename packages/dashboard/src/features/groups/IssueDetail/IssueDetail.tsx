@@ -7,10 +7,10 @@ import shared from './_shared.module.css'
 import styles from './IssueDetail.module.css'
 import { CollaborationMessages } from './CollaborationMessages'
 import { ContinueInputBar } from './ContinueInputBar'
-import { FooterHint } from './FooterHint'
 import { IssueDetailHeader } from './IssueDetailHeader'
 import { IssueEditForm } from './IssueEditForm'
 import { IssueEventsTimeline } from './IssueEventsTimeline'
+import { IssueStatusBar } from './IssueStatusBar'
 import { PendingApprovalsBar } from './PendingApprovalsBar'
 import { WorkerTodosPanel } from './WorkerTodosPanel'
 import { useIssueData } from './useIssueData'
@@ -35,9 +35,13 @@ interface IssueDetailProps {
    *  切换到可见并选中该文件;standalone 态由 IssueDetailPage 弹出抽屉预览。
    *  不传时产物列表维持只读展示(不做点击)。 */
   onArtifactClick?: (path: string) => void
+  /** 执行过程中累积 token usage 的实时快照(由 parent 从 useSocket 派生)。
+   *  命中当前 issueId 时优先于 issue.usage 显示;undefined 时降级到 issue.usage
+   *  终态值。IssuePanel 嵌入态不订阅,自然为 undefined。 */
+  liveUsage?: import('../../../api/types').TokenUsage
 }
 
-export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false, readOnly = false, onArtifactClick }: IssueDetailProps) {
+export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false, readOnly = false, onArtifactClick, liveUsage }: IssueDetailProps) {
   const { issue, events, messages, loading, reload } = useIssueData(issueId, refreshSignal)
   const edit = useIssueEdit(issue, reload)
 
@@ -62,6 +66,7 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
           standalone={standalone}
           readOnly={readOnly}
           onArtifactClick={onArtifactClick}
+          liveUsage={liveUsage}
         />
       )}
     </AsyncBoundary>
@@ -81,6 +86,7 @@ interface IssueDetailBodyProps {
   standalone: boolean
   readOnly: boolean
   onArtifactClick?: (path: string) => void
+  liveUsage?: import('../../../api/types').TokenUsage
 }
 
 function IssueDetailBody({
@@ -96,6 +102,7 @@ function IssueDetailBody({
   standalone,
   readOnly,
   onArtifactClick,
+  liveUsage,
 }: IssueDetailBodyProps) {
   // in_progress 期间用户已发送但 worker 还没消费的追加指令(chip 列表)。
   // 提升到 IssueDetail 层,让 ContinueInputBar(push)和 IssueDetailHeader
@@ -352,11 +359,7 @@ function IssueDetailBody({
           ref={dockRef}
           className={`${styles.bottomDock} ${standalone ? styles.bottomDockFixed : ''}`}
         >
-          <FooterHint
-            status={issue.status}
-            assignedTo={issue.assigned_to}
-            pendingCount={pendingQueue.length}
-          />
+          <IssueStatusBar issue={issue} liveUsage={liveUsage} />
           <ContinueInputBar
             issueId={issueId}
             continuedBy={issue.created_by}

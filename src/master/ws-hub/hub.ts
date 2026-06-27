@@ -94,6 +94,13 @@ export interface WSHubSelf {
   generation: number;
   readonly pendingSessionRequests: Map<string, PendingSession>;
   readonly sessionSnapshots: Map<string, SessionEntry[]>;
+  /**
+   * issueId → agentId Set。dashboard 客户端 subscribe_issue_detail 后加入,
+   * master 把 issue_usage_progress(执行过程中实时 token)精准路由给订阅者,
+   * 不广播给所有群成员(避免无差别流量)。agentId 是 connections 的现有键,
+   * disconnect / replaced 路径同步清理。
+   */
+  readonly issueSubscriptions: Map<string, Set<string>>;
 
   // ─── Low-level transport ────────────────────────────────────────────────
   /** Send a ServerMessage on a raw ws. No-op if not OPEN. */
@@ -125,6 +132,14 @@ export interface WSHubSelf {
   pushChatCancel(agentName: string, requestId: string, reason?: string): boolean;
   /** Notify the issue's group of a change (called from connection.ts's update_info / issue_update paths). */
   notifyIssueChanged(issueId: string, groupId: string, kind: "created" | "updated" | "event_appended" | "deleted"): void;
+  /** Add this agentId to the issue's subscriber set (idempotent). */
+  subscribeIssue(issueId: string, agentId: string): void;
+  /** Remove this agentId from the issue's subscriber set (no-op if absent). */
+  unsubscribeIssue(issueId: string, agentId: string): void;
+  /** Remove this agentId from ALL issue subscriptions (call on disconnect). */
+  unsubscribeAllIssues(agentId: string): void;
+  /** Push a ServerMessage to every agent currently subscribed to the issue. */
+  sendToIssueSubscribers(issueId: string, msg: ServerMessage): void;
   /** Post a system message to a group (used by collaboration conclude/advance). */
   postSystemToGroup(groupId: string, content: string, excludeAgentNames?: string[], ensureRecipientNames?: string[]): void;
   /** Conclude a collaboration (called when a round hits max_rounds). */
@@ -170,6 +185,13 @@ export class WSHubCore {
    * re-pushes a snapshot.
    */
   readonly sessionSnapshots = new Map<string, SessionEntry[]>();
+
+  /**
+   * issueId → agentId Set。dashboard 客户端 subscribe_issue_detail 后加入。
+   * issue_usage_progress 只转发给订阅者(不广播、不落 DB)。disconnect 时
+   * 整个 agentId 条目从所有 Set 里清掉。
+   */
+  readonly issueSubscriptions = new Map<string, Set<string>>();
 
   constructor(
     httpServer: Server,

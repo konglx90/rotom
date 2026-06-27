@@ -101,6 +101,26 @@ export function ContinueInputBar({
     }
   }
 
+  // 快捷键提示:对齐 codex CLI footer.rs 的状态机,放在按钮同一行左侧。
+  //   open + 已指派        → Enter 开始任务
+  //   in_progress(空闲)   → Esc 中断 · Enter 加入队列
+  //   in_progress + 有队列 → Esc 立即处理队列 · N 条待处理
+  //   paused              → Enter 用上一轮 session 续跑
+  //   completed/failed     → Enter 继续执行
+  //   cancelled / open 未指派 → 不显示
+  const hint = (() => {
+    if (isOpen && hasAssignee) return 'Enter 开始任务 · Shift+Enter 换行'
+    if (isInProgress) {
+      const queueLen = pendingQueue?.length ?? 0
+      return queueLen > 0
+        ? `Esc 立即处理队列 · ${queueLen} 条待处理 · Enter 加入队列`
+        : 'Esc 中断当前步骤 · Enter 加入队列 · Shift+Enter 换行'
+    }
+    if (isPaused) return '中断后待继续 · Enter 用上一轮 session 续跑 · Shift+Enter 换行'
+    if (status === 'completed' || status === 'failed') return 'Enter 继续执行(基于上次 session) · Shift+Enter 换行'
+    return null
+  })()
+
   const placeholder = (() => {
     if (disabled) return '请先在上方指派 Agent，再发送指令'
     if (isStartMode) return `确认或编辑给 ${assignedTo} 的 prompt，点下方「开始任务」`
@@ -141,6 +161,7 @@ export function ContinueInputBar({
         rows={isStartMode ? 4 : 2}
       />
       <div className={styles.continueInputActions}>
+        {hint && <span className={styles.continueInputHint}>{hint}</span>}
         {error && <span className={styles.continueInputError}>{error}</span>}
         <Button
           variant="primary"

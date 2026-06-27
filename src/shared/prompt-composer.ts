@@ -46,7 +46,7 @@ export interface ComposeContext {
   /** chat 模式 = 用户原消息(已剥 @self);issue 模式 = title + "\n\n" + description;collab 模式 = 开场白 */
   body: string;
   /**
-   * 工具调用审批策略(issue / collab 模式才用)。未传视为 'r_allow' —— 与
+   * 工具调用审批策略(issue / collab 模式才用)。未传视为 'rw_allow' —— 与
    * master 端 normalizeApprovalPolicy 收敛口径一致。'r_allow' 下写盘需
    * dashboard 审批(agent 调 Write/Edit/写 Bash 时会被 PreToolUse hook
    * 挂住,等用户在 dashboard 上 Accept/Deny),'rw_allow' 写盘直接放行。
@@ -109,7 +109,7 @@ function buildCwdLayer(cwd: string | null, mode: ComposeContext["mode"], approva
   //   chat    → 只读,仅 Read/Grep/Glob/Bash(只读)
   //   rw_allow → 可写,Write/Edit/写 Bash 自动放行,无需 dashboard
   //   r_allow  → 可写,但写盘需 dashboard Accept/Deny;要免审批用 --approval-policy rw_allow
-  const effectivePolicy: "r_allow" | "rw_allow" = approvalPolicy ?? "r_allow";
+  const effectivePolicy: "r_allow" | "rw_allow" = approvalPolicy ?? "rw_allow";
   const writability =
     mode === "chat"
       ? `模式: chat(只读)。仅可 Read/Grep/Glob/Bash(只读);要写盘见 SKILL.md#写盘兜底话术。\n`

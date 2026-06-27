@@ -24,11 +24,23 @@ export interface IssueChangeSignal {
   ts: number
 }
 
+export interface IssueUsageProgressSignal {
+  issueId: string
+  usage: import('../api/types').TokenUsage
+  ts: number
+}
+
 interface SocketContextValue {
   status: ConnectionStatus
   send: (payload: unknown) => boolean
   subscribe: (fn: (msg: ServerMessage) => void) => () => void
   lastIssueChange: IssueChangeSignal | null
+  /** 最新一次 issue_usage_progress 推送。IssueDetail 派生 liveUsage 时按 issueId 匹配。 */
+  lastIssueUsageProgress: IssueUsageProgressSignal | null
+  /** 订阅某 issue 详情的实时推送(只接收该 issueId 的 usage_progress,不广播)。 */
+  subscribeIssueDetail: (issueId: string) => void
+  /** 取消订阅;IssueDetail unmount 时调用,避免泄漏。 */
+  unsubscribeIssueDetail: (issueId: string) => void
   reconnect: () => void
 }
 
@@ -48,6 +60,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected')
   const [showConflictModal, setShowConflictModal] = useState(false)
   const [lastIssueChange, setLastIssueChange] = useState<IssueChangeSignal | null>(null)
+  const [lastIssueUsageProgress, setLastIssueUsageProgress] = useState<IssueUsageProgressSignal | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const handlersRef = useRef<Set<(msg: ServerMessage) => void>>(new Set())
@@ -55,6 +68,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectAttemptRef = useRef(0)
   const tabIdRef = useRef<string>(generateUUID())
+  /** 当前订阅的 issueId(ref 副本),ws onopen / 状态变 connected 时重发,
+   *  跨重连保留(Master 端 disconnect 已清掉订阅)。null = 无订阅。 */
+  const subscribedIssueIdRef = useRef<string | null>(null)
 
   const loadAgentsRef = useRef(loadAgents)
   useEffect(() => { loadAgentsRef.current = loadAgents }, [loadAgents])
@@ -125,6 +141,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           JSON.stringify({ tabId: tabIdRef.current, timestamp: Date.now() }),
         )
         startHeartbeat(ws)
+        // 重连后重发当前 issue 订阅(Master 端 disconnect 已清掉,不重发就拿不到 usage 推送)。
+        const issueId = subscribedIssueIdRef.current
+        if (issueId) {
+          ws.send(JSON.stringify({ type: 'subscribe_issue_detail', issueId }))
+        }
       } else if (msg.type === 'auth_fail') {
         setStatus('disconnected')
         clearTimers()
@@ -134,6 +155,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             groupId: msg.groupId,
             issueId: msg.issueId,
             kind: msg.kind,
+            ts: Date.now(),
+          })
+        }
+      } else if (msg.type === 'issue_usage_progress') {
+        // 不触发 reload(IssueDetail 局部更新 IssueStatusBar 即可),避免每秒高频刷新。
+        if (msg.issueId && msg.usage) {
+          setLastIssueUsageProgress({
+            issueId: msg.issueId,
+            usage: msg.usage,
             ts: Date.now(),
           })
         }
@@ -245,11 +275,31 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     doConnect()
   }, [doConnect])
 
+  const subscribeIssueDetail = useCallback((issueId: string) => {
+    // 切换 issueId 时先 unsubscribe 旧的(Master 端 Set 删除旧条目),
+    // 再 subscribe 新的。同一个 issueId 重复 subscribe 是幂等的。
+    const prev = subscribedIssueIdRef.current
+    if (prev && prev !== issueId) {
+      send({ type: 'unsubscribe_issue_detail', issueId: prev })
+    }
+    subscribedIssueIdRef.current = issueId
+    send({ type: 'subscribe_issue_detail', issueId })
+  }, [send])
+
+  const unsubscribeIssueDetail = useCallback((issueId: string) => {
+    if (subscribedIssueIdRef.current !== issueId) return
+    subscribedIssueIdRef.current = null
+    send({ type: 'unsubscribe_issue_detail', issueId })
+  }, [send])
+
   const value: SocketContextValue = {
     status,
     send,
     subscribe,
     lastIssueChange,
+    lastIssueUsageProgress,
+    subscribeIssueDetail,
+    unsubscribeIssueDetail,
     reconnect,
   }
 
