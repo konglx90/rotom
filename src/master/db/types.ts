@@ -32,6 +32,7 @@ export interface AgentRow {
   token: string | null;
   enabled: number;
   profile: string | null;
+  avatar_url: string | null;
 }
 
 export interface OfflineMessageRow {

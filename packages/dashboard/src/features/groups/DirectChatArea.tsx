@@ -3,6 +3,7 @@ import { Search, Square } from 'lucide-react'
 import { Avatar } from '../../components/ui/Avatar'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import { StreamingStatus } from '../../components/ui/StreamingStatus'
+import type { Agent } from '../../api/types'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
@@ -13,6 +14,7 @@ interface DirectChatAreaProps {
   directTarget: string
   myAgentName: string
   messages: ChatMessage[]
+  agents: Agent[]
   connectionStatus: ConnectionStatus
   onSendMessage: (text: string) => void
   /** 中断某个 agent 的在飞 chat 流。requestId 是 master/worker 侧的原始 id
@@ -39,6 +41,7 @@ export function DirectChatArea({
   directTarget,
   myAgentName,
   messages,
+  agents,
   connectionStatus,
   onSendMessage,
   onCancelStream,
@@ -136,7 +139,11 @@ export function DirectChatArea({
             {isContinuation ? (
               <div className={styles.avatarPlaceholder} aria-hidden="true" />
             ) : (
-              <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={30} className={styles.messageAvatar} />
+              <Avatar
+                name={msg.isIncoming ? msg.from : myAgentName}
+                src={agents.find(a => a.name === (msg.isIncoming ? msg.from : myAgentName))?.avatar_url}
+                size={30}
+                className={styles.messageAvatar} />
             )}
             <div
               className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing}`}

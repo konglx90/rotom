@@ -46,7 +46,7 @@ export function MemberListModal({
                   padding: '6px 4px',
                 }}
               >
-                <Avatar name={name} size={32} />
+                <Avatar name={name} src={agent?.avatar_url} size={32} />
                 <span style={{ fontSize: 14, color: 'var(--color-navy)', fontWeight: 500 }}>{name}</span>
                 <span
                   title={m.working_dir || groupWorkingDir || undefined}

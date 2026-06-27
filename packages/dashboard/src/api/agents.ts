@@ -59,6 +59,13 @@ export const agentsApi = {
   },
 
   /**
+   * Upload avatar for an agent
+   */
+  async uploadAvatar(agentId: string, dataBase64: string, mimeType: string): Promise<{ url: string }> {
+    return api.post<{ url: string }>('/agents/avatar', { agentId, dataBase64, mimeType })
+  },
+
+  /**
    * Send message to an agent
    */
   async sendMessage(from: string, to: string, message: string): Promise<{

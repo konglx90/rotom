@@ -27,6 +27,7 @@ export interface Agent {
   connected_at?: number
   registered_at?: number
   profile?: AgentProfile
+  avatar_url?: string | null
   /** Plaintext mesh_* token. Returned by GET /agents/:id only — list endpoints omit it.
    *  Null/undefined for agents registered before migration 016. */
   token?: string | null
@@ -50,6 +51,7 @@ export interface UpdateAgentDto {
   domain?: string
   enabled?: boolean
   profile?: AgentProfile
+  avatar_url?: string | null
 }
 
 // Domain Types

@@ -4,11 +4,12 @@ import styles from './Avatar.module.css'
 
 interface AvatarProps {
   name: string
+  src?: string | null
   size?: number
   className?: string
 }
 
-export function Avatar({ name, size = 36, className }: AvatarProps) {
+export function Avatar({ name, src, size = 36, className }: AvatarProps) {
   const [failed, setFailed] = useState(false)
 
   if (failed) {
@@ -30,7 +31,7 @@ export function Avatar({ name, size = 36, className }: AvatarProps) {
 
   return (
     <img
-      src={getAvatarUrl(name)}
+      src={src ?? getAvatarUrl(name)}
       alt={name}
       className={`${styles.avatar} ${className || ''}`}
       style={{ width: size, height: size }}

@@ -1,6 +1,7 @@
 import type { Agent } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { Avatar } from '../../components/ui/Avatar'
 import { AsyncBoundary } from '../../components/async/AsyncBoundary'
 import { useAgents } from '../../hooks/useAgents'
 import styles from './AgentList.module.css'
@@ -85,9 +86,7 @@ function AgentCard({ agent }: AgentCardProps) {
   return (
     <div className={`${styles.card} ${isOnline ? styles.online : styles.offline}`}>
       <div className={styles.cardHeader}>
-        <div className={styles.avatar}>
-          {agent.name.charAt(0).toUpperCase()}
-        </div>
+        <Avatar name={agent.name} src={agent.avatar_url} size={40} />
         <div className={styles.cardInfo}>
           <h3 className={styles.name}>{agent.name}</h3>
           <div className={styles.meta}>
