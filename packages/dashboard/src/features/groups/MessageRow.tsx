@@ -96,7 +96,11 @@ export const MessageRow = memo(function MessageRow({
       {isContinuation ? (
         <div className={styles.avatarPlaceholder} aria-hidden="true" />
       ) : (
-        <Avatar name={msg.isIncoming ? msg.from : myAgentName} size={30} className={styles.messageAvatar} />
+        <Avatar
+                name={msg.isIncoming ? msg.from : myAgentName}
+                src={agents.find(a => a.name === (msg.isIncoming ? msg.from : myAgentName))?.avatar_url}
+                size={30}
+                className={styles.messageAvatar} />
       )}
       <div
         className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''}`}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Agent } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { Avatar } from '../../components/ui/Avatar'
 import styles from './AgentTable.module.css'
 
 interface AgentTableProps {
@@ -64,7 +65,7 @@ export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps)
             {sortedAgents.map((agent) => (
               <tr key={agent.id} className={agent.status === 'online' ? styles.online : styles.offline}>
                 <td className={styles.name}>
-                  <div className={styles.avatar}>{agent.name.charAt(0).toUpperCase()}</div>
+                  <Avatar name={agent.name} src={agent.avatar_url} size={32} />
                   <span>{agent.name}</span>
                 </td>
                 <td>

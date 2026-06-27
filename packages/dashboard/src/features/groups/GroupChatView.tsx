@@ -708,6 +708,7 @@ export function GroupChatView() {
                               directTarget={directTarget}
                               myAgentName={myAgentName}
                               messages={messages}
+                              agents={agents}
                               connectionStatus={connectionStatus}
                               onSendMessage={handleSendMessage}
                               onCancelStream={cancelStream}

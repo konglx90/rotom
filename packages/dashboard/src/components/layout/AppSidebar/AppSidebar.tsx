@@ -250,7 +250,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                       onClick={() => handleDirectChat(agent.name)}
                       title={agent.name}
                     >
-                      <Avatar name={agent.name} size={32} />
+                      <Avatar name={agent.name} src={agent.avatar_url} size={32} />
                     </button>
                   </li>
                 ))}
@@ -342,7 +342,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                           }`}
                           onClick={() => handleDirectChat(agent.name)}
                         >
-                          <Avatar name={agent.name} size={28} />
+                          <Avatar name={agent.name} src={agent.avatar_url} size={28} />
                           <div className={styles.directInfo}>
                             <div className={styles.directName}>{agent.name}</div>
                             {conversations.length > 1 && (
@@ -410,7 +410,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                           onClick={() => handleDirectChat(agent.name)}
                           title={agent.name + (conversations.length > 1 ? ` (${conversations.length} 对话)` : '')}
                         >
-                          <Avatar name={agent.name} size={32} />
+                          <Avatar name={agent.name} src={agent.avatar_url} size={32} />
                           <div className={styles.dmAvatarDot} />
                           {conversations.length > 1 && (
                             <span className={styles.dmAvatarBadge}>{conversations.length}</span>
@@ -578,7 +578,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
               onClick={openConfigModal}
               title="切换身份"
             >
-              <Avatar name={myAgentName} size={24} />
+              <Avatar name={myAgentName} src={onlineAgents.find(a => a.name === myAgentName)?.avatar_url} size={24} />
               <span className={styles.userName}>{myAgentName}</span>
             </button>
           )}

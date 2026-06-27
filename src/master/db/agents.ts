@@ -78,13 +78,14 @@ export const agentMethods = {
   updateAgentMeta(
     this: MeshDbSelf,
     id: string,
-    meta: { description?: string; domain?: string; profile?: string },
+    meta: { description?: string; domain?: string; profile?: string; avatar_url?: string },
   ): void {
     const sets: string[] = [];
     const values: unknown[] = [];
     if (meta.description !== undefined) { sets.push("description = ?"); values.push(meta.description); }
     if (meta.domain !== undefined) { sets.push("domain = ?"); values.push(meta.domain); }
     if (meta.profile !== undefined) { sets.push("profile = ?"); values.push(meta.profile); }
+    if (meta.avatar_url !== undefined) { sets.push("avatar_url = ?"); values.push(meta.avatar_url); }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
     values.push(id);
