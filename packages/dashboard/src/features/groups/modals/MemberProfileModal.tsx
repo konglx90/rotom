@@ -11,7 +11,7 @@ interface MemberProfileModalProps {
   /** Agent 全局 profile, 用于显示「未覆盖时使用」的兜底值。 */
   globalProfile?: AgentProfile | null
   onClose: () => void
-  onSubmit: (profile: { position?: string; bio?: string; category?: string }) => Promise<void> | void
+  onSubmit: (profile: { position?: string; bio?: string }) => Promise<void> | void
 }
 
 /**
@@ -28,23 +28,20 @@ export function MemberProfileModal({
 }: MemberProfileModalProps) {
   const [position, setPosition] = useState('')
   const [bio, setBio] = useState('')
-  const [category, setCategory] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (open) {
       setPosition(currentProfile?.position ?? '')
       setBio(currentProfile?.bio ?? '')
-      setCategory(currentProfile?.category ?? '')
     }
   }, [open, currentProfile])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const profile: { position?: string; bio?: string; category?: string } = {}
+    const profile: { position?: string; bio?: string } = {}
     if (position.trim()) profile.position = position.trim()
     if (bio.trim()) profile.bio = bio.trim()
-    if (category.trim()) profile.category = category.trim()
     setSaving(true)
     try {
       await onSubmit(profile)
@@ -53,7 +50,7 @@ export function MemberProfileModal({
     }
   }
 
-  const fallbackHint = (field: 'position' | 'bio' | 'category') => {
+  const fallbackHint = (field: 'position' | 'bio') => {
     const v = globalProfile?.[field]
     return v ? `未覆盖时使用全局值：${v}` : '未覆盖时无全局值'
   }
@@ -83,7 +80,7 @@ export function MemberProfileModal({
           />
         </div>
 
-        <div className="field" style={{ marginBottom: 12 }}>
+        <div className="field" style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', fontSize: 13, marginBottom: 4, color: 'var(--color-navy)' }}>简介</label>
           <textarea
             value={bio}
@@ -92,18 +89,6 @@ export function MemberProfileModal({
             rows={3}
             disabled={saving}
             style={{ width: '100%', resize: 'vertical', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }}
-          />
-        </div>
-
-        <div className="field" style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 13, marginBottom: 4, color: 'var(--color-navy)' }}>类别</label>
-          <input
-            type="text"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder={fallbackHint('category')}
-            disabled={saving}
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }}
           />
         </div>
 
