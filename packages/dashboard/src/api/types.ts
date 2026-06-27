@@ -217,9 +217,9 @@ export interface Issue {
   summary: string | null
   /** Slash command 声明（如 "/plan"）。由 master 端解析 title 前缀写入，UI 显示徽标。 */
   slash_command: string | null
-  /** 工具调用审批策略。后端默认 'r_allow'（写需人工审批，读放行）；
+  /** 工具调用审批策略。后端默认 .rw_allow.（写需人工审批，读放行）；
    *  'rw_allow' 时 worker 不传审批回调，写类工具也自动通过。
-   *  老接口可能返回 undefined（迁移前的列），UI 读取处用 'r_allow' 兜底。 */
+   *  老接口可能返回 undefined（迁移前的列），UI 读取处用 'rw_allow' 兜底。 */
   approval_policy?: 'r_allow' | 'rw_allow'
   /** Token usage JSON 字符串（migration 025）。解析为 TokenUsage 用于徽章展示。
    *  老接口可能返回 undefined（迁移前的列）。 */

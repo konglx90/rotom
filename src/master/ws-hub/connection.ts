@@ -150,6 +150,9 @@ export const connectionMethods = {
           this.logger.info(`[mesh] Kicking old connection for ${agent.name}`);
           existing.ws.close(1000, "Replaced by new connection");
           this.connections.delete(agentId);
+          // 旧连接的 issue 订阅必须清掉,否则 usage 推送会发到已死 socket
+          // (客户端重连后会重新 subscribe_issue_detail)。
+          this.unsubscribeAllIssues(agentId);
         }
 
         // Assign generation for this connection
@@ -679,6 +682,31 @@ export const connectionMethods = {
         return;
       }
 
+      // 执行过程中 worker 上报累积 token usage(每秒最多 1 次节流后)。
+      // **不落 DB**——只在内存转发给订阅了该 issue 详情的 dashboard 客户端,
+      // reload 后客户端从 issue.usage(终态 result.usage 落库)拿值。区别于
+      // issue_todos_update:todos 要写 DB(覆盖快照 + 时间线),usage 纯流式。
+      if (msg.type === "issue_usage_progress") {
+        this.sendToIssueSubscribers(msg.issueId, {
+          type: "issue_usage_progress",
+          issueId: msg.issueId,
+          usage: msg.usage,
+        });
+        return;
+      }
+
+      // dashboard 客户端订阅 / 取消订阅某 issue 的实时推送。issue_usage_progress
+      // 只推给订阅者,避免给所有群成员打高频流量。重连时客户端必须重发订阅
+      // (订阅不跨连接保留,disconnect 时由 unsubscribeAllIssues 清掉)。
+      if (msg.type === "subscribe_issue_detail") {
+        this.subscribeIssue(msg.issueId, agentId);
+        return;
+      }
+      if (msg.type === "unsubscribe_issue_detail") {
+        this.unsubscribeIssue(msg.issueId, agentId);
+        return;
+      }
+
       // ── Issue approval request (codex etc. asks for human Accept/Deny) ─
       if (msg.type === "issue_approval_request") {
         const conn = this.connections.get(agentId);
@@ -756,6 +784,9 @@ export const connectionMethods = {
     // stale sessions for an offline executor. The worker re-pushes a fresh
     // snapshot on next auth.
     this.sessionSnapshots.delete(agentId);
+    // Clean up issue detail subscriptions so usage pushes don't go to a dead
+    // socket. Re-subscribe happens on the next connect (client ws.onopen).
+    this.unsubscribeAllIssues(agentId);
 
     this.broadcastDirectory("leave", {
       name: conn.name,

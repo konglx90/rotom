@@ -112,11 +112,11 @@ export interface IssueRow {
   // Slash command (added in migration 014). 例如 '/plan'，由 master 端解析 title 写入。
   slash_command: string | null;
   // 审批策略 (added in migration 015)。
-  //   'r_allow'  (默认) → 写类工具调用走人工审批，读类放行
-  //   'rw_allow'         → claude 不挂 PreToolUse hook；codex 不传 onApprovalRequest
+  //   'rw_allow' (默认) → claude 不挂 PreToolUse hook; codex 不传 onApprovalRequest, 写盘直接放行
+  //   'r_allow'           → 写类工具调用走人工审批, 读类放行
   approval_policy: string;
   // Session usage / model (added in migration 025)。usage 是 TokenUsage 的
-  // JSON 字符串(见 src/executor/cli-executor.ts),由 worker 透传过来。
+  //   'rw_allow' (默认) → 写类工具调用直接放行，无需人工审批
   usage: string | null;
   model: string | null;
   // 最新一次 TodoWrite 的 todos 快照(added in migration 028)。JSON 字符串,

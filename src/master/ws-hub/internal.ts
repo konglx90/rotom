@@ -47,6 +47,10 @@ export class WSHub extends WSHubCore {
   declare pushIssueAppend: typeof routingMethods.pushIssueAppend;
   declare notifyNewIssue: typeof routingMethods.notifyNewIssue;
   declare notifyIssueChanged: typeof routingMethods.notifyIssueChanged;
+  declare subscribeIssue: typeof routingMethods.subscribeIssue;
+  declare unsubscribeIssue: typeof routingMethods.unsubscribeIssue;
+  declare unsubscribeAllIssues: typeof routingMethods.unsubscribeAllIssues;
+  declare sendToIssueSubscribers: typeof routingMethods.sendToIssueSubscribers;
 
   // ─── directory ────────────────────────────────────────────────────────────
   declare getDirectory: typeof directoryMethods.getDirectory;

@@ -269,4 +269,52 @@ export const routingMethods = {
     if (!groupId) return;
     this.broadcastToGroup(groupId, { type: "issue_changed", issueId, groupId, kind });
   },
+
+  /**
+   * Add this agentId to the issue's subscriber set. Idempotent — re-subscribe
+   * on reconnect is safe. Used by dashboard clients to opt into
+   * issue_usage_progress pushes for the issue they're viewing.
+   */
+  subscribeIssue(this: WSHubSelf, issueId: string, agentId: string): void {
+    let set = this.issueSubscriptions.get(issueId);
+    if (!set) {
+      set = new Set();
+      this.issueSubscriptions.set(issueId, set);
+    }
+    set.add(agentId);
+  },
+
+  /** Remove this agentId from the issue's subscriber set (no-op if absent). */
+  unsubscribeIssue(this: WSHubSelf, issueId: string, agentId: string): void {
+    const set = this.issueSubscriptions.get(issueId);
+    if (!set) return;
+    set.delete(agentId);
+    if (set.size === 0) this.issueSubscriptions.delete(issueId);
+  },
+
+  /**
+   * Remove this agentId from ALL issue subscriptions. Called on disconnect /
+   * "Replaced by new connection" to prevent pushes to dead sockets. Iterating
+   * a snapshot via Array.from avoids mutating-during-iteration if cleanup
+   * deletes the Set (which would also delete the Map entry).
+   */
+  unsubscribeAllIssues(this: WSHubSelf, agentId: string): void {
+    for (const issueId of Array.from(this.issueSubscriptions.keys())) {
+      this.unsubscribeIssue(issueId, agentId);
+    }
+  },
+
+  /**
+   * Push a ServerMessage to every agent currently subscribed to the issue.
+   * Used for issue_usage_progress — explicitly NOT a broadcast, since usage
+   * pushes are high-frequency (1Hz during execution) and only the client
+   * viewing that issue's detail cares.
+   */
+  sendToIssueSubscribers(this: WSHubSelf, issueId: string, msg: ServerMessage): void {
+    const set = this.issueSubscriptions.get(issueId);
+    if (!set || set.size === 0) return;
+    for (const agentId of set) {
+      this.sendToAgent(agentId, msg);
+    }
+  },
 };

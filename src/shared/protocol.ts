@@ -166,7 +166,10 @@ export type ClientMessage =
   | ClientDisconnectMessage
   | ClientIssueUpdateMessage
   | ClientIssueTodosUpdateMessage
+  | ClientIssueUsageProgressMessage
   | ClientIssueApprovalRequestMessage
+  | ClientSubscribeIssueDetailMessage
+  | ClientUnsubscribeIssueDetailMessage
   | ClientSessionViewResponse
   | ClientSessionDeleteResponse
   | ClientSessionSnapshot;
@@ -318,6 +321,47 @@ export interface ClientIssueTodosUpdateMessage {
   todos: TodoItem[];
 }
 
+/**
+ * Agent → Master: 执行过程中实时上报 token usage 增量(每条 assistant 消息
+ * 触发一次)。Master **不落 DB**——只在内存累积值,按 issueId 路由推送给订阅
+ * 了该 issue 详情的 dashboard 客户端(见 ClientSubscribeIssueDetailMessage)。
+ *
+ * 与 issue_todos_update 的区别:
+ *   - todos 是覆盖式全量,直接写 issues.latest_todos_json
+ *   - usage 是增量,Master 端不累积(由 worker 节流后给累积值),只做转发
+ *
+ * Worker 端做 leading+trailing 1s 节流,避免高频 assistant 事件打爆 WS。
+ * 终态(completed/failed)时 worker 用 result.usage 覆盖累积值并强制 flush
+ * 一次,保证 reload 后看到的 issue.usage 与最后一次推送一致。
+ */
+export interface ClientIssueUsageProgressMessage {
+  type: "issue_usage_progress";
+  issueId: string;
+  /** 累积 usage 快照(不是增量)——worker 已 merge 完毕,Master 直接转发。 */
+  usage: TokenUsage;
+}
+
+/**
+ * Dashboard → Master: 订阅 / 取消订阅某个 issue 详情的实时推送。当前仅用于
+ * issue_usage_progress —— 不广播给所有群成员,只推给订阅了该 issueId 的客户端。
+ *
+ * 订阅键是 WS 连接的 agentId。Master 在 connection close / "Replaced by new
+ * connection" 路径必须清理订阅,避免泄漏。客户端 ws onopen 后必须重发当前
+ * 订阅(订阅不会跨重连保留)。
+ *
+ * 引用计数由 Master 端 Set 天然处理:多个 connection 同时订阅同一 issueId
+ * 是允许的(多 dashboard 看同一 issue),Set 去重;unsubscribe 只删当前连接。
+ */
+export interface ClientSubscribeIssueDetailMessage {
+  type: "subscribe_issue_detail";
+  issueId: string;
+}
+
+export interface ClientUnsubscribeIssueDetailMessage {
+  type: "unsubscribe_issue_detail";
+  issueId: string;
+}
+
 // --- Session management (Agent → Master) ---
 //
 // Workers answer the master's session_list/view/delete_request messages with
@@ -438,6 +482,7 @@ export type ServerMessage =
   | ServerIssueContinueMessage
   | ServerIssueAppendMessage
   | ServerIssueInterruptMessage
+  | ServerIssueUsageProgressMessage
   | ServerSessionViewRequest
   | ServerSessionDeleteRequest;
 
@@ -544,7 +589,7 @@ export interface ServerIssueAssignedMessage {
   /** issue 创建时由 master 解析出的 slash command（如 "/plan"）；worker 据此向底层
    *  CLI 注入对应执行模式。未声明时为 undefined。 */
   slashCommand?: string;
-  /** 工具调用审批策略。默认 'r_allow'（写需人工审批，读放行）；
+  /** 工具调用审批策略。默认 .rw_allow.（读写默认通过，无需人工审批）；
    *  'rw_allow' 时 worker 不挂审批回调，writes 也自动通过。 */
   approvalPolicy?: "r_allow" | "rw_allow";
   /** Master dispatch 时从 agents.profile 注入;worker 收到后更新本地缓存,
@@ -654,6 +699,20 @@ export interface ServerIssueInterruptMessage {
   type: "issue_interrupt";
   issueId: string;
   groupId?: string;
+}
+
+/**
+ * Master → Dashboard: 执行过程中累积 token usage 的实时快照。Master 收到
+ * worker 的 ClientIssueUsageProgressMessage 后,仅转发给订阅了该 issueId 的
+ * 连接(不广播、不落 DB)。
+ *
+ * Dashboard 收到后局部更新 IssueStatusBar 的 token 数字,**不触发 reload**
+ * (区别于 issue_changed)——避免每秒高频刷新打爆 useIssueData。
+ */
+export interface ServerIssueUsageProgressMessage {
+  type: "issue_usage_progress";
+  issueId: string;
+  usage: TokenUsage;
 }
 
 /**
@@ -776,6 +835,12 @@ export function isClientMessage(x: unknown): x is ClientMessage {
       return typeof msg.issueId === "string" && typeof msg.status === "string";
     case "issue_todos_update":
       return typeof msg.issueId === "string" && Array.isArray(msg.todos);
+    case "issue_usage_progress":
+      return typeof msg.issueId === "string" && !!msg.usage;
+    case "subscribe_issue_detail":
+      return typeof msg.issueId === "string";
+    case "unsubscribe_issue_detail":
+      return typeof msg.issueId === "string";
     case "issue_approval_request":
       return typeof msg.issueId === "string"
         && typeof msg.approvalId === "string"

@@ -1,0 +1,129 @@
+/* 单行容器:左对齐状态点 + 文案,右推 token / 耗时。和 FooterHint 同高,
+ * 通过 border-top 与上方滚动内容分隔。flex-wrap 关掉避免状态行被截断换行
+ * (窄屏右半段会自然溢出,内部各段都 white-space:nowrap)。 */
+.statusBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 14px;
+  border-top: 1px solid var(--border-color-light);
+  background: var(--color-paper, #fafafa);
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--color-slate);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.right {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+/* 状态点:8px 圆点,in_progress 时呼吸动画。颜色对齐 Badge.tsx 的
+ * STATUS_COLORS (open=blue / in_progress=amber / paused=orange / completed=
+ * green / failed=red / cancelled=slate),保持视觉一致。 */
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+.dot_idle    { color: #94a3b8; }                  /* slate */
+.dot_running { color: #d97706; animation: dotPulse 1.4s ease-in-out infinite; }
+.dot_paused  { color: #ea580c; }
+.dot_done    { color: #16a34a; }
+.dot_failed  { color: #dc2626; }
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.85); }
+}
+
+.statusLabel {
+  color: var(--color-navy);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.agentName {
+  font-family: inherit;
+  color: var(--color-navy);
+  background: var(--color-surface-alt, rgba(100, 116, 139, 0.08));
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.sep {
+  color: var(--color-slate);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.model {
+  color: #163300;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tokens {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tokenIn,
+.tokenOut {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+.tokenIn  { color: #054d28; }
+.tokenOut { color: #b15a00; }
+
+.arrow {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.cost {
+  color: #054d28;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.elapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.elapsedIcon {
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.elapsedValue {
+  font-family: inherit;
+  color: var(--color-navy);
+}

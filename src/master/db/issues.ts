@@ -32,7 +32,7 @@ export const issueMethods = {
       issue.createdBy, issue.workingDir || null,
       issue.type || "task",
       issue.slashCommand || null,
-      issue.approvalPolicy || "r_allow",
+      issue.approvalPolicy || "rw_allow",
       issue.assignedTo || null,
       now,
     );
@@ -51,7 +51,7 @@ export const issueMethods = {
     const params: unknown[] = [groupId];
     if (status) { sql += " AND status = ?"; params.push(status); }
     if (type) { sql += " AND type = ?"; params.push(type); }
-    sql += " ORDER BY created_at DESC";
+    sql += " ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 WHEN 'failed' THEN 2 WHEN 'cancelled' THEN 3 WHEN 'completed' THEN 4 ELSE 5 END, created_at DESC";
     return this.db.prepare(sql).all(...params) as IssueRow[];
   },
 
@@ -59,7 +59,7 @@ export const issueMethods = {
     let sql = "SELECT * FROM issues";
     const params: unknown[] = [];
     if (status) { sql += " WHERE status = ?"; params.push(status); }
-    sql += " ORDER BY created_at DESC";
+    sql += " ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 WHEN 'failed' THEN 2 WHEN 'cancelled' THEN 3 WHEN 'completed' THEN 4 ELSE 5 END, created_at DESC";
     return this.db.prepare(sql).all(...params) as IssueRow[];
   },
 

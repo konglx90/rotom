@@ -26,7 +26,7 @@ export interface ChatMessage {
 }
 
 export interface ServerMessage {
-  type: 'a2a_message' | 'directory_update' | 'auth_ok' | 'auth_fail' | 'route_result' | 'a2a_stream_chunk' | 'a2a_stream_end' | 'heartbeat_ack' | 'issue_changed' | 'collaboration_started' | 'collaboration_concluded'
+  type: 'a2a_message' | 'directory_update' | 'auth_ok' | 'auth_fail' | 'route_result' | 'a2a_stream_chunk' | 'a2a_stream_end' | 'heartbeat_ack' | 'issue_changed' | 'collaboration_started' | 'collaboration_concluded' | 'issue_usage_progress'
   requestId?: string
   from?: { name: string; domain?: string; status: string }
   payload?: { message: string }
@@ -50,6 +50,8 @@ export interface ServerMessage {
   title?: string
   /** collaboration_concluded:协作任务结论摘要。 */
   summary?: string
+  /** issue_usage_progress:累积 token usage 快照(执行过程中 1Hz 推送)。 */
+  usage?: import('../../api/types').TokenUsage
 }
 
 export const DM_GROUP_PREFIX = '__dm__:'

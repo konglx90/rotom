@@ -4,12 +4,9 @@ import type { Agent, Issue } from '../../../api/types'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Select } from '../../../components/ui/Select'
-import { useIssueElapsed } from '../../../hooks/useIssueElapsed'
-import { formatDuration } from '../../../utils/formatDuration'
 import styles from './IssueDetailHeader.module.css'
 import type { IssueEditState } from './useIssueEdit'
 import { displayTitle } from '../createIssueTitle'
-import { UsageBadge } from './UsageBadge'
 
 interface IssueDetailHeaderProps {
   issue: Issue
@@ -35,8 +32,8 @@ interface IssueDetailHeaderProps {
 type ApprovalPolicy = NonNullable<Issue['approval_policy']>
 
 const APPROVAL_POLICY_OPTIONS: Array<{ value: ApprovalPolicy; label: string }> = [
-  { value: 'r_allow', label: '读默认通过' },
   { value: 'rw_allow', label: '读写默认通过' },
+  { value: 'r_allow', label: '读默认通过' },
 ]
 
 export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete, onInterrupted, pendingQueue, readOnly = false }: IssueDetailHeaderProps) {
@@ -56,21 +53,6 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
   // 快捷键和「中断」按钮在 paused 下都不显示 —— 没有活跃步骤可中断。
   const isInProgress = issue.status === 'in_progress'
 
-  // 耗时:running 状态 1s tick,终态/未开始 静态。详情页只有一个 header,放
-  // 这里直接 setInterval 安全;放子组件会造成每张详情卡都挂 timer。
-  const elapsedMs = useIssueElapsed(issue.started_at, issue.completed_at)
-  const elapsedLabel = elapsedMs == null ? '—' : formatDuration(elapsedMs)
-  const elapsedIcon = isFinalState ? '✓' : isInProgress ? '⏱' : '—'
-  const elapsedClass = isFinalState
-    ? styles.elapsedDone
-    : isInProgress
-      ? styles.elapsedRunning
-      : styles.elapsedIdle
-  const elapsedTitle = elapsedMs == null
-    ? '尚未开始(等待 worker 认领)'
-    : isFinalState
-      ? '总耗时'
-      : '当前区间耗时(实时刷新)'
   const showAssign = issue.type !== 'collaboration'
 
   // 中断当前步骤(对齐 codex CLI 的 ESC + flush steers):POST /issues/:id/append
@@ -146,7 +128,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
     }
   }
 
-  const currentPolicy: ApprovalPolicy = issue.approval_policy ?? 'r_allow'
+  const currentPolicy: ApprovalPolicy = issue.approval_policy ?? 'rw_allow'
   const handlePolicyChange = async (next: ApprovalPolicy) => {
     if (currentPolicy === next) return
     setSavingPolicy(true)
@@ -179,7 +161,6 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
         )}
         <div className={styles.headerPrimaryMeta}>
           <Badge tone="status" value={issue.status} />
-          <UsageBadge issue={issue} />
           {!readOnly && isInProgress && (
             <Button
               variant="danger"
@@ -208,7 +189,8 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
 
       {detailsVisible && (
         <div className={styles.headerSecondary}>
-          {/* 元信息簇：只读 priority + id + 耗时 + 工作目录 + session */}
+          {/* 元信息簇：只读 priority + id + 工作目录 + session(耗时 / token
+              usage 已挪到底部 IssueStatusBar,贴着输入框更直观) */}
           <div className={styles.metaCluster}>
             <Badge tone="priority" value={issue.priority} />
             <Badge
@@ -222,13 +204,6 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
               }}
               title={copiedId ? '已复制' : `点击复制: ${issue.id}`}
             >{copiedId ? '✓ 已复制' : `#${issue.id.slice(0, 8)}`}</Badge>
-            <div
-              className={`${styles.issueElapsed} ${elapsedClass}`}
-              title={elapsedTitle}
-            >
-              <span className={styles.elapsedLabel}>耗时</span>
-              <code className={styles.elapsedValue}>{elapsedIcon} {elapsedLabel}</code>
-            </div>
             {issue.working_dir && (
               <div className={styles.issueWorkingDir} title={issue.working_dir}>
                 <span className={styles.fieldLabel}>工作目录</span>
@@ -301,7 +276,7 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
                 </div>
               )}
 
-              {/* 审批策略：r_allow（写需审批，读放行，默认）/ rw_allow（写也自动通过）。
+              {/* 审批策略：rw_allow（写自动通过，读自动通过，默认）/ r_allow（写需审批，读放行）。
                   读类工具始终放行；本项只影响写类工具是否走 dashboard 人工审批。
                   终态 issue 不允许改：再改也不会触发新一次执行。 */}
               <div className={styles.fieldGroup}>

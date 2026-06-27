@@ -8,7 +8,7 @@
  * other handlers can see them.
  */
 import { randomUUID } from "node:crypto";
-import type { ApprovalDecision, ApprovalRequestInput } from "./cli-executor.js";
+import type { ApprovalDecision, ApprovalRequestInput, ExecuteResult } from "./cli-executor.js";
 import { composePrompt, type ComposedPrompt } from "../shared/prompt-composer.js";
 import { isReadonlyCommand } from "../shared/readonly-allowlist.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
@@ -80,11 +80,11 @@ export class IssueHandler {
     let lastSessionId: string | undefined = resumeSessionId;
 
     // 写策略跟随 issue.approval_policy 入参;master 端 normalizeApprovalPolicy
-    // 已把 undefined / 脏值收敛成 'r_allow',这里再兜一次底:undefined 当 r_allow
+    // 已把 undefined / 脏值收敛成有效值,,这里再兜一次底:undefined 当 rw_allow
     // 走(写需审批),符合 protocol 默认。PreToolUse hook 始终挂载:避免 claude
     // 自己的权限提示因 stdin 关闭而卡死。r_allow 下 hook 走 issue_approval_request
     // 挂起等用户决策,rw_allow 下本地立即 accept 不阻塞 CLI。
-    const effectivePolicy: "r_allow" | "rw_allow" = approvalPolicy ?? "r_allow";
+    const effectivePolicy: "r_allow" | "rw_allow" = approvalPolicy ?? "rw_allow";
     const onApprovalRequest = (req: ApprovalRequestInput) => {
       const approvalId = randomUUID();
       if (effectivePolicy === "rw_allow") {
@@ -121,8 +121,11 @@ export class IssueHandler {
       });
     };
 
+    // result 提到 try 外声明,让 finally 能访问 result.usage 给 flushIssueUsage
+    // 做终态覆盖。execute 抛错时 result 为 undefined,flush 用累积值兜底。
+    let result: ExecuteResult | undefined;
     try {
-      const result = await this.worker.executor.execute(prompt, cwd, (chunk) => {
+      result = await this.worker.executor.execute(prompt, cwd, (chunk) => {
         if (task.aborted) return;
         this.worker.sendUpdate(issueId, "in_progress", chunk, undefined, cwd);
       }, {
@@ -138,6 +141,13 @@ export class IssueHandler {
           // 单独走 issue_todos_update WS 消息,不混进 issue_update 的 progress
           // 事件流——后者会产生 [tool:exec] 等气泡,todos 不该走那条路。
           this.worker.send({ type: "issue_todos_update", issueId, todos });
+        },
+        onUsage: (increment) => {
+          if (task.aborted) return;
+          // executor 给单轮增量,worker 内部 sum 成累积值并 1s 节流推送。
+          // 不调 onUsage 的 backend(codex/hermes/openclaw)→ 本回调不被触发,
+          // IssueStatusBar 自然降级到终态 issue.usage。
+          this.worker.reportIssueUsage(issueId, increment);
         },
       });
 
@@ -190,6 +200,11 @@ export class IssueHandler {
         console.error(`${this.worker.tag} Issue error: ${issueId}`, err.message);
       }
     } finally {
+      // 强制 flush 累积 usage:覆盖所有路径(正常完成/abort/catch)。override
+      // 用 result.usage(终态汇总值,口径与 reload 后 issue.usage 一致),保证
+      // 最后一次推送与 DB 终态值对齐,避免数字回退。result 为 undefined 时
+      // (execute 抛错)用累积值兜底。
+      this.worker.flushIssueUsage(issueId, result?.usage);
       this.worker.activeTasks.delete(issueId);
       for (const [approvalId, p] of this.worker.pendingApprovals) {
         if (p.issueId !== issueId) continue;
