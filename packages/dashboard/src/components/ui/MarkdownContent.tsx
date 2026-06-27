@@ -199,7 +199,11 @@ function pairExecCalls(raw: RawPart[]): Part[] {
     } else if (cur.type === 'tool-result-exec') {
       if (!consumedResults.has(i)) {
         consumedResults.add(i)
-        out.push({ type: 'tool-call', command: '(unknown)', result: cur.content, streaming: cur.unclosed })
+        // 孤儿 result:配对的 [tool:exec] 不在这段内容里(典型原因是
+        // progress 被截断、或流式过程中 exec chunk 还没到)。不再用
+        // "(unknown)" 这种误导性标签,改成明确提示命令记录缺失,但
+        // 仍然把输出挂出来让用户能看。
+        out.push({ type: 'tool-call', command: '(已省略命令记录)', result: cur.content, streaming: cur.unclosed })
       }
     } else if (cur.type === 'tool-ask') {
       let answer: string | undefined

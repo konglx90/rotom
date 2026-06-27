@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { issuesApi, type IssueMessage } from '../../../api/issues'
-import type { Agent, Issue, IssueEvent } from '../../../api/types'
+import type { Agent, Issue, IssueEvent, TokenUsage } from '../../../api/types'
 import { AsyncBoundary } from '../../../components/async/AsyncBoundary'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
+import { useSocket } from '../../../context/SocketContext'
 import shared from './_shared.module.css'
 import styles from './IssueDetail.module.css'
 import { CollaborationMessages } from './CollaborationMessages'
@@ -35,13 +36,9 @@ interface IssueDetailProps {
    *  切换到可见并选中该文件;standalone 态由 IssueDetailPage 弹出抽屉预览。
    *  不传时产物列表维持只读展示(不做点击)。 */
   onArtifactClick?: (path: string) => void
-  /** 执行过程中累积 token usage 的实时快照(由 parent 从 useSocket 派生)。
-   *  命中当前 issueId 时优先于 issue.usage 显示;undefined 时降级到 issue.usage
-   *  终态值。IssuePanel 嵌入态不订阅,自然为 undefined。 */
-  liveUsage?: import('../../../api/types').TokenUsage
 }
 
-export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false, readOnly = false, onArtifactClick, liveUsage }: IssueDetailProps) {
+export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false, readOnly = false, onArtifactClick }: IssueDetailProps) {
   const { issue, events, messages, loading, reload } = useIssueData(issueId, refreshSignal)
   const edit = useIssueEdit(issue, reload)
 
@@ -66,7 +63,6 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
           standalone={standalone}
           readOnly={readOnly}
           onArtifactClick={onArtifactClick}
-          liveUsage={liveUsage}
         />
       )}
     </AsyncBoundary>
@@ -86,7 +82,6 @@ interface IssueDetailBodyProps {
   standalone: boolean
   readOnly: boolean
   onArtifactClick?: (path: string) => void
-  liveUsage?: import('../../../api/types').TokenUsage
 }
 
 function IssueDetailBody({
@@ -102,8 +97,33 @@ function IssueDetailBody({
   standalone,
   readOnly,
   onArtifactClick,
-  liveUsage,
 }: IssueDetailBodyProps) {
+  // 订阅当前 issue 的实时 usage 推送(Master 只转发给订阅者,不广播)。
+  // 订阅放在 IssueDetailBody 而非 IssueDetailPage,这样 standalone 路由和
+  // IssuePanel 嵌入态(GroupChatView)都能拿到 liveUsage。wsStatus 依赖:
+  // 重连后 SocketContext 会在 onopen 自动重发订阅,这里也补一次保险。
+  // 访客模式 readOnly 不订阅(无权看 usage)。
+  const { lastIssueUsageProgress, status: wsStatus, subscribeIssueDetail, unsubscribeIssueDetail } = useSocket()
+  useEffect(() => {
+    if (!issueId || readOnly) return
+    if (wsStatus !== 'connected') return
+    subscribeIssueDetail(issueId)
+    return () => { unsubscribeIssueDetail(issueId) }
+  }, [issueId, wsStatus, readOnly, subscribeIssueDetail, unsubscribeIssueDetail])
+  const liveUsage: TokenUsage | undefined = lastIssueUsageProgress && lastIssueUsageProgress.issueId === issueId
+    ? lastIssueUsageProgress.usage
+    : undefined
+
+  // 从 events 派生活动指示:最后一条 progress 事件的 created_at + 从 content
+  // 提取的最后状态文案(Working/Running/Patching/...)。配合 IssueStatusBar 的
+  // 本地 1s tick 显示「状态 · Xs 前」,让用户一眼判断 CLI 是否还在动:
+  //   - 思考中 · 3s 前  → 流式输出中,正常
+  //   - 思考中 · 90s 前 → 等流式请求,可能 API 慢
+  //   - 执行命令 · 60s 前 → 长命令跑着,没挂
+  // events 通过 issue_changed reload 拿,CLI 持续输出时实时刷新;CLI 卡住时
+  // events 不更新,但本地 tick 仍能算 elapsed 增长——这正是「疑似卡住」信号。
+  const activity = useMemo(() => extractActivity(events), [events])
+
   // in_progress 期间用户已发送但 worker 还没消费的追加指令(chip 列表)。
   // 提升到 IssueDetail 层,让 ContinueInputBar(push)和 IssueDetailHeader
   // (中断时 flush + clear)都能访问。issue 翻终态时按下面 effect 处理。
@@ -359,7 +379,7 @@ function IssueDetailBody({
           ref={dockRef}
           className={`${styles.bottomDock} ${standalone ? styles.bottomDockFixed : ''}`}
         >
-          <IssueStatusBar issue={issue} liveUsage={liveUsage} />
+          <IssueStatusBar issue={issue} liveUsage={liveUsage} activity={activity} />
           <ContinueInputBar
             issueId={issueId}
             continuedBy={issue.created_by}
@@ -375,4 +395,57 @@ function IssueDetailBody({
       ) : null)}
     </div>
   )
+}
+
+// 从 events 派生活动指示:最后一条 progress 事件的时间戳 + 状态文案。
+// 状态文案从 `[status:thinking]X[/status:thinking]` 标签提取(emitStatus 注入)。
+// 找不到 status 标签时降级到 event_type 本身(approval_request / todos 等)。
+// 返回 null 表示该 issue 没有任何 progress 事件(刚创建未开始)。
+export interface IssueActivity {
+  /** 最后一条 progress 事件的 created_at(ISO)。前端 tick 算「Xs 前」。 */
+  lastAt: string
+  /** 提取的状态文案,如「思考中」「执行命令」「编辑文件」。null = 没状态标签。 */
+  statusLabel: string | null
+}
+
+function extractActivity(events: IssueEvent[]): IssueActivity | null {
+  // 倒序找最后一条 progress 事件(跳过 approval_request / todos / created 等
+  // 非输出流事件——这些不反映 CLI 当前在干嘛)。
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i]
+    if (ev.event_type !== 'progress') continue
+    const statusLabel = extractStatusFromContent(ev.content)
+    return { lastAt: ev.created_at, statusLabel }
+  }
+  return null
+}
+
+// 从 progress 事件 content 提取状态文案。content 形如:
+//   [status:thinking]Working[/status:thinking]
+//   [tool:exec]ls -la[/tool:exec]
+//   [tool-result:exec]...[/tool-result:exec]
+// 只有 [status:thinking]X[/status:thinking] 能提取出状态文案;tool 类返回 null
+// (调用方会继续往前找,直到找到 status 事件或耗尽)。
+// 但实际上 extractActivity 只看最后一条 progress,如果是 tool:exec 就返回 null
+// statusLabel —— 这种情况前端会降级到 issue.status 的默认文案(执行中)。
+// 更精细的做法:继续往前找 status 事件。但 tool:exec 后通常紧跟 status:Running,
+// 所以最后一条往往就是 status 事件,够用。
+function extractStatusFromContent(content: string): string | null {
+  const m = content.match(/\[status:thinking\]([^\]]+)\[\/status:thinking\]/)
+  if (!m) return null
+  return mapStatusToLabel(m[1])
+}
+
+// emitStatus 用的英文 key 映射到中文文案。未匹配的回退到原文。
+function mapStatusToLabel(s: string): string {
+  const map: Record<string, string> = {
+    Working: '思考中',
+    Running: '执行命令',
+    Patching: '编辑文件',
+    Asking: '询问中',
+    Answered: '已回答',
+    Done: '完成',
+    Failed: '失败',
+  }
+  return map[s] ?? s
 }
