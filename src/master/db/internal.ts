@@ -24,6 +24,7 @@ import { issueMethods } from "./issues.js";
 import { noteMethods } from "./notes.js";
 import { collaborationMethods } from "./collaboration.js";
 import { scheduleMethods } from "./schedules.js";
+import { askBridgeMethods } from "./ask-bridges.js";
 
 export class MeshDb extends MeshDbCore {
   // ─── agents ────────────────────────────────────────────────────────────────
@@ -88,6 +89,7 @@ export class MeshDb extends MeshDbCore {
   declare getGroupByIdFull: typeof groupMethods.getGroupByIdFull;
   declare listGroupsByType: typeof groupMethods.listGroupsByType;
   declare updateGroupMetadata: typeof groupMethods.updateGroupMetadata;
+  declare updateGroupGuidancePrompt: typeof groupMethods.updateGroupGuidancePrompt;
   declare addGroupMembers: typeof groupMethods.addGroupMembers;
   declare removeGroupMembers: typeof groupMethods.removeGroupMembers;
   declare getGroupMembers: typeof groupMethods.getGroupMembers;
@@ -155,6 +157,21 @@ export class MeshDb extends MeshDbCore {
   declare markScheduledTaskRun: typeof scheduleMethods.markScheduledTaskRun;
   declare disableScheduledTask: typeof scheduleMethods.disableScheduledTask;
 
+  // ask_bridges —— Agent A 提问 B 的等回复 + 超时兜底 bridge
+  declare createAskBridge: typeof askBridgeMethods.createAskBridge;
+  declare getAskBridge: typeof askBridgeMethods.getAskBridge;
+  declare listAskBridges: typeof askBridgeMethods.listAskBridges;
+  declare getPendingAskBridges: typeof askBridgeMethods.getPendingAskBridges;
+  declare findAtReplyForBridge: typeof askBridgeMethods.findAtReplyForBridge;
+  declare findLatestReplyForBridge: typeof askBridgeMethods.findLatestReplyForBridge;
+  declare markBridgeAnswered: typeof askBridgeMethods.markBridgeAnswered;
+  declare markBridgeTimedOut: typeof askBridgeMethods.markBridgeTimedOut;
+  declare cancelBridge: typeof askBridgeMethods.cancelBridge;
+  declare getGroupMessageContent: typeof askBridgeMethods.getGroupMessageContent;
+  declare findBridgesAnsweredByMessage: typeof askBridgeMethods.findBridgesAnsweredByMessage;
+  declare findScheduledTaskByName: typeof askBridgeMethods.findScheduledTaskByName;
+  declare findPendingBridge: typeof askBridgeMethods.findPendingBridge;
+
   constructor(dbPath: string) {
     super(dbPath);
     // Each method bag's `this` resolves to this instance at call time. The
@@ -167,5 +184,6 @@ export class MeshDb extends MeshDbCore {
     Object.assign(this, noteMethods);
     Object.assign(this, collaborationMethods);
     Object.assign(this, scheduleMethods);
+    Object.assign(this, askBridgeMethods);
   }
 }

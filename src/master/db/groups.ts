@@ -20,6 +20,8 @@ export interface GroupRow {
   archived_at: string | null;
   type: string | null;
   metadata: string;
+  /** 群级别指导 prompt,全群一份;NULL 或空串 = 未设置。 */
+  guidance_prompt: string | null;
 }
 
 export interface GroupMemberRow {
@@ -240,6 +242,12 @@ export const groupMethods = {
   /** Update group metadata JSON */
   updateGroupMetadata(this: MeshDbSelf, id: string, metadata: string): void {
     this.db.prepare("UPDATE groups SET metadata = ? WHERE id = ?").run(metadata, id);
+  },
+
+  /** 群级别指导 prompt;传 null/空串清空。 */
+  updateGroupGuidancePrompt(this: MeshDbSelf, id: string, prompt: string | null): void {
+    const v = prompt && prompt.trim() ? prompt : null;
+    this.db.prepare("UPDATE groups SET guidance_prompt = ? WHERE id = ?").run(v, id);
   },
 
   addGroupMembers(this: MeshDbSelf, groupId: string, agentNames: string[]): void {

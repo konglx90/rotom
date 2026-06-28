@@ -3,7 +3,7 @@ import type { Group, CreateGroupDto } from './types'
 
 /** 单条消息的"喂给 CLI 的 prompt"分层组成。点击消息气泡时弹出查看。 */
 export interface ComposedPromptLayer {
-  layer: 'rotom-cli' | 'group-basic' | 'agent-role' | 'cwd' | 'task'
+  layer: 'rotom-cli' | 'group-basic' | 'group-guidance' | 'agent-role' | 'cwd' | 'task'
   content: string
   /** 数据源标注,如 "src/shared/rotom-cli-prompt.ts (constant)" */
   source: string
@@ -58,6 +58,10 @@ export const groupsApi = {
 
   async updateName(id: string, name: string): Promise<{ ok: boolean }> {
     return api.patch<{ ok: boolean }>(`/groups/${id}`, { name })
+  },
+
+  async updateGuidancePrompt(id: string, prompt: string | null): Promise<{ ok: boolean }> {
+    return api.patch<{ ok: boolean }>(`/groups/${id}`, { guidancePrompt: prompt })
   },
 
   async delete(id: string): Promise<{ ok: boolean }> {

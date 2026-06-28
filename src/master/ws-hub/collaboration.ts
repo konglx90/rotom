@@ -16,6 +16,7 @@
  * Methods attach via Object.assign.
  */
 
+import { randomUUID } from "node:crypto";
 import type { ServerMessage } from "../../shared/protocol.js";
 import type { WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
@@ -73,7 +74,7 @@ export const collaborationMethods = {
     const collabs = this.db.getActiveCollaborationsByGroup(conversation.groupId);
     if (collabs.length === 0) {
       // No collaboration but still attach activeIssues so agents can see them.
-      return { ...conversation, activeIssues, workingDir } as T;
+      return { ...conversation, activeIssues, workingDir, guidancePrompt: group?.guidance_prompt || undefined } as T;
     }
     const collab = collabs[0]; // single active collaboration per group
     const currentRound = collab.current_round ?? 1;
@@ -85,6 +86,7 @@ export const collaborationMethods = {
       ...conversation,
       activeIssues,
       workingDir,
+      guidancePrompt: group?.guidance_prompt || undefined,
       collaboration: {
         issueId: collab.id,
         title: collab.title,
@@ -97,6 +99,89 @@ export const collaborationMethods = {
         earlierSpeakers,
       },
     } as T;
+  },
+
+  /**
+   * 隐式 bridge 创建:群消息落库后调。若 sender @ 了某 agent B,自动建 bridge
+   * (asker=sender, target=B) + 20s interval scheduled_task。A 不用调 rotom ask,
+   * 直接 @ B 即可,系统透明管 timer。
+   *
+   * 跳过条件:
+   *   - B == sender(自 @)
+   *   - B 是真人(category=真人,真人不参与 bridge)
+   *   - sender 是某 pending bridge 的 target(说明 sender 在回复别人问题,不是在提问)
+   *   - (sender, B) 已有 pending bridge(防重)
+   */
+  autoCreateBridgeOnMention(this: WSHubSelf, groupId: string, sender: string, mentions: string[], msgId: number): void {
+    if (mentions.length === 0 || sender === "system") return;
+    // 只有消息含 #reply 标记才建 bridge——普通 @ 不需要回复,不建 timer
+    const content = this.db.getGroupMessageContent(msgId) || "";
+    if (!content.includes("#reply")) return;
+    const senderAgent = this.db.getAgentByName(sender);
+    if (!senderAgent) return;
+    for (const targetName of mentions) {
+      if (targetName === sender) continue;
+      const targetAgent = this.db.getAgentByName(targetName);
+      if (!targetAgent) continue;
+      // 跳过真人 target
+      let targetProfile: any = {};
+      try { targetProfile = targetAgent.profile ? JSON.parse(targetAgent.profile) : {}; } catch { /* ignore */ }
+      if (targetProfile.category === "真人") continue;
+      // 跳过:sender 是某 pending bridge 的 target(在回复,不在提问)
+      const asTarget = this.db.findPendingBridge(groupId, targetName, sender);
+      if (asTarget) continue;
+      // 跳过:已有 pending bridge (sender → targetName)
+      const existing = this.db.findPendingBridge(groupId, sender, targetName);
+      if (existing) continue;
+      // 建 bridge
+      const bridgeId = randomUUID();
+      const bridge = this.db.createAskBridge({
+        id: bridgeId,
+        groupId,
+        asker: sender,
+        target: targetName,
+        questionMsgId: msgId,
+        escalateTo: null,
+        timeoutMs: 5 * 60_000,
+      });
+      const task = this.db.createScheduledTask({
+        name: `ask-bridge:${bridgeId.slice(0, 8)}`,
+        groupId,
+        mode: "message",
+        scheduleKind: "interval",
+        intervalSec: 20,
+        prompt: `(ask-bridge timer for ${bridgeId})`,
+        handlerKey: "ask-bridge-check",
+        handlerPayload: JSON.stringify({ bridgeId }),
+      });
+      this.logger.info(`[mesh] bridge auto-created: ${bridgeId} (${sender}→${targetName}) msg=${msgId} (#reply), schedule task #${task.id}`);
+    }
+  },
+
+  /**
+   * 事件式 bridge 检测:群消息落库后调。若该消息"答中"了某 pending bridge
+   * (sender = bridge.target AND mentions 含 bridge.asker),mark answered + disable
+   * scheduled_task + **注入 system @ 消息给 asker**(带"汇报给原始提问者"上下文)。
+   *
+   * 不直接 WS 推 raw @ —— 那样 A 的 LLM 会回复给 B 而非汇报给原始提问者。
+   * 改用 postSystemToGroup 注入带上下文的 system 消息,A 的 LLM 知道该汇报给谁。
+   */
+  checkAndCancelBridgesForMessage(this: WSHubSelf, groupId: string, sender: string, mentions: string[], msgId: number): void {
+    if (mentions.length === 0) return;
+    const bridges = this.db.findBridgesAnsweredByMessage(groupId, sender, mentions);
+    if (bridges.length === 0) return;
+    // B @ A 回复:A 通过 a2a_message 广播已收到(session 复用,有上下文)。
+    // 这里只 cancel bridge + delete timer,不注入 system 消息——避免 A 收到两条消息(raw @ + system)顺序不确定。
+    // system 复述只在 handler 路径(非@回复,20s poll 检测)走,A 没被 @ 触发才需要 system 唤醒。
+    for (const bridge of bridges) {
+      this.db.markBridgeAnswered(bridge.id, msgId);
+      const taskName = `ask-bridge:${bridge.id.slice(0, 8)}`;
+      const task = this.db.findScheduledTaskByName(taskName);
+      if (task && task.enabled) {
+        this.db.disableScheduledTask(task.id);
+      }
+      this.logger.info(`[mesh] bridge ${bridge.id} auto-answered: ${sender} @ ${bridge.asker} (msg ${msgId}), timer "${taskName}" cancelled`);
+    }
   },
 
   /** Track a group message as a collaboration turn if applicable. */
@@ -199,7 +284,7 @@ export const collaborationMethods = {
     message: string;
     groupId?: string;
     groupName?: string;
-  }): { requestId: string; delivered: boolean; queued: boolean; error?: string } {
+  }): { requestId: string; delivered: boolean; queued: boolean; error?: string; messageId?: number } {
     const fromAgent = this.db.getAgentByName(opts.fromName);
     if (!fromAgent) return { requestId: "", delivered: false, queued: false, error: `Sender agent "${opts.fromName}" not found` };
     const targetAgent = this.db.getAgentByName(opts.target);
@@ -221,6 +306,7 @@ export const collaborationMethods = {
 
     let delivered = false;
     let queued = false;
+    let messageId: number | undefined;
     if (result.targetAgentId) {
       const enrichedConversation = this.enrichConversationWithCollaboration(conversation);
       const wireMsg = enrichWorkerDispatch(this, {
@@ -252,8 +338,10 @@ export const collaborationMethods = {
         this.broadcastToGroup(opts.groupId, wireMsg, [fromAgent.id, result.targetAgentId, ...sendAsMentionAgentIds]);
 
         const mentions = sendAsMentions;
-        this.db.addGroupMessage(opts.groupId, opts.fromName, opts.message, mentions);
+        messageId = this.db.addGroupMessage(opts.groupId, opts.fromName, opts.message, mentions);
         this.trackCollaborationTurn(opts.groupId, opts.fromName, opts.message);
+        this.autoCreateBridgeOnMention(opts.groupId, opts.fromName, mentions, messageId);
+        this.checkAndCancelBridgesForMessage(opts.groupId, opts.fromName, mentions, messageId);
       }
 
       if (!delivered) {
@@ -278,6 +366,6 @@ export const collaborationMethods = {
       source: "cli",
     });
 
-    return { requestId, delivered, queued };
+    return { requestId, delivered, queued, messageId };
   },
 };

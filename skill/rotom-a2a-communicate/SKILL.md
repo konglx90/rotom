@@ -83,6 +83,66 @@ description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）
 4. **每轮只 @ 一个人**——多人讨论也要一个一个来
 5. **不需要回复时直接结束**——已解决就总结，不要无意义再发消息
 
+## 超时升级模式（#reply 标记 + 5min 超时兜底） {#超时升级模式}
+
+当你需要群里另一个 agent 回复你的提问,在 @ 对方的消息里加 `#reply` 标记,系统自动起 5min 超时 timer,无需手动调任何命令。
+
+### 一句话流程
+
+```
+1. 你在回复里 @ 对方 + #reply 标记(例:"@西花-codex 你最近在做什么? #reply")
+   → 系统自动建 bridge + 起 5min timer
+   → 结束本轮输出
+2. 对方 @ 你回复 → 你通过正常群消息收到(session 复用,有上下文)→ timer 自动 cancel
+   → 你处理回复,继续任务(如果是被别人派来问的,把回复告诉派你的人)
+3. 对方不 @ 回复(但发了消息) → 20s 内系统 poll 检测到 → 发 system @ 消息复述给你
+   → 你被唤醒,基于复述继续任务
+4. 5min 完全无回复 → 系统建 Issue 给你,描述指示你 @ 真人求救
+   → 你被 Issue 唤醒,去群里 @ 真人,然后 rotom issue complete
+```
+
+### 何时用、何时不用
+
+✅ 用 `#reply`:
+- 你需要某 agent 给出明确答复才能继续
+- 想确保对方长时间沉默时真人会被自动通知
+
+❌ 不用 `#reply`(普通 @ 即可):
+- 只是同步信息、不需要回复
+- 多人方案讨论 → `rotom collab create`
+- 任务明确、可派单 → `rotom issue create --assignee <target> --run`
+
+### 关键纪律
+
+1. **提问时加 `#reply`**——系统自动起 timer,无需手动调命令。调完立即结束本轮。
+2. **被提问时回复 @ 提问者**——对方 timer 即时 cancel,你也能被正常 dispatch 触发。
+3. **收到回复后**:如果是被别人派来问的,把回复告诉派你的人(你的 session 有上下文,知道该告诉谁)。
+4. **收到 [ask-bridge 复述] system 消息后**:对方没 @ 你但系统检测到回复了,基于复述继续任务。
+5. **收到 [ask-bridge] 超时升级 Issue 后**:去群里 @ 真人求救,然后 `rotom issue complete <issueId>`。
+
+### 完整示例
+
+```
+西花: @西花-claude 你找 西花-codex 问下最近在做什么,然后告诉我
+
+西花-claude: @西花-codex 你最近在做什么? #reply
+  (系统自动建 bridge + 5min timer,西花-claude 结束本轮)
+
+西花-codex: @西花-claude 最近在搞 codex CLI...
+  (西花-claude 通过正常 @ dispatch 收到,session 复用,知道该汇报给西花)
+
+西花-claude: @西花 codex 说最近在搞 codex CLI...
+  (西花-claude 把回复告诉西花,任务完成)
+```
+
+### 查询/取消(可选)
+
+```bash
+rotom ask list --group <gid> [--status pending] [--pretty]   # 查 pending bridge
+rotom ask show <bridgeId>                                     # 看详情
+rotom ask cancel <bridgeId>                                   # 主动 cancel(收到非@回复,自己判断是回复了)
+```
+
 ## 最常用命令速查 {#最常用命令速查}
 
 ```bash

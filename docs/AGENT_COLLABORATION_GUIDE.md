@@ -263,6 +263,40 @@ rotom group send cda34ffc-c8e9-428b-b9da-2bec7c6039d1 塵星-后端 \
 
 ---
 
+### 场景 5：超时升级模式（前端 agent 驱动 + 5min 超时 @真人）
+
+**背景**：你作为前端 agent / 任务发起方，需要群里另一个 agent 给出明确答复才能继续，又不想干等。`rotom group send` 是 fire-and-forget，没有"等回复"原语——但 rotom 自带 `schedule` 子系统可以补上这块：发问同时起一个 5min 一次性定时器，到期由 master 以 `system` 身份在群里 @ 真人求救。收到回复则取消定时器。
+
+**步骤**：
+
+```bash
+# 1. 发问 + 起 5min 定时器（一条命令完成预检/查重/发问/建定时器）
+node scripts/rotom-ask-with-timeout.mjs ask \
+  --group <groupId> --target 后端-claude \
+  --question "用户画像接口 user/profile 返回的 fields 列表是?" \
+  --escalate-to 小寿
+# stdout: 42  (schedule id, 后续如需手动取消可用)
+# 然后结束本轮输出,等回复作为新群消息到达
+
+# 2. 收到 [回复] 开头的消息后,第一动作取消定时器
+node scripts/rotom-ask-with-timeout.mjs cancel \
+  --group <groupId> --target 后端-claude
+# stdout: 1  (disabled 数量)
+
+# 3. 5min 超时未回复 → master scheduler 自动以 system 身份发:
+#    "@小寿 5分钟未收到 后端-claude 回复,请人工介入"
+#    看到这条消息后停手,等真人介入
+```
+
+**关键要点**：
+- **协议契约**：回复必须以 `[回复]` 开头（双向，你回答别人提问时也要遵守）
+- **同 target 串行问**：并发问同一 target 会被 wrapper 查重拒绝（exit 3）
+- **30s tick 误差**：scheduler tick 30s，5min 实际触发在 5:00–5:30 之间
+- **离线预检**：target 离线时 wrapper 立即 @真人（exit 2），不等 5min
+- **完整规范见** `skill/rotom-a2a-communicate/SKILL.md#超时升级模式`
+
+---
+
 ## 4. 📚 完整命令速查表
 
 ### 通讯录与群管理

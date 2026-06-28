@@ -13,6 +13,7 @@
 export { MeshDb } from "./internal.js";
 export type {
   AgentRow,
+  AskBridgeRow,
   AuditLogRow,
   DomainRow,
   IssueEventRow,

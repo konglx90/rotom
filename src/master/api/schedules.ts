@@ -143,7 +143,6 @@ export function registerScheduleRoutes(apiRouter: ExpressRouter, db: MeshDb): vo
         })();
 
     const enabled = asBool(b.enabled);
-    console.log(prompt, name, 'prompt ==')
     const task = db.createScheduledTask({
       name,
       groupId,

@@ -123,7 +123,7 @@ export function resolveAgentFromEntry(name: string, entry: RotomAgentEntry): Res
 export function resolveAgent(asFlag?: string): ResolvedAgent {
   const cfg = loadRotomConfig();
   const chosen = process.env.ROTOM_AGENT || asFlag || cfg.defaultAgent;
-  console.debug(`[rotom] Resolving agent with --as=${asFlag} ROTOM_AGENT=${process.env.ROTOM_AGENT} defaultAgent=${cfg.defaultAgent}`);
+  process.stderr.write(`[rotom] Resolving agent with --as=${asFlag} ROTOM_AGENT=${process.env.ROTOM_AGENT} defaultAgent=${cfg.defaultAgent}\n`);
   if (!chosen) {
     const known = cfg.agents ? Object.keys(cfg.agents) : [];
     const executorWorkers = listExecutorWorkers(DEFAULT_EXECUTOR_CONFIG);

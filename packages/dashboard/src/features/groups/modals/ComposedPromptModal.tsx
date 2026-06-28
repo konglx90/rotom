@@ -13,6 +13,7 @@ const LAYER_LABELS: Record<ComposedPrompt['layers'][number]['layer'], string> = 
   'rotom-cli': 'rotom-cli',
   'agent-role': 'agent-role',
   'group-basic': 'group-basic',
+  'group-guidance': 'group-guidance',
   cwd: 'cwd',
   task: 'task',
 }

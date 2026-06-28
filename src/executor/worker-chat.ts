@@ -11,6 +11,10 @@ import { composePrompt } from "../shared/prompt-composer.js";
 import type { ExecutorWorker } from "./worker.js";
 
 export class ChatHandler {
+  /** 同群 chat 队列:groupId → 待处理消息队列。同群串行,保证 session 不丢。 */
+  private groupChatQueues: Map<string, Array<{ requestId: string; content: string; fromName: string; conversation: any; cwdOverride?: string }>> = new Map();
+  private groupChatActive: Set<string> = new Set();
+
   constructor(private readonly worker: ExecutorWorker) {}
 
   async handleChatReply(requestId: string, content: string, fromName: string, conversation: any, cwdOverride?: string): Promise<void> {
@@ -18,6 +22,22 @@ export class ChatHandler {
     if (this.worker.activeTasks.has(taskKey)) return;
 
     const groupId: string = conversation?.id ?? conversation?.groupId ?? "";
+
+    // 同群串行:若该群已有活跃 chat 任务,排队等当前任务结束(session 已存)再处理。
+    // 避免新 chat 开新 session 丢失上下文(ask-bridge 复述到达时 A 的原始 turn 可能还没结束)。
+    if (groupId && this.groupChatActive.has(groupId)) {
+      const queue = this.groupChatQueues.get(groupId) ?? [];
+      queue.push({ requestId, content, fromName, conversation, cwdOverride });
+      this.groupChatQueues.set(groupId, queue);
+      console.log(`${this.worker.tag} Chat from ${fromName} queued for group ${groupId} (queue=${queue.length})`);
+      return;
+    }
+
+    await this.runChatReply(requestId, content, fromName, conversation, cwdOverride, groupId);
+  }
+
+  private async runChatReply(requestId: string, content: string, fromName: string, conversation: any, cwdOverride: string | undefined, groupId: string): Promise<void> {
+    const taskKey = `chat:${requestId}`;
     // cwd 优先用 master 推送(Dashboard 群工作目录 / per-agent override);
     // 本机不存在或未推送时回落本地派生(<workingDirMap[groupId]> 或 <base>/<groupId>)。
     // 旧的 conversation.workingDir 仍忽略(那是展示元数据,与 spawn 无关)。
@@ -31,11 +51,13 @@ export class ChatHandler {
     const controller = new AbortController();
     const task = { aborted: false, controller };
     this.worker.activeTasks.set(taskKey, task);
+    if (groupId) this.groupChatActive.add(groupId);
 
     const body = content.replace(`@${this.worker.config.name}`, "").trim();
 
     if (!body) {
       this.worker.activeTasks.delete(taskKey);
+      this.dequeueNextChat(groupId);
       this.worker.sendChatEnd(requestId, "你好，有什么可以帮你的？", conversation, resolveChatCwd());
       return;
     }
@@ -57,6 +79,7 @@ export class ChatHandler {
             id: conversation.groupId,
             name: conversation.groupName || conversation.groupId,
             activeIssues: conversation.activeIssues ?? [],
+            guidancePrompt: conversation.guidancePrompt ?? null,
           }
         : null,
       cwd,
@@ -178,7 +201,25 @@ export class ChatHandler {
       }
     } finally {
       this.worker.activeTasks.delete(taskKey);
+      this.dequeueNextChat(groupId);
     }
+  }
+
+  /** 当前群 chat 任务结束,从队列取下一条处理。session 已存,新任务能复用。 */
+  private dequeueNextChat(groupId: string): void {
+    if (!groupId) return;
+    this.groupChatActive.delete(groupId);
+    const queue = this.groupChatQueues.get(groupId);
+    if (!queue || queue.length === 0) {
+      this.groupChatQueues.delete(groupId);
+      return;
+    }
+    const next = queue.shift()!;
+    if (queue.length === 0) this.groupChatQueues.delete(groupId);
+    console.log(`${this.worker.tag} Dequeue chat from ${next.fromName} for group ${groupId} (remaining=${queue.length})`);
+    this.runChatReply(next.requestId, next.content, next.fromName, next.conversation, next.cwdOverride, groupId).catch((err) => {
+      console.error(`${this.worker.tag} Dequeued chat error:`, err.message);
+    });
   }
 
   /** Handle collaboration_started notification — generate initial contribution. */

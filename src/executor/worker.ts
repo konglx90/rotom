@@ -458,9 +458,12 @@ ${prompt}`;
       // Group: only process if @mentioned
       const isGroup = conversation?.type === "group";
       const isMentioned = content.includes(`@${this.config.name}`);
+      console.log(`${this.tag} a2a_message from ${fromName} requestId=${requestId} isGroup=${isGroup} isMentioned=${isMentioned} contentLen=${content.length} contentHead=${JSON.stringify(content.slice(0, 60))}`);
       if (!isGroup || isMentioned) {
         console.log(`${this.tag} Chat from ${fromName}: ${content.slice(0, 80)}...`);
         this.chat.handleChatReply(requestId, content, fromName, conversation, overrideCwd);
+      } else {
+        console.log(`${this.tag} SKIP group message from ${fromName}: not @mentioned (looking for @${this.config.name})`);
       }
     }
 
