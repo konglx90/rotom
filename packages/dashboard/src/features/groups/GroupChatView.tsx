@@ -96,6 +96,7 @@ export function GroupChatView() {
     loadGroups,
     setGroupMemberWorkingDir,
     clearGroupMemberWorkingDir,
+    updateGroupGuidancePrompt,
   } = useChatContext()
   const { status: connectionStatus, send, lastIssueChange } = useSocket()
   const { isVisitor, error: visitorError, validate: validateVisitor, token: visitorToken, groupId: visitorResolvedGroupId } = useVisitorMode()
@@ -480,6 +481,8 @@ export function GroupChatView() {
               agents={agents}
               groupId={selectedGroup.id}
               groupWorkingDir={selectedGroup.working_dir ?? null}
+              groupGuidancePrompt={selectedGroup.guidance_prompt ?? null}
+              onUpdateGuidancePrompt={updateGroupGuidancePrompt}
               onClose={() => setShowMemberList(false)}
               onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
                 if (dir === null) {

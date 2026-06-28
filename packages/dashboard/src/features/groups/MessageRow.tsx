@@ -15,6 +15,28 @@ import styles from './ChatArea.module.css'
 const COLLAPSE_CHAR_THRESHOLD = 2400
 const COLLAPSE_LINE_THRESHOLD = 48
 
+// 结构化块标记(thinking / tool:exec / tool-result 等)。系统消息折叠时
+// 用这个正则把工具/思考块整体剔除,取剩余文字的首行作为摘要。
+// 与 GroupChatArea.tsx:89 的 STRUCT_BLOCK_RE 保持同步,新增标签时两处一起改
+// (源头是 MarkdownContent.tsx:122 的 TAGS 列表)。
+const STRUCT_BLOCK_RE = /\[(?:thinking|status:thinking|tool:exec|tool-result:exec|tool:patch|tool:ask|tool-result:ask)\][\s\S]*?(?:\[\/(?:thinking|status:thinking|tool:exec|tool-result:exec|tool:patch|tool:ask|tool-result:ask)\]|$)/g
+
+// 系统消息折叠态摘要:剔除工具/思考块后,取首行非空文字,截断到 120 字符。
+// 返回 null 表示剔除后没有任何可读文字(纯工具执行日志),此时折叠态展示占位符。
+function extractSystemSummary(content: string): { summary: string; hasMore: boolean } | null {
+  const hadStructBlocks = (content.match(STRUCT_BLOCK_RE) ?? []).length > 0
+  const stripped = content.replace(STRUCT_BLOCK_RE, '').replace(/\n{3,}/g, '\n').trim()
+  if (!stripped) return null
+  const firstLine = stripped.split('\n').find((l) => l.trim().length > 0) ?? ''
+  const trimmed = firstLine.trim()
+  if (!trimmed) return null
+  // hasMore = 剔除后剩余文字不止一行,或原文含结构化块(工具/思考)被藏起来了
+  const remainingLines = stripped.split('\n').filter((l) => l.trim().length > 0)
+  const hasMore = remainingLines.length > 1 || hadStructBlocks
+  const summary = trimmed.length > 120 ? trimmed.slice(0, 120) + '…' : trimmed
+  return { summary, hasMore }
+}
+
 interface MessageRowProps {
   msg: ChatMessage
   agents: Agent[]
@@ -87,9 +109,19 @@ export const MessageRow = memo(function MessageRow({
     const lineCount = (msg.content.match(/\n/g) || []).length + 1
     return msg.content.length > COLLAPSE_CHAR_THRESHOLD || lineCount > COLLAPSE_LINE_THRESHOLD
   }, [msg.content, msg.isLoading])
+
+  // 系统消息:默认折叠成一行摘要(剔除工具/思考块后的首行文字)。
+  // 与长消息折叠共用 userExpanded 状态:默认收起,点「展开」看全文。
+  // 纯工具日志(剔除后无文字)不进摘要逻辑,保持原样渲染避免空摘要。
+  const systemSummary = useMemo(
+    () => (isSystem && !msg.isLoading ? extractSystemSummary(msg.content) : null),
+    [isSystem, msg.isLoading, msg.content],
+  )
   const [userExpanded, setUserExpanded] = useState(false)
   useEffect(() => { setUserExpanded(false) }, [msg.id])
-  const collapsed = isLong && !userExpanded && !msg.streaming
+  const collapsed = isSystem
+    ? (systemSummary?.hasMore && !userExpanded && !msg.streaming)
+    : (isLong && !userExpanded && !msg.streaming)
 
   return (
     <div className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''} ${isContinuation ? styles.continuation : ''}`}>
@@ -203,7 +235,7 @@ export const MessageRow = memo(function MessageRow({
             </span>
           </div>
         </div>
-        <div className={`${styles.messageContentWrapper} ${collapsed ? styles.collapsed : ''}`}>
+        <div className={`${styles.messageContentWrapper} ${collapsed && !isSystem ? styles.collapsed : ''}`}>
           <div className={styles.messageContent}>
             {msg.isLoading ? (
               <div className={styles.loadingDots}>
@@ -211,6 +243,8 @@ export const MessageRow = memo(function MessageRow({
                 <span className={styles.dot}></span>
                 <span className={styles.dot}></span>
               </div>
+            ) : isSystem && collapsed && systemSummary ? (
+              <span className={styles.systemSummary} title={systemSummary.summary}>{systemSummary.summary}</span>
             ) : (
               <MarkdownContent
                 content={msg.content}
@@ -228,7 +262,7 @@ export const MessageRow = memo(function MessageRow({
             </div>
           )}
         </div>
-        {isLong && !msg.streaming && !msg.isLoading && (
+        {((isLong && !isSystem) || (isSystem && systemSummary?.hasMore)) && !msg.streaming && !msg.isLoading && (
           <button
             type="button"
             className={styles.collapseToggle}
@@ -238,7 +272,7 @@ export const MessageRow = memo(function MessageRow({
             {collapsed ? (
               <>
                 <ChevronDown size={12} />
-                <span>查看更多</span>
+                <span>展开</span>
               </>
             ) : (
               <>

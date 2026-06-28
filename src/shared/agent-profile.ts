@@ -23,3 +23,17 @@ export function parseAgentProfile(json: string | null | undefined): AgentProfile
     return null;
   }
 }
+
+/**
+ * 群级别 profile 覆盖 merge 到 agent 全局 profile 上,群级别非 undefined 字段胜出。
+ * 供 dispatch-enrich(WS 推送 self profile)与 GET /groups/:id(返回群成员花名册)共用,
+ * 避免两份 merge 逻辑漂移。
+ */
+export function mergeGroupProfile(base: AgentProfile | null | undefined, group: AgentProfile | null): AgentProfile | undefined {
+  if (!group) return base ?? undefined;
+  const merged: AgentProfile = { ...(base ?? {}) };
+  if (typeof group.category === "string") merged.category = group.category;
+  if (typeof group.position === "string") merged.position = group.position;
+  if (typeof group.bio === "string") merged.bio = group.bio;
+  return merged;
+}

@@ -216,6 +216,8 @@ export let pretty = false;
 
 export function setPretty(v: boolean): void { pretty = v; }
 
+export function isPretty(): boolean { return pretty; }
+
 export function printJson(data: any): void {
   process.stdout.write(JSON.stringify(data, null, pretty ? 2 : 0) + "\n");
 }

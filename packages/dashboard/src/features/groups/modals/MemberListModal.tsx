@@ -12,6 +12,8 @@ interface Props {
   agents: Agent[]
   groupId: string
   groupWorkingDir: string | null
+  groupGuidancePrompt?: string | null
+  onUpdateGuidancePrompt?: (groupId: string, prompt: string | null) => Promise<void>
   onClose: () => void
   onUpdateMemberWorkingDir: (groupId: string, agentName: string, dir: string | null) => Promise<void> | void
   onProfilesChanged?: () => void
@@ -37,15 +39,31 @@ export function MemberListModal({
   agents,
   groupId,
   groupWorkingDir,
+  groupGuidancePrompt,
+  onUpdateGuidancePrompt,
   onClose,
   onUpdateMemberWorkingDir,
   onProfilesChanged,
 }: Props) {
   const [editingDir, setEditingDir] = useState<GroupMember | null>(null)
   const [editingProfile, setEditingProfile] = useState<GroupMember | null>(null)
+  const [guidanceValue, setGuidanceValue] = useState(groupGuidancePrompt || '')
+  const [guidanceSaving, setGuidanceSaving] = useState(false)
 
   const closeEditingDir = () => setEditingDir(null)
   const closeEditingProfile = () => setEditingProfile(null)
+
+  const guidanceDirty = guidanceValue.trim() !== (groupGuidancePrompt || '').trim()
+
+  const saveGuidance = async () => {
+    if (!onUpdateGuidancePrompt || !guidanceDirty) return
+    setGuidanceSaving(true)
+    try {
+      await onUpdateGuidancePrompt(groupId, guidanceValue.trim() || null)
+    } finally {
+      setGuidanceSaving(false)
+    }
+  }
 
   const agentsByName = useMemo(() => {
     const m = new Map<string, Agent>()
@@ -152,6 +170,57 @@ export function MemberListModal({
             )
           })}
         </div>
+
+        {/* 群指导 prompt —— 全群一份,群内所有 agent 被唤起时拼到 prompt 上 */}
+        {onUpdateGuidancePrompt && (
+          <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)', marginTop: 12, paddingTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-navy)' }}>📋 群指导 prompt</span>
+              {guidanceDirty && (
+                <button
+                  type="button"
+                  onClick={saveGuidance}
+                  disabled={guidanceSaving}
+                  style={{
+                    border: 'none',
+                    background: 'var(--color-primary, #4f46e5)',
+                    color: '#fff',
+                    borderRadius: 6,
+                    padding: '4px 12px',
+                    fontSize: 12,
+                    cursor: guidanceSaving ? 'not-allowed' : 'pointer',
+                    opacity: guidanceSaving ? 0.6 : 1,
+                  }}
+                >
+                  {guidanceSaving ? '保存中...' : '保存'}
+                </button>
+              )}
+            </div>
+            <textarea
+              value={guidanceValue}
+              onChange={(e) => setGuidanceValue(e.target.value)}
+              placeholder="全群一份,群内所有 agent 被唤起时拼到 prompt 上。例:本群讨论 VR 需求,回复聚焦用户场景;提问加 #reply。"
+              style={{
+                width: '100%',
+                minHeight: 70,
+                padding: '8px 10px',
+                border: '1px solid rgba(0,0,0,0.12)',
+                borderRadius: 6,
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: 'var(--color-navy)',
+                background: 'var(--color-surface, #fff)',
+                outline: 'none',
+                resize: 'vertical',
+                boxSizing: 'border-box',
+              }}
+              spellCheck={false}
+            />
+            <div style={{ fontSize: 11, color: 'var(--color-slate)', marginTop: 4 }}>
+              留空保存 = 清除。群级别硬约定,所有成员都会看到。
+            </div>
+          </div>
+        )}
       </Modal>
 
       {editingDir && (

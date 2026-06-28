@@ -13,20 +13,10 @@
  * 设计为纯函数,只依赖 `db`,ws-hub method bag 与 api 层都能直接调。
  */
 
-import { parseAgentProfile } from "../../shared/agent-profile.js";
+import { parseAgentProfile, mergeGroupProfile } from "../../shared/agent-profile.js";
 import { resolveGroupAgentWorkingDir } from "../group-paths.js";
 import type { AgentProfile, ServerMessage } from "../../shared/protocol.js";
 import type { MeshDb } from "../db.js";
-
-/** 群级别 profile 覆盖 merge 到 agent 全局 profile 上,群级别非 undefined 字段胜出。 */
-function mergeGroupProfile(base: AgentProfile | undefined, group: AgentProfile | null): AgentProfile | undefined {
-  if (!group) return base;
-  const merged: AgentProfile = { ...(base ?? {}) };
-  if (typeof group.category === "string") merged.category = group.category;
-  if (typeof group.position === "string") merged.position = group.position;
-  if (typeof group.bio === "string") merged.bio = group.bio;
-  return merged;
-}
 
 /** 调用方仅需提供 db(ws-hub method bag 传 this,api 层传 hub 实例)。
  *  agentName / groupId 任一缺失时跳过对应字段的注入(返回 undefined)。 */
