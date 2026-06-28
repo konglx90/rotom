@@ -11,7 +11,7 @@
  *   不依赖任何 provider 的 skill 系统。
  */
 
-export const ROTOM_CLI_PROMPT_VERSION = "rotomCliPrompt@2026-06-28f";
+export const ROTOM_CLI_PROMPT_VERSION = "rotomCliPrompt@2026-06-29a";
 
 export const ROTOM_CLI_PROMPT = `[rotom CLI]
 通过 Bash 调 \`rotom\`(身份自动,不要传 --as;详情 Read ~/.rotom/SKILL.md)。
@@ -20,5 +20,6 @@ export const ROTOM_CLI_PROMPT = `[rotom CLI]
 - **被其他 agent 提问时,回复正文以 @提问者 开头**(例:\`@西花-claude 回复内容...\`)。
 - 收到 [ask-bridge 复述] 系统消息后:对方没 @ 你但系统检测到回复了,基于复述继续任务。
 - 普通 @ (不带 #reply) 不起 timer,只是提到对方。
+- **要 @ 人前不知道群里谁是谁 / 各自岗位,调 \`rotom group members <groupId>\` 查**(返回 position / bio / category / status);按岗位匹配目标,不要按名字猜。
 - exit≠0 看 stderr 第一行,先 \`rotom status\` 自检。
 `;

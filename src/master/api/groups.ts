@@ -7,6 +7,7 @@ import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import { defaultGroupWorkingDir } from "../group-paths.js";
 import { createLogger } from "../../shared/logger.js";
+import { parseAgentProfile, mergeGroupProfile } from "../../shared/agent-profile.js";
 
 const log = createLogger("mesh-api");
 
@@ -163,7 +164,18 @@ export function registerGroupRoutes(
       res.status(404).json({ error: "Group not found" });
       return;
     }
-    const members = db.getGroupMembers(req.params.id);
+    const members = db.getGroupMembers(req.params.id).map((m) => {
+      const agent = db.getAgentByName(m.agent_name);
+      const base = agent?.profile ? parseAgentProfile(agent.profile) : null;
+      const override = parseAgentProfile(m.profile);
+      const effective = mergeGroupProfile(base, override);
+      return {
+        agent_name: m.agent_name,
+        joined_at: m.joined_at,
+        status: agent?.status ?? "offline",
+        profile: effective,
+      };
+    });
     res.json({ ...group, members });
   });
 

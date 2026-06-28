@@ -154,7 +154,7 @@ rotom config show
 rotom directory --pretty
 rotom directory --online --pretty
 rotom group list --pretty
-rotom group members <groupId> --pretty
+rotom group members <groupId> --pretty      # 返回每个成员的 position / bio / category / status(群级别覆盖优先于全局)
 rotom group history <groupId> --limit 30 --pretty
 
 # 发群消息（message 必须以 @target 开头）

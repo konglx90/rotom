@@ -334,6 +334,16 @@
   color: var(--color-warm-dark);
 }
 
+/* 系统消息折叠态:只显示一行摘要(剔除工具/思考块后的首行文字),
+ * 超长用省略号截断。点「展开」看完整 MarkdownContent。 */
+.systemSummary {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
 .messageStatus {
   margin-left: 8px;
   font-size: 11px;

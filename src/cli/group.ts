@@ -10,6 +10,7 @@ import {
   api,
   printJson,
   printTable,
+  isPretty,
   fail,
   flagInt,
   flagStr,
@@ -49,9 +50,27 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
   if (sub === "members") {
     const groupId = rest[1]; if (!groupId) fail("usage: rotom group members <groupId>");
     const data = await api(agent, "GET", `/groups/${encodeURIComponent(groupId)}`);
+    const members = (data.members || []) as Array<{
+      agent_name: string;
+      joined_at: string;
+      status?: string;
+      profile?: { position?: string; bio?: string; category?: string } | null;
+    }>;
+    // 非.pretty 走完整 JSON,保留 profile 嵌套结构供 agent 程序化读取;
+    // .pretty 走扁平表格,bio 截断 40 字符避免撑爆终端。
+    if (!isPretty()) {
+      printJson(members);
+      return;
+    }
     printTable(
-      (data.members || []).map((m: any) => ({ agent_name: m.agent_name, joined_at: m.joined_at })),
-      ["agent_name", "joined_at"],
+      members.map((m) => ({
+        agent_name: m.agent_name,
+        position: m.profile?.position ?? "",
+        bio: (m.profile?.bio ?? "").slice(0, 40),
+        category: m.profile?.category ?? "",
+        status: m.status ?? "",
+      })),
+      ["agent_name", "position", "bio", "category", "status"],
     );
     return;
   }
