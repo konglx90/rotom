@@ -68,6 +68,20 @@
   text-overflow: ellipsis;
 }
 
+.schedulePersona {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.schedulePersonaName {
+  font-weight: 600;
+  color: var(--color-warm-dark);
+  letter-spacing: -0.01em;
+}
+
 .scheduleBadge {
   font-size: 10px;
   font-weight: 600;

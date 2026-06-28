@@ -21,6 +21,7 @@ export function AppShell({ children }: AppShellProps) {
   const { isVisitor } = useVisitorMode()
   const location = useLocation()
   const isFullBleed = location.pathname.startsWith('/dashboard/groups')
+  const isToolboxRoute = location.pathname.startsWith('/dashboard/toolbox')
   const hideSidebar = /^\/dashboard\/groups\/[^/]+\/issues-single(\/|$)/.test(
     location.pathname,
   )
@@ -84,7 +85,7 @@ export function AppShell({ children }: AppShellProps) {
         {!isVisitor && isE2edRoute && <E2edSidebar />}
         <main
           className={`${styles.main} ${zenMode ? styles.mainZen : ''} ${
-            isFullBleed ? styles.mainFullBleed : ''
+            isFullBleed || isToolboxRoute ? styles.mainFullBleed : ''
           }`}
         >
           {children}

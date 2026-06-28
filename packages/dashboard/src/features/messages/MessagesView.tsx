@@ -124,8 +124,6 @@ export function MessagesView() {
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.title}>消息流</h1>
-
       <div className={styles.filters}>
         <div className={styles.filter}>
           <label className={styles.filterLabel}>发送方</label>

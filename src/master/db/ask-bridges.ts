@@ -163,10 +163,25 @@ export const askBridgeMethods = {
     `).all(groupId, sender, ...mentions) as AskBridgeRow[];
   },
 
-  /** 按 name 查 scheduled_tasks(用于 cancel 对应的 ask-bridge timer)。 */
+  /**
+   * 按 name 查 scheduled_tasks(legacy,仍保留给历史 task name 兜底)。
+   * 新代码请用 findAskBridgeScheduledTask —— name 已改成"星期五 · …"友好文案,
+   * 不再适合做 lookup key。
+   */
   findScheduledTaskByName(this: MeshDbSelf, name: string): { id: number; enabled: number } | undefined {
     return this.db.prepare("SELECT id, enabled FROM scheduled_tasks WHERE name = ? ORDER BY id DESC LIMIT 1")
       .get(name) as { id: number; enabled: number } | undefined;
+  },
+
+  /**
+   * 按 bridgeId 查对应的 ask-bridge scheduled_task(handler_key='ask-bridge-check'
+   * 且 handler_payload 里含该 bridgeId)。name 改成"星期五 · 等待 X 回复"友好文案后,
+   * 这是 cancel 路径的权威查找方式。bridgeId 是 UUID,LIKE 不会误匹配。
+   */
+  findAskBridgeScheduledTask(this: MeshDbSelf, bridgeId: string): { id: number; enabled: number } | undefined {
+    return this.db.prepare(
+      "SELECT id, enabled FROM scheduled_tasks WHERE handler_key = 'ask-bridge-check' AND handler_payload LIKE ? ORDER BY id DESC LIMIT 1",
+    ).get(`%"bridgeId":"${bridgeId}"%`) as { id: number; enabled: number } | undefined;
   },
 
   /** 查是否有 pending bridge where asker+target 匹配(用于 autoCreate 防重 + 区分提问/回复)。 */

@@ -26,6 +26,7 @@ import { collaborationMethods } from "./collaboration.js";
 import { scheduleMethods } from "./schedules.js";
 import { askBridgeMethods } from "./ask-bridges.js";
 import { guidanceTemplateMethods } from "./guidance-templates.js";
+import { schedulePatternMethods } from "./schedule-patterns.js";
 
 export class MeshDb extends MeshDbCore {
   // ─── agents ────────────────────────────────────────────────────────────────
@@ -171,6 +172,7 @@ export class MeshDb extends MeshDbCore {
   declare getGroupMessageContent: typeof askBridgeMethods.getGroupMessageContent;
   declare findBridgesAnsweredByMessage: typeof askBridgeMethods.findBridgesAnsweredByMessage;
   declare findScheduledTaskByName: typeof askBridgeMethods.findScheduledTaskByName;
+  declare findAskBridgeScheduledTask: typeof askBridgeMethods.findAskBridgeScheduledTask;
   declare findPendingBridge: typeof askBridgeMethods.findPendingBridge;
 
   // guidance_templates —— 群指导 prompt 模板库
@@ -179,6 +181,13 @@ export class MeshDb extends MeshDbCore {
   declare createGuidanceTemplate: typeof guidanceTemplateMethods.createGuidanceTemplate;
   declare updateGuidanceTemplate: typeof guidanceTemplateMethods.updateGuidanceTemplate;
   declare deleteGuidanceTemplate: typeof guidanceTemplateMethods.deleteGuidanceTemplate;
+
+  // schedule_patterns —— 调度模式参考库
+  declare listSchedulePatterns: typeof schedulePatternMethods.listSchedulePatterns;
+  declare getSchedulePattern: typeof schedulePatternMethods.getSchedulePattern;
+  declare createSchedulePattern: typeof schedulePatternMethods.createSchedulePattern;
+  declare updateSchedulePattern: typeof schedulePatternMethods.updateSchedulePattern;
+  declare deleteSchedulePattern: typeof schedulePatternMethods.deleteSchedulePattern;
 
   constructor(dbPath: string) {
     super(dbPath);
@@ -194,5 +203,6 @@ export class MeshDb extends MeshDbCore {
     Object.assign(this, scheduleMethods);
     Object.assign(this, askBridgeMethods);
     Object.assign(this, guidanceTemplateMethods);
+    Object.assign(this, schedulePatternMethods);
   }
 }

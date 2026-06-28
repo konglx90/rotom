@@ -26,6 +26,7 @@ import { registerSessionRoutes } from "./sessions.js";
 import { registerScheduleRoutes } from "./schedules.js";
 import { registerShareRoutes } from "./share.js";
 import { registerGuidanceTemplateRoutes } from "./guidance-templates.js";
+import { registerSchedulePatternRoutes } from "./schedule-patterns.js";
 
 const log = createLogger("mesh-api");
 
@@ -85,6 +86,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
   registerScheduleRoutes(apiRouter, db);
   registerShareRoutes(apiRouter, db, shareTokens);
   registerGuidanceTemplateRoutes(apiRouter, db);
+  registerSchedulePatternRoutes(apiRouter, db);
 
   return apiRouter;
 }

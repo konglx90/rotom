@@ -25,3 +25,4 @@ export type {
 } from "./types.js";
 
 export type { GuidanceTemplateRow } from "./guidance-templates.js";
+export type { SchedulePatternRow } from "./schedule-patterns.js";
