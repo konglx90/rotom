@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
+import { GuidanceTemplatePicker } from './GuidanceTemplatePicker'
 import styles from './GroupSettingsModal.module.css'
 
 interface GroupSettingsModalProps {
   open: boolean
+  groupId: string
   groupName: string
   groupWorkingDir: string | null | undefined
   groupGuidancePrompt?: string | null
+  memberAgentNames?: string[]
   onClose: () => void
   onSaveName: (name: string) => void
   onSaveWorkingDir: (dir: string | null) => void
@@ -16,9 +19,11 @@ interface GroupSettingsModalProps {
 
 export function GroupSettingsModal({
   open,
+  groupId,
   groupName,
   groupWorkingDir,
   groupGuidancePrompt,
+  memberAgentNames,
   onClose,
   onSaveName,
   onSaveWorkingDir,
@@ -27,6 +32,7 @@ export function GroupSettingsModal({
   const [nameValue, setNameValue] = useState(groupName)
   const [dirValue, setDirValue] = useState(groupWorkingDir || '')
   const [guidanceValue, setGuidanceValue] = useState(groupGuidancePrompt || '')
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -159,7 +165,24 @@ export function GroupSettingsModal({
 
         {/* Guidance Prompt */}
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="group-settings-guidance">群指导 prompt</label>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <label className={styles.label} htmlFor="group-settings-guidance">群指导 prompt</label>
+            <button
+              type="button"
+              onClick={() => setShowTemplatePicker(true)}
+              style={{
+                border: '1px solid rgba(0,0,0,0.12)',
+                background: 'transparent',
+                color: 'var(--color-navy)',
+                borderRadius: 6,
+                padding: '2px 10px',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              📚 从模板选择
+            </button>
+          </div>
           <textarea
             id="group-settings-guidance"
             value={guidanceValue}
@@ -197,6 +220,17 @@ export function GroupSettingsModal({
           </div>
         </div>
       </div>
+
+      {showTemplatePicker && (
+        <GuidanceTemplatePicker
+          open={showTemplatePicker}
+          groupId={groupId}
+          groupName={groupName}
+          memberAgentNames={memberAgentNames ?? []}
+          onPromptApplied={(resolved) => setGuidanceValue(resolved)}
+          onClose={() => setShowTemplatePicker(false)}
+        />
+      )}
     </Modal>
   )
 }

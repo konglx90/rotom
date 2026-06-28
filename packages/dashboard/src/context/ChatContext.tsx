@@ -10,7 +10,8 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { agentsApi } from '../api/agents'
 import { groupsApi } from '../api/groups'
-import type { Agent, Group } from '../api/types'
+import { schedulesApi } from '../api/schedules'
+import type { Agent, Group, GuidanceScheduleConfig } from '../api/types'
 import {
   DM_GROUP_PREFIX,
   generateDmGroupName,
@@ -58,7 +59,14 @@ interface ChatContextValue {
   handleNewDmConversation: (targetName: string) => Promise<void>
   activateDmGroup: (groupId: string, targetName: string) => void
   selectGroup: (groupId: string) => void
-  createGroup: (name: string, memberNames: string[], workingDir?: string) => Promise<void>
+  createGroup: (
+    name: string,
+    memberNames: string[],
+    workingDir?: string,
+    type?: string,
+    guidancePrompt?: string,
+    scheduleConfig?: GuidanceScheduleConfig,
+  ) => Promise<void>
   updateGroupWorkingDir: (groupId: string, workingDir: string | null) => Promise<void>
   setGroupMemberWorkingDir: (groupId: string, agentName: string, workingDir: string) => Promise<void>
   clearGroupMemberWorkingDir: (groupId: string, agentName: string) => Promise<void>
@@ -206,15 +214,48 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   )
 
   const createGroup = useCallback(
-    async (name: string, memberNames: string[], workingDir?: string, type?: string) => {
+    async (
+      name: string,
+      memberNames: string[],
+      workingDir?: string,
+      type?: string,
+      guidancePrompt?: string,
+      scheduleConfig?: GuidanceScheduleConfig,
+    ) => {
       if (!myAgentName) return
       try {
-        await groupsApi.create({
+        const created = await groupsApi.create({
           name,
           memberNames: [...memberNames, myAgentName],
           workingDir,
           type,
         })
+        // 建群后落地模板:先写 guidance_prompt,再建定时任务(若模板带 schedule_config)
+        const followups: Promise<unknown>[] = []
+        if (guidancePrompt) {
+          followups.push(groupsApi.updateGuidancePrompt(created.id, guidancePrompt))
+        }
+        if (scheduleConfig) {
+          followups.push(schedulesApi.create({
+            name: `${name}-${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`,
+            group_id: created.id,
+            mode: scheduleConfig.mode,
+            agent_name: scheduleConfig.agent_name,
+            schedule_kind: scheduleConfig.schedule_kind,
+            interval_sec: scheduleConfig.interval_sec,
+            run_at: scheduleConfig.run_at,
+            prompt: scheduleConfig.prompt,
+            repeat_times: scheduleConfig.repeat_times ?? null,
+            enabled: true,
+          }))
+        }
+        if (followups.length > 0) {
+          await Promise.all(followups).catch(err => {
+            // 模板落地失败不阻塞建群,只提示
+            console.error('Failed to apply guidance template after group creation:', err)
+            window.alert(`群已创建,但模板落地失败: ${err instanceof Error ? err.message : String(err)}`)
+          })
+        }
         setShowCreateGroupModal(false)
         await loadGroups()
       } catch (error) {

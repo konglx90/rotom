@@ -25,6 +25,7 @@ import { noteMethods } from "./notes.js";
 import { collaborationMethods } from "./collaboration.js";
 import { scheduleMethods } from "./schedules.js";
 import { askBridgeMethods } from "./ask-bridges.js";
+import { guidanceTemplateMethods } from "./guidance-templates.js";
 
 export class MeshDb extends MeshDbCore {
   // ─── agents ────────────────────────────────────────────────────────────────
@@ -172,6 +173,13 @@ export class MeshDb extends MeshDbCore {
   declare findScheduledTaskByName: typeof askBridgeMethods.findScheduledTaskByName;
   declare findPendingBridge: typeof askBridgeMethods.findPendingBridge;
 
+  // guidance_templates —— 群指导 prompt 模板库
+  declare listGuidanceTemplates: typeof guidanceTemplateMethods.listGuidanceTemplates;
+  declare getGuidanceTemplate: typeof guidanceTemplateMethods.getGuidanceTemplate;
+  declare createGuidanceTemplate: typeof guidanceTemplateMethods.createGuidanceTemplate;
+  declare updateGuidanceTemplate: typeof guidanceTemplateMethods.updateGuidanceTemplate;
+  declare deleteGuidanceTemplate: typeof guidanceTemplateMethods.deleteGuidanceTemplate;
+
   constructor(dbPath: string) {
     super(dbPath);
     // Each method bag's `this` resolves to this instance at call time. The
@@ -185,5 +193,6 @@ export class MeshDb extends MeshDbCore {
     Object.assign(this, collaborationMethods);
     Object.assign(this, scheduleMethods);
     Object.assign(this, askBridgeMethods);
+    Object.assign(this, guidanceTemplateMethods);
   }
 }

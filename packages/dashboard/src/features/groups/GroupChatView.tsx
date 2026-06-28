@@ -480,6 +480,7 @@ export function GroupChatView() {
               members={selectedGroup.members || []}
               agents={agents}
               groupId={selectedGroup.id}
+              groupName={selectedGroup.name}
               groupWorkingDir={selectedGroup.working_dir ?? null}
               groupGuidancePrompt={selectedGroup.guidance_prompt ?? null}
               onUpdateGuidancePrompt={updateGroupGuidancePrompt}

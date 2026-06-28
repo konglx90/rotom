@@ -37,11 +37,14 @@ function stopBubble(e: ReactMouseEvent) {
   e.stopPropagation()
 }
 
+type MentionState = { firstDone: boolean }
+
 function highlightMentionsInText(
   text: string,
   isMember: (name: string) => boolean,
   className: string | undefined,
   keyPrefix: string,
+  state: MentionState,
 ): ReactNode {
   const out: ReactNode[] = []
   let last = 0
@@ -54,11 +57,16 @@ function highlightMentionsInText(
     if (!isMember(name)) continue
     matched = true
     if (m.index > last) out.push(text.slice(last, m.index))
-    out.push(
-      <span key={`${keyPrefix}-${m.index}`} className={className}>
-        @{name}
-      </span>,
-    )
+    if (!state.firstDone) {
+      state.firstDone = true
+      out.push(
+        <span key={`${keyPrefix}-${m.index}`} className={className}>
+          @{name}
+        </span>,
+      )
+    } else {
+      out.push(`@${name}`)
+    }
     last = m.index + m[0].length
   }
   if (!matched) return text
@@ -71,10 +79,11 @@ function transformMentionChildren(
   isMember: (name: string) => boolean,
   className: string | undefined,
   keyPrefix = 'mention',
+  state: MentionState = { firstDone: false },
 ): ReactNode {
   return Children.map(children, (child, idx) => {
     if (typeof child === 'string') {
-      return highlightMentionsInText(child, isMember, className, `${keyPrefix}-${idx}`)
+      return highlightMentionsInText(child, isMember, className, `${keyPrefix}-${idx}`, state)
     }
     if (!isValidElement(child)) return child
     const el = child as ReactElement<{ children?: ReactNode }>
@@ -87,6 +96,7 @@ function transformMentionChildren(
           isMember,
           className,
           `${keyPrefix}-${idx}`,
+          state,
         ),
       })
     }
