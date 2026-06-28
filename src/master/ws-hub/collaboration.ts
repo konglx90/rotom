@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import type { ServerMessage } from "../../shared/protocol.js";
 import type { WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
+import { TIMER_PERSONA_NAME } from "../util/persona.js";
 
 export const collaborationMethods = {
   /**
@@ -145,14 +146,14 @@ export const collaborationMethods = {
         timeoutMs: 5 * 60_000,
       });
       const task = this.db.createScheduledTask({
-        name: `ask-bridge:${bridgeId.slice(0, 8)}`,
+        name: `${TIMER_PERSONA_NAME} · 等待 ${targetName} 回复`,
         groupId,
         mode: "message",
         scheduleKind: "interval",
         intervalSec: 20,
-        prompt: `(ask-bridge timer for ${bridgeId})`,
+        prompt: `${TIMER_PERSONA_NAME} 每 20s 检查一次 ${targetName} 有没有回复 ${sender} 的问题;有回复就复述给 ${sender},5 分钟没回复就升级 Issue。`,
         handlerKey: "ask-bridge-check",
-        handlerPayload: JSON.stringify({ bridgeId }),
+        handlerPayload: JSON.stringify({ bridgeId, asker: sender, target: targetName }),
       });
       this.logger.info(`[mesh] bridge auto-created: ${bridgeId} (${sender}→${targetName}) msg=${msgId} (#reply), schedule task #${task.id}`);
     }
@@ -175,12 +176,11 @@ export const collaborationMethods = {
     // system 复述只在 handler 路径(非@回复,20s poll 检测)走,A 没被 @ 触发才需要 system 唤醒。
     for (const bridge of bridges) {
       this.db.markBridgeAnswered(bridge.id, msgId);
-      const taskName = `ask-bridge:${bridge.id.slice(0, 8)}`;
-      const task = this.db.findScheduledTaskByName(taskName);
+      const task = this.db.findAskBridgeScheduledTask(bridge.id);
       if (task && task.enabled) {
         this.db.disableScheduledTask(task.id);
       }
-      this.logger.info(`[mesh] bridge ${bridge.id} auto-answered: ${sender} @ ${bridge.asker} (msg ${msgId}), timer "${taskName}" cancelled`);
+      this.logger.info(`[mesh] bridge ${bridge.id} auto-answered: ${sender} @ ${bridge.asker} (msg ${msgId}), timer task #${task?.id ?? "?"} cancelled`);
     }
   },
 

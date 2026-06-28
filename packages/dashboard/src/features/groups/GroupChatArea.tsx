@@ -145,6 +145,19 @@ export function GroupChatArea({
     () => selectedGroup.members?.map(m => m.agent_name) || [],
     [selectedGroup.members],
   )
+  // 当前登录用户是否是真人 —— 优先看群成员 profile override,回落到全局 agent profile。
+  // MessageRow 用这个判断"@了我"要不要突显,不能只看全局 profile(category 可能只在群内设)。
+  const myAgentIsHuman = useMemo(() => {
+    const myMember = selectedGroup.members?.find(m => m.agent_name === myAgentName)
+    if (myMember?.profile) {
+      try {
+        const p = JSON.parse(myMember.profile) as { category?: string }
+        if (typeof p.category === 'string') return p.category === '真人'
+      } catch { /* fall through */ }
+    }
+    const myAgent = agents.find(a => a.name === myAgentName)
+    return myAgent?.profile?.category === '真人'
+  }, [selectedGroup.members, agents, myAgentName])
   const filteredMentionAgents = agents.filter(a =>
     a.name !== myAgentName && groupMembers.includes(a.name) &&
     a.name.toLowerCase().includes(mentionFilter.toLowerCase())
@@ -390,6 +403,7 @@ export function GroupChatArea({
                 msg={msg}
                 agents={agents}
                 myAgentName={myAgentName}
+                myAgentIsHuman={myAgentIsHuman}
                 groupMembers={groupMembers}
                 onShowPrompt={handleShowPrompt}
                 onQuote={handleQuote}

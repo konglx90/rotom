@@ -6,6 +6,7 @@ import { Badge } from '../../components/ui/Badge'
 import { StreamingStatus } from '../../components/ui/StreamingStatus'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import type { ChatMessage } from './types'
+import { extractMentions } from './types'
 import styles from './ChatArea.module.css'
 
 // 长度阈值:超过任一阈值的气泡默认折叠,「查看更多」展开。
@@ -83,6 +84,12 @@ export const MessageRow = memo(function MessageRow({
 }: MessageRowProps) {
   const isSystem = msg.from === 'system'
   const hasPrompt = Boolean(msg.composedPrompt)
+  // @了我(当前登录用户):左侧棪色色条突显,让我在一堆 agent 气泡里一眼看到自己被点名
+  const fromAgent = msg.isIncoming ? agents.find(a => a.name === msg.from) : undefined
+  const mentionedNames = extractMentions(msg.content)
+  const isMyMention =
+    msg.isIncoming /* 只看别人发的;自己发的不算 */ &&
+    mentionedNames.includes(myAgentName)
   // ⏹ 按钮条件:agent 正在流式响应中的 incoming 气泡。outgoing / 已完成的不显示。
   // 只在 bubble.id 是 stream_ 前缀(占位 id)时才渲染 —— 历史加载的 gm_/grp_/dm_
   // 前缀 id 不可能是 streaming 中的,跳过额外渲染开销。
@@ -124,7 +131,7 @@ export const MessageRow = memo(function MessageRow({
     : (isLong && !userExpanded && !msg.streaming)
 
   return (
-    <div className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''} ${isContinuation ? styles.continuation : ''}`}>
+    <div className={`${styles.messageRow} ${msg.isIncoming ? '' : styles.outgoing} ${isSystem ? styles.systemRow : ''} ${isMyMention ? styles.mentionMeRow : ''} ${isContinuation ? styles.continuation : ''}`}>
       {isContinuation ? (
         <div className={styles.avatarPlaceholder} aria-hidden="true" />
       ) : (
@@ -135,7 +142,7 @@ export const MessageRow = memo(function MessageRow({
                 className={styles.messageAvatar} />
       )}
       <div
-        className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''}`}
+        className={`${styles.messageBubble} ${msg.isIncoming ? styles.incoming : styles.outgoing} ${isSystem ? styles.systemBubble : ''} ${isMyMention ? styles.mentionMeBubble : ''}`}
         onContextMenu={onContextMenu ? (e) => onContextMenu(e, msg) : undefined}
       >
         <div className={styles.messageSender}>
@@ -146,8 +153,7 @@ export const MessageRow = memo(function MessageRow({
                 {isSystem ? (
                   <Badge tone="category" value="system">📣 系统</Badge>
                 ) : (() => {
-                  const agent = agents.find(a => a.name === msg.from)
-                  const cat = agent?.profile?.category
+                  const cat = fromAgent?.profile?.category
                   if (!cat) return null
                   return (
                     <Badge tone="category" value={cat}>

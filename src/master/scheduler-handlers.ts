@@ -22,6 +22,7 @@ import type { MeshDb } from "./db.js";
 import type { SchedulerHub } from "./scheduler.js";
 import { resolveGroupAgentWorkingDir } from "./group-paths.js";
 import { createLogger } from "../shared/logger.js";
+import { TIMER_PERSONA_NAME } from "./util/persona.js";
 
 const log = createLogger("mesh-scheduler-handlers");
 
@@ -88,7 +89,7 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
     const qSnippet = questionContent.slice(0, 200);
     const replySnippet = reply.content.slice(0, 500);
     const msg =
-      `@${bridge.asker} [ask-bridge 复述] ${bridge.target} 在 ${reply.created_at} 回复了你之前的提问:\n` +
+      `@${bridge.asker} ${TIMER_PERSONA_NAME} 来汇报: ${bridge.target} 在 ${reply.created_at} 回复了你之前的提问:\n` +
       `你问: ${qSnippet}\n` +
       `${bridge.target} 回复: ${replySnippet}\n` +
       `\n` +
@@ -105,14 +106,16 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
     const qSnippet = questionContent.slice(0, 200);
     const createdIso = new Date(bridge.created_at).toISOString();
     const minutes = Math.max(1, Math.round(bridge.timeout_ms / 60_000));
-    const escalateTo = bridge.escalate_to || "(自己挑群里在线的真人)";
+    const escalateTo = resolveEscalateTo(ctx, bridge);
     const title = `[ask-bridge] ${bridge.target} 未回复,需升级`;
     const description = [
-      `[系统触发:ask-bridge 超时升级]`,
+      `${TIMER_PERSONA_NAME} 等了 ${minutes} 分钟没等到 ${bridge.target},触发升级:`,
       `你于 ${createdIso} 在群 "${bridge.group_id}" 问 ${bridge.target}:`,
       `  "${qSnippet}"`,
       ``,
-      `${minutes} 分钟内 ${bridge.target} 未回复。请去群里 @ ${escalateTo} 求救,说明:`,
+      escalateTo
+        ? `请去群里 @ ${escalateTo} 求救,说明:`
+        : `群里当前没有在线的真人。请在群里说明情况,等真人上线后跟进。`,
       `- 你问的是什么`,
       `- 等了多久`,
       `- 你尝试过什么(如有)`,
@@ -143,12 +146,54 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
   return { status: "ok" };
 });
 
-/** cancel name=`ask-bridge:<bridgeId前8位>` 的 scheduled_task(disable,保留在列表里做审计)。 */
+/** cancel 对应 bridgeId 的 ask-bridge scheduled_task(disable,保留在列表里做审计)。
+ *  按 handler_key + handler_payload 查,不依赖 name(name 已改成"星期五 · …"友好文案)。 */
 function cancelBridgeTask(ctx: HandlerContext, bridgeId: string): void {
-  const taskName = `ask-bridge:${bridgeId.slice(0, 8)}`;
-  const task = ctx.db.findScheduledTaskByName(taskName);
+  const task = ctx.db.findAskBridgeScheduledTask(bridgeId);
   if (task && task.enabled) {
     ctx.db.disableScheduledTask(task.id);
-    log.info(`bridge ${bridgeId}: cancelled schedule task "${taskName}" (#${task.id})`);
+    log.info(`bridge ${bridgeId}: cancelled schedule task #${task.id}`);
   }
+}
+
+/**
+ * 解析超时升级的求救对象。
+ *
+ * 优先级:
+ *   1. bridge.escalate_to 显式指定 —— 直接用
+ *   2. 群里在线真人(群成员 profile override 或全局 agent profile 里 category=真人,
+ *      且 status=online,且不是 asker 自己)—— 返回 "名字1 或 名字2"
+ *   3. 没有在线真人 —— 返回 null(调用方给另一套文案,不让 asker LLM 自己挑,
+ *      否则它会乱猜 agent 当真人,见 issue bcb92df5)
+ */
+function resolveEscalateTo(ctx: HandlerContext, bridge: { group_id: string; escalate_to: string | null; asker: string }): string | null {
+  if (bridge.escalate_to) return bridge.escalate_to;
+  const members = ctx.db.getGroupMembers(bridge.group_id);
+  const agentByName = new Map<string, { status: string; profile: string | null }>();
+  for (const a of ctx.db.listAgents() as Array<{ name: string; status: string; profile: string | null }>) {
+    agentByName.set(a.name, a);
+  }
+  const humans: string[] = [];
+  for (const m of members) {
+    if (m.agent_name === bridge.asker) continue;
+    const agent = agentByName.get(m.agent_name);
+    if (!agent || agent.status !== "online") continue;
+    // category 优先取群成员 profile override,回落到全局 agent profile
+    let category: string | undefined;
+    if (m.profile) {
+      try {
+        const p = JSON.parse(m.profile) as { category?: string };
+        if (typeof p.category === "string") category = p.category;
+      } catch { /* fall through */ }
+    }
+    if (!category && agent.profile) {
+      try {
+        const p = JSON.parse(agent.profile) as { category?: string };
+        if (typeof p.category === "string") category = p.category;
+      } catch { /* ignore */ }
+    }
+    if (category === "真人") humans.push(m.agent_name);
+  }
+  if (humans.length === 0) return null;
+  return humans.join(" 或 ");
 }

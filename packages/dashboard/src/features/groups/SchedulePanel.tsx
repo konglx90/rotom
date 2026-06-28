@@ -78,6 +78,20 @@ export function SchedulePanel({ selectedGroupId }: SchedulePanelProps) {
 
 const COLLAPSE_THRESHOLD = 200
 
+/** 定时器人设名 —— 与后端 src/master/util/persona.ts 保持一致。不是 LLM,只是跑腿 scheduler。 */
+const TIMER_PERSONA_NAME = '星期五'
+
+/** ask-bridge 任务的展示信息:从 handler_payload 解析出 target/asker,渲染友好文案。 */
+function parseAskBridgePayload(s: Schedule): { asker?: string; target?: string } | null {
+  if (s.handler_key !== 'ask-bridge-check' || !s.handler_payload) return null
+  try {
+    const p = JSON.parse(s.handler_payload) as { asker?: string; target?: string }
+    return { asker: p.asker, target: p.target }
+  } catch {
+    return null
+  }
+}
+
 function ScheduleItem({ schedule: s }: { schedule: Schedule }) {
   const [expanded, setExpanded] = useState(false)
   const disabled = !s.enabled
@@ -88,10 +102,16 @@ function ScheduleItem({ schedule: s }: { schedule: Schedule }) {
         ? styles.skipped
         : ''
   const canCollapse = s.prompt.length > COLLAPSE_THRESHOLD
+  const bridge = parseAskBridgePayload(s)
+  // ask-bridge 任务:name 已含"星期五 · 等待 X 回复",直接用;非 ask-bridge 任务:name 前贴人设 avatar
+  const displayName = bridge?.target ? `等待 ${bridge.target} 回复` : s.name
   return (
     <li className={`${styles.scheduleItem} ${disabled ? styles.disabled : ''}`}>
       <div className={styles.scheduleItemHeader}>
-        <span className={styles.scheduleName}>{s.name}</span>
+        <span className={styles.schedulePersona} aria-label={TIMER_PERSONA_NAME}>
+          🧑‍💼 <span className={styles.schedulePersonaName}>{TIMER_PERSONA_NAME}</span>
+        </span>
+        <span className={styles.scheduleName}>{displayName}</span>
         <span className={`${styles.scheduleBadge} ${s.mode === 'agent' ? styles.modeAgent : styles.modeMessage}`}>
           {s.mode}
         </span>

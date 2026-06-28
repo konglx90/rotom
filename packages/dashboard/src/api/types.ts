@@ -321,6 +321,8 @@ export interface Schedule {
   repeat_count: number
   created_at: number
   updated_at: number
+  handler_key: string | null
+  handler_payload: string | null
 }
 
 // Guidance Template Types (群指导 prompt 模板库)
@@ -346,6 +348,20 @@ export interface GuidanceScheduleConfig {
   run_at?: number
   repeat_times?: number
   prompt: string
+}
+
+// Schedule Pattern Types (调度模式参考库 — 常见定时任务模式样板)
+// schedule_config 是 JSON 字符串,解析后形如 GuidanceScheduleConfig。
+// 仅作参考/学习用,不直接管理 scheduled_tasks 实例。
+export interface SchedulePattern {
+  id: number
+  name: string
+  description: string
+  schedule_config: string | null
+  sort_order: number
+  is_default: number
+  created_at: number
+  updated_at: number
 }
 
 export interface CreateCollaborationDto {

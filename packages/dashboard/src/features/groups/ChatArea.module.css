@@ -256,6 +256,12 @@
   border-top-left-radius: 6px;
 }
 
+/* @了我的消息(当前登录真人是被点名方):左侧棪色色条突显。
+   用 inset box-shadow 而非 border-left,避免改变气泡宽度导致内容回流。 */
+.messageBubble.mentionMeBubble {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
 .messageBubble.outgoing {
   background: var(--color-wise-green);
   color: var(--color-dark-green);

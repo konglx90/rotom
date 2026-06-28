@@ -470,6 +470,26 @@
   flex-shrink: 0;
 }
 
+/* #reply 标记的内联胶囊:agent 提问其他 agent 时正文末尾的 marker,系统
+ * 据此建 5min 超时 bridge。直接显示 `#reply` 字面太突兀,换成视觉化标签。
+ * 颜色跟 askPill 同色系(琥珀),表达「等待回复」语义。*/
+.replyTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  vertical-align: baseline;
+  user-select: none;
+  white-space: nowrap;
+}
+
 .askBody {
   padding: 8px 12px;
   display: flex;

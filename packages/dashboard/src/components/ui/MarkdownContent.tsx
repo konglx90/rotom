@@ -29,6 +29,10 @@ interface Props {
 }
 
 const MENTION_RE = /@([\w一-鿿][\w.一-鿿-]*)/g
+// #reply 标记:agent 提问其他 agent 时在正文末尾加的 marker,系统据此建 5min
+// 超时 bridge(见 collaboration.ts:119)。负向 lookbehind 排除 `##reply` / `abc#reply`
+// 这类不应被识别为 marker 的写法;尾部 \b 排除 `#replies` / `#replyxxx`。
+const REPLY_TAG_RE = /(?<![\w#])#reply\b/g
 
 // MarkdownContent 经常被放进一个 onClick 触发弹窗的气泡里(<details>/<summary>
 // 默认会让 click 冒泡上去,导致展开思考/工具调用时也弹出 prompt 弹窗)。
@@ -39,10 +43,15 @@ function stopBubble(e: ReactMouseEvent) {
 
 type MentionState = { firstDone: boolean }
 
-function highlightMentionsInText(
+// 同时识别 @mention 和 #reply 标记,在文本节点内做内联替换。
+// - @mention:仅当 name 命中群成员时高亮(保留 firstDone 逻辑,只高亮首个)
+// - #reply:无条件替换成 🧑‍💼 星期五 等待中 胶囊(每处都替换,因为 marker 是系统级语义)
+// 两者共用一次扫描,避免对同一段文本走两遍正则。
+function highlightInlineTokens(
   text: string,
   isMember: (name: string) => boolean,
-  className: string | undefined,
+  mentionClassName: string | undefined,
+  replyClassName: string,
   keyPrefix: string,
   state: MentionState,
 ): ReactNode {
@@ -50,22 +59,39 @@ function highlightMentionsInText(
   let last = 0
   let matched = false
   let m: RegExpExecArray | null
-  // Each call uses a fresh regex to avoid lastIndex state.
-  const re = new RegExp(MENTION_RE.source, 'g')
+  // 合并正则:要么 @name(捕获 1/2),要么 #reply(无捕获,整体匹配)
+  const re = new RegExp(`(${MENTION_RE.source})|${REPLY_TAG_RE.source}`, 'g')
   while ((m = re.exec(text)) !== null) {
-    const name = m[1]
-    if (!isMember(name)) continue
+    let isMention = false
+    let isReply = false
+    let name = ''
+    if (m[1] != null) {
+      // @name 分支:m[2] 是去 @ 后的名字
+      name = m[2]
+      if (isMember(name)) isMention = true
+    } else {
+      isReply = true
+    }
+    if (!isMention && !isReply) continue
     matched = true
     if (m.index > last) out.push(text.slice(last, m.index))
-    if (!state.firstDone) {
-      state.firstDone = true
+    if (isMention) {
+      if (!state.firstDone) {
+        state.firstDone = true
+        out.push(
+          <span key={`${keyPrefix}-${m.index}`} className={mentionClassName}>
+            @{name}
+          </span>,
+        )
+      } else {
+        out.push(`@${name}`)
+      }
+    } else {
       out.push(
-        <span key={`${keyPrefix}-${m.index}`} className={className}>
-          @{name}
+        <span key={`${keyPrefix}-${m.index}`} className={replyClassName}>
+          🧑‍💼 星期五 等待中
         </span>,
       )
-    } else {
-      out.push(`@${name}`)
     }
     last = m.index + m[0].length
   }
@@ -77,13 +103,14 @@ function highlightMentionsInText(
 function transformMentionChildren(
   children: ReactNode,
   isMember: (name: string) => boolean,
-  className: string | undefined,
+  mentionClassName: string | undefined,
+  replyClassName: string,
   keyPrefix = 'mention',
   state: MentionState = { firstDone: false },
 ): ReactNode {
   return Children.map(children, (child, idx) => {
     if (typeof child === 'string') {
-      return highlightMentionsInText(child, isMember, className, `${keyPrefix}-${idx}`, state)
+      return highlightInlineTokens(child, isMember, mentionClassName, replyClassName, `${keyPrefix}-${idx}`, state)
     }
     if (!isValidElement(child)) return child
     const el = child as ReactElement<{ children?: ReactNode }>
@@ -94,7 +121,8 @@ function transformMentionChildren(
         children: transformMentionChildren(
           el.props.children,
           isMember,
-          className,
+          mentionClassName,
+          replyClassName,
           `${keyPrefix}-${idx}`,
           state,
         ),
@@ -386,15 +414,19 @@ export const MarkdownContent = memo(function MarkdownContent({
     }
   }, [content, streaming])
   const mentionComponents = useMemo<Components | undefined>(() => {
-    if (!mentionMembers || mentionMembers.length === 0) return undefined
-    const memberSet = new Set(mentionMembers)
+    const hasMembers = !!mentionMembers && mentionMembers.length > 0
+    // #reply 标记需要无条件渲染成胶囊,即使没有群成员列表也要启用 transformer。
+    const hasReply = content.includes('#reply')
+    if (!hasMembers && !hasReply) return undefined
+    const memberSet = new Set(mentionMembers ?? [])
     const isMember = (name: string) => memberSet.has(name)
+    const replyClassName = styles.replyTag
     const wrap = (tag: keyof JSX.IntrinsicElements) =>
       function MentionWrapper({ children, node: _node, ...rest }: any) {
         return createElement(
           tag,
           rest,
-          transformMentionChildren(children, isMember, mentionClassName),
+          transformMentionChildren(children, isMember, mentionClassName, replyClassName),
         )
       }
     // Cover text-containing markdown elements. <code>/<pre> are explicitly
@@ -416,7 +448,7 @@ export const MarkdownContent = memo(function MarkdownContent({
       h6: wrap('h6'),
       blockquote: wrap('blockquote'),
     } as Components
-  }, [mentionMembers, mentionClassName])
+  }, [mentionMembers, mentionClassName, content])
 
   if ((rest.length === 0 && !status) || (rest.length === 1 && rest[0].type === 'text' && !status)) {
     return (

@@ -12,6 +12,9 @@ import { IssuesListPage } from './features/groups/IssuesListPage'
 import { KanbanView } from './features/kanban/KanbanView'
 import { MessagesView } from './features/messages/MessagesView'
 import { TerminalPage } from './features/terminal/TerminalPage'
+import { ToolboxView } from './features/toolbox/ToolboxView'
+import { PromptsManagementTab } from './features/toolbox/PromptsManagementTab'
+import { SchedulePatternsTab } from './features/toolbox/SchedulePatternsTab'
 import { E2edGroupsView } from './features/e2ed/E2edGroupsView'
 import { E2edPipelineView } from './features/e2ed/E2edPipelineView'
 import { ConfigModal } from './features/groups/modals/ConfigModal'
@@ -69,13 +72,20 @@ function App() {
               <Routes>
                 <Route path="/dashboard/agents" element={<div className="container-full"><AgentsView /></div>} />
                 <Route path="/dashboard/kanban" element={<RequireAgent><div className="container-full"><KanbanView /></div></RequireAgent>} />
-                <Route path="/dashboard/messages" element={<RequireAgent><div className="container-full"><MessagesView /></div></RequireAgent>} />
                 <Route path="/dashboard/groups" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
                 <Route path="/dashboard/groups/:groupId" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
                 <Route path="/dashboard/groups/:groupId/issues/:issueId" element={<RequireAgent><div className="container-full"><GroupChatView /></div></RequireAgent>} />
                 <Route path="/dashboard/groups/:groupId/issues-single" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssuesListPage /></div></RequireAgent>} />
                 <Route path="/dashboard/groups/:groupId/issues-single/:issueId" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssueDetailPage /></div></RequireAgent>} />
-                <Route path="/dashboard/terminal" element={<div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><TerminalPage /></div>} />
+                <Route path="/dashboard/toolbox" element={<RequireAgent><div className="container-full"><ToolboxView /></div></RequireAgent>}>
+                  <Route index element={<Navigate to="terminal" replace />} />
+                  <Route path="terminal" element={<TerminalPage />} />
+                  <Route path="messages" element={<MessagesView />} />
+                  <Route path="prompts" element={<PromptsManagementTab />} />
+                  <Route path="schedule-patterns" element={<SchedulePatternsTab />} />
+                </Route>
+                <Route path="/dashboard/messages" element={<Navigate to="/dashboard/toolbox/messages" replace />} />
+                <Route path="/dashboard/terminal" element={<Navigate to="/dashboard/toolbox/terminal" replace />} />
                 <Route path="/dashboard/e2ed" element={<div className="container-full"><E2edGroupsView /></div>} />
                 <Route path="/dashboard/e2ed/:groupId" element={<div className="container-full"><E2edPipelineView /></div>} />
                 <Route path="/dashboard" element={<Navigate to="/dashboard/agents" replace />} />
