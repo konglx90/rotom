@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IssueRow, ScheduledTaskRow } from "./types.js";
 import type { GroupRow } from "./groups.js";
+import type { GuidanceTemplateRow } from "./guidance-templates.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,6 +51,8 @@ export interface MeshDbSelf {
   listGroups(): (GroupRow & { member_count: number })[];
   getRoundTracker(issueId: string, round: number): { agent_name: string; has_contributed: number }[];
   getScheduledTask(id: number): ScheduledTaskRow | undefined;
+  /** guidance_templates 模块:create/update/delete 内部回查用。 */
+  getGuidanceTemplate(id: number): GuidanceTemplateRow | undefined;
   /** ask_bridges 模块:createAskBridge 内部回查用。 */
   getAskBridge(id: string): unknown;
   /** 取 group_messages.content;scheduler 创建超时 Issue 时复述原问题用。 */

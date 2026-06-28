@@ -23,3 +23,5 @@ export type {
   OfflineMessageRow,
   ScheduledTaskRow,
 } from "./types.js";
+
+export type { GuidanceTemplateRow } from "./guidance-templates.js";

@@ -598,9 +598,11 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
         return (
           <GroupSettingsModal
             open={true}
+            groupId={g.id}
             groupName={g.name}
             groupWorkingDir={g.working_dir}
             groupGuidancePrompt={g.guidance_prompt}
+            memberAgentNames={(g.members ?? []).map(m => m.agent_name)}
             onClose={() => setSettingsGroupId(null)}
             onSaveName={(name) => updateGroupName(g.id, name)}
             onSaveWorkingDir={(dir) => updateGroupWorkingDir(g.id, dir)}

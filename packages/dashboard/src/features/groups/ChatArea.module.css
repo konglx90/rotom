@@ -453,13 +453,12 @@
 }
 
 .mention {
-  color: var(--color-positive);
+  color: #15803d;
   font-weight: 700;
   cursor: pointer;
 }
 
 .messageBubble.outgoing .mention {
-  color: var(--color-dark-green);
   text-decoration: underline;
   text-underline-offset: 2px;
 }

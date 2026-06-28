@@ -323,6 +323,31 @@ export interface Schedule {
   updated_at: number
 }
 
+// Guidance Template Types (群指导 prompt 模板库)
+// schedule_config 是 JSON 字符串,解析后形如 { mode, agent_name, schedule_kind, interval_sec, repeat_times, prompt }
+// 其中 agent_name / prompt 也支持 {{teacher}}/{{student}}/{{topic}} 占位符。
+export interface GuidanceTemplate {
+  id: number
+  name: string
+  description: string
+  prompt_text: string
+  schedule_config: string | null
+  sort_order: number
+  is_default: number
+  created_at: number
+  updated_at: number
+}
+
+export interface GuidanceScheduleConfig {
+  mode: 'agent' | 'message'
+  agent_name?: string
+  schedule_kind: 'once' | 'interval'
+  interval_sec?: number
+  run_at?: number
+  repeat_times?: number
+  prompt: string
+}
+
 export interface CreateCollaborationDto {
   title: string
   collaborationGoal: string

@@ -4,6 +4,7 @@ import { Avatar } from '../../../components/ui/Avatar'
 import { Modal } from '../../../components/ui/Modal/Modal'
 import { WorkingDirModal } from './WorkingDirModal'
 import { MemberProfileModal } from './MemberProfileModal'
+import { GuidanceTemplatePicker } from './GuidanceTemplatePicker'
 import { groupsApi } from '../../../api/groups'
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
   members: GroupMember[]
   agents: Agent[]
   groupId: string
+  groupName: string
   groupWorkingDir: string | null
   groupGuidancePrompt?: string | null
   onUpdateGuidancePrompt?: (groupId: string, prompt: string | null) => Promise<void>
@@ -38,6 +40,7 @@ export function MemberListModal({
   members,
   agents,
   groupId,
+  groupName,
   groupWorkingDir,
   groupGuidancePrompt,
   onUpdateGuidancePrompt,
@@ -49,6 +52,7 @@ export function MemberListModal({
   const [editingProfile, setEditingProfile] = useState<GroupMember | null>(null)
   const [guidanceValue, setGuidanceValue] = useState(groupGuidancePrompt || '')
   const [guidanceSaving, setGuidanceSaving] = useState(false)
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
 
   const closeEditingDir = () => setEditingDir(null)
   const closeEditingProfile = () => setEditingProfile(null)
@@ -176,25 +180,42 @@ export function MemberListModal({
           <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)', marginTop: 12, paddingTop: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-navy)' }}>📋 群指导 prompt</span>
-              {guidanceDirty && (
+              <div style={{ display: 'flex', gap: 6 }}>
                 <button
                   type="button"
-                  onClick={saveGuidance}
-                  disabled={guidanceSaving}
+                  onClick={() => setShowTemplatePicker(true)}
                   style={{
-                    border: 'none',
-                    background: 'var(--color-primary, #4f46e5)',
-                    color: '#fff',
+                    border: '1px solid rgba(0,0,0,0.12)',
+                    background: 'transparent',
+                    color: 'var(--color-navy)',
                     borderRadius: 6,
-                    padding: '4px 12px',
+                    padding: '4px 10px',
                     fontSize: 12,
-                    cursor: guidanceSaving ? 'not-allowed' : 'pointer',
-                    opacity: guidanceSaving ? 0.6 : 1,
+                    cursor: 'pointer',
                   }}
                 >
-                  {guidanceSaving ? '保存中...' : '保存'}
+                  📚 从模板选择
                 </button>
-              )}
+                {guidanceDirty && (
+                  <button
+                    type="button"
+                    onClick={saveGuidance}
+                    disabled={guidanceSaving}
+                    style={{
+                      border: 'none',
+                      background: 'var(--color-primary, #4f46e5)',
+                      color: '#fff',
+                      borderRadius: 6,
+                      padding: '4px 12px',
+                      fontSize: 12,
+                      cursor: guidanceSaving ? 'not-allowed' : 'pointer',
+                      opacity: guidanceSaving ? 0.6 : 1,
+                    }}
+                  >
+                    {guidanceSaving ? '保存中...' : '保存'}
+                  </button>
+                )}
+              </div>
             </div>
             <textarea
               value={guidanceValue}
@@ -250,6 +271,17 @@ export function MemberListModal({
             onProfilesChanged?.()
             closeEditingProfile()
           }}
+        />
+      )}
+
+      {showTemplatePicker && (
+        <GuidanceTemplatePicker
+          open={showTemplatePicker}
+          groupId={groupId}
+          groupName={groupName}
+          memberAgentNames={members.map(m => m.agent_name)}
+          onPromptApplied={(resolved) => setGuidanceValue(resolved)}
+          onClose={() => setShowTemplatePicker(false)}
         />
       )}
     </>
