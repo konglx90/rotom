@@ -77,13 +77,32 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
   if (sub === "history") {
     const groupId = rest[1]; if (!groupId) fail("usage: rotom group history <groupId>");
     const limit = flagInt(flags, "limit") ?? 50;
+    const contentLen = flagInt(flags, "content-len") ?? 200;
+    const hideExec = flags["no-exec"] === true;
+    const clean = flags["clean"] !== false;
     const data = await api(agent, "GET", `/groups/${encodeURIComponent(groupId)}/messages?limit=${limit}`);
+    // --no-exec 过滤 sender=system 且以「请求执行命令:」开头的 shell 调用通知,
+    // 这类消息占行多但很少是用户想看的回复主体。
+    const filtered = hideExec
+      ? data.filter((m: any) => !(m.sender === "system" && /^请求执行命令[::]/.test(m.content || "")))
+      : data;
     printTable(
-      data.map((m: any) => ({
-        time: m.created_at,
-        sender: m.sender,
-        content: (m.content || "").replace(/\s+/g, " ").slice(0, 80),
-      })),
+      filtered.map((m: any) => {
+        // --clean 去掉行内 [xxx:yyy]...[/xxx:yyy] 形式的 agent 状态/工具标记
+        // ([status:thinking] / [tool:exec] / [tool-result:exec] 等),只留自然语言主体。
+        let content = (m.content || "").replace(/\s+/g, " ");
+        if (clean) {
+          content = content
+            .replace(/\[(\w[\w-]*:\w[\w-]*)\].*?\[\/\1\]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+        return {
+          time: m.created_at,
+          sender: m.sender,
+          content: content.slice(0, contentLen),
+        };
+      }),
       ["time", "sender", "content"],
     );
     return;

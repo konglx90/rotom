@@ -316,7 +316,7 @@ export function registerGroupRoutes(
     const resolvedMentions = Array.isArray(mentions) && mentions.length > 0
       ? mentions
       : (content.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) ?? []);
-    db.addGroupMessage(req.params.id, sender, content, resolvedMentions);
+    const msgId = db.addGroupMessage(req.params.id, sender, content, resolvedMentions);
 
     // ── 真人发群消息:广播给所有群成员 ─────────────────────────────
     // 行为对齐 ws-hub.ts:462-465 (a2a_reply 对群消息做的 broadcastToGroup)。
@@ -349,6 +349,13 @@ export function registerGroupRoutes(
           .filter((id: string | undefined): id is string => !!id);
         hub.broadcastToGroupPublic(req.params.id, wireMsg, [senderAgent.id, ...mentionAgentIds]);
       }
+
+      // 对齐 ws-hub a2a_reply 路径(connection.ts:403-404 + trackCollaborationTurn):
+      // 真人 @ 回复也要走 bridge 检测,否则 pending bridge 不会在入库时 mark answered,
+      // 20s 后 handler 兜底会再发一条 system 复述,跟真人原始 @ 重复(见群 34dd5eee)。
+      hub.autoCreateBridgeOnMention(req.params.id, sender, resolvedMentions, msgId);
+      hub.checkAndCancelBridgesForMessage(req.params.id, sender, resolvedMentions, msgId);
+      hub.trackCollaborationTurn(req.params.id, sender, content);
     }
 
     db.logMessage({

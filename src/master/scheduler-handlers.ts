@@ -58,7 +58,9 @@ export function getSchedulerHandler(key: string): ScheduledTaskHandler | undefin
  *
  * 每次 tick 检查三条路径:
  *   1. bridge 已 resolved(answered/cancelled/timed_out)→ skip,handler 应已 disable task
- *   2. B 有回复(@ 或非@)→ mark answered + postSystemToGroup 复述给 A + disable task
+ *   2. B 有回复 → mark answered + disable task。复述按 reply.mentions 分流:
+ *      - reply 已 @ asker → A 已被 raw @ 唤醒,跳过 system 复述(避免重复提醒)
+ *      - reply 未 @ asker → postSystemToGroup 复述给 A(20s poll 兜底,raw @ 没触发)
  *   3. expires_at < now(5min 到)→ 创建升级 Issue + mark timed_out + disable task
  *   4. 都没命中 → return ok,等下个 20s tick
  *
@@ -82,9 +84,17 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
   // 1. 查 B 是否有回复(@ 或非@都算,取最新一条)
   const reply = ctx.db.findLatestReplyForBridge(bridge);
   if (reply) {
-    // 有回复 → mark answered + system @ 复述(轻量,不建 Issue) + disable task
+    // 有回复 → mark answered + disable task。是否发 system 复述看 reply 是否已 @ asker:
+    //   - 已 @ → A 已被 raw @ 唤醒,不复述(避免重复提醒,西花 06-28 反馈)
+    //   - 未 @ → 走 system 复述唤醒 A(20s poll 兜底路径)
+    // mentions 从 content 重抽(不信任 DB 行的 mentions 列:agent a2a_reply 入库写死 [])
     ctx.db.markBridgeAnswered(bridge.id, reply.id);
     cancelBridgeTask(ctx, bridge.id);
+    const replyMentions = (reply.content || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) ?? [];
+    if (replyMentions.includes(bridge.asker)) {
+      log.info(`bridge #${bridge.id} answered by handler: ${bridge.target} replied (msg ${reply.id}) already @ ${bridge.asker}, skip restatement`);
+      return { status: "ok" };
+    }
     const questionContent = ctx.db.getGroupMessageContent(bridge.question_msg_id) || "(原问题已删除)";
     const qSnippet = questionContent.slice(0, 200);
     const replySnippet = reply.content.slice(0, 500);
@@ -95,7 +105,7 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
       `\n` +
       `**下一步**:基于这条回复继续你之前的任务。如果你不记得任务上下文(新 session),**立即跑 \`rotom group history ${bridge.group_id} --limit 10\`**,找到你问之前是谁 @ 你的、他们让你做什么,然后把 ${bridge.target} 的回复告诉那个人。`;
     ctx.hub.postSystemToGroup(bridge.group_id, msg);
-    log.info(`bridge #${bridge.id} answered by handler: ${bridge.target} replied (msg ${reply.id}), restated to ${bridge.asker}`);
+    log.info(`bridge #${bridge.id} answered by handler: ${bridge.target} replied (msg ${reply.id}), restated to ${bridge.asker} (no @ in reply)`);
     return { status: "ok" };
   }
 
