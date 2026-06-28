@@ -128,6 +128,10 @@ export interface WSHubSelf {
   ): T;
   /** Track a group message as a collaboration turn if applicable. */
   trackCollaborationTurn(groupId: string, agentName: string, content?: string): void;
+  /** 事件式 bridge 检测:群消息落库后调,若答中 pending bridge 即 cancel + 注入 system 上下文。 */
+  checkAndCancelBridgesForMessage(groupId: string, sender: string, mentions: string[], msgId: number): void;
+  /** 隐式 bridge 创建:群消息落库后调,若 sender @ 了 agent B,自动建 bridge。 */
+  autoCreateBridgeOnMention(groupId: string, sender: string, mentions: string[], msgId: number): void;
   /** Push a chat-stream cancellation to the responder worker. */
   pushChatCancel(agentName: string, requestId: string, reason?: string): boolean;
   /** Notify the issue's group of a change (called from connection.ts's update_info / issue_update paths). */

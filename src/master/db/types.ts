@@ -173,4 +173,25 @@ export interface ScheduledTaskRow {
   repeat_count: number;
   created_at: number;
   updated_at: number;
+  /** 非空时,task 到点跑 handler_key 对应的硬编码逻辑(而非 prompt/agent)。 */
+  handler_key: string | null;
+  /** JSON 字符串,handler 自行解析。 */
+  handler_payload: string | null;
+}
+
+/** ask_bridges 行 —— Agent A 提问 B 后的等回复 + 超时兜底记录。详见 migration 034。 */
+export interface AskBridgeRow {
+  id: string;
+  group_id: string;
+  asker: string;
+  target: string;
+  question_msg_id: number;
+  escalate_to: string | null;
+  timeout_ms: number;
+  created_at: number;
+  expires_at: number;
+  status: "pending" | "answered" | "timed_out" | "cancelled";
+  reply_msg_id: number | null;
+  resolved_at: number | null;
+  issue_id: string | null;
 }

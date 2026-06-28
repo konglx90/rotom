@@ -50,6 +50,10 @@ export interface MeshDbSelf {
   listGroups(): (GroupRow & { member_count: number })[];
   getRoundTracker(issueId: string, round: number): { agent_name: string; has_contributed: number }[];
   getScheduledTask(id: number): ScheduledTaskRow | undefined;
+  /** ask_bridges 模块:createAskBridge 内部回查用。 */
+  getAskBridge(id: string): unknown;
+  /** 取 group_messages.content;scheduler 创建超时 Issue 时复述原问题用。 */
+  getGroupMessageContent(msgId: number): string | undefined;
 }
 
 export class MeshDbCore {

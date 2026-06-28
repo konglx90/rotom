@@ -48,6 +48,10 @@ export const scheduleMethods = {
     prompt: string;
     repeatTimes?: number | null;
     enabled?: boolean;
+    /** 非空时,task 到点跑 handler_key 对应的硬编码逻辑(而非 prompt/agent)。 */
+    handlerKey?: string | null;
+    /** JSON 字符串,handler 自行解析。 */
+    handlerPayload?: string | null;
   }): ScheduledTaskRow {
     const now = Date.now();
     const enabled = input.enabled === false ? 0 : 1;
@@ -57,8 +61,9 @@ export const scheduleMethods = {
     const info = this.db.prepare(`
       INSERT INTO scheduled_tasks (
         name, group_id, mode, agent_name, schedule_kind, interval_sec, run_at,
-        prompt, enabled, next_run_at, repeat_times, repeat_count, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        prompt, enabled, next_run_at, repeat_times, repeat_count, created_at, updated_at,
+        handler_key, handler_payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
     `).run(
       input.name,
       input.groupId,
@@ -73,6 +78,8 @@ export const scheduleMethods = {
       input.repeatTimes ?? null,
       now,
       now,
+      input.handlerKey ?? null,
+      input.handlerPayload ?? null,
     );
     return this.getScheduledTask(Number(info.lastInsertRowid))!;
   },
@@ -88,6 +95,8 @@ export const scheduleMethods = {
     prompt?: string;
     enabled?: boolean;
     repeatTimes?: number | null;
+    handlerKey?: string | null;
+    handlerPayload?: string | null;
   }): ScheduledTaskRow | undefined {
     const task = this.getScheduledTask(id);
     if (!task) return undefined;
@@ -100,6 +109,8 @@ export const scheduleMethods = {
     if (patch.prompt !== undefined) { sets.push("prompt = ?"); values.push(patch.prompt); }
     if (patch.enabled !== undefined) { sets.push("enabled = ?"); values.push(patch.enabled ? 1 : 0); }
     if (patch.repeatTimes !== undefined) { sets.push("repeat_times = ?"); values.push(patch.repeatTimes); }
+    if (patch.handlerKey !== undefined) { sets.push("handler_key = ?"); values.push(patch.handlerKey); }
+    if (patch.handlerPayload !== undefined) { sets.push("handler_payload = ?"); values.push(patch.handlerPayload); }
 
     // schedule_kind / interval_sec / run_at 任一变化都重算 next_run_at
     const scheduleChanged =

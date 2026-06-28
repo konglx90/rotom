@@ -95,6 +95,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     openCreateGroupModal,
     openConfigModal,
     updateGroupName,
+    updateGroupGuidancePrompt,
     updateGroupWorkingDir,
     toggleGroupPinned,
     toggleGroupArchived,
@@ -599,9 +600,11 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             open={true}
             groupName={g.name}
             groupWorkingDir={g.working_dir}
+            groupGuidancePrompt={g.guidance_prompt}
             onClose={() => setSettingsGroupId(null)}
             onSaveName={(name) => updateGroupName(g.id, name)}
             onSaveWorkingDir={(dir) => updateGroupWorkingDir(g.id, dir)}
+            onSaveGuidancePrompt={(prompt) => updateGroupGuidancePrompt(g.id, prompt)}
           />
         )
       })()}

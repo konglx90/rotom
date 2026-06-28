@@ -397,7 +397,11 @@ export const connectionMethods = {
 
           // Persist to group history BEFORE sending (avoids race with history refresh)
           if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
-            this.db.addGroupMessage(conversation.groupId, fromName, msg.payload?.message || "", []);
+            const msgId = this.db.addGroupMessage(conversation.groupId, fromName, msg.payload?.message || "", []);
+            // 提取 mentions 走 bridge 检测(同 sendAsAgent 的 regex)
+            const mentions = (msg.payload?.message || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+            this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
+            this.checkAndCancelBridgesForMessage(conversation.groupId, fromName, mentions, msgId);
           }
 
           // Group replies: broadcast to all members so everyone sees it in real-time
@@ -411,15 +415,19 @@ export const connectionMethods = {
             this.sendToAgent(targetId, replyMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
           }
 
-          // Log reply with latency
+          // Log reply with latency. toName 优先用 @ 到的 agent(群回复 @ 了谁就是写给谁),
+          // 没提到 agent 才回落到 reply target(原始发送方)。
           const sendTs = this.sendTimestamps.get(msg.requestId);
           const latencyMs = sendTs ? Date.now() - sendTs : undefined;
+          const replyMentions = (msg.payload?.message || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+          const firstMentionedName = replyMentions.find((n: string) => this.db.getAgentByName(n));
+          const logToAgent = firstMentionedName ? this.db.getAgentByName(firstMentionedName) : targetAgent;
           this.db.logMessage({
             requestId: msg.requestId,
             fromName,
             fromDomain: conn?.domain,
-            toName: targetAgent?.name,
-            toDomain: targetAgent?.domain ?? undefined,
+            toName: logToAgent?.name,
+            toDomain: logToAgent?.domain ?? undefined,
             routeType: "reply",
             direction: "reply",
             payload: JSON.stringify(msg.payload),
@@ -486,6 +494,9 @@ export const connectionMethods = {
               [],
               cancelled ? { cancelledAt: new Date().toISOString() } : undefined,
             );
+            const mentions = (msg.payload?.message || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+            this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
+            this.checkAndCancelBridgesForMessage(conversation.groupId, fromName, mentions, msgId);
             // 把 worker 回传的 composedPrompt 持久化,前端点击消息可直接读出来渲染分层。
             // 中断态也保留(用户可能想看 prompt 排查为何中断),只要 worker 带了就存。
             const cp = (msg as any).composedPrompt as
@@ -506,11 +517,21 @@ export const connectionMethods = {
             }
           }
 
-          // Group stream end: broadcast to all members
+          // Group stream end: broadcast a2a_message(带完整内容)给群成员,
+          // 让其他 agent 的 worker 能处理(worker 只认 a2a_message,不认 a2a_stream_end)。
+          // a2a_stream_end 只发给原始 target,用于 Dashboard 流式 UI 收尾。
           if (conversation?.type === "group" && conversation.groupId) {
-            this.broadcastToGroup(conversation.groupId, endMsg as unknown as Parameters<typeof this.sendToAgent>[1], [agentId]);
-            // 流式结束同样计入协作轮次贡献 —— 但中断的回复不算贡献,
-            // 否则会让协作轮次在 agent 还没真正表达完整观点时误推进。
+            const groupMsg = enrichWorkerDispatch(this, {
+              type: "a2a_message" as const,
+              requestId: msg.requestId,
+              from: { name: fromName, domain: conn?.domain, status: "online" as const },
+              payload: msg.payload,
+              routeType: "reply" as const,
+              conversation: this.enrichConversationWithCollaboration(conversation),
+            } as ServerMessage, undefined, conversation.groupId);
+            this.broadcastToGroup(conversation.groupId, groupMsg as unknown as Parameters<typeof this.sendToAgent>[1], [agentId]);
+            // a2a_stream_end 发给原始 target(发起方 Dashboard 收尾流式 UI)
+            this.sendToAgent(targetId, endMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
             if (!cancelled) {
               this.trackCollaborationTurn(conversation.groupId, fromName, msg.payload?.message || "");
             }
@@ -518,16 +539,19 @@ export const connectionMethods = {
             this.sendToAgent(targetId, endMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
           }
 
-          // Log complete reply with latency
+          // Log complete reply with latency. toName 优先用 @ 到的 agent。
           const sendTs = this.sendTimestamps.get(msg.requestId);
           const latencyMs = sendTs ? Date.now() - sendTs : undefined;
           const targetAgent = this.db.getAgentById(targetId);
+          const endMentions = (msg.payload?.message || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+          const firstMentionedName = endMentions.find((n: string) => this.db.getAgentByName(n));
+          const logToAgent = firstMentionedName ? this.db.getAgentByName(firstMentionedName) : targetAgent;
           this.db.logMessage({
             requestId: msg.requestId,
             fromName,
             fromDomain: conn?.domain,
-            toName: targetAgent?.name,
-            toDomain: targetAgent?.domain ?? undefined,
+            toName: logToAgent?.name,
+            toDomain: logToAgent?.domain ?? undefined,
             routeType: "reply",
             direction: "reply",
             payload: JSON.stringify(msg.payload),

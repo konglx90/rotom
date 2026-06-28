@@ -173,6 +173,8 @@ export interface Group {
   working_dir?: string | null
   pinned_at?: string | null
   archived_at?: string | null
+  /** 群级别指导 prompt,全群一份;null/空 = 未设置。 */
+  guidance_prompt?: string | null
   member_count?: number
   members?: GroupMember[]
 }

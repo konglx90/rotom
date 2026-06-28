@@ -66,6 +66,8 @@ export class WSHub extends WSHubCore {
   // ─── collaboration ────────────────────────────────────────────────────────
   declare enrichConversationWithCollaboration: typeof collaborationMethods.enrichConversationWithCollaboration;
   declare trackCollaborationTurn: typeof collaborationMethods.trackCollaborationTurn;
+  declare checkAndCancelBridgesForMessage: typeof collaborationMethods.checkAndCancelBridgesForMessage;
+  declare autoCreateBridgeOnMention: typeof collaborationMethods.autoCreateBridgeOnMention;
   declare concludeCollaboration: typeof collaborationMethods.concludeCollaboration;
   declare sendAsAgent: typeof collaborationMethods.sendAsAgent;
 

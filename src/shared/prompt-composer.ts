@@ -18,7 +18,7 @@ import { ROTOM_CLI_PROMPT, ROTOM_CLI_PROMPT_VERSION } from "./rotom-cli-prompt.j
 import type { AgentProfile } from "./agent-profile.js";
 import type { ActiveIssueRef } from "./group-context.js";
 
-export type PromptLayerKind = "rotom-cli" | "group-basic" | "agent-role" | "cwd" | "task";
+export type PromptLayerKind = "rotom-cli" | "group-basic" | "group-guidance" | "agent-role" | "cwd" | "task";
 
 export interface PromptLayer {
   layer: PromptLayerKind;
@@ -39,7 +39,7 @@ export interface ComposeContext {
   agentName: string;
   agentProfile: AgentProfile | null;
   /** 群内调用时填;DM / 单 issue 可空 */
-  group?: { id: string; name: string; activeIssues: ActiveIssueRef[] } | null;
+  group?: { id: string; name: string; activeIssues: ActiveIssueRef[]; guidancePrompt?: string | null } | null;
   cwd: string | null;
   /** chat 模式时填,告诉 agent 这条消息是谁发的。issue/collab 模式不需要,留空。 */
   fromName?: string | null;
@@ -59,6 +59,7 @@ export interface ComposeContext {
 const SOURCE_ROTOM_CLI = "src/shared/rotom-cli-prompt.ts (constant)";
 const SOURCE_AGENT_PROFILE = "agents.profile JSON (edit via Dashboard 员工介绍)";
 const SOURCE_GROUP_BASIC = "groups + active_issues (runtime, from master enrichConversationWithCollaboration)";
+const SOURCE_GROUP_GUIDANCE = "groups.guidance_prompt (edit via Dashboard 群设置 / PATCH /groups/:id)";
 const SOURCE_CWD = "<worker.executor>.resolveIssueCwd(groupId)";
 
 function buildRotomCliLayer(): PromptLayer {
@@ -79,7 +80,7 @@ function buildAgentRoleLayer(profile: AgentProfile | null): PromptLayer | null {
 }
 
 function buildGroupBasicLayer(
-  group: { id: string; name: string; activeIssues: ActiveIssueRef[] } | null | undefined,
+  group: { id: string; name: string; activeIssues: ActiveIssueRef[]; guidancePrompt?: string | null } | null | undefined,
   selfName: string,
 ): PromptLayer | null {
   if (!group) return null;
@@ -93,6 +94,20 @@ function buildGroupBasicLayer(
     layer: "group-basic",
     content: header + issuesBlock,
     source: SOURCE_GROUP_BASIC,
+  };
+}
+
+/** 群级别指导 prompt;空/null 不渲染。在 group-basic 之后、cwd 之前插入。 */
+function buildGroupGuidanceLayer(
+  group: { guidancePrompt?: string | null } | null | undefined,
+): PromptLayer | null {
+  if (!group) return null;
+  const prompt = group.guidancePrompt;
+  if (!prompt || !prompt.trim()) return null;
+  return {
+    layer: "group-guidance",
+    content: `[群指导] ${prompt.trim()}\n`,
+    source: SOURCE_GROUP_GUIDANCE,
   };
 }
 
@@ -160,6 +175,9 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
 
   const group = buildGroupBasicLayer(ctx.group, ctx.agentName);
   if (group) layers.push(group);
+
+  const guidance = buildGroupGuidanceLayer(ctx.group);
+  if (guidance) layers.push(guidance);
 
   const cwd = buildCwdLayer(ctx.cwd, ctx.mode, ctx.approvalPolicy);
   if (cwd) layers.push(cwd);

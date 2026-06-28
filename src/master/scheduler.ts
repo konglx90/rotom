@@ -27,11 +27,12 @@ import { randomUUID } from "node:crypto";
 import type { MeshDb, ScheduledTaskRow } from "./db.js";
 import { resolveGroupAgentWorkingDir } from "./group-paths.js";
 import { createLogger } from "../shared/logger.js";
+import { getSchedulerHandler } from "./scheduler-handlers.js";
 
 const log = createLogger("mesh-scheduler");
 
-/** 调度器扫描周期。每 30s 看一眼,粒度足够 30s 间隔及以上的任务。 */
-const TICK_MS = 30_000;
+/** 调度器扫描周期。每 20s 看一眼:扫 scheduled_tasks(含 ask-bridge handler)。 */
+const TICK_MS = 20_000;
 
 /** 一次性任务的 grace window,固定 120s。 */
 const ONESHOT_GRACE_SEC = 120;
@@ -120,6 +121,31 @@ export class Scheduler {
     const newRepeatCount = task.repeat_count + 1;
 
     try {
+      // handler 模式:跑硬编码逻辑(ask-bridge-check 等),不走 prompt/agent 路径
+      if (task.handler_key) {
+        const handler = getSchedulerHandler(task.handler_key);
+        if (!handler) {
+          this.db.markScheduledTaskRun(task.id, now, "error", `unknown handler: ${task.handler_key}`, null, newRepeatCount);
+          log.error(`task #${task.id} "${task.name}" unknown handler: ${task.handler_key}`);
+          this.autoDisableIfDone(task, newRepeatCount);
+          return;
+        }
+        let payload: unknown;
+        try {
+          payload = task.handler_payload ? JSON.parse(task.handler_payload) : {};
+        } catch (e: any) {
+          this.db.markScheduledTaskRun(task.id, now, "error", `bad handler_payload JSON: ${e.message}`, null, newRepeatCount);
+          log.error(`task #${task.id} "${task.name}" bad handler_payload`, e);
+          this.autoDisableIfDone(task, newRepeatCount);
+          return;
+        }
+        const result = await handler(payload, { db: this.db, hub: this.hub });
+        this.db.markScheduledTaskRun(task.id, now, result.status, result.error ?? null, result.issueId ?? null, newRepeatCount);
+        log.info(`task #${task.id} "${task.name}" handler "${task.handler_key}" → ${result.status}${result.issueId ? ` (issue ${result.issueId})` : ""}`);
+        this.autoDisableIfDone(task, newRepeatCount);
+        return;
+      }
+
       if (task.mode === "message") {
         this.hub.postSystemToGroup(task.group_id, task.prompt);
         this.db.markScheduledTaskRun(task.id, now, "ok", null, null, newRepeatCount);

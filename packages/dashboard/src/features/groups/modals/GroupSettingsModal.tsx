@@ -7,39 +7,47 @@ interface GroupSettingsModalProps {
   open: boolean
   groupName: string
   groupWorkingDir: string | null | undefined
+  groupGuidancePrompt?: string | null
   onClose: () => void
   onSaveName: (name: string) => void
   onSaveWorkingDir: (dir: string | null) => void
+  onSaveGuidancePrompt: (prompt: string | null) => void
 }
 
 export function GroupSettingsModal({
   open,
   groupName,
   groupWorkingDir,
+  groupGuidancePrompt,
   onClose,
   onSaveName,
   onSaveWorkingDir,
+  onSaveGuidancePrompt,
 }: GroupSettingsModalProps) {
   const [nameValue, setNameValue] = useState(groupName)
   const [dirValue, setDirValue] = useState(groupWorkingDir || '')
+  const [guidanceValue, setGuidanceValue] = useState(groupGuidancePrompt || '')
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (open) {
       setNameValue(groupName)
       setDirValue(groupWorkingDir || '')
+      setGuidanceValue(groupGuidancePrompt || '')
       requestAnimationFrame(() => {
         nameInputRef.current?.focus()
         nameInputRef.current?.select()
       })
     }
-  }, [open, groupName, groupWorkingDir])
+  }, [open, groupName, groupWorkingDir, groupGuidancePrompt])
 
   const nameTrimmed = nameValue.trim()
   const nameDirty = nameTrimmed !== groupName.trim()
   const dirTrimmed = dirValue.trim()
   const dirDirty = dirTrimmed !== (groupWorkingDir || '').trim()
-  const canSave = nameDirty || dirDirty
+  const guidanceTrimmed = guidanceValue.trim()
+  const guidanceDirty = guidanceTrimmed !== (groupGuidancePrompt || '').trim()
+  const canSave = nameDirty || dirDirty || guidanceDirty
 
   const handleSave = () => {
     if (nameDirty && nameTrimmed) {
@@ -48,7 +56,10 @@ export function GroupSettingsModal({
     if (dirDirty) {
       onSaveWorkingDir(dirTrimmed ? dirTrimmed : null)
     }
-    if (nameDirty || dirDirty) {
+    if (guidanceDirty) {
+      onSaveGuidancePrompt(guidanceTrimmed ? guidanceTrimmed : null)
+    }
+    if (nameDirty || dirDirty || guidanceDirty) {
       onClose()
     }
   }
@@ -146,6 +157,26 @@ export function GroupSettingsModal({
           </p>
         </div>
 
+        {/* Guidance Prompt */}
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="group-settings-guidance">群指导 prompt</label>
+          <textarea
+            id="group-settings-guidance"
+            value={guidanceValue}
+            onChange={e => setGuidanceValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="全群一份,群内所有 agent 被唤起时拼到 prompt 上。例:本群讨论 VR 需求,所有回复聚焦用户场景;提问其他 agent 必须用 scripts/rotom-ask-with-timeout.mjs。"
+            className={styles.guidanceTextarea}
+            rows={4}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <p className={styles.hint}>
+            <span className={styles.hintIcon}>💡</span>
+            <span>群级别硬约定,所有成员都会看到。留空保存等同于清除。不支持 per-member 覆盖。</span>
+          </p>
+        </div>
+
         {/* Current values summary */}
         <div className={styles.summary}>
           <div className={styles.summaryRow}>
@@ -156,6 +187,12 @@ export function GroupSettingsModal({
             <span className={styles.summaryLabel}>当前目录</span>
             <span className={`${styles.summaryValue} ${!groupWorkingDir ? styles.summaryValueEmpty : ''}`}>
               {groupWorkingDir || '未设置'}
+            </span>
+          </div>
+          <div className={styles.summaryRow}>
+            <span className={styles.summaryLabel}>当前指导</span>
+            <span className={`${styles.summaryValue} ${!groupGuidancePrompt ? styles.summaryValueEmpty : ''}`}>
+              {groupGuidancePrompt ? `${groupGuidancePrompt.slice(0, 60)}${groupGuidancePrompt.length > 60 ? '…' : ''}` : '未设置'}
             </span>
           </div>
         </div>

@@ -111,12 +111,12 @@ export function registerGroupRoutes(
       res.status(404).json({ error: "Group not found" });
       return;
     }
-    const { name, workingDir, pinned, archived } = req.body;
+    const { name, workingDir, pinned, archived, guidancePrompt } = req.body;
     if (name !== undefined && name !== null) {
       db.updateGroupName(req.params.id, String(name));
       log.info(`Group ${req.params.id} name → ${name}`);
     }
-    if (workingDir === undefined && name === undefined && pinned === undefined && archived === undefined) {
+    if (workingDir === undefined && name === undefined && pinned === undefined && archived === undefined && guidancePrompt === undefined) {
       res.status(400).json({ error: "no updatable fields" });
       return;
     }
@@ -127,6 +127,11 @@ export function registerGroupRoutes(
     if (archived !== undefined) {
       const next = db.updateGroupArchived(req.params.id, Boolean(archived));
       log.info(`Group ${req.params.id} archived_at → ${next ?? "null"}`);
+    }
+    if (guidancePrompt !== undefined) {
+      const v = typeof guidancePrompt === "string" ? guidancePrompt : null;
+      db.updateGroupGuidancePrompt(req.params.id, v);
+      log.info(`Group ${req.params.id} guidance_prompt → ${v ? `(${v.length} chars)` : "(cleared)"}`);
     }
     if (workingDir !== undefined) {
       let next: string;
@@ -412,5 +417,27 @@ export function registerGroupRoutes(
     }
     const deleted = db.deleteCrossDomainRule(from, to);
     res.json({ ok: true, deleted });
+  });
+
+  /** GET /api/groups/:id/asks?status=pending —— 列出群里的 bridge */
+  apiRouter.get("/groups/:id/asks", (req, res) => {
+    const status = typeof req.query.status === "string" ? req.query.status as any : undefined;
+    const bridges = db.listAskBridges({ groupId: req.params.id, status });
+    res.json(bridges);
+  });
+
+  /** GET /api/asks/:id —— 单条 bridge 详情 */
+  apiRouter.get("/asks/:id", (req, res) => {
+    const bridge = db.getAskBridge(req.params.id);
+    if (!bridge) { res.status(404).json({ error: "Bridge not found" }); return; }
+    res.json(bridge);
+  });
+
+  /** POST /api/asks/:id/cancel —— A 主动 cancel(收到非@回复,自己判断是回复了) */
+  apiRouter.post("/asks/:id/cancel", (req, res) => {
+    const ok = db.cancelBridge(req.params.id);
+    if (!ok) { res.status(409).json({ error: "Bridge not pending (already resolved)" }); return; }
+    log.info(`Ask bridge cancelled: ${req.params.id}`);
+    res.json({ ok: true });
   });
 }

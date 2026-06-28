@@ -63,6 +63,7 @@ interface ChatContextValue {
   setGroupMemberWorkingDir: (groupId: string, agentName: string, workingDir: string) => Promise<void>
   clearGroupMemberWorkingDir: (groupId: string, agentName: string) => Promise<void>
   updateGroupName: (groupId: string, name: string) => Promise<void>
+  updateGroupGuidancePrompt: (groupId: string, prompt: string | null) => Promise<void>
   toggleGroupPinned: (groupId: string, pinned: boolean) => Promise<void>
   deleteGroup: (groupId: string) => Promise<void>
   toggleGroupArchived: (groupId: string, archived: boolean) => Promise<void>
@@ -332,6 +333,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     },
     [loadGroups],
   )
+
+  const updateGroupGuidancePrompt = useCallback(
+    async (groupId: string, prompt: string | null) => {
+      try {
+        await groupsApi.updateGuidancePrompt(groupId, prompt)
+        await loadGroups()
+      } catch (error) {
+        console.error('Failed to update group guidance prompt:', error)
+        const msg = error instanceof Error ? error.message : String(error)
+        window.alert(`更新群指导 prompt 失败：${msg}`)
+        throw error
+      }
+    },
+    [loadGroups],
+  )
   const toggleGroupArchived = useCallback(
     async (groupId: string, archived: boolean) => {
       setGroups((prev) =>
@@ -458,6 +474,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     selectGroup,
     createGroup,
     updateGroupName,
+    updateGroupGuidancePrompt,
     updateGroupWorkingDir,
     setGroupMemberWorkingDir,
     clearGroupMemberWorkingDir,

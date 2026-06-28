@@ -39,6 +39,7 @@ import { cmdIssue } from "./issue.js";
 import { cmdNote } from "./note.js";
 import { cmdCollab } from "./collab.js";
 import { cmdSchedule } from "./schedule.js";
+import { cmdAsk } from "./ask.js";
 import { cmdMaster, colonExpand } from "./master.js";
 import { cmdExecutor } from "./executor.js";
 import { cmdInit } from "./init.js";
@@ -152,6 +153,17 @@ Schedule (群内定时任务,master 端 30s tick 调度):
     --at    <iso>   例 2026-06-22T09:00          one-shot,绝对时间
     --repeat N      最多跑 N 次后自动 disable;传 0 或 ∞ 表示不限次数
 
+Ask (Agent A 提问 B + 5min 超时兜底 bridge,详见 docs/AGENT_ASK_REPLY_TIMER.md):
+  ask <groupId> <target> <question...>   [--timeout 5m] [--escalate-to <真人>]
+    发问 + 建 bridge。系统自动 5min 超时:
+      - B @ A → master 正常 dispatch 给 A,timer 自动 cancel
+      - B 不 @ 回复 → 5min 后系统建 Issue 给 A,描述里复述回复
+      - 完全无回复 → 5min 后系统建 Issue 指示 A @ 真人求救
+    target 离线 → 不建 bridge,exit 2(提示 A 自己 @ 真人)
+  ask list --group <id> [--status pending|answered|timed_out|cancelled] [--pretty]
+  ask show <bridgeId>
+  ask cancel <bridgeId>                    A 主动 cancel(收到非@回复,自己判断是回复了)
+
 Process lifecycle (local daemon control — do not require an agent):
   master <start|stop|restart|status> [--daemon] [--port N] [--host A] [--data D] [--dev]
   master:start | master:stop | master:status | master:restart   (alias)
@@ -203,6 +215,7 @@ async function main(): Promise<void> {
     case "note":            return cmdNote(agent, rest, flags);
     case "collab":          return cmdCollab(agent, rest, flags);
     case "schedule":        return cmdSchedule(agent, rest, flags);
+    case "ask":             return cmdAsk(agent, rest, flags);
     default: fail(`unknown command: ${cmd}\nRun 'rotom help' for usage.`);
   }
 }
