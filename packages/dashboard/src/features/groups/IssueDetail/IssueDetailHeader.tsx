@@ -80,17 +80,23 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
     }
   }
 
-  // 全局 ESC 监听:in_progress 时触发中断(对齐 codex interaction.rs:117)。
-  // 输入框 / textarea 聚焦时不拦截 —— 让用户正常 ESC 退出编辑。中断进行中
-  // 不重复触发。open / 终态 ESC 无效(无活跃步骤可中断)。
+  // 全局 ESC 监听(对齐 codex CLI 的 ESC + flush steers 与编辑取消):
+  //   - 编辑态(edit.editing):取消编辑,退出 textarea,不触发中断。
+  //   - in_progress:中断当前步骤 + flush pendingQueue。即使 ContinueInputBar
+  //     textarea 聚焦也触发 —— placeholder 明确告知用户「Esc 统一发送并中断
+  //     当前步骤」,旧实现把 textarea 一律 return 掉,导致 ESC 在输入框里失效。
+  //   - open / paused / 终态且未编辑:无 ESC 行为(没活跃步骤可中断,也没编辑可取消)。
+  // 旧实现 `if (!isInProgress) return` 让 listener 只在 in_progress 挂载,
+  // 结果非 in_progress 态下编辑描述时 ESC 完全无反应(本 issue 修复点)。
   useEffect(() => {
-    if (!isInProgress) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      const t = e.target as HTMLElement | null
-      const tag = t?.tagName
-      // 输入框聚焦时 ESC 让用户退出编辑,不触发中断。
-      if (tag === 'TEXTAREA' || tag === 'INPUT' || t?.isContentEditable) return
+      if (edit.editing) {
+        e.preventDefault()
+        edit.cancelEdit()
+        return
+      }
+      if (!isInProgress) return
       e.preventDefault()
       void handleInterrupt()
     }
@@ -100,9 +106,10 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
     // 但中断进行中的去重由 setInterrupting + 早 return 保证。pendingQueue
     // 必须放依赖:否则用户加 chip 后按 ESC,监听闭包里的 handleInterrupt 还是
     // 旧 render 的(空队列),chip 不会被 flush。pendingQueue 只在 chip 增删
-    // 时换引用,重绑频率很低。
+    // 时换引用,重绑频率很低。edit.editing 必须放依赖:进入/退出编辑时
+    // 重绑 listener,确保 ESC 走对应分支。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInProgress, issue.id, pendingQueue])
+  }, [edit.editing, isInProgress, issue.id, pendingQueue])
 
   // 候选指派对象 = 群成员 ∩ 非真人 agent（真人不参与抢单执行）。
   const memberSet = new Set(groupMembers)
