@@ -456,6 +456,7 @@ export function GroupChatView() {
       {(!visitorToken || isVisitor) && (
         <div className={styles.workspace}>
           <AddMemberModal
+            key={selectedGroup?.id ?? 'no-group'}
             open={showAddMemberModal}
             groupMemberNames={groupMembers}
             agents={agents}
@@ -463,9 +464,12 @@ export function GroupChatView() {
             onAdd={handleAddMembers}
           />
 
-          {/* 群模式:成员列表 modal(从原 chatHeader 上移)。 */}
+          {/* 群模式:成员列表 modal(从原 chatHeader 上移)。
+              key=groupId:切群时强制 remount,清空内部 group-scoped state(guidanceValue/editingDir 等),
+              否则切群后残留上一群的编辑态。 */}
           {selectedGroup && !isDirectMode && (
             <MemberListModal
+              key={selectedGroup.id}
               open={showMemberList}
               members={selectedGroup.members || []}
               agents={agents}
@@ -489,6 +493,7 @@ export function GroupChatView() {
           {/* 群模式:分享链接 modal(从原 chatHeader 上移)。 */}
           {showShareModal && selectedGroup && !isDirectMode && (
             <ShareLinkModal
+              key={selectedGroup.id}
               open
               groupId={selectedGroup.id}
               groupName={selectedGroup.name}

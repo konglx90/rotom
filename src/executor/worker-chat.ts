@@ -89,6 +89,7 @@ export class ChatHandler {
             activeIssues: conversation.activeIssues ?? [],
             guidancePrompt: conversation.guidancePrompt ?? null,
             memoryCounts: conversation.memoryCounts,
+            skillCount: conversation.skillCount,
           }
         : null,
       cwd,

@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { GuidanceTemplatePicker } from './GuidanceTemplatePicker'
+import { skillsApi } from '../../../api/skills'
+import type { SkillIndex, SkillBinding } from '../../../api/skills'
+import { useChatContext } from '../../../context/ChatContext'
 import styles from './GroupSettingsModal.module.css'
 
 interface GroupSettingsModalProps {
@@ -221,6 +224,8 @@ export function GroupSettingsModal({
         </div>
       </div>
 
+      <SkillBindingsSection groupId={groupId} memberAgentNames={memberAgentNames ?? []} />
+
       {showTemplatePicker && (
         <GuidanceTemplatePicker
           open={showTemplatePicker}
@@ -232,5 +237,91 @@ export function GroupSettingsModal({
         />
       )}
     </Modal>
+  )
+}
+
+/** 每个 agent 勾选该群要绑定的 skill。勾选实时 bind/unbind。 */
+function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; memberAgentNames: string[] }) {
+  const { myAgentName } = useChatContext()
+  const [allSkills, setAllSkills] = useState<SkillIndex[]>([])
+  const [bindings, setBindings] = useState<SkillBinding[]>([])
+  const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string>('')  // "agentName:skillName" 防抖
+
+  const reload = () => {
+    Promise.all([skillsApi.list(), skillsApi.listBindings(groupId)])
+      .then(([s, b]) => { setAllSkills(s); setBindings(b) })
+      .catch(e => setErr((e as Error).message))
+  }
+  useEffect(() => { reload() }, [groupId])
+
+  const toggle = async (agentName: string, skill: SkillIndex) => {
+    const key = `${agentName}:${skill.id}`
+    if (busy) return
+    setBusy(key)
+    try {
+      const isBound = bindings.some(b => b.agent_name === agentName && b.skill_id === skill.id)
+      if (isBound) {
+        await skillsApi.unbind(groupId, agentName, skill.name)
+      } else {
+        await skillsApi.bind(groupId, agentName, skill.name, myAgentName)
+      }
+      await reload()
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  if (memberAgentNames.length === 0) return null
+
+  return (
+    <div className={styles.summary} style={{ marginTop: 12 }}>
+      <div className={styles.summaryRow} style={{ marginBottom: 8 }}>
+        <span className={styles.summaryLabel}>技能绑定(per agent)</span>
+        <span className={styles.summaryValue} style={{ fontSize: 11, color: 'var(--color-slate, #888)' }}>
+          勾选的 skill 会在该 agent 执行时注入 prompt 指针。全局 skill 在工具箱管理。
+        </span>
+      </div>
+      {err && <div style={{ color: '#c00', fontSize: 12, marginBottom: 6 }}>{err}</div>}
+      {allSkills.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--color-slate, #888)', padding: '8px 0' }}>
+          暂无 skill。去工具箱「技能」tab 新建,或 `rotom memory promote-to-skill` 沉淀。
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {memberAgentNames.map(aname => (
+            <div key={aname} style={{ padding: '6px 0', borderTop: '1px solid var(--border-color-light, #eee)' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{aname}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {allSkills.map(s => {
+                  const checked = bindings.some(b => b.agent_name === aname && b.skill_id === s.id)
+                  const key = `${aname}:${s.id}`
+                  return (
+                    <label key={s.id} style={{
+                      fontSize: 11, padding: '2px 8px',
+                      border: `1px solid ${checked ? 'var(--color-wise-green, #2f7a2f)' : 'var(--border-color-light, #ddd)'}`,
+                      borderRadius: 4, cursor: 'pointer',
+                      background: checked ? 'rgba(47, 122, 47, 0.08)' : 'transparent',
+                      opacity: busy === key ? 0.5 : 1,
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={busy === key}
+                        onChange={() => toggle(aname, s)}
+                        style={{ marginRight: 4 }}
+                      />
+                      {s.name}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

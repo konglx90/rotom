@@ -38,6 +38,7 @@ import { cmdGroup } from "./group.js";
 import { cmdIssue } from "./issue.js";
 import { cmdNote } from "./note.js";
 import { cmdMemory } from "./memory.js";
+import { cmdSkill } from "./skill.js";
 import { cmdCollab } from "./collab.js";
 import { cmdSchedule } from "./schedule.js";
 import { cmdAsk } from "./ask.js";
@@ -229,6 +230,7 @@ async function main(): Promise<void> {
     case "issue":           return cmdIssue(agent, rest, flags);
     case "note":            return cmdNote(agent, rest, flags);
     case "memory":          return cmdMemory(agent, rest, flags);
+    case "skill":           return cmdSkill(agent, rest, flags);
     case "collab":          return cmdCollab(agent, rest, flags);
     case "schedule":        return cmdSchedule(agent, rest, flags);
     case "ask":             return cmdAsk(agent, rest, flags);

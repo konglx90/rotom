@@ -23,6 +23,7 @@ import { groupMethods } from "./groups.js";
 import { issueMethods } from "./issues.js";
 import { noteMethods } from "./notes.js";
 import { memoryMethods } from "./memory.js";
+import { skillMethods } from "./skills.js";
 import { collaborationMethods } from "./collaboration.js";
 import { scheduleMethods } from "./schedules.js";
 import { askBridgeMethods } from "./ask-bridges.js";
@@ -154,6 +155,21 @@ export class MeshDb extends MeshDbCore {
   declare listStaleMemory: typeof memoryMethods.listStaleMemory;
   declare memoryStats: typeof memoryMethods.memoryStats;
 
+  // ─── skills(全局 skill 知识库 + 绑定关系)──────────────────────────────
+  declare listSkills: typeof skillMethods.listSkills;
+  declare searchSkills: typeof skillMethods.searchSkills;
+  declare getSkill: typeof skillMethods.getSkill;
+  declare getSkillByName: typeof skillMethods.getSkillByName;
+  declare createSkill: typeof skillMethods.createSkill;
+  declare updateSkill: typeof skillMethods.updateSkill;
+  declare deactivateSkill: typeof skillMethods.deactivateSkill;
+  declare bindSkill: typeof skillMethods.bindSkill;
+  declare unbindSkill: typeof skillMethods.unbindSkill;
+  declare listBindings: typeof skillMethods.listBindings;
+  declare countSkillsForAgent: typeof skillMethods.countSkillsForAgent;
+  declare listSkillsForAgent: typeof skillMethods.listSkillsForAgent;
+  declare promoteMemoryToSkill: typeof skillMethods.promoteMemoryToSkill;
+
   // ─── collaboration ─────────────────────────────────────────────────────────
   declare createCollaborationIssue: typeof collaborationMethods.createCollaborationIssue;
   declare getActiveCollaborationsByGroup: typeof collaborationMethods.getActiveCollaborationsByGroup;
@@ -226,6 +242,7 @@ export class MeshDb extends MeshDbCore {
     Object.assign(this, issueMethods);
     Object.assign(this, noteMethods);
     Object.assign(this, memoryMethods);
+    Object.assign(this, skillMethods);
     Object.assign(this, collaborationMethods);
     Object.assign(this, scheduleMethods);
     Object.assign(this, askBridgeMethods);

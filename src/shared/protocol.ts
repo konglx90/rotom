@@ -97,6 +97,8 @@ export interface GroupConversation {
   activeIssues?: ActiveIssueRef[];
   /** 群内 + 全局可被 agent 检索的记忆条数(极简指针注入用)。 */
   memoryCounts?: { group: number; global: number };
+  /** 当前 agent 在该群绑定的 skill 数(极简指针注入用,per-agent)。 */
+  skillCount?: number;
 }
 
 /** Active collaboration metadata for an in-flight group message. */
