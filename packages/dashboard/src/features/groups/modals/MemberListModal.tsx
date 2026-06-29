@@ -295,11 +295,22 @@ export function MemberListModal({
 
 /** 每个 agent 勾选该群要绑定的 skill。勾选实时 bind/unbind。 */
 function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; memberAgentNames: string[] }) {
-  const { myAgentName } = useChatContext()
+  const { myAgentName, agents } = useChatContext()
   const [allSkills, setAllSkills] = useState<SkillIndex[]>([])
   const [bindings, setBindings] = useState<SkillBinding[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState<string>('')
+
+  // 真人不参与 skill 绑定(category === "真人"),优先取群成员 profile override,回落全局 agent profile。
+  const aiAgentNames = useMemo(() => {
+    const byName = new Map(agents.map(a => [a.name, a]))
+    return memberAgentNames.filter(aname => {
+      const member = byName.get(aname)
+      let category: string | undefined
+      if (member?.profile?.category) category = member.profile.category
+      return category !== '真人'
+    })
+  }, [memberAgentNames, agents])
 
   const reload = () => {
     Promise.all([skillsApi.list(), skillsApi.listBindings(groupId)])
