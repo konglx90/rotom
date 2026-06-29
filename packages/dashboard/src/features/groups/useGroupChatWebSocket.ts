@@ -331,23 +331,9 @@ export function useGroupChatWebSocket({
     }
   }, [])
 
-  // 找出某个 agent 当前 streaming 中的 requestId(用于"自动中断再发送" ——
-  // 用户给同一 agent 发新消息时,先把它的在飞流打断)。streamId 形如
-  // `stream_msg_xxx`,要去掉前缀还原成 master / worker 那边的 requestId。
-  // 使用 ref 实时读最新 messages,避免 useCallback 依赖 messages 导致
-  // 频繁重建(每来一个 chunk 就 invalidate 一次)。
-  const messagesRef = useRef(messages)
-  messagesRef.current = messages
-  const getStreamingRequestIdForAgent = useCallback((agentName: string): string | undefined => {
-    const m = messagesRef.current.find(x => x.streaming && x.isIncoming && x.from === agentName)
-    if (!m) return undefined
-    return m.id.startsWith('stream_') ? m.id.slice('stream_'.length) : m.id
-  }, [])
-
   return {
     messages,
     setMessages,
     cancelStream,
-    getStreamingRequestIdForAgent,
   }
 }

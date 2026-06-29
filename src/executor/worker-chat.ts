@@ -36,7 +36,15 @@ export class ChatHandler {
     await this.runChatReply(requestId, content, fromName, conversation, cwdOverride, groupId);
   }
 
-  private async runChatReply(requestId: string, content: string, fromName: string, conversation: any, cwdOverride: string | undefined, groupId: string): Promise<void> {
+  private async runChatReply(
+    requestId: string,
+    content: string,
+    fromName: string | null,
+    conversation: any,
+    cwdOverride: string | undefined,
+    groupId: string,
+    mergedSiblings?: Array<{ requestId: string; conversation: any }>,
+  ): Promise<void> {
     const taskKey = `chat:${requestId}`;
     // cwd 优先用 master 推送(Dashboard 群工作目录 / per-agent override);
     // 本机不存在或未推送时回落本地派生(<workingDirMap[groupId]> 或 <base>/<groupId>)。
@@ -89,6 +97,15 @@ export class ChatHandler {
 
     console.log(`${this.worker.tag} Session lookup: cliTool=${this.worker.cliTool}, groupId=${groupId}, sessionId=${sessionId ?? "(none)"}, conversation=${JSON.stringify(conversation)}`);
     console.log(`${this.worker.tag} Replying to ${fromName}: ${composed.final.slice(0, 60)}...`);
+
+    // 合并 turn:把合并用的 composedPrompt 挂到 sibling 气泡上,让 dashboard
+    // "查看 prompt"在每个被合并的 bubble 都能打开(否则 sibling 只有一条系统
+    // 文案,hasPrompt=false,按钮不出现)。sibling 的 loading bubble 也由此关闭。
+    if (mergedSiblings && mergedSiblings.length > 0) {
+      for (const sib of mergedSiblings) {
+        this.worker.sendChatEnd(sib.requestId, "[系统] 已合并到下一条回复", sib.conversation, undefined, composed);
+      }
+    }
 
     // 提到 try 块外:catch 路径下(子进程被 SIGTERM 后某些 executor 会 throw)
     // 仍要拿着已积累的 partial content 走 cancelled 终态,否则传空字符串给
@@ -215,7 +232,10 @@ export class ChatHandler {
     }
   }
 
-  /** 当前群 chat 任务结束,从队列取下一条处理。session 已存,新任务能复用。 */
+  /** 当前群 chat 任务结束,从队列取下一条处理。session 已存,新任务能复用。
+   *  积压合并:队列里有 ≥2 条待处理时,取最多 MAX_MERGE=3 条合并成一次 turn
+   *  (首条 requestId 作主回复流,其余发系统文案 bubble 关闭 loading),省 LLM 调用。
+   */
   private dequeueNextChat(groupId: string): void {
     if (!groupId) return;
     this.groupChatActive.delete(groupId);
@@ -224,11 +244,33 @@ export class ChatHandler {
       this.groupChatQueues.delete(groupId);
       return;
     }
-    const next = queue.shift()!;
+    const MAX_MERGE = 3;
+    const batch = queue.splice(0, Math.min(MAX_MERGE, queue.length));
     if (queue.length === 0) this.groupChatQueues.delete(groupId);
-    console.log(`${this.worker.tag} Dequeue chat from ${next.fromName} for group ${groupId} (remaining=${queue.length})`);
-    this.runChatReply(next.requestId, next.content, next.fromName, next.conversation, next.cwdOverride, groupId).catch((err) => {
-      console.error(`${this.worker.tag} Dequeued chat error:`, err.message);
+
+    if (batch.length === 1) {
+      const n = batch[0];
+      console.log(`${this.worker.tag} Dequeue chat from ${n.fromName} for group ${groupId} (remaining=${queue.length})`);
+      this.runChatReply(n.requestId, n.content, n.fromName, n.conversation, n.cwdOverride, groupId).catch((err) => {
+        console.error(`${this.worker.tag} Dequeued chat error:`, err.message);
+      });
+      return;
+    }
+
+    // 合并:首条作主 requestId 流式回复,其余 sibling 在 runChatReply compose 完后
+    // 用同一份 composedPrompt 关闭 loading(让 dashboard 每个 sibling 都能查看 prompt)。
+    const primary = batch[0];
+    const mergedNames = batch.map((b) => b.fromName).join(", ");
+    const siblings = batch.slice(1).map((b) => ({ requestId: b.requestId, conversation: b.conversation }));
+    // 合并 body:每条标 [from=X] 让 agent 区分发送者;fromName 传 null 避免 composePrompt
+    // 再加单 sender 头(多 sender 已在 body 内标注)。
+    const mentionTag = `@${this.worker.config.name}`;
+    const mergedBody = batch
+      .map((b) => `[from=${b.fromName}]\n${b.content.replace(mentionTag, "").trim()}`)
+      .join("\n\n---\n\n");
+    console.log(`${this.worker.tag} Dequeue merged chat for group ${groupId} (merged=${batch.length}, from=[${mergedNames}], remaining=${queue.length})`);
+    this.runChatReply(primary.requestId, mergedBody, null, primary.conversation, primary.cwdOverride, groupId, siblings).catch((err) => {
+      console.error(`${this.worker.tag} Dequeued merged chat error:`, err.message);
     });
   }
 

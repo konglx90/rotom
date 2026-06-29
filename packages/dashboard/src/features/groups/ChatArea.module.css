@@ -152,13 +152,10 @@
   flex-shrink: 0;
 }
 
-/* 连续消息贴近上一条 + 隐藏 sender 行(头像占位 + 只显示 content)。 */
+/* 连续消息贴近上一条。sender 行(名字/时间/按钮)全部保留 —— 否则连续回复
+   的第 2 条起引用/prompt 按钮消失,且只露按钮的残行更丑。 */
 .messageRow.continuation {
   margin-top: -4px;
-}
-
-.messageRow.continuation .messageSender {
-  display: none;
 }
 
 /* 单列布局:头像固定最左,incoming/outgoing 都从左侧延伸。
