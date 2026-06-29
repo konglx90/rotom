@@ -12,6 +12,13 @@ export interface SessionEntry {
   agentName?: string
   usage?: TokenUsage | null
   model?: string | null
+  /** 累计成本(USD),跨该 chat session 所有 turn 的 totalCostUsd 之和。
+   *  undefined 表示从未报告过 cost。 */
+  cumulativeCostUsd?: number
+  /** 该 session 的 worker 当前是否 WS 连着 master。 */
+  online?: boolean
+  /** ISO 时间戳;非 null 表示已失效(poison / provider error / 用户主动删)。 */
+  invalidatedAt?: string | null
 }
 
 /** View content response. `error` is non-empty when the executor's CLI
@@ -36,6 +43,13 @@ export interface SessionUsage {
   usage: TokenUsage | null
   /** 该 chat session 最近一次 turn 的模型名。 */
   model: string | null
+  /** 累计成本(USD),跨该 chat session 所有 turn 的 totalCostUsd 之和。
+   *  null 表示从未报告过 cost。 */
+  cumulativeCostUsd: number | null
+  /** 该 session 的 worker 当前是否在线。 */
+  online: boolean
+  /** ISO 时间戳;非 null 表示已失效。 */
+  invalidatedAt: string | null
 }
 
 export const sessionsApi = {

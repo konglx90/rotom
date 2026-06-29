@@ -135,11 +135,21 @@ export class ChatHandler {
       // session 可以正常续聊。只有 invalidateSession=true 且非用户主动中断
       // 时才丢弃 sessionId。
       if (groupId && result.invalidateSession && !task.aborted) {
+        // 失效前抓住 sessionId,通知 master 在 DB 里打 invalidated_at 戳(保留历史)。
+        const invalidatedSessionId = sessionId;
         this.worker.sessions.delete(this.worker.cliTool, groupId);
         console.warn(
           `${this.worker.tag} Session invalidated: ${this.worker.cliTool}:${groupId}` +
           (result.failed ? " (provider error)" : " (poisoned history)"),
         );
+        if (invalidatedSessionId) {
+          this.worker.send({
+            type: "session_invalidated",
+            cliTool: this.worker.cliTool,
+            groupId,
+            sessionId: invalidatedSessionId,
+          });
+        }
         this.worker.sendSessionSnapshot();
       } else {
         // Persist sessionId for future messages in this group. Even when

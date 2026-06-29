@@ -109,8 +109,9 @@ export function SessionPanel({ groupId, onChange }: SessionPanelProps) {
       {state.sessions.map((entry) => {
         const key = `${entry.cliTool}:${entry.sessionId}`
         const isDeleting = deleting === key
+        const invalidated = !!entry.invalidatedAt
         return (
-          <div key={key} className={styles.sessionRow}>
+          <div key={key} className={`${styles.sessionRow} ${invalidated ? styles.sessionRowInvalidated : ''}`}>
             <div
               className={styles.sessionCliTag}
               title={entry.agentName ? `${entry.agentName} · ${entry.cliTool}` : entry.cliTool}
@@ -122,12 +123,21 @@ export function SessionPanel({ groupId, onChange }: SessionPanelProps) {
                 {entry.cliTool}
               </div>
             )}
+            <span
+              className={`${styles.sessionOnlineDot} ${entry.online ? styles.sessionOnlineDotOn : styles.sessionOnlineDotOff}`}
+              title={entry.online ? 'worker 在线' : 'worker 离线'}
+            />
             <div className={styles.sessionId} title={entry.sessionId}>
               {entry.sessionId.length > 14
                 ? `${entry.sessionId.slice(0, 6)}…${entry.sessionId.slice(-4)}`
                 : entry.sessionId}
             </div>
             <SessionUsageLine entry={entry} />
+            {invalidated && (
+              <span className={styles.sessionInvalidatedTag} title={`失效于 ${entry.invalidatedAt}`}>
+                已失效
+              </span>
+            )}
             <div className={styles.sessionActions}>
               <Button
                 variant="ghost"
@@ -188,6 +198,8 @@ function SessionUsageLine({ entry }: { entry: SessionEntry }) {
     || u.cacheCreationTokens != null
     || u.totalCostUsd != null
   )
+  const cumCost = usage.cumulativeCostUsd
+  const showCumCost = typeof cumCost === "number" && cumCost > 0
 
   return (
     <span className={styles.sessionUsage} title={buildSessionTooltip(usage)}>
@@ -198,23 +210,31 @@ function SessionUsageLine({ entry }: { entry: SessionEntry }) {
         <>
           {usage.model && <span className={styles.sessionUsageSep}>·</span>}
           {u.inputTokens != null && (
-            <span className={styles.sessionUsageTokenIn} title="输入 tokens">
+            <span className={styles.sessionUsageTokenIn} title="输入 tokens (本次 turn)">
               <span className={styles.sessionUsageArrow}>↑</span>{formatTokens(u.inputTokens)}
             </span>
           )}
           {u.outputTokens != null && (
-            <span className={styles.sessionUsageTokenOut} title="输出 tokens">
+            <span className={styles.sessionUsageTokenOut} title="输出 tokens (本次 turn)">
               <span className={styles.sessionUsageArrow}>↓</span>{formatTokens(u.outputTokens)}
             </span>
           )}
           {u.totalCostUsd != null && u.totalCostUsd > 0 && (
             <>
               <span className={styles.sessionUsageSep}>·</span>
-              <span className={styles.sessionUsageCost} title="总成本 (USD)">
+              <span className={styles.sessionUsageCost} title="本次 turn 成本 (USD)">
                 ${formatCost(u.totalCostUsd)}
               </span>
             </>
           )}
+        </>
+      )}
+      {showCumCost && (
+        <>
+          <span className={styles.sessionUsageSep}>·</span>
+          <span className={styles.sessionUsageCostCum} title="累计成本 (USD, 跨该 session 所有 turn)">
+            Σ${formatCost(cumCost!)}
+          </span>
         </>
       )}
     </span>
@@ -226,11 +246,14 @@ function buildSessionTooltip(usage: SessionUsage): string {
   if (usage.model) parts.push(`模型: ${usage.model}`)
   const u = usage.usage
   if (u) {
-    if (u.inputTokens != null) parts.push(`输入: ${u.inputTokens.toLocaleString()}`)
-    if (u.outputTokens != null) parts.push(`输出: ${u.outputTokens.toLocaleString()}`)
+    if (u.inputTokens != null) parts.push(`输入(本次): ${u.inputTokens.toLocaleString()}`)
+    if (u.outputTokens != null) parts.push(`输出(本次): ${u.outputTokens.toLocaleString()}`)
     if (u.cacheReadTokens != null) parts.push(`缓存读: ${u.cacheReadTokens.toLocaleString()}`)
     if (u.cacheCreationTokens != null) parts.push(`缓存写: ${u.cacheCreationTokens.toLocaleString()}`)
-    if (u.totalCostUsd != null) parts.push(`成本: $${u.totalCostUsd.toFixed(6)}`)
+    if (u.totalCostUsd != null) parts.push(`本次成本: $${u.totalCostUsd.toFixed(6)}`)
+  }
+  if (typeof usage.cumulativeCostUsd === "number" && usage.cumulativeCostUsd > 0) {
+    parts.push(`累计成本: $${usage.cumulativeCostUsd.toFixed(6)}`)
   }
   return parts.join(' · ') || '无 usage 数据'
 }

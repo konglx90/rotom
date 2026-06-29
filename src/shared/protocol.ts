@@ -172,7 +172,8 @@ export type ClientMessage =
   | ClientUnsubscribeIssueDetailMessage
   | ClientSessionViewResponse
   | ClientSessionDeleteResponse
-  | ClientSessionSnapshot;
+  | ClientSessionSnapshot
+  | ClientSessionInvalidated;
 
 export interface ClientAuthMessage {
   type: "auth";
@@ -410,6 +411,16 @@ export interface SessionEntry {
   /** Backend-reported model name for the latest chat turn in this session
    *  (e.g. `claude-sonnet-4-6`, `gpt-5`). Same lifecycle as `usage`. */
   model?: string | null;
+  /** 累计成本(USD),跨该 chat session 所有 turn 的 totalCostUsd 之和。
+   *  worker 在 session_snapshot 里推送,master 缓存后透传给 dashboard。
+   *  session 失效重建(sessionId 变更)时清零。undefined 表示从未报告过 cost。 */
+  cumulativeCostUsd?: number;
+  /** 该 session 的 worker 当前是否 WS 连着 master。由 master 在
+   *  listSessionsByGroup 里 join connections 算出,不持久化。 */
+  online?: boolean;
+  /** ISO 时间戳;非 null 表示该 session 已被 worker 标记失效(poison /
+   *  provider error / 用户主动删)。null = 仍 active。 */
+  invalidatedAt?: string | null;
 }
 
 export interface ClientSessionViewResponse {
@@ -454,6 +465,21 @@ export interface ClientSessionSnapshot {
   entries: SessionEntry[];
 }
 
+/**
+ * Worker → Master:某个 session 被 worker 主动失效(poison / provider error /
+ * dashboard 用户主动删)。master 不删行,只打 invalidated_at 戳,保留历史。
+ *
+ * 与 session_snapshot 的区别:snapshot 是全量替换 worker 的 active 列表,
+ * 适合"状态同步";invalidated 是单条事件的明确信号,适合"这条 session 不再
+ * 用于 resume 了,但请在 DB 里保留它"。
+ */
+export interface ClientSessionInvalidated {
+  type: "session_invalidated";
+  cliTool: string;
+  groupId: string;
+  sessionId: string;
+}
+
 // ---------------------------------------------------------------------------
 // Master → Client messages
 // ---------------------------------------------------------------------------
@@ -484,7 +510,8 @@ export type ServerMessage =
   | ServerIssueInterruptMessage
   | ServerIssueUsageProgressMessage
   | ServerSessionViewRequest
-  | ServerSessionDeleteRequest;
+  | ServerSessionDeleteRequest
+  | ServerSessionSyncPush;
 
 export interface ServerAuthOkMessage {
   type: "auth_ok";
@@ -806,6 +833,20 @@ export interface ServerSessionDeleteRequest {
   sessionId: string;
 }
 
+/**
+ * Master → Worker:worker 刚认证成功后,master 把该 (agentName, cliTool) 名下
+ * 所有 active(未失效)的 session 推给 worker。worker 用这些填充自己的内存
+ * SessionStore,这样后续 chat turn 能 `--resume <sessionId>`。
+ *
+ * 数据源是 master DB 的 agent_sessions 表(替代了 worker 侧的 sessions.json)。
+ * 之后 worker 每次 mutation 会推 session_snapshot 回来,master upsert 到 DB,
+ * 双向同步达成。
+ */
+export interface ServerSessionSyncPush {
+  type: "session_sync_push";
+  entries: SessionEntry[];
+}
+
 // ---------------------------------------------------------------------------
 // Type guards (runtime validation for external input)
 // ---------------------------------------------------------------------------
@@ -859,6 +900,10 @@ export function isClientMessage(x: unknown): x is ClientMessage {
         && typeof msg.ok === "boolean";
     case "session_snapshot":
       return Array.isArray(msg.entries);
+    case "session_invalidated":
+      return typeof msg.cliTool === "string"
+        && typeof msg.groupId === "string"
+        && typeof msg.sessionId === "string";
     default:
       return false;
   }

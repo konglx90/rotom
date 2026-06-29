@@ -27,6 +27,7 @@ import { scheduleMethods } from "./schedules.js";
 import { askBridgeMethods } from "./ask-bridges.js";
 import { guidanceTemplateMethods } from "./guidance-templates.js";
 import { schedulePatternMethods } from "./schedule-patterns.js";
+import { agentSessionMethods } from "./agent-sessions.js";
 
 export class MeshDb extends MeshDbCore {
   // ─── agents ────────────────────────────────────────────────────────────────
@@ -189,6 +190,14 @@ export class MeshDb extends MeshDbCore {
   declare updateSchedulePattern: typeof schedulePatternMethods.updateSchedulePattern;
   declare deleteSchedulePattern: typeof schedulePatternMethods.deleteSchedulePattern;
 
+  // agent_sessions —— 持久化 session 注册表(替代 worker 侧 sessions.json)
+  declare upsertAgentSession: typeof agentSessionMethods.upsertAgentSession;
+  declare listAgentSessionsByGroup: typeof agentSessionMethods.listAgentSessionsByGroup;
+  declare listActiveAgentSessions: typeof agentSessionMethods.listActiveAgentSessions;
+  declare invalidateAgentSession: typeof agentSessionMethods.invalidateAgentSession;
+  declare deleteAgentSession: typeof agentSessionMethods.deleteAgentSession;
+  declare findAgentSession: typeof agentSessionMethods.findAgentSession;
+
   constructor(dbPath: string) {
     super(dbPath);
     // Each method bag's `this` resolves to this instance at call time. The
@@ -204,5 +213,6 @@ export class MeshDb extends MeshDbCore {
     Object.assign(this, askBridgeMethods);
     Object.assign(this, guidanceTemplateMethods);
     Object.assign(this, schedulePatternMethods);
+    Object.assign(this, agentSessionMethods);
   }
 }

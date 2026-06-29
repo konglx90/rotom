@@ -208,6 +208,34 @@ export const connectionMethods = {
           config: { domain: dbDomain, enabled: dbEnabled !== 0 },
         });
 
+        // Push the worker's active sessions from DB so it can populate its
+        // in-memory SessionStore (used for --resume). Replaces the old
+        // worker-side ~/.rotom/sessions.json file.
+        const cliTool = typeof msg.cliTool === "string" && msg.cliTool ? msg.cliTool : undefined;
+        if (cliTool) {
+          const rows = this.db.listActiveAgentSessions(agent.name as string, cliTool);
+          if (rows.length > 0) {
+            this.send(ws, {
+              type: "session_sync_push",
+              entries: rows.map(r => ({
+                cliTool: r.cli_tool,
+                groupId: r.group_id,
+                sessionId: r.session_id,
+                agentName: r.agent_name,
+                usage: {
+                  inputTokens: r.input_tokens ?? undefined,
+                  outputTokens: r.output_tokens ?? undefined,
+                  cacheReadTokens: r.cache_read_tokens ?? undefined,
+                  cacheCreationTokens: r.cache_creation_tokens ?? undefined,
+                  totalCostUsd: r.total_cost_usd ?? undefined,
+                },
+                model: r.model ?? null,
+                cumulativeCostUsd: r.cumulative_cost_usd,
+              })),
+            });
+          }
+        }
+
         // Push offline messages
         const offlineMsgs = this.offlineQueue.pop(agentId);
         if (offlineMsgs.length > 0) {
@@ -774,11 +802,35 @@ export const connectionMethods = {
         return;
       }
 
-      // ── Session snapshot push (worker → master cache) ─────────────────
+      // ── Session snapshot push (worker → master DB) ───────────────────
       if (msg.type === "session_snapshot") {
-        // Replace the worker's snapshot wholesale — workers push a full
-        // SessionEntry[] each time, not a diff.
+        // worker 推它当前所有 active sessions;master upsert 到 DB 持久化。
+        // in-memory cache 同步更新(供 /sessions 快速查询 + online 判定)。
+        const conn = this.connections.get(agentId);
+        const agentName = conn?.name;
+        if (agentName) {
+          for (const entry of msg.entries) {
+            this.db.upsertAgentSession({
+              groupId: entry.groupId,
+              agentName,
+              cliTool: entry.cliTool,
+              sessionId: entry.sessionId,
+              usage: entry.usage ?? undefined,
+              model: entry.model ?? undefined,
+              cumulativeCostUsd: entry.cumulativeCostUsd,
+            });
+          }
+        }
         this.sessionSnapshots.set(agentId, msg.entries);
+        return;
+      }
+
+      // ── Session invalidated (worker → master: 标记失效,保留历史) ────
+      if (msg.type === "session_invalidated") {
+        this.db.invalidateAgentSession(msg.cliTool, msg.groupId, msg.sessionId);
+        this.logger.info(
+          `[mesh] Session invalidated: ${msg.cliTool}:${msg.groupId} → ${msg.sessionId}`,
+        );
         return;
       }
     });
