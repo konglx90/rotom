@@ -231,6 +231,10 @@ export const connectionMethods = {
                 },
                 model: r.model ?? null,
                 cumulativeCostUsd: r.cumulative_cost_usd,
+                cumulativeInputTokens: r.cumulative_input_tokens,
+                cumulativeOutputTokens: r.cumulative_output_tokens,
+                cumulativeCacheReadTokens: r.cumulative_cache_read_tokens,
+                cumulativeCacheCreationTokens: r.cumulative_cache_creation_tokens,
               })),
             });
           }
@@ -818,6 +822,10 @@ export const connectionMethods = {
               usage: entry.usage ?? undefined,
               model: entry.model ?? undefined,
               cumulativeCostUsd: entry.cumulativeCostUsd,
+              cumulativeInputTokens: entry.cumulativeInputTokens,
+              cumulativeOutputTokens: entry.cumulativeOutputTokens,
+              cumulativeCacheReadTokens: entry.cumulativeCacheReadTokens,
+              cumulativeCacheCreationTokens: entry.cumulativeCacheCreationTokens,
             });
           }
         }

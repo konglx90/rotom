@@ -200,6 +200,11 @@ function SessionUsageLine({ entry }: { entry: SessionEntry }) {
   )
   const cumCost = usage.cumulativeCostUsd
   const showCumCost = typeof cumCost === "number" && cumCost > 0
+  const cumIn = usage.cumulativeInputTokens
+  const cumOut = usage.cumulativeOutputTokens
+  const showCumTokens =
+    (typeof cumIn === "number" && cumIn > 0) ||
+    (typeof cumOut === "number" && cumOut > 0)
 
   return (
     <span className={styles.sessionUsage} title={buildSessionTooltip(usage)}>
@@ -209,23 +214,25 @@ function SessionUsageLine({ entry }: { entry: SessionEntry }) {
       {hasUsage && u && (
         <>
           {usage.model && <span className={styles.sessionUsageSep}>·</span>}
-          {u.inputTokens != null && (
-            <span className={styles.sessionUsageTokenIn} title="输入 tokens (本次 turn)">
-              <span className={styles.sessionUsageArrow}>↑</span>{formatTokens(u.inputTokens)}
-            </span>
-          )}
-          {u.outputTokens != null && (
-            <span className={styles.sessionUsageTokenOut} title="输出 tokens (本次 turn)">
-              <span className={styles.sessionUsageArrow}>↓</span>{formatTokens(u.outputTokens)}
-            </span>
-          )}
           {u.totalCostUsd != null && u.totalCostUsd > 0 && (
-            <>
-              <span className={styles.sessionUsageSep}>·</span>
-              <span className={styles.sessionUsageCost} title="本次 turn 成本 (USD)">
-                ${formatCost(u.totalCostUsd)}
-              </span>
-            </>
+            <span className={styles.sessionUsageCost} title="本次 turn 成本 (USD)">
+              ${formatCost(u.totalCostUsd)}
+            </span>
+          )}
+        </>
+      )}
+      {showCumTokens && (
+        <>
+          {(hasUsage && u && u.totalCostUsd != null && u.totalCostUsd > 0 || usage.model) && <span className={styles.sessionUsageSep}>·</span>}
+          {typeof cumIn === "number" && cumIn > 0 && (
+            <span className={styles.sessionUsageTokenIn} title="累计输入 tokens (跨该 session 所有 turn)">
+              <span className={styles.sessionUsageArrow}>↑</span>{formatTokens(cumIn)}
+            </span>
+          )}
+          {typeof cumOut === "number" && cumOut > 0 && (
+            <span className={styles.sessionUsageTokenOut} title="累计输出 tokens (跨该 session 所有 turn)">
+              <span className={styles.sessionUsageArrow}>↓</span>{formatTokens(cumOut)}
+            </span>
           )}
         </>
       )}
@@ -248,9 +255,21 @@ function buildSessionTooltip(usage: SessionUsage): string {
   if (u) {
     if (u.inputTokens != null) parts.push(`输入(本次): ${u.inputTokens.toLocaleString()}`)
     if (u.outputTokens != null) parts.push(`输出(本次): ${u.outputTokens.toLocaleString()}`)
-    if (u.cacheReadTokens != null) parts.push(`缓存读: ${u.cacheReadTokens.toLocaleString()}`)
-    if (u.cacheCreationTokens != null) parts.push(`缓存写: ${u.cacheCreationTokens.toLocaleString()}`)
+    if (u.cacheReadTokens != null) parts.push(`缓存读(本次): ${u.cacheReadTokens.toLocaleString()}`)
+    if (u.cacheCreationTokens != null) parts.push(`缓存写(本次): ${u.cacheCreationTokens.toLocaleString()}`)
     if (u.totalCostUsd != null) parts.push(`本次成本: $${u.totalCostUsd.toFixed(6)}`)
+  }
+  if (typeof usage.cumulativeInputTokens === "number" && usage.cumulativeInputTokens > 0) {
+    parts.push(`累计输入: ${usage.cumulativeInputTokens.toLocaleString()}`)
+  }
+  if (typeof usage.cumulativeOutputTokens === "number" && usage.cumulativeOutputTokens > 0) {
+    parts.push(`累计输出: ${usage.cumulativeOutputTokens.toLocaleString()}`)
+  }
+  if (typeof usage.cumulativeCacheReadTokens === "number" && usage.cumulativeCacheReadTokens > 0) {
+    parts.push(`累计缓存读: ${usage.cumulativeCacheReadTokens.toLocaleString()}`)
+  }
+  if (typeof usage.cumulativeCacheCreationTokens === "number" && usage.cumulativeCacheCreationTokens > 0) {
+    parts.push(`累计缓存写: ${usage.cumulativeCacheCreationTokens.toLocaleString()}`)
   }
   if (typeof usage.cumulativeCostUsd === "number" && usage.cumulativeCostUsd > 0) {
     parts.push(`累计成本: $${usage.cumulativeCostUsd.toFixed(6)}`)
