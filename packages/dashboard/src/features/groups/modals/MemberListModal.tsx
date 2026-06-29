@@ -338,7 +338,7 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
     }
   }
 
-  if (memberAgentNames.length === 0) return null
+  if (aiAgentNames.length === 0) return null
 
   return (
     <div style={{ marginTop: 16, padding: 14, border: '1px solid var(--border-color-light, rgba(0,0,0,0.08))', borderRadius: 8, background: 'var(--color-surface, #fff)' }}>
@@ -355,7 +355,7 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {memberAgentNames.map(aname => (
+          {aiAgentNames.map(aname => (
             <div key={aname} style={{ padding: '6px 0', borderTop: '1px solid var(--border-color-light, #eee)' }}>
               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6, color: 'var(--color-navy, #1a365d)' }}>{aname}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
