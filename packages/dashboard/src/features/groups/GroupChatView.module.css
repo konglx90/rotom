@@ -548,8 +548,7 @@
 }
 
 .sessionRow {
-  display: grid;
-  grid-template-columns: 64px 1fr auto auto;
+  display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -570,6 +569,8 @@
   border-radius: 4px;
   background: var(--color-wise-green, #2e7d32);
   color: #fff;
+  flex-shrink: 0;
+  min-width: 48px;
 }
 
 .sessionCliSubTag {
@@ -617,6 +618,8 @@
 }
 
 .sessionId {
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-mono, monospace);
   font-size: 12px;
   color: var(--color-slate, #555);
