@@ -22,6 +22,7 @@ import { domainMethods } from "./domains.js";
 import { groupMethods } from "./groups.js";
 import { issueMethods } from "./issues.js";
 import { noteMethods } from "./notes.js";
+import { memoryMethods } from "./memory.js";
 import { collaborationMethods } from "./collaboration.js";
 import { scheduleMethods } from "./schedules.js";
 import { askBridgeMethods } from "./ask-bridges.js";
@@ -137,6 +138,22 @@ export class MeshDb extends MeshDbCore {
   declare updateNote: typeof noteMethods.updateNote;
   declare deleteNote: typeof noteMethods.deleteNote;
 
+  // ─── memory(原 notes 升级版,agent_memory 表)─────────────────────────────
+  declare listMemory: typeof memoryMethods.listMemory;
+  declare searchMemory: typeof memoryMethods.searchMemory;
+  declare getMemory: typeof memoryMethods.getMemory;
+  declare countMemory: typeof memoryMethods.countMemory;
+  declare addMemory: typeof memoryMethods.addMemory;
+  declare updateMemory: typeof memoryMethods.updateMemory;
+  declare deactivateMemory: typeof memoryMethods.deactivateMemory;
+  declare expireMemory: typeof memoryMethods.expireMemory;
+  declare promoteMemoryVisibility: typeof memoryMethods.promoteMemoryVisibility;
+  declare listPendingMemory: typeof memoryMethods.listPendingMemory;
+  declare approveMemory: typeof memoryMethods.approveMemory;
+  declare rejectMemory: typeof memoryMethods.rejectMemory;
+  declare listStaleMemory: typeof memoryMethods.listStaleMemory;
+  declare memoryStats: typeof memoryMethods.memoryStats;
+
   // ─── collaboration ─────────────────────────────────────────────────────────
   declare createCollaborationIssue: typeof collaborationMethods.createCollaborationIssue;
   declare getActiveCollaborationsByGroup: typeof collaborationMethods.getActiveCollaborationsByGroup;
@@ -208,6 +225,7 @@ export class MeshDb extends MeshDbCore {
     Object.assign(this, groupMethods);
     Object.assign(this, issueMethods);
     Object.assign(this, noteMethods);
+    Object.assign(this, memoryMethods);
     Object.assign(this, collaborationMethods);
     Object.assign(this, scheduleMethods);
     Object.assign(this, askBridgeMethods);

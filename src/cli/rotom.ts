@@ -37,6 +37,7 @@ import { cmdDirectory } from "./directory.js";
 import { cmdGroup } from "./group.js";
 import { cmdIssue } from "./issue.js";
 import { cmdNote } from "./note.js";
+import { cmdMemory } from "./memory.js";
 import { cmdCollab } from "./collab.js";
 import { cmdSchedule } from "./schedule.js";
 import { cmdAsk } from "./ask.js";
@@ -136,6 +137,20 @@ Note (极简文字记录,纯 CRUD):
   note update <noteId> [--title T] [--description D]
   note delete <noteId>
 
+Memory (记忆体系:note=纯人看 agent_visible=0;memory=agent 可见 agent_visible=1):
+  memory search <keyword> <groupId> [--scope group|global] [--category <c>]
+  memory list <groupId> [--scope group|global] [--type note|memory|all] [--category <c>] [--tags t1,t2]
+  memory get <memoryId>
+  memory add <groupId> --key K --value V --category C [--scope global] [--summary S] [--tags t1,t2]
+                 [--visibility group|global|private] [--no-agent-visible] [--expires 7d]
+  memory update <id> [--value V] [--category C] [--visibility V] [--agent-visible|--no-agent-visible]
+  memory remove <id>
+  memory promote <id> --visibility global
+  memory pending <groupId> [--scope global]
+  memory approve <id>
+  memory reject <id>
+  memory stats <groupId> [--scope global]
+
 Schedule (群内定时任务,master 端 30s tick 调度):
   schedule list                              [--group <id>] [--pretty]
   schedule show <id>
@@ -213,6 +228,7 @@ async function main(): Promise<void> {
     case "group":           return cmdGroup(agent, rest, flags);
     case "issue":           return cmdIssue(agent, rest, flags);
     case "note":            return cmdNote(agent, rest, flags);
+    case "memory":          return cmdMemory(agent, rest, flags);
     case "collab":          return cmdCollab(agent, rest, flags);
     case "schedule":        return cmdSchedule(agent, rest, flags);
     case "ask":             return cmdAsk(agent, rest, flags);

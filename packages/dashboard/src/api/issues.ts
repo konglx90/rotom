@@ -116,4 +116,10 @@ export const issuesApi = {
   async delete(id: string): Promise<{ ok: boolean }> {
     return api.delete<{ ok: boolean }>(`/issues/${id}`)
   },
+
+  /** 对 completed 的 Issue 触发「生成记忆」:创建一个记忆提取任务 Issue push 给 agent。
+   *  agent 读原 Issue 产出 → 提炼记忆 → 调 rotom memory add --pending 写入待审核池。 */
+  async extractMemory(id: string, agentName?: string): Promise<{ extractIssueId: string; agentName: string; pushed: boolean }> {
+    return api.post<{ extractIssueId: string; agentName: string; pushed: boolean }>(`/issues/${id}/extract-memory`, { agentName })
+  },
 }

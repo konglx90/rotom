@@ -255,6 +255,41 @@ describe("composePrompt", () => {
     assert.strictEqual(t.content, "hi");
   });
 
+  // ── memory-pointer 层(极简指针)─────────────────────────────────────────
+  it("memory-pointer: group.memoryCounts 有值时,末尾注入 [可用记忆] 一行指针", () => {
+    const ctx = baseCtx({
+      group: { id: "g-1", name: "G1", activeIssues: [], guidancePrompt: null, memoryCounts: { group: 3, global: 2 } },
+      body: "hi",
+    });
+    const composed = composePrompt(ctx);
+    const ptr = composed.layers.find((l) => l.layer === "memory-pointer");
+    assert.ok(ptr, "应有 memory-pointer 层");
+    assert.match(ptr!.content, /\[可用记忆\] 群 3 条 \/ 全局 2 条/);
+    assert.match(ptr!.content, /rotom memory search/);
+    assert.match(ptr!.content, /rotom memory get/);
+    const taskIdx = composed.layers.findIndex((l) => l.layer === "task");
+    const ptrIdx = composed.layers.findIndex((l) => l.layer === "memory-pointer");
+    assert.ok(ptrIdx > taskIdx, "memory-pointer 应在 task 之后");
+  });
+
+  it("memory-pointer: count 全为 0 时不注入", () => {
+    const ctx = baseCtx({
+      group: { id: "g-1", name: "G1", activeIssues: [], guidancePrompt: null, memoryCounts: { group: 0, global: 0 } },
+      body: "hi",
+    });
+    const composed = composePrompt(ctx);
+    assert.ok(!composed.layers.some((l) => l.layer === "memory-pointer"));
+  });
+
+  it("memory-pointer: 无 memoryCounts 字段时不注入", () => {
+    const ctx = baseCtx({
+      group: { id: "g-1", name: "G1", activeIssues: [], guidancePrompt: null },
+      body: "hi",
+    });
+    const composed = composePrompt(ctx);
+    assert.ok(!composed.layers.some((l) => l.layer === "memory-pointer"));
+  });
+
   it("issue/collab 模式 + fromName: fromName 不注入(只有 chat 才有 fromName 语义)", () => {
     const issueOut = composePrompt(baseCtx({ mode: "issue", fromName: "X", body: "任务" }));
     const collabOut = composePrompt(baseCtx({ mode: "collab", fromName: "X", body: "开场白" }));

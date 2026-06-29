@@ -18,7 +18,7 @@ import { ROTOM_CLI_PROMPT, ROTOM_CLI_PROMPT_VERSION } from "./rotom-cli-prompt.j
 import type { AgentProfile } from "./agent-profile.js";
 import type { ActiveIssueRef } from "./group-context.js";
 
-export type PromptLayerKind = "rotom-cli" | "group-basic" | "group-guidance" | "agent-role" | "cwd" | "task";
+export type PromptLayerKind = "rotom-cli" | "group-basic" | "group-guidance" | "agent-role" | "cwd" | "task" | "memory-pointer";
 
 export interface PromptLayer {
   layer: PromptLayerKind;
@@ -39,7 +39,7 @@ export interface ComposeContext {
   agentName: string;
   agentProfile: AgentProfile | null;
   /** 群内调用时填;DM / 单 issue 可空 */
-  group?: { id: string; name: string; activeIssues: ActiveIssueRef[]; guidancePrompt?: string | null } | null;
+  group?: { id: string; name: string; activeIssues: ActiveIssueRef[]; guidancePrompt?: string | null; memoryCounts?: { group: number; global: number } } | null;
   cwd: string | null;
   /** chat 模式时填,告诉 agent 这条消息是谁发的。issue/collab 模式不需要,留空。 */
   fromName?: string | null;
@@ -160,6 +160,20 @@ function buildTaskLayer(body: string, mode: ComposeContext["mode"], fromName?: s
   return { layer: "task", content, source };
 }
 
+/** 记忆极简指针层:只一行,告诉 agent 有多少记忆可查 + 怎么查。不展开索引,不干扰核心任务。 */
+function buildMemoryPointerLayer(counts: { group: number; global: number }): PromptLayer | null {
+  const total = counts.group + counts.global;
+  if (total === 0) return null;
+  return {
+    layer: "memory-pointer",
+    content:
+      `[可用记忆] 群 ${counts.group} 条 / 全局 ${counts.global} 条。` +
+      `需要时用 \`rotom memory search <关键词>\` 查询(支持 key/value/summary/tags),` +
+      `\`rotom memory get <id>\` 看详情;无关记忆忽略,不要硬套。\n`,
+    source: "agent_memory count (runtime, agent_visible=1, active, non-pending)",
+  };
+}
+
 // ── Public API ──────────────────────────────────────────────────────────
 
 export function composePrompt(ctx: ComposeContext): ComposedPrompt {
@@ -184,6 +198,12 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
 
   // chat 模式下,发信人 fromName 注入到 task 层头部(只有 chat 才有 fromName 语义)。
   layers.push(buildTaskLayer(ctx.body, ctx.mode, ctx.mode === "chat" ? ctx.fromName : null));
+
+  // 记忆极简指针层(末尾,优先级低,不干扰核心任务)
+  if (ctx.group?.memoryCounts) {
+    const ptr = buildMemoryPointerLayer(ctx.group.memoryCounts);
+    if (ptr) layers.push(ptr);
+  }
 
   return {
     layers,
