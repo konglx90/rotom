@@ -135,6 +135,12 @@
   font-size: 12px;
 }
 
+.tsParts {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
 .payloadCell {
   max-width: 400px;
   overflow: hidden;

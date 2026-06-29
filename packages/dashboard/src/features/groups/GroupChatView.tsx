@@ -23,6 +23,7 @@ import { CreateNoteDialog } from './CreateNoteDialog'
 import { AddMemberModal } from './modals/AddMemberModal'
 import { MemberListModal } from './modals/MemberListModal'
 import { ShareLinkModal } from './ShareLinkModal'
+import { GroupMessageStreamModal } from './modals/GroupMessageStreamModal'
 import { ModeSidebarClock } from './ModeSidebarClock'
 import { SessionPanel } from './SessionPanel'
 import { Modal } from '../../components/ui/Modal/Modal'
@@ -119,6 +120,7 @@ export function GroupChatView() {
   const [showMemberList, setShowMemberList] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [showDebugModal, setShowDebugModal] = useState(false)
+  const [showGroupMessagesModal, setShowGroupMessagesModal] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
   // 创建对话框状态从 IssuePanel/NotePanel 上移到 process panel 顶部 tabs 行,
   // 让 tabs 行与 chat header 等高对齐。kind 区分走 Issue/协作 还是 Note 流程。
@@ -506,6 +508,17 @@ export function GroupChatView() {
             </Modal>
           )}
 
+          {/* 当前群消息流 modal:锁定当前群,群不可切换。 */}
+          {showGroupMessagesModal && selectedGroup && !isDirectMode && (
+            <GroupMessageStreamModal
+              open
+              groupId={selectedGroup.id}
+              groupName={selectedGroup.name}
+              groups={groups}
+              onClose={() => setShowGroupMessagesModal(false)}
+            />
+          )}
+
           {createDialog?.kind === 'issue' && selectedGroupId && (
             <CreateIssueDialog
               open
@@ -597,6 +610,18 @@ export function GroupChatView() {
                 title="Sessions 调试"
               >
                 <span className={styles.modeBtnIcons}>{'\u{1F527}'}</span>
+              </button>
+            )}
+
+            {/* 当前群消息流弹窗:仅群模式,锁定当前群不可切换。 */}
+            {selectedGroup && !isDirectMode && (
+              <button
+                type="button"
+                className={styles.modeBtn}
+                onClick={() => setShowGroupMessagesModal(true)}
+                title="当前群消息流"
+              >
+                <span className={styles.modeBtnIcons}>{'\u{1F4AC}'}</span>
               </button>
             )}
 

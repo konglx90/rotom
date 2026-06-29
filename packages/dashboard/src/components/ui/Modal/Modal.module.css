@@ -38,6 +38,10 @@
   max-width: 760px;
 }
 
+.size-xl {
+  max-width: 1080px;
+}
+
 .titleRow {
   display: flex;
   align-items: center;
