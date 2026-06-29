@@ -331,11 +331,11 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
 
   return (
     <div style={{ marginTop: 16, padding: 14, border: '1px solid var(--border-color-light, rgba(0,0,0,0.08))', borderRadius: 8, background: 'var(--color-surface, #fff)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-navy, #1a365d)' }}>⚡ 技能绑定(per agent)</span>
-        <span style={{ fontSize: 11, color: 'var(--color-slate, #888)' }}>
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-navy, #1a365d)' }}>⚡ 技能绑定(per agent)</div>
+        <div style={{ fontSize: 11, color: 'var(--color-slate, #888)', marginTop: 2, lineHeight: 1.4 }}>
           勾选的 skill 在该 agent 执行时注入 prompt 指针;全局 skill 在工具箱管理
-        </span>
+        </div>
       </div>
       {err && <div style={{ color: '#c00', fontSize: 12, marginBottom: 6 }}>{err}</div>}
       {allSkills.length === 0 ? (
@@ -346,25 +346,29 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {memberAgentNames.map(aname => (
             <div key={aname} style={{ padding: '6px 0', borderTop: '1px solid var(--border-color-light, #eee)' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{aname}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6, color: 'var(--color-navy, #1a365d)' }}>{aname}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {allSkills.map(s => {
                   const checked = bindings.some(b => b.agent_name === aname && b.skill_id === s.id)
                   const key = `${aname}:${s.id}`
                   return (
                     <label key={s.id} style={{
-                      fontSize: 11, padding: '2px 8px',
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: 11, padding: '4px 10px',
                       border: `1px solid ${checked ? 'var(--color-wise-green, #2f7a2f)' : 'var(--border-color-light, #ddd)'}`,
-                      borderRadius: 4, cursor: 'pointer',
+                      borderRadius: 6, cursor: busy === key ? 'wait' : 'pointer',
+                      userSelect: 'none', lineHeight: 1.2,
                       background: checked ? 'rgba(47, 122, 47, 0.08)' : 'transparent',
+                      color: checked ? 'var(--color-wise-green, #2f7a2f)' : 'var(--color-navy, #1a365d)',
                       opacity: busy === key ? 0.5 : 1,
+                      transition: 'background 0.15s, border-color 0.15s, color 0.15s',
                     }}>
                       <input
                         type="checkbox"
                         checked={checked}
                         disabled={busy === key}
                         onChange={() => toggle(aname, s)}
-                        style={{ marginRight: 4 }}
+                        style={{ margin: 0, accentColor: 'var(--color-wise-green, #2f7a2f)', cursor: busy === key ? 'wait' : 'pointer' }}
                       />
                       {s.name}
                     </label>
