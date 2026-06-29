@@ -27,3 +27,5 @@ export type {
 export type { GuidanceTemplateRow } from "./guidance-templates.js";
 export type { SchedulePatternRow } from "./schedule-patterns.js";
 export type { AgentSessionRow, AgentSessionUpsert } from "./agent-sessions.js";
+export type { MemoryRow, MemoryIndex, MemoryInput } from "./memory.js";
+export type { SkillRow, SkillIndex, SkillBindingRow, SkillInput } from "./skills.js";

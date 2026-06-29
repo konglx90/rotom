@@ -78,10 +78,15 @@ export const collaborationMethods = {
       global: this.db.countMemory("global"),
     };
 
+    // skill 计数(该 agent 在该群绑定的 active skill 数,per-agent)
+    const skillCount = targetAgentName
+      ? this.db.countSkillsForAgent(conversation.groupId, targetAgentName)
+      : 0;
+
     const collabs = this.db.getActiveCollaborationsByGroup(conversation.groupId);
     if (collabs.length === 0) {
       // No collaboration but still attach activeIssues so agents can see them.
-      return { ...conversation, activeIssues, workingDir, memoryCounts, guidancePrompt: group?.guidance_prompt || undefined } as T;
+      return { ...conversation, activeIssues, workingDir, memoryCounts, skillCount, guidancePrompt: group?.guidance_prompt || undefined } as T;
     }
     const collab = collabs[0]; // single active collaboration per group
     const currentRound = collab.current_round ?? 1;
@@ -94,6 +99,7 @@ export const collaborationMethods = {
       activeIssues,
       workingDir,
       memoryCounts,
+      skillCount,
       guidancePrompt: group?.guidance_prompt || undefined,
       collaboration: {
         issueId: collab.id,

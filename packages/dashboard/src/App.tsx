@@ -15,6 +15,8 @@ import { TerminalPage } from './features/terminal/TerminalPage'
 import { ToolboxView } from './features/toolbox/ToolboxView'
 import { PromptsManagementTab } from './features/toolbox/PromptsManagementTab'
 import { SchedulePatternsTab } from './features/toolbox/SchedulePatternsTab'
+import { MemoryManagementTab } from './features/toolbox/MemoryManagementTab'
+import { SkillsManagementTab } from './features/toolbox/SkillsManagementTab'
 import { E2edGroupsView } from './features/e2ed/E2edGroupsView'
 import { E2edPipelineView } from './features/e2ed/E2edPipelineView'
 import { ConfigModal } from './features/groups/modals/ConfigModal'
@@ -83,6 +85,8 @@ function App() {
                   <Route path="messages" element={<MessagesView />} />
                   <Route path="prompts" element={<PromptsManagementTab />} />
                   <Route path="schedule-patterns" element={<SchedulePatternsTab />} />
+                  <Route path="memory" element={<MemoryManagementTab />} />
+                  <Route path="skills" element={<SkillsManagementTab />} />
                 </Route>
                 <Route path="/dashboard/messages" element={<Navigate to="/dashboard/toolbox/messages" replace />} />
                 <Route path="/dashboard/terminal" element={<Navigate to="/dashboard/toolbox/terminal" replace />} />

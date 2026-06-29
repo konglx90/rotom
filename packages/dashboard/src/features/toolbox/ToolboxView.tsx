@@ -11,6 +11,8 @@ const TABS = [
   { to: 'messages', label: '消息流', icon: '📜' },
   { to: 'prompts', label: 'Prompt管理', icon: '📝' },
   { to: 'schedule-patterns', label: '定时任务模板管理', icon: '⏰' },
+  { to: 'memory', label: '记忆', icon: '🧠' },
+  { to: 'skills', label: '技能', icon: '⚡' },
   { to: 'terminal', label: '终端', icon: '⌨️' },
 ] as const
 

@@ -18,7 +18,7 @@ import { ROTOM_CLI_PROMPT, ROTOM_CLI_PROMPT_VERSION } from "./rotom-cli-prompt.j
 import type { AgentProfile } from "./agent-profile.js";
 import type { ActiveIssueRef } from "./group-context.js";
 
-export type PromptLayerKind = "rotom-cli" | "group-basic" | "group-guidance" | "agent-role" | "cwd" | "task" | "memory-pointer";
+export type PromptLayerKind = "rotom-cli" | "group-basic" | "group-guidance" | "agent-role" | "cwd" | "task" | "memory-pointer" | "skill-pointer";
 
 export interface PromptLayer {
   layer: PromptLayerKind;
@@ -39,7 +39,7 @@ export interface ComposeContext {
   agentName: string;
   agentProfile: AgentProfile | null;
   /** 群内调用时填;DM / 单 issue 可空 */
-  group?: { id: string; name: string; activeIssues: ActiveIssueRef[]; guidancePrompt?: string | null; memoryCounts?: { group: number; global: number } } | null;
+  group?: { id: string; name: string; activeIssues: ActiveIssueRef[]; guidancePrompt?: string | null; memoryCounts?: { group: number; global: number }; skillCount?: number } | null;
   cwd: string | null;
   /** chat 模式时填,告诉 agent 这条消息是谁发的。issue/collab 模式不需要,留空。 */
   fromName?: string | null;
@@ -174,6 +174,19 @@ function buildMemoryPointerLayer(counts: { group: number; global: number }): Pro
   };
 }
 
+/** skill 极简指针层:只一行,告诉 agent 有多少可用 skill + 怎么查。count=0 不注入。 */
+function buildSkillPointerLayer(count: number, groupId?: string): PromptLayer | null {
+  if (count === 0) return null;
+  const gidHint = groupId ? ` ${groupId}` : "";
+  return {
+    layer: "skill-pointer",
+    content:
+      `[可用技能] ${count} 个。用 \`rotom skill mine${gidHint}\` 查列表,` +
+      `\`rotom skill get <name>\` 看详情;无关技能忽略,不要硬套。\n`,
+    source: "agent_skill_bindings count (runtime, group+agent scoped)",
+  };
+}
+
 // ── Public API ──────────────────────────────────────────────────────────
 
 export function composePrompt(ctx: ComposeContext): ComposedPrompt {
@@ -202,6 +215,12 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
   // 记忆极简指针层(末尾,优先级低,不干扰核心任务)
   if (ctx.group?.memoryCounts) {
     const ptr = buildMemoryPointerLayer(ctx.group.memoryCounts);
+    if (ptr) layers.push(ptr);
+  }
+
+  // skill 极简指针层(最末尾,优先级最低)
+  if (ctx.group?.skillCount !== undefined) {
+    const ptr = buildSkillPointerLayer(ctx.group.skillCount, ctx.group?.id);
     if (ptr) layers.push(ptr);
   }
 

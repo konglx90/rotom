@@ -209,6 +209,19 @@ export async function cmdMemory(
     return;
   }
 
+  // ── promote-to-skill(playbook memory → 全局 skill)────────────────────
+  if (sub === "promote-to-skill") {
+    const id = rest[1]; if (!id) fail("usage: rotom memory promote-to-skill <memoryId> [--name N] [--description D]");
+    const name = flagStr(flags, "name");
+    const description = flagStr(flags, "description");
+    const body: Record<string, unknown> = { createdBy: agent.name };
+    if (name) body.name = name;
+    if (description) body.description = description;
+    const data = await api(agent, "POST", `/memory/${encodeURIComponent(id)}/promote-to-skill`, body);
+    printJson(data);
+    return;
+  }
+
   // ── 审核 ──────────────────────────────────────────────────────────────
   if (sub === "pending") {
     let url: string;
@@ -279,6 +292,7 @@ usage:
   memory remove <id>
   memory expire <id>
   memory promote <id> --visibility global
+  memory promote-to-skill <memoryId> [--name N] [--description D]   # playbook → 全局 skill
   memory pending <groupId> [--scope global]
   memory approve <id>
   memory reject <id>
