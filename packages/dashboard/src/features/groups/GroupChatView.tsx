@@ -187,7 +187,6 @@ export function GroupChatView() {
     messages,
     setMessages,
     cancelStream,
-    getStreamingRequestIdForAgent,
   } = useGroupChatWebSocket({
     myAgentName,
     selectedGroupId,
@@ -217,10 +216,6 @@ export function GroupChatView() {
     pushHistory(trimmed)
 
     if (isDirectMode && selectedGroupId) {
-      const inFlight = getStreamingRequestIdForAgent(directTarget)
-      if (inFlight) {
-        await cancelStream(inFlight, directTarget)
-      }
       const requestId = `dm_${Date.now()}`
       const ok = send({
         type: 'a2a_send',
@@ -273,13 +268,6 @@ export function GroupChatView() {
       type: 'group' as const,
       groupId: selectedGroupId,
       groupName: selectedGroup?.name,
-    }
-
-    for (const target of targets) {
-      const inFlight = getStreamingRequestIdForAgent(target)
-      if (inFlight) {
-        await cancelStream(inFlight, target)
-      }
     }
 
     groupsApi.sendMessage(selectedGroupId, myAgentName, trimmed, mentions).catch((err) => {
