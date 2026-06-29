@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { GuidanceTemplatePicker } from './GuidanceTemplatePicker'
@@ -242,11 +242,21 @@ export function GroupSettingsModal({
 
 /** 每个 agent 勾选该群要绑定的 skill。勾选实时 bind/unbind。 */
 function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; memberAgentNames: string[] }) {
-  const { myAgentName } = useChatContext()
+  const { myAgentName, agents } = useChatContext()
   const [allSkills, setAllSkills] = useState<SkillIndex[]>([])
   const [bindings, setBindings] = useState<SkillBinding[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState<string>('')  // "agentName:skillName" 防抖
+
+  // 真人不参与 skill 绑定(category === "真人"),优先取群成员 profile override,回落全局 agent profile。
+  const aiAgentNames = useMemo(() => {
+    const byName = new Map(agents.map(a => [a.name, a]))
+    return memberAgentNames.filter(aname => {
+      const member = byName.get(aname)
+      return member?.profile?.category !== '真人'
+    })
+  }, [memberAgentNames, agents])
+
 
   const reload = () => {
     Promise.all([skillsApi.list(), skillsApi.listBindings(groupId)])
@@ -274,7 +284,7 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
     }
   }
 
-  if (memberAgentNames.length === 0) return null
+  if (aiAgentNames.length === 0) return null
 
   return (
     <div className={styles.summary} style={{ marginTop: 12 }}>
@@ -291,7 +301,7 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {memberAgentNames.map(aname => (
+          {aiAgentNames.map(aname => (
             <div key={aname} style={{ padding: '6px 0', borderTop: '1px solid var(--border-color-light, #eee)' }}>
               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6, color: 'var(--color-navy, #1a365d)' }}>{aname}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
