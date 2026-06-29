@@ -88,6 +88,7 @@ export class ChatHandler {
             name: conversation.groupName || conversation.groupId,
             activeIssues: conversation.activeIssues ?? [],
             guidancePrompt: conversation.guidancePrompt ?? null,
+            memoryCounts: conversation.memoryCounts,
           }
         : null,
       cwd,

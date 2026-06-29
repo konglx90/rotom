@@ -16,7 +16,6 @@ import { DirectChatArea } from './DirectChatArea'
 import { GroupChatArea } from './GroupChatArea'
 import { IssuePanel } from './IssuePanel'
 const LazyArtifactPanel = lazy(() => import('./ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })))
-import { NotePanel } from './NotePanel'
 import { SchedulePanel } from './SchedulePanel'
 import { CreateIssueDialog } from './CreateIssueDialog'
 import { CreateNoteDialog } from './CreateNoteDialog'
@@ -24,6 +23,7 @@ import { AddMemberModal } from './modals/AddMemberModal'
 import { MemberListModal } from './modals/MemberListModal'
 import { ShareLinkModal } from './ShareLinkModal'
 import { GroupMessageStreamModal } from './modals/GroupMessageStreamModal'
+import { MemoryPanel } from './MemoryPanel'
 import { ModeSidebarClock } from './ModeSidebarClock'
 import { SessionPanel } from './SessionPanel'
 import { Modal } from '../../components/ui/Modal/Modal'
@@ -788,7 +788,7 @@ export function GroupChatView() {
                                 className={`${styles.processTab} ${processTab === 'notes' ? styles.processTabActive : ''}`}
                                 onClick={() => setProcessTab('notes')}
                               >
-                                Notes
+                                Memory
                               </button>
                               <button
                                 type="button"
@@ -798,11 +798,11 @@ export function GroupChatView() {
                                 Schedules
                               </button>
                             </div>
-                            {!isVisitor && (processTab === 'issues' || processTab === 'notes') && (
+                            {!isVisitor && processTab === 'issues' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCreateDialog({ kind: processTab === 'issues' ? 'issue' : 'note' })}
+                                onClick={() => setCreateDialog({ kind: 'issue' })}
                                 className={styles.processCreateBtn}
                               >
                                 + 创建
@@ -826,7 +826,7 @@ export function GroupChatView() {
                                 onArtifactClick={handleArtifactClick}
                               />
                             ) : processTab === 'notes' ? (
-                              <NotePanel
+                              <MemoryPanel
                                 selectedGroupId={selectedGroupId}
                                 myAgentName={myAgentName}
                               />

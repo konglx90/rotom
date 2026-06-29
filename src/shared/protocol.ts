@@ -95,6 +95,8 @@ export interface GroupConversation {
   groupId?: string;
   groupName?: string;
   activeIssues?: ActiveIssueRef[];
+  /** 群内 + 全局可被 agent 检索的记忆条数(极简指针注入用)。 */
+  memoryCounts?: { group: number; global: number };
 }
 
 /** Active collaboration metadata for an in-flight group message. */

@@ -314,11 +314,43 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
               {isFinalState && (
                 <Button variant="secondary" size="xs" onClick={onDelete}>删除</Button>
               )}
+              {issue.status === 'completed' && (
+                <ExtractMemoryButton issueId={issue.id} agentName={issue.assigned_to ?? undefined} />
+              )}
             </div>
           </div>
           )}
         </div>
       )}
     </div>
+  )
+}
+
+function ExtractMemoryButton({ issueId, agentName }: { issueId: string; agentName?: string }) {
+  const [extracting, setExtracting] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const handleExtract = async () => {
+    if (extracting) return
+    if (!window.confirm('生成记忆?会创建一个提取任务 Issue,push 给原 Issue 的 assignee 执行。提取出的记忆进入「待审核」,需在 Memory 面板审核。')) return
+    setExtracting(true)
+    setMsg(null)
+    try {
+      const r = await issuesApi.extractMemory(issueId, agentName)
+      setMsg(r.pushed ? `已派给 ${r.agentName}` : `已建任务,但 ${r.agentName} 离线,上线后自动抢单`)
+    } catch (e) {
+      setMsg(`失败:${(e as Error).message}`)
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  return (
+    <>
+      <Button variant="secondary" size="xs" onClick={handleExtract} disabled={extracting} title="从本次 Issue 产出提炼记忆,写入待审核池">
+        {extracting ? '生成中...' : '🧠 生成记忆'}
+      </Button>
+      {msg && <span className={styles.fieldHint}>{msg}</span>}
+    </>
   )
 }

@@ -736,4 +736,75 @@ export function registerIssueRoutes(
     log.info(`Collaboration concluded: "${issue.title}" (${req.params.id})`);
     res.json({ ok: true });
   });
+
+  // ── Issue → 记忆提取(用户点「生成记忆」触发,非自动)──────────────────
+  // 创建一个"记忆提取"任务 Issue,push 给指定 agent 执行。
+  // agent 读原 Issue 产出 → 提炼记忆 → 调 `rotom memory add --pending` 写入。
+  // 写入的记忆 pending_review=1,需用户在 MemoryPanel「待审核」tab 审核。
+  apiRouter.post("/issues/:id/extract-memory", (req, res) => {
+    const sourceIssue = db.getIssueById(req.params.id);
+    if (!sourceIssue) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+    if (sourceIssue.status !== "completed") {
+      res.status(400).json({ error: "只能对 completed 状态的 Issue 生成记忆" });
+      return;
+    }
+    const { agentName } = req.body ?? {};
+    const targetAgent = (typeof agentName === "string" && agentName.trim()) ? agentName.trim() : sourceIssue.assigned_to;
+    if (!targetAgent) {
+      res.status(400).json({ error: "原 Issue 无 assignee,需传 agentName 指定执行 agent" });
+      return;
+    }
+    const targetAgentRow = db.getAgentByName(targetAgent);
+    if (!targetAgentRow) {
+      res.status(404).json({ error: `Agent "${targetAgent}" 不存在` });
+      return;
+    }
+    if (!hub) {
+      res.status(500).json({ error: "WSHub 未初始化" });
+      return;
+    }
+
+    const sourceShortId = req.params.id.slice(0, 8);
+    const extractIssueId = randomUUID();
+    const extractPrompt = [
+      `[记忆提取任务] 请从 Issue #${sourceShortId} 的产出中提炼值得长期记住的经验。`,
+      ``,
+      `原 Issue 标题:${sourceIssue.title}`,
+      `原 Issue 描述:`,
+      sourceIssue.description || "(无)",
+      ``,
+      `步骤:`,
+      `1. 用 \`rotom issue show ${req.params.id}\` 或读 issue 详情,了解这次任务做了什么、关键决策、踩过的坑、用到的技术栈/约定`,
+      `2. 提炼 0~N 条记忆,每条选定 category(fact/decision/convention/pitfall/todo/playbook)`,
+      `3. 每条用 \`rotom memory add ${sourceIssue.group_id} --key <主题> --value <内容> --category <cat> --summary <一句话> --pending\` 写入`,
+      `   - --pending 必须加,写入后处于待审核状态,由人在 dashboard 审核`,
+      `   - key 用 "decision:xxx" / "pitfall:xxx" / "fact:xxx" 等带前缀的形式`,
+      `   - 只提炼真正值得长期记住的,无关细节不要记。没有值得记的就一条都不写`,
+      `4. 完成后在群里回复"已提取 N 条记忆,待审核"`,
+      ``,
+      `重要:不要记临时性的、任务特定的、下次不会复用的信息。`,
+    ].join("\n");
+
+    const workingDir = resolveGroupAgentWorkingDir(db, sourceIssue.group_id, targetAgent);
+    db.createIssue({
+      id: extractIssueId,
+      groupId: sourceIssue.group_id,
+      title: `[记忆提取] #${sourceShortId} ${sourceIssue.title}`.slice(0, 200),
+      description: extractPrompt,
+      createdBy: "system:memory-extract",
+      workingDir,
+      assignedTo: targetAgent,
+      approvalPolicy: "rw_allow",
+    });
+    const pushed = hub.pushIssueAssignment(extractIssueId, targetAgent);
+    if (!pushed) {
+      log.warn(`extract-memory: pushIssueAssignment 失败,agent ${targetAgent} 可能不在线 (issue ${extractIssueId})`);
+    }
+    hub.notifyIssueChanged(extractIssueId, sourceIssue.group_id, "created");
+    log.info(`extract-memory: source=${req.params.id} → extract issue=${extractIssueId} → agent=${targetAgent}`);
+    res.status(201).json({ extractIssueId, agentName: targetAgent, pushed });
+  });
 }

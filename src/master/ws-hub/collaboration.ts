@@ -72,10 +72,16 @@ export const collaborationMethods = {
       priority: it.priority || undefined,
     }));
 
+    // 记忆计数(极简指针注入用,只算 agent_visible=1 且 active 且非 pending)
+    const memoryCounts = {
+      group: this.db.countMemory("group", conversation.groupId),
+      global: this.db.countMemory("global"),
+    };
+
     const collabs = this.db.getActiveCollaborationsByGroup(conversation.groupId);
     if (collabs.length === 0) {
       // No collaboration but still attach activeIssues so agents can see them.
-      return { ...conversation, activeIssues, workingDir, guidancePrompt: group?.guidance_prompt || undefined } as T;
+      return { ...conversation, activeIssues, workingDir, memoryCounts, guidancePrompt: group?.guidance_prompt || undefined } as T;
     }
     const collab = collabs[0]; // single active collaboration per group
     const currentRound = collab.current_round ?? 1;
@@ -87,6 +93,7 @@ export const collaborationMethods = {
       ...conversation,
       activeIssues,
       workingDir,
+      memoryCounts,
       guidancePrompt: group?.guidance_prompt || undefined,
       collaboration: {
         issueId: collab.id,
