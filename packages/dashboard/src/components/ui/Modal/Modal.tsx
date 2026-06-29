@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import styles from './Modal.module.css'
 
-export type ModalSize = 'sm' | 'md' | 'lg'
+export type ModalSize = 'sm' | 'md' | 'lg' | 'xl'
 
 interface ModalProps {
   /** Whether the modal is visible. */

@@ -78,7 +78,7 @@ function App() {
                 <Route path="/dashboard/groups/:groupId/issues-single" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssuesListPage /></div></RequireAgent>} />
                 <Route path="/dashboard/groups/:groupId/issues-single/:issueId" element={<RequireAgent><div className="container-full" style={{ display: 'flex', flexDirection: 'column' }}><IssueDetailPage /></div></RequireAgent>} />
                 <Route path="/dashboard/toolbox" element={<RequireAgent><div className="container-full"><ToolboxView /></div></RequireAgent>}>
-                  <Route index element={<Navigate to="terminal" replace />} />
+                  <Route index element={<Navigate to="messages" replace />} />
                   <Route path="terminal" element={<TerminalPage />} />
                   <Route path="messages" element={<MessagesView />} />
                   <Route path="prompts" element={<PromptsManagementTab />} />
