@@ -585,6 +585,37 @@
   color: var(--color-slate, #555);
 }
 
+.sessionOnlineDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sessionOnlineDotOn {
+  background: #4caf50;
+  box-shadow: 0 0 4px rgba(76, 175, 80, 0.6);
+}
+
+.sessionOnlineDotOff {
+  background: #bbb;
+  opacity: 0.5;
+}
+
+.sessionRowInvalidated {
+  opacity: 0.55;
+}
+
+.sessionInvalidatedTag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(180, 80, 80, 0.15);
+  color: #8a3232;
+  flex-shrink: 0;
+}
+
 .sessionId {
   font-family: var(--font-mono, monospace);
   font-size: 12px;
@@ -644,6 +675,12 @@
 .sessionUsageCost {
   color: #054d28;
   font-weight: 600;
+}
+
+.sessionUsageCostCum {
+  color: #5b3a9e;
+  font-weight: 500;
+  opacity: 0.85;
 }
 
 .sessionUsageArrow {

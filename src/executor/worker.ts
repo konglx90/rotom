@@ -155,6 +155,14 @@ export class ExecutorWorker {
      * session 是 worker 全局状态,不应该跟着 groupId 散布到 `<base>/<groupId>/` 里。
      */
     readonly rotomHome: string,
+    /**
+     * 共享的 SessionStore 实例。executor 进程内所有 worker 必须共用同一个,
+     * 否则每个 worker 各自 flush 自己的内存 map 到同一个 sessions.json,
+     * 后 flush 的 worker 会覆盖先 flush 的 worker 写入的条目(典型表现:
+     * 重启后某些 cliTool 的 session 「消失」)。由 index.ts 创建并传入。
+     * 不传时(主要为了测试隔离)回退到自建实例。
+     */
+    sharedSessions?: SessionStore,
   ) {
     this.tag = `[executor:${config.name}]`;
     // workingDir 是 per-group cwd 派生的 base,完全本机解析,与 master 无关。
@@ -165,7 +173,7 @@ export class ExecutorWorker {
     this.workingDir = config.workingDir || path.join(os.homedir(), ".rotom");
     this.maxConcurrent = config.maxConcurrent ?? 2;
     this.cliTool = cliTool;
-    this.sessions = new SessionStore(this.rotomHome);
+    this.sessions = sharedSessions ?? new SessionStore();
     this.agentProfile = parseAgentProfile(JSON.stringify(config.profile ?? null));
 
     // Subsystems store the worker reference only — no work in constructors.
@@ -238,9 +246,7 @@ export class ExecutorWorker {
 
   stop(): void {
     this.connection.stop();
-    // Flush pending SessionStore writes — without this, sessions sitting in
-    // the 1s debounce timer would be lost on SIGINT/shutdown.
-    this.sessions.shutdown();
+    // SessionStore is in-memory only now; persistence lives in master DB.
   }
 
   // ── Message router ────────────────────────────────────────────────
@@ -248,11 +254,29 @@ export class ExecutorWorker {
   handleMessage(msg: Record<string, unknown>): void {
     if (msg.type === "auth_ok") {
       console.log(`${this.tag} Authenticated`);
-      // Push initial SessionStore snapshot so master's cache is populated
-      // before any dashboard hits GET /sessions. Master replaces any prior
-      // snapshot for this worker on receipt.
+      // Push initial SessionStore snapshot so master's DB is populated
+      // (covers the legacy backfill path: entries read from sessions.json
+      // get upserted into master DB on first auth). Master will then push
+      // back a session_sync_push with the worker's active sessions.
       this.sendSessionSnapshot();
       this.connection.startHeartbeat();
+    }
+
+    if (msg.type === "session_sync_push") {
+      // Master pushes the worker's active sessions from DB on auth. Hydrate
+      // the in-memory store so subsequent chat turns can --resume.
+      const entries = (msg as any).entries as Array<any> | undefined;
+      if (Array.isArray(entries)) {
+        this.sessions.hydrate(entries.map(e => ({
+          cliTool: e.cliTool,
+          groupId: e.groupId,
+          sessionId: e.sessionId,
+          usage: e.usage ?? undefined,
+          model: e.model ?? undefined,
+          cumulativeCostUsd: e.cumulativeCostUsd,
+        })));
+      }
+      return;
     }
 
     if (msg.type === "auth_fail") {
@@ -504,6 +528,13 @@ ${prompt}`;
       if (had) {
         this.sessions.delete(this.cliTool, groupId);
         console.log(`${this.tag} Session deleted via dashboard: ${this.cliTool}:${groupId} → ${sessionId}`);
+        // 通知 master 标记失效(不删行,保留历史);再推 snapshot 同步 active 列表。
+        this.send({
+          type: "session_invalidated",
+          cliTool: this.cliTool,
+          groupId,
+          sessionId,
+        });
         this.sendSessionSnapshot();
       }
       this.send({

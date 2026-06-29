@@ -36,13 +36,10 @@ export function registerSessionRoutes(
   }
 
   // ── List sessions for a group ──────────────────────────────────────────
-  // Reads the master's in-memory `sessionSnapshots` cache (populated by
-  // workers pushing `session_snapshot` after auth and after every
-  // SessionStore mutation). No WS broadcast, no timeout — synchronous and
-  // returns whatever workers have reported so far.
-  //
-  // Workers that have never connected since master start contribute nothing,
-  // which matches the "live state" semantics the dashboard wants.
+  // Reads from master DB (`agent_sessions` table), which workers keep fresh
+  // via `session_snapshot` pushes (master upserts on receipt). Includes
+  // invalidated sessions (full history). `online` is computed by joining
+  // against the in-memory `connections` map.
   apiRouter.get("/sessions", async (req, res) => {
     const groupId = typeof req.query.groupId === "string" ? req.query.groupId : "";
     if (!groupId) {
@@ -57,14 +54,13 @@ export function registerSessionRoutes(
     res.json({ sessions });
   });
 
-  // ── Session usage / model (from worker snapshot cache) ─────────────────
+  // ── Session usage / model / online (from DB) ──────────────────────────
   // Debug 视图 SessionPanel 用它把每个 chat session 自己的 token 用量 / 模型名
-  // 拉出来展示。数据源是 worker 在每次 chat turn 结束后推送的 session_snapshot
-  // —— worker.handleChatReply 把 result.usage / result.model 写进 SessionStore,
-  // 然后 sendSessionSnapshot 推给 master,master 缓存在 sessionSnapshots 里。
+  // 拉出来展示。数据源是 master DB 的 agent_sessions 表(由 worker 的
+  // session_snapshot 推送写入)。online 由 connections 内存表 join 算出。
   //
   // 这条路径返回的就是该 chat session 自己的消耗,跟 issue 执行的 session 是
-  // 两个独立 session(issue 有自己的 session_id,不共享)。不再反查 issues 表。
+  // 两个独立 session(issue 有自己的 session_id,不共享)。
   apiRouter.get("/sessions/:cliTool/:groupId/:sessionId/usage", (req, res) => {
     const { cliTool, groupId, sessionId } = req.params;
     if (!SAFE_CLI.test(cliTool)) {
@@ -75,10 +71,10 @@ export function registerSessionRoutes(
       res.status(400).json({ error: "invalid groupId or sessionId" });
       return;
     }
-    void db; // retained for future DB-backed enrichment; cache is the source of truth now
+    void db; // DB 通过 hub.findSessionEntry 内部访问;这里保留签名兼容
     const entry = hub.findSessionEntry(sessionId);
     if (!entry) {
-      res.json({ cliTool, sessionId, usage: null, model: null });
+      res.json({ cliTool, sessionId, usage: null, model: null, cumulativeCostUsd: null, online: false, invalidatedAt: null });
       return;
     }
     res.json({
@@ -86,6 +82,9 @@ export function registerSessionRoutes(
       sessionId,
       usage: entry.usage ?? null,
       model: entry.model ?? null,
+      cumulativeCostUsd: typeof entry.cumulativeCostUsd === "number" ? entry.cumulativeCostUsd : null,
+      online: entry.online ?? false,
+      invalidatedAt: entry.invalidatedAt ?? null,
     });
   });
 

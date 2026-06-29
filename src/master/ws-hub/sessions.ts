@@ -1,14 +1,13 @@
 /**
  * Session management — Master ↔ Executor session routing.
  *
- * The dashboard's `/sessions` endpoints need per-worker SessionStore data.
- * Workers push a `session_snapshot` after auth and after every mutation;
- * master holds it in memory (`sessionSnapshots`) so HTTP GETs can answer
- * without round-tripping each worker.
+ * Dashboard 的 `/sessions` 端点现在直接读 master DB 的 `agent_sessions` 表
+ * (替代了之前的 in-memory `sessionSnapshots` 缓存)。worker 仍然推
+ * `session_snapshot`,master 在 connection.ts 里 upsert 到 DB + 更新内存
+ * 缓存(缓存保留给 online 判定 + routeToExecutor 用)。
  *
- * `routeToExecutor` is the inverse direction — master forwards a request
- * to one or more workers matching a predicate, returns the first response
- * within timeout. Used by /sessions view + delete endpoints.
+ * `routeToExecutor` 是反向:master 把 view/delete 请求转发给匹配的 worker,
+ * 取第一个响应。
  *
  * Methods attach via Object.assign.
  */
@@ -18,44 +17,80 @@ import type { ConnectedAgent, WSHubSelf } from "./hub.js";
 
 export const sessionsMethods = {
   /**
-   * Aggregate every connected worker's cached SessionStore snapshot and return
-   * only entries belonging to `groupId`. Deduplicates by `(cliTool, sessionId)`
-   * — in single-worker-per-cliTool deployments this is a no-op, but if two
-   * workers with the same cliTool both claim an entry we keep the first one.
+   * 列出该群所有 session(包括已失效的),按最近使用倒序。数据源是 DB。
+   * online 字段由 connections 内存表 join 算出:该 session 的 (agentName,
+   * cliTool) 对应的 worker 当前是否 WS 连着。
    *
-   * This is the fast path for `GET /sessions?groupId=X`: no WS broadcast, no
-   * waiting on worker responses. The cache is kept fresh by workers pushing
-   * `session_snapshot` after auth and after every mutation.
+   * `GET /sessions?groupId=X` 的快路径。
    */
   listSessionsByGroup(this: WSHubSelf, groupId: string): SessionEntry[] {
-    const seen = new Set<string>();
-    const out: SessionEntry[] = [];
-    for (const [agentId, entries] of this.sessionSnapshots) {
-      const agentName = this.connections.get(agentId)?.name;
-      for (const entry of entries) {
-        if (entry.groupId !== groupId) continue;
-        const key = `${agentId}:${entry.cliTool}:${entry.sessionId}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(agentName ? { ...entry, agentName } : entry);
-      }
+    const rows = this.db.listAgentSessionsByGroup(groupId);
+    // 算 online:agent_name + cli_tool 同时匹配某个 connected worker
+    const onlineKeys = new Set<string>();
+    for (const conn of this.connections.values()) {
+      if (conn.ws.readyState !== WebSocket.OPEN) continue;
+      if (!conn.cliTool) continue;
+      onlineKeys.add(`${conn.name}:${conn.cliTool}`);
     }
-    return out;
+    return rows.map(r => {
+      const online = onlineKeys.has(`${r.agent_name}:${r.cli_tool}`);
+      const entry: SessionEntry & { online?: boolean; invalidatedAt?: string | null } = {
+        cliTool: r.cli_tool,
+        groupId: r.group_id,
+        sessionId: r.session_id,
+        agentName: r.agent_name,
+        usage: (r.input_tokens == null && r.output_tokens == null && r.total_cost_usd == null)
+          ? null
+          : {
+              inputTokens: r.input_tokens ?? undefined,
+              outputTokens: r.output_tokens ?? undefined,
+              cacheReadTokens: r.cache_read_tokens ?? undefined,
+              cacheCreationTokens: r.cache_creation_tokens ?? undefined,
+              totalCostUsd: r.total_cost_usd ?? undefined,
+            },
+        model: r.model ?? null,
+        cumulativeCostUsd: r.cumulative_cost_usd,
+        online,
+        invalidatedAt: r.invalidated_at,
+      };
+      return entry;
+    });
   },
 
   /**
-   * Look up a single session's cached usage/model by sessionId. Used by
-   * `GET /sessions/:cliTool/:groupId/:sessionId/usage` — reads straight from
-   * the in-memory snapshot cache (workers push usage/model after every chat
-   * turn), no DB lookup. Returns undefined when no connected worker has
-   * reported this sessionId yet.
+   * 反查单条 session 的 usage/model/cumulative/online/invalidatedAt。
+   * `GET /sessions/:.../usage` 用。直接读 DB,不再依赖 worker 在线。
    */
   findSessionEntry(this: WSHubSelf, sessionId: string): SessionEntry | undefined {
-    for (const entries of this.sessionSnapshots.values()) {
-      const hit = entries.find((e) => e.sessionId === sessionId);
-      if (hit) return hit;
+    const r = this.db.findAgentSession(sessionId);
+    if (!r) return undefined;
+    let online = false;
+    for (const conn of this.connections.values()) {
+      if (conn.ws.readyState !== WebSocket.OPEN) continue;
+      if (conn.name === r.agent_name && conn.cliTool === r.cli_tool) {
+        online = true;
+        break;
+      }
     }
-    return undefined;
+    return {
+      cliTool: r.cli_tool,
+      groupId: r.group_id,
+      sessionId: r.session_id,
+      agentName: r.agent_name,
+      usage: (r.input_tokens == null && r.output_tokens == null && r.total_cost_usd == null)
+        ? null
+        : {
+            inputTokens: r.input_tokens ?? undefined,
+            outputTokens: r.output_tokens ?? undefined,
+            cacheReadTokens: r.cache_read_tokens ?? undefined,
+            cacheCreationTokens: r.cache_creation_tokens ?? undefined,
+            totalCostUsd: r.total_cost_usd ?? undefined,
+          },
+      model: r.model ?? null,
+      cumulativeCostUsd: r.cumulative_cost_usd,
+      online,
+      invalidatedAt: r.invalidated_at,
+    };
   },
 
   /**

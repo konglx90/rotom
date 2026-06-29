@@ -24,6 +24,7 @@ import { HermesCliExecutor } from "./executors/hermes-cli.js";
 import { OpenclawExecutor } from "./executors/openclaw.js";
 import type { CliExecutor } from "./cli-executor.js";
 import { ExecutorWorker, type WorkerConfig } from "./worker.js";
+import { SessionStore } from "./session-store.js";
 import { ensureRotomSkillMd } from "../shared/skill-md.js";
 
 // ── Config ──────────────────────────────────────────────────────────────
@@ -177,11 +178,19 @@ for (const w of workers) {
 const fallbackCli = detectCliTool();
 const workerInstances: ExecutorWorker[] = [];
 
+// 进程级共享 SessionStore —— 所有 worker 共用同一份内存 map。持久化在 master
+// DB 的 agent_sessions 表里,worker 启动时通过 session_sync_push 从 master 拉。
+const sharedSessions = new SessionStore();
+// 一次性迁移:把旧的 ~/.rotom/sessions.json 灌进内存,auth_ok 后会推给 master
+// 落 DB。文件读完即删,后续启动直接走 master DB。
+sharedSessions.backfillFromLegacyJson(ROTOM_HOME);
+
 for (const w of workers) {
   const cliTool = w.cliTool || fallbackCli;
   const executor = createExecutor(cliTool);
-  // 第 5 个参数 rotomHome:SessionStore 文件落点,与 per-group cwd 派生路径解耦
-  const worker = new ExecutorWorker(w, executor, master, cliTool, ROTOM_HOME);
+  // 第 5 个参数 rotomHome:SessionStore 文件落点,与 per-group cwd 派生路径解耦;
+  // 第 6 个参数 sharedSessions:进程级单例,所有 worker 共用。
+  const worker = new ExecutorWorker(w, executor, master, cliTool, ROTOM_HOME, sharedSessions);
   workerInstances.push(worker);
   const mapCount = w.workingDirMap ? Object.keys(w.workingDirMap).length : 0;
   console.log(`[executor] worker "${w.name}" base cwd: ${w.workingDir} (per-group: <base>/<groupId>${mapCount > 0 ? `, ${mapCount} explicit override(s)` : ""})`);

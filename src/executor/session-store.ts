@@ -1,8 +1,9 @@
-import path from "node:path";
 import fs from "node:fs";
+import path from "node:path";
 import type { TokenUsage } from "../shared/protocol.js";
 
-/** Shape persisted to ~/.rotom/sessions.json and surfaced via listAll(). */
+/** Shape held in memory and surfaced via listAll(). Persisted to master DB
+ *  via session_snapshot pushes; no longer written to local JSON file. */
 export interface StoredSession {
   sessionId: string;
   /** Latest usage captured from the CLI backend. undefined until the first
@@ -10,63 +11,95 @@ export interface StoredSession {
   usage?: TokenUsage;
   /** Backend-reported model name. Same lifecycle as usage. */
   model?: string;
+  /** 累计成本(USD),跨该 chat session 所有 turn 的 totalCostUsd 之和。
+   *  recordUsage 每次把当前 turn 的 totalCostUsd 累加进来;session 失效
+   *  重建(sessionId 变更)时清零。undefined 表示从未报告过 cost。 */
+  cumulativeCostUsd?: number;
 }
 
 /**
- * Manages conversation sessions per group per CLI.
- * Persisted to ~/.rotom/sessions.json so sessions survive restarts.
+ * In-memory registry of conversation sessions per group per CLI.
+ *
+ * Persistence moved to master DB (`agent_sessions` table). On startup the
+ * worker receives a `session_sync_push` from master with all its active
+ * sessions; mutations are pushed back via `session_snapshot`. The old
+ * `~/.rotom/sessions.json` file is gone — master is the single source of
+ * truth, which fixes the multi-worker flush-overwrite bug and lets the
+ * dashboard surface full session history (including invalidated ones).
+ *
  * Key format: `${cliTool}:${groupId}` → StoredSession
  */
 export class SessionStore {
   private sessions = new Map<string, StoredSession>();
-  private filePath: string;
-  private dirty = false;
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(rotomDir: string) {
-    this.filePath = path.join(rotomDir, "sessions.json");
-    this.load();
-  }
-
-  private load(): void {
-    try {
-      if (fs.existsSync(this.filePath)) {
-        const data = JSON.parse(fs.readFileSync(this.filePath, "utf-8")) as Record<string, unknown>;
-        for (const [k, v] of Object.entries(data)) {
-          // Backward compat: old format was Record<string, string> (just sessionId).
-          // New format is Record<string, StoredSession>. Accept both.
-          if (typeof v === "string") {
-            this.sessions.set(k, { sessionId: v });
-          } else if (v && typeof v === "object" && typeof (v as any).sessionId === "string") {
-            this.sessions.set(k, v as StoredSession);
-          }
-        }
-        console.log(`[session-store] Loaded ${this.sessions.size} session(s) from ${this.filePath}`);
-      }
-    } catch (err: any) {
-      console.warn(`[session-store] Failed to load: ${err.message}`);
+  /** Populate from master's session_sync_push on startup. Merges with any
+   *  existing in-memory state (e.g. legacy backfill) — master entries only
+   *  fill in (cliTool, groupId) pairs the store doesn't already have. */
+  hydrate(entries: Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage | null; model?: string | null; cumulativeCostUsd?: number }>): void {
+    let added = 0;
+    for (const e of entries) {
+      const k = this.key(e.cliTool, e.groupId);
+      if (this.sessions.has(k)) continue;
+      const stored: StoredSession = { sessionId: e.sessionId };
+      if (e.usage) stored.usage = e.usage;
+      if (e.model) stored.model = e.model;
+      if (typeof e.cumulativeCostUsd === "number") stored.cumulativeCostUsd = e.cumulativeCostUsd;
+      this.sessions.set(k, stored);
+      added++;
+    }
+    if (added > 0) {
+      console.log(`[session-store] Hydrated ${added} session(s) from master (of ${entries.length} pushed)`);
     }
   }
 
-  private scheduleFlush(): void {
-    if (this.flushTimer) return;
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null;
-      this.flush();
-    }, 1000);
-  }
-
-  private flush(): void {
-    if (!this.dirty) return;
+  /**
+   * One-time migration: read the legacy `~/.rotom/sessions.json` file and
+   * populate the in-memory store. The file is deleted after reading so
+   * subsequent starts don't re-backfill (which would overwrite newer DB
+   * state). Safe to call multiple times — no-op if the file is gone.
+   *
+   * Called once from executor index.ts after constructing the shared
+   * SessionStore. After this, master DB is the source of truth.
+   */
+  backfillFromLegacyJson(rotomHome: string): void {
+    const file = path.join(rotomHome, "sessions.json");
+    let raw: string;
     try {
-      const obj: Record<string, StoredSession> = {};
-      for (const [k, v] of this.sessions) {
-        obj[k] = v;
+      raw = fs.readFileSync(file, "utf-8");
+    } catch {
+      return; // file gone or never existed — normal path after first migration
+    }
+    try {
+      const data = JSON.parse(raw) as Record<string, unknown>;
+      let count = 0;
+      for (const [k, v] of Object.entries(data)) {
+        const sep = k.indexOf(":");
+        if (sep === -1) continue;
+        const cliTool = k.slice(0, sep);
+        const groupId = k.slice(sep + 1);
+        if (typeof v === "string") {
+          this.sessions.set(k, { sessionId: v });
+          count++;
+        } else if (v && typeof v === "object" && typeof (v as any).sessionId === "string") {
+          const obj = v as any;
+          const stored: StoredSession = { sessionId: obj.sessionId };
+          if (obj.usage) stored.usage = obj.usage;
+          if (obj.model) stored.model = obj.model;
+          if (typeof obj.cumulativeCostUsd === "number") stored.cumulativeCostUsd = obj.cumulativeCostUsd;
+          this.sessions.set(k, stored);
+          count++;
+        }
       }
-      fs.writeFileSync(this.filePath, JSON.stringify(obj, null, 2));
-      this.dirty = false;
+      console.log(`[session-store] Backfilled ${count} session(s) from legacy ${file}`);
+      // Delete the file so we never re-backfill (would clobber DB state).
+      try {
+        fs.unlinkSync(file);
+        console.log(`[session-store] Removed legacy ${file}`);
+      } catch (err: any) {
+        console.warn(`[session-store] Failed to remove legacy ${file}: ${err.message}`);
+      }
     } catch (err: any) {
-      console.warn(`[session-store] Failed to flush: ${err.message}`);
+      console.warn(`[session-store] Failed to parse legacy ${file}: ${err.message} (leaving file in place)`);
     }
   }
 
@@ -89,8 +122,6 @@ export class SessionStore {
     } else {
       this.sessions.set(k, { sessionId });
     }
-    this.dirty = true;
-    this.scheduleFlush();
   }
 
   /** Record the latest usage/model captured from the CLI backend for this
@@ -99,22 +130,23 @@ export class SessionStore {
     const k = this.key(cliTool, groupId);
     const existing = this.sessions.get(k);
     if (!existing) return;
-    // Only update if there's something to record — avoids bumping dirty
-    // (and triggering a disk flush) on every chat turn that reports nothing.
+    // Only update if there's something to record — avoids bumping state
+    // on every chat turn that reports nothing.
     if (!usage && !model) return;
+    // 累加 cost:usage.totalCostUsd 是本次 turn 的成本,加到 cumulativeCostUsd。
+    // usage 本身仍整体覆盖(保留"最近一 turn 用量"语义)。
+    const turnCost = typeof usage?.totalCostUsd === "number" ? usage.totalCostUsd : 0;
+    const newCumulative = (existing.cumulativeCostUsd ?? 0) + turnCost;
     this.sessions.set(k, {
       ...existing,
       ...(usage ? { usage } : {}),
       ...(model ? { model } : {}),
+      cumulativeCostUsd: newCumulative,
     });
-    this.dirty = true;
-    this.scheduleFlush();
   }
 
   delete(cliTool: string, groupId: string): void {
     this.sessions.delete(this.key(cliTool, groupId));
-    this.dirty = true;
-    this.scheduleFlush();
   }
 
   has(cliTool: string, groupId: string, sessionId: string): boolean {
@@ -123,11 +155,11 @@ export class SessionStore {
 
   /**
    * Return every entry in the store, parsed from the `${cliTool}:${groupId}`
-   * keys. Used by the worker's session_snapshot push so master can cache the
-   * full picture without per-group requests.
+   * keys. Used by the worker's session_snapshot push so master can persist
+   * to DB.
    */
-  listAll(): Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string }> {
-    const out: Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string }> = [];
+  listAll(): Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string; cumulativeCostUsd?: number }> {
+    const out: Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string; cumulativeCostUsd?: number }> = [];
     for (const [k, stored] of this.sessions) {
       const sep = k.indexOf(":");
       if (sep === -1) continue;
@@ -137,16 +169,9 @@ export class SessionStore {
         sessionId: stored.sessionId,
         ...(stored.usage ? { usage: stored.usage } : {}),
         ...(stored.model ? { model: stored.model } : {}),
+        ...(typeof stored.cumulativeCostUsd === "number" ? { cumulativeCostUsd: stored.cumulativeCostUsd } : {}),
       });
     }
     return out;
-  }
-
-  shutdown(): void {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-    this.flush();
   }
 }

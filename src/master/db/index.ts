@@ -26,3 +26,4 @@ export type {
 
 export type { GuidanceTemplateRow } from "./guidance-templates.js";
 export type { SchedulePatternRow } from "./schedule-patterns.js";
+export type { AgentSessionRow, AgentSessionUpsert } from "./agent-sessions.js";
