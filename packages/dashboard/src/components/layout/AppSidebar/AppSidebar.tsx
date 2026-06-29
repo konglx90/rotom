@@ -41,7 +41,7 @@ function ArchivedSection({ archivedGroups, selectedGroupId, selectGroup, toggleG
         <span className={styles.archivedSectionCount}>{archivedGroups.length}</span>
       </div>
       {expanded && (
-        <ul className={styles.groupList}>
+        <ul className={styles.archivedList}>
           {archivedGroups.map((group) => {
             const isActive = selectedGroupId === group.id
             return (
