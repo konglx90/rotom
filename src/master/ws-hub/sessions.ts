@@ -50,6 +50,10 @@ export const sessionsMethods = {
             },
         model: r.model ?? null,
         cumulativeCostUsd: r.cumulative_cost_usd,
+        cumulativeInputTokens: r.cumulative_input_tokens,
+        cumulativeOutputTokens: r.cumulative_output_tokens,
+        cumulativeCacheReadTokens: r.cumulative_cache_read_tokens,
+        cumulativeCacheCreationTokens: r.cumulative_cache_creation_tokens,
         online,
         invalidatedAt: r.invalidated_at,
       };
@@ -88,6 +92,10 @@ export const sessionsMethods = {
           },
       model: r.model ?? null,
       cumulativeCostUsd: r.cumulative_cost_usd,
+      cumulativeInputTokens: r.cumulative_input_tokens,
+      cumulativeOutputTokens: r.cumulative_output_tokens,
+      cumulativeCacheReadTokens: r.cumulative_cache_read_tokens,
+      cumulativeCacheCreationTokens: r.cumulative_cache_creation_tokens,
       online,
       invalidatedAt: r.invalidated_at,
     };

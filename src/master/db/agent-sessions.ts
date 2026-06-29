@@ -28,6 +28,10 @@ export interface AgentSessionRow {
   total_cost_usd: number | null;
   model: string | null;
   cumulative_cost_usd: number;
+  cumulative_input_tokens: number;
+  cumulative_output_tokens: number;
+  cumulative_cache_read_tokens: number;
+  cumulative_cache_creation_tokens: number;
   invalidated_at: string | null;
 }
 
@@ -42,6 +46,11 @@ export interface AgentSessionUpsert {
   /** 跨该 session 所有 turn 的累计成本。worker 自己累加并上报,
    *  master 不做累加逻辑(worker 是唯一写入方,避免并发累加竞争)。 */
   cumulativeCostUsd?: number;
+  /** 累计 token 数,同 cumulativeCostUsd 语义。 */
+  cumulativeInputTokens?: number;
+  cumulativeOutputTokens?: number;
+  cumulativeCacheReadTokens?: number;
+  cumulativeCacheCreationTokens?: number;
 }
 
 export const agentSessionMethods = {
@@ -55,19 +64,27 @@ export const agentSessionMethods = {
         group_id, agent_name, cli_tool, session_id,
         created_at, last_used_at,
         input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-        total_cost_usd, model, cumulative_cost_usd, invalidated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        total_cost_usd, model,
+        cumulative_cost_usd,
+        cumulative_input_tokens, cumulative_output_tokens,
+        cumulative_cache_read_tokens, cumulative_cache_creation_tokens,
+        invalidated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
       ON CONFLICT(cli_tool, group_id, session_id) DO UPDATE SET
-        agent_name            = excluded.agent_name,
-        last_used_at          = excluded.last_used_at,
-        input_tokens          = COALESCE(excluded.input_tokens, agent_sessions.input_tokens),
-        output_tokens         = COALESCE(excluded.output_tokens, agent_sessions.output_tokens),
-        cache_read_tokens     = COALESCE(excluded.cache_read_tokens, agent_sessions.cache_read_tokens),
-        cache_creation_tokens = COALESCE(excluded.cache_creation_tokens, agent_sessions.cache_creation_tokens),
-        total_cost_usd        = COALESCE(excluded.total_cost_usd, agent_sessions.total_cost_usd),
-        model                 = COALESCE(excluded.model, agent_sessions.model),
-        cumulative_cost_usd   = COALESCE(excluded.cumulative_cost_usd, agent_sessions.cumulative_cost_usd),
-        invalidated_at        = NULL
+        agent_name                    = excluded.agent_name,
+        last_used_at                  = excluded.last_used_at,
+        input_tokens                  = COALESCE(excluded.input_tokens, agent_sessions.input_tokens),
+        output_tokens                 = COALESCE(excluded.output_tokens, agent_sessions.output_tokens),
+        cache_read_tokens             = COALESCE(excluded.cache_read_tokens, agent_sessions.cache_read_tokens),
+        cache_creation_tokens         = COALESCE(excluded.cache_creation_tokens, agent_sessions.cache_creation_tokens),
+        total_cost_usd                = COALESCE(excluded.total_cost_usd, agent_sessions.total_cost_usd),
+        model                         = COALESCE(excluded.model, agent_sessions.model),
+        cumulative_cost_usd           = COALESCE(excluded.cumulative_cost_usd, agent_sessions.cumulative_cost_usd),
+        cumulative_input_tokens       = COALESCE(excluded.cumulative_input_tokens, agent_sessions.cumulative_input_tokens),
+        cumulative_output_tokens      = COALESCE(excluded.cumulative_output_tokens, agent_sessions.cumulative_output_tokens),
+        cumulative_cache_read_tokens  = COALESCE(excluded.cumulative_cache_read_tokens, agent_sessions.cumulative_cache_read_tokens),
+        cumulative_cache_creation_tokens = COALESCE(excluded.cumulative_cache_creation_tokens, agent_sessions.cumulative_cache_creation_tokens),
+        invalidated_at                = NULL
     `).run(
       s.groupId, s.agentName, s.cliTool, s.sessionId,
       now, now,
@@ -78,6 +95,10 @@ export const agentSessionMethods = {
       u?.totalCostUsd ?? null,
       s.model ?? null,
       s.cumulativeCostUsd ?? 0,
+      s.cumulativeInputTokens ?? 0,
+      s.cumulativeOutputTokens ?? 0,
+      s.cumulativeCacheReadTokens ?? 0,
+      s.cumulativeCacheCreationTokens ?? 0,
     );
   },
 

@@ -15,6 +15,11 @@ export interface StoredSession {
    *  recordUsage 每次把当前 turn 的 totalCostUsd 累加进来;session 失效
    *  重建(sessionId 变更)时清零。undefined 表示从未报告过 cost。 */
   cumulativeCostUsd?: number;
+  /** 累计 token 数,同 cumulativeCostUsd 语义。 */
+  cumulativeInputTokens?: number;
+  cumulativeOutputTokens?: number;
+  cumulativeCacheReadTokens?: number;
+  cumulativeCacheCreationTokens?: number;
 }
 
 /**
@@ -35,7 +40,7 @@ export class SessionStore {
   /** Populate from master's session_sync_push on startup. Merges with any
    *  existing in-memory state (e.g. legacy backfill) — master entries only
    *  fill in (cliTool, groupId) pairs the store doesn't already have. */
-  hydrate(entries: Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage | null; model?: string | null; cumulativeCostUsd?: number }>): void {
+  hydrate(entries: Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage | null; model?: string | null; cumulativeCostUsd?: number; cumulativeInputTokens?: number; cumulativeOutputTokens?: number; cumulativeCacheReadTokens?: number; cumulativeCacheCreationTokens?: number }>): void {
     let added = 0;
     for (const e of entries) {
       const k = this.key(e.cliTool, e.groupId);
@@ -44,6 +49,10 @@ export class SessionStore {
       if (e.usage) stored.usage = e.usage;
       if (e.model) stored.model = e.model;
       if (typeof e.cumulativeCostUsd === "number") stored.cumulativeCostUsd = e.cumulativeCostUsd;
+      if (typeof e.cumulativeInputTokens === "number") stored.cumulativeInputTokens = e.cumulativeInputTokens;
+      if (typeof e.cumulativeOutputTokens === "number") stored.cumulativeOutputTokens = e.cumulativeOutputTokens;
+      if (typeof e.cumulativeCacheReadTokens === "number") stored.cumulativeCacheReadTokens = e.cumulativeCacheReadTokens;
+      if (typeof e.cumulativeCacheCreationTokens === "number") stored.cumulativeCacheCreationTokens = e.cumulativeCacheCreationTokens;
       this.sessions.set(k, stored);
       added++;
     }
@@ -133,15 +142,22 @@ export class SessionStore {
     // Only update if there's something to record — avoids bumping state
     // on every chat turn that reports nothing.
     if (!usage && !model) return;
-    // 累加 cost:usage.totalCostUsd 是本次 turn 的成本,加到 cumulativeCostUsd。
-    // usage 本身仍整体覆盖(保留"最近一 turn 用量"语义)。
+    // 累加 cost + tokens:每次 turn 的值加到 cumulative 字段。
+    // usage 本身仍整体覆盖(保留"最近一 turn 用量"语义,tooltip 用)。
     const turnCost = typeof usage?.totalCostUsd === "number" ? usage.totalCostUsd : 0;
-    const newCumulative = (existing.cumulativeCostUsd ?? 0) + turnCost;
+    const turnIn = typeof usage?.inputTokens === "number" ? usage.inputTokens : 0;
+    const turnOut = typeof usage?.outputTokens === "number" ? usage.outputTokens : 0;
+    const turnCacheRead = typeof usage?.cacheReadTokens === "number" ? usage.cacheReadTokens : 0;
+    const turnCacheCreation = typeof usage?.cacheCreationTokens === "number" ? usage.cacheCreationTokens : 0;
     this.sessions.set(k, {
       ...existing,
       ...(usage ? { usage } : {}),
       ...(model ? { model } : {}),
-      cumulativeCostUsd: newCumulative,
+      cumulativeCostUsd: (existing.cumulativeCostUsd ?? 0) + turnCost,
+      cumulativeInputTokens: (existing.cumulativeInputTokens ?? 0) + turnIn,
+      cumulativeOutputTokens: (existing.cumulativeOutputTokens ?? 0) + turnOut,
+      cumulativeCacheReadTokens: (existing.cumulativeCacheReadTokens ?? 0) + turnCacheRead,
+      cumulativeCacheCreationTokens: (existing.cumulativeCacheCreationTokens ?? 0) + turnCacheCreation,
     });
   }
 
@@ -158,8 +174,8 @@ export class SessionStore {
    * keys. Used by the worker's session_snapshot push so master can persist
    * to DB.
    */
-  listAll(): Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string; cumulativeCostUsd?: number }> {
-    const out: Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string; cumulativeCostUsd?: number }> = [];
+  listAll(): Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string; cumulativeCostUsd?: number; cumulativeInputTokens?: number; cumulativeOutputTokens?: number; cumulativeCacheReadTokens?: number; cumulativeCacheCreationTokens?: number }> {
+    const out: Array<{ cliTool: string; groupId: string; sessionId: string; usage?: TokenUsage; model?: string; cumulativeCostUsd?: number; cumulativeInputTokens?: number; cumulativeOutputTokens?: number; cumulativeCacheReadTokens?: number; cumulativeCacheCreationTokens?: number }> = [];
     for (const [k, stored] of this.sessions) {
       const sep = k.indexOf(":");
       if (sep === -1) continue;
@@ -170,6 +186,10 @@ export class SessionStore {
         ...(stored.usage ? { usage: stored.usage } : {}),
         ...(stored.model ? { model: stored.model } : {}),
         ...(typeof stored.cumulativeCostUsd === "number" ? { cumulativeCostUsd: stored.cumulativeCostUsd } : {}),
+        ...(typeof stored.cumulativeInputTokens === "number" ? { cumulativeInputTokens: stored.cumulativeInputTokens } : {}),
+        ...(typeof stored.cumulativeOutputTokens === "number" ? { cumulativeOutputTokens: stored.cumulativeOutputTokens } : {}),
+        ...(typeof stored.cumulativeCacheReadTokens === "number" ? { cumulativeCacheReadTokens: stored.cumulativeCacheReadTokens } : {}),
+        ...(typeof stored.cumulativeCacheCreationTokens === "number" ? { cumulativeCacheCreationTokens: stored.cumulativeCacheCreationTokens } : {}),
       });
     }
     return out;

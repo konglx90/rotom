@@ -415,6 +415,11 @@ export interface SessionEntry {
    *  worker 在 session_snapshot 里推送,master 缓存后透传给 dashboard。
    *  session 失效重建(sessionId 变更)时清零。undefined 表示从未报告过 cost。 */
   cumulativeCostUsd?: number;
+  /** 累计 token 数,跨该 session 所有 turn 之和。同 cumulativeCostUsd 语义。 */
+  cumulativeInputTokens?: number;
+  cumulativeOutputTokens?: number;
+  cumulativeCacheReadTokens?: number;
+  cumulativeCacheCreationTokens?: number;
   /** 该 session 的 worker 当前是否 WS 连着 master。由 master 在
    *  listSessionsByGroup 里 join connections 算出,不持久化。 */
   online?: boolean;

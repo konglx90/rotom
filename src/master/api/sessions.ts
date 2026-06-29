@@ -74,7 +74,15 @@ export function registerSessionRoutes(
     void db; // DB 通过 hub.findSessionEntry 内部访问;这里保留签名兼容
     const entry = hub.findSessionEntry(sessionId);
     if (!entry) {
-      res.json({ cliTool, sessionId, usage: null, model: null, cumulativeCostUsd: null, online: false, invalidatedAt: null });
+      res.json({
+        cliTool, sessionId, usage: null, model: null,
+        cumulativeCostUsd: null,
+        cumulativeInputTokens: null,
+        cumulativeOutputTokens: null,
+        cumulativeCacheReadTokens: null,
+        cumulativeCacheCreationTokens: null,
+        online: false, invalidatedAt: null,
+      });
       return;
     }
     res.json({
@@ -83,6 +91,10 @@ export function registerSessionRoutes(
       usage: entry.usage ?? null,
       model: entry.model ?? null,
       cumulativeCostUsd: typeof entry.cumulativeCostUsd === "number" ? entry.cumulativeCostUsd : null,
+      cumulativeInputTokens: entry.cumulativeInputTokens ?? null,
+      cumulativeOutputTokens: entry.cumulativeOutputTokens ?? null,
+      cumulativeCacheReadTokens: entry.cumulativeCacheReadTokens ?? null,
+      cumulativeCacheCreationTokens: entry.cumulativeCacheCreationTokens ?? null,
       online: entry.online ?? false,
       invalidatedAt: entry.invalidatedAt ?? null,
     });

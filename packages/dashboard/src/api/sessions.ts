@@ -15,6 +15,11 @@ export interface SessionEntry {
   /** 累计成本(USD),跨该 chat session 所有 turn 的 totalCostUsd 之和。
    *  undefined 表示从未报告过 cost。 */
   cumulativeCostUsd?: number
+  /** 累计 token 数,跨该 session 所有 turn 之和。 */
+  cumulativeInputTokens?: number
+  cumulativeOutputTokens?: number
+  cumulativeCacheReadTokens?: number
+  cumulativeCacheCreationTokens?: number
   /** 该 session 的 worker 当前是否 WS 连着 master。 */
   online?: boolean
   /** ISO 时间戳;非 null 表示已失效(poison / provider error / 用户主动删)。 */
@@ -46,6 +51,11 @@ export interface SessionUsage {
   /** 累计成本(USD),跨该 chat session 所有 turn 的 totalCostUsd 之和。
    *  null 表示从未报告过 cost。 */
   cumulativeCostUsd: number | null
+  /** 累计 token 数。 */
+  cumulativeInputTokens: number | null
+  cumulativeOutputTokens: number | null
+  cumulativeCacheReadTokens: number | null
+  cumulativeCacheCreationTokens: number | null
   /** 该 session 的 worker 当前是否在线。 */
   online: boolean
   /** ISO 时间戳;非 null 表示已失效。 */
