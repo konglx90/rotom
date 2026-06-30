@@ -17,6 +17,14 @@ const ZEN_WIDTH = 56
 const NORMAL_DEFAULT = 280
 const NORMAL_MIN = 200
 const MAX_WIDTH = 520
+
+// 群类型 → 显示标签。null/空/"chat" 走默认(不显示 badge,避免视觉噪音)。
+function getGroupTypeBadge(type?: string | null): { label: string; title: string; cls: string } | null {
+  if (!type) return null
+  if (type === 'patrol') return { label: '巡检', title: '巡检群:定时自动派单', cls: 'typePatrol' }
+  if (type === 'a2a_direct') return { label: '单播', title: '单播群(unicast):消息只入库不广播,需 --need-reply 点名', cls: 'typeUnicast' }
+  return null
+}
 interface AppSidebarProps {
   width: number
   onWidthChange: (w: number) => void
@@ -445,6 +453,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                     <ul className={styles.groupList}>
                       {displayGroups.map((group) => {
                         const isPinned = Boolean(group.pinned_at)
+                        const typeBadge = getGroupTypeBadge(group.type)
                         return (
                           <li
                             key={group.id}
@@ -459,6 +468,14 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                   <span className={styles.pinnedMark} title="已置顶">📌</span>
                                 )}
                                 <span className={styles.groupNameText}>{group.name}</span>
+                                {typeBadge && (
+                                  <span
+                                    className={`${styles.typeBadge} ${styles[typeBadge.cls]}`}
+                                    title={typeBadge.title}
+                                  >
+                                    {typeBadge.label}
+                                  </span>
+                                )}
                                 <span className={styles.memberCount}>
                                   {`· ${group.member_count || 0} 位`}
                                 </span>

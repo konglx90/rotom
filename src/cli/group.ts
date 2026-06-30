@@ -36,7 +36,7 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
   const sub = rest[0];
   if (sub === "create") {
     const title = rest[1];
-    if (!title) fail("usage: rotom group create <title> --agents <a,b[,c]> [--message M] [--note D] [--note-file F] [--cwd PATH] [--no-template]");
+    if (!title) fail("usage: rotom group create <title> --agents <a,b[,c...]> [--message M] [--note D] [--note-file F] [--cwd PATH] [--no-template] [--a2a-direct]");
     const agentsFlag = requireFlag(flags, "agents");
     const agents = agentsFlag.split(",").map((s) => s.trim()).filter(Boolean);
     if (agents.length === 0) fail("--agents must list at least one agent name (comma-separated)");
@@ -46,6 +46,15 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     if (noteInline && noteFile) fail("--note and --note-file are mutually exclusive");
     const cwd = flagStr(flags, "cwd");
     const noTemplate = flags["no-template"] === true;
+    const a2aDirect = flags["a2a-direct"] === true;
+    // 单播群(unicast):消息不广播、worker 不被消息自动唤醒,只通过 CLI --need-reply
+    // 显式点名叫醒对方。≥2 成员,后续可追加。
+    if (a2aDirect && agents.length < 2) {
+      fail("单播群(--a2a-direct)至少需要 2 个成员: rotom group create <title> --agents a,b[,c...] --a2a-direct");
+    }
+    if (a2aDirect && new Set(agents).size !== agents.length) {
+      fail("单播群(--a2a-direct)成员不能重复");
+    }
 
     // 预检:校验 --agents 名字都已注册,未注册 → fail 不建群
     const allAgents = await api(agent, "GET", "/agents") as any[];
@@ -61,7 +70,8 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     // 建群 + 拉人(一次 API 调用,master 内部 addGroupMembers)
     const createBody: Record<string, unknown> = { name: title, memberNames: agents };
     if (cwd) createBody.workingDir = cwd;
-    const created = await api(agent, "POST", "/groups", createBody) as { id: string; name: string; working_dir: string };
+    if (a2aDirect) createBody.type = "a2a_direct";
+    const created = await api(agent, "POST", "/groups", createBody) as { id: string; name: string; working_dir: string; type?: string | null };
     const groupId = created.id;
 
     // 默认加载"群内讨论方案设计" guidance template
@@ -109,11 +119,14 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
       id: groupId,
       name: created.name,
       working_dir: created.working_dir,
+      type: created.type ?? (a2aDirect ? "a2a_direct" : "chat"),
       memberCount: agents.length,
       guidanceTemplate,
       messagePosted,
       noteId,
-      hint: `验证: rotom group members ${groupId}   |   rotom group history ${groupId} --limit 20`,
+      hint: a2aDirect
+        ? `单播群(unicast):消息只入库,不广播。叫醒对方: rotom --as=<你> group send ${groupId} <对方> "<问题>" --need-reply。轮询回复: bash skill/rotom-bus-host/scripts/poll-replies.sh ${groupId} --as <你>`
+        : `验证: rotom group members ${groupId}   |   rotom group history ${groupId} --limit 20`,
     });
     return;
   }
@@ -124,10 +137,11 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
         id: g.id,
         name: g.name,
         members: (g.members?.length ?? 0),
+        type: g.type || "chat",
         created_at: g.created_at,
         archived: g.archived_at ? "yes" : "",
       })),
-      ["id", "name", "members", "created_at", "archived"],
+      ["id", "name", "members", "type", "created_at", "archived"],
     );
     return;
   }
@@ -177,7 +191,7 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
         let content = (m.content || "").replace(/\s+/g, " ");
         if (clean) {
           content = content
-            .replace(/\[(\w[\w-]*:\w[\w-]*)\].*?\[\/\1\]/g, "")
+            .replace(/\[(\w[\w-]*(?::\w[\w-]*)?)\].*?\[\/\1\]/g, "")
             .replace(/\s+/g, " ")
             .trim();
         }
@@ -203,7 +217,7 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
         let content = (m.content || "").replace(/\s+/g, " ");
         if (clean) {
           content = content
-            .replace(/\[(\w[\w-]*:\w[\w-]*)\].*?\[\/\1\]/g, "")
+            .replace(/\[(\w[\w-]*(?::\w[\w-]*)?)\].*?\[\/\1\]/g, "")
             .replace(/\s+/g, " ")
             .trim();
         }

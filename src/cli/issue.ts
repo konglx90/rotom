@@ -46,15 +46,26 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
   }
 
   if (sub === "events") {
-    const id = rest[1]; if (!id) fail("usage: rotom issue events <issueId>");
+    const id = rest[1]; if (!id) fail("usage: rotom issue events <issueId> [--content-len N] [--no-clean]");
+    const contentLen = flagInt(flags, "content-len") ?? 200;
+    const clean = flags["clean"] !== false;
     const data = await api(agent, "GET", `/issues/${encodeURIComponent(id)}/events`);
     printTable(
-      data.map((e: any) => ({
-        time: e.created_at,
-        type: e.event_type,
-        agent: e.agent_name,
-        content: (e.content || "").slice(0, 80),
-      })),
+      data.map((e: any) => {
+        let content = (e.content || "").replace(/\s+/g, " ");
+        if (clean) {
+          content = content
+            .replace(/\[(\w[\w-]*(?::\w[\w-]*)?)\].*?\[\/\1\]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+        return {
+          time: e.created_at,
+          type: e.event_type,
+          agent: e.agent_name,
+          content: content.slice(0, contentLen),
+        };
+      }),
       ["time", "type", "agent", "content"],
     );
     return;

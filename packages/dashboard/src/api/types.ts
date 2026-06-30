@@ -175,6 +175,8 @@ export interface Group {
   archived_at?: string | null
   /** 群级别指导 prompt,全群一份;null/空 = 未设置。 */
   guidance_prompt?: string | null
+  /** 群类型: patrol=巡检群 / a2a_direct=单播群 / 未设置或空 = 普通群(chat)。 */
+  type?: string | null
   member_count?: number
   members?: GroupMember[]
 }

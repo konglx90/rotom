@@ -257,14 +257,28 @@ export const conversationMethods = {
         // 时若还带 qaMode=true,他们也会 bypass,导致群里全员被唤醒回复
         // (典型症状:--need-reply 后群里非 @ 对象也冒泡接话)。
         // 剥一份广播专用副本。
+        //
+        // 单播群(unicast, type=a2a_direct)默认静默:不广播、也不投递给非
+        // target 成员。消息只入库,asker 通过 group history / new-messages
+        // 拉,reply 通过 a2a_reply 路径同样静默(target sendToAgent 仅对
+        // asker 那条连接,其他成员 worker 不会被消息自动唤醒)。
+        const group = this.db.getGroupById(opts.groupId);
+        const a2aDirect = group?.type === "a2a_direct";
         const sendAsMentions = messageBody.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
-        const sendAsMentionAgentIds = sendAsMentions
-          .map((name: string) => this.db.getAgentByName(name)?.id)
-          .filter((id: string | undefined): id is string => !!id);
-        const broadcastWire = (opts.needReply
-          ? { ...wireMsg, qaMode: undefined }
-          : wireMsg) as ServerMessage;
-        this.broadcastToGroup(opts.groupId, broadcastWire, [fromAgent.id, result.targetAgentId, ...sendAsMentionAgentIds]);
+
+        if (!a2aDirect) {
+          const sendAsMentionAgentIds = sendAsMentions
+            .map((name: string) => this.db.getAgentByName(name)?.id)
+            .filter((id: string | undefined): id is string => !!id);
+          const broadcastWire = (opts.needReply
+            ? { ...wireMsg, qaMode: undefined }
+            : wireMsg) as ServerMessage;
+          this.broadcastToGroup(opts.groupId, broadcastWire, [fromAgent.id, result.targetAgentId, ...sendAsMentionAgentIds]);
+        } else if (opts.needReply) {
+          this.logger.info(`[mesh] sendAsAgent a2a_direct group: qaMode target engaged (no broadcast)`);
+        } else {
+          this.logger.info(`[mesh] sendAsAgent a2a_direct group: pure store, no broadcast, no target dispatch`);
+        }
 
         const mentions = sendAsMentions;
         messageId = this.db.addGroupMessage(opts.groupId, opts.fromName, messageBody, mentions);

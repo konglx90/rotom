@@ -95,10 +95,15 @@ Identity:
 
 Read:
   directory [--online] [--domain D]
-  group create <title> --agents <a,b[,c]> [--message M] [--note D|--note-file F] [--cwd PATH] [--no-template]
+  group create <title> --agents <a,b[,c...]> [--message M] [--note D|--note-file F] [--cwd PATH] [--no-template] [--a2a-direct]
                                                一键建群+拉人。默认加载"群内讨论方案设计"
                                                guidance 模板(可 --no-template 跳过)。
                                                预检 --agents 名字都已注册,未注册 → fail 不建群。
+                                               --a2a-direct  建单播群(unicast):≥2 成员,
+                                                            消息只入库、不广播,worker 不被
+                                                            自动唤醒;只在 CLI --need-reply
+                                                            显式点名时叫醒对方回话,每轮
+                                                            A 发 → B 回 → 停。
   group list
   group members <groupId>
   group history <groupId> [--limit N]

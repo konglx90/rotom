@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# poll-replies.sh — 轮询 rotom 群新消息,等到 reply 或超时
+# poll-replies.sh — 轮询 rotom 群最近 10 条消息,等出现新消息后 dump 给大模型判断
 #
 # 用法:
 #   poll-replies.sh <groupId> --as <agent> [options]
@@ -9,33 +9,29 @@
 #   --as <agent>         轮询身份(对应 ~/.rotom/executor.config.json 的 worker 名)
 #
 # 可选:
-#   --since <时间>        起始时间(北京时间字符串如 "2026-06-30 18:02:04" 或 UTC ISO)。
-#                        不传则自动取群里"最近一条"消息的时间作为起点
 #   --max-rounds N       最多轮询 N 轮(默认 10)
 #   --interval S         每轮间隔秒数(默认 30)
+#   --limit N            每次拉多少条最近消息(默认 10)
+#   --once               只拉一次当前最近 N 条,不轮询(LLM 自己看现状用)
 #   --quiet              静默模式:轮询中不打印 "still waiting..." 心跳
 #
 # 默认 10×30s = 5min,正好覆盖 ask-bridge 5min 超时窗口。
 #
+# 原理:不靠 --since 时间过滤(那是 JSON/表格列位陷阱)。开局拉一次最近 N 条
+# 记下哈希,每轮再拉一次比哈希。哈希变了 = 有新消息到位,把当前最近 N 条
+# 完整 dump 到 stdout,退出码 0。大模型自己读这 N 条判断里面有没有自己等
+# 的回复。如果没有就再调一次脚本继续等。
+#
 # 退出码:
-#   0  找到新消息(已 echo 到 stdout)
+#   0  检测到新消息(最近 N 条已 echo 到 stdout)
 #   1  命令行参数错
-#   2  轮询 N 轮仍未找到新消息(超时)
+#   2  轮询 N 轮仍无新消息(超时)
 #   3  其它错误(rotom 命令失败、group 不存在等)
 #
 # 例子:
 #   poll-replies.sh 7cada00f-... --as codex-xihua
 #   poll-replies.sh 7cada00f-... --as codex-xihua --max-rounds 20 --interval 15
-#   poll-replies.sh 7cada00f-... --as codex-xihua --since "2026-06-30 18:02:04"
-#
-# 设计要点:
-#   - 强制 --pretty —— rotom 默认输出 JSON(`[{"time":"...",...}]`),直接
-#     `awk '{print $1,$2}'` 会抽到 `[{"time":"2026-06-29` 当 SINCE,SINCE 全废。
-#     --pretty 出表格后,SINCE 抽取用 `grep -oE 'YYYY-MM-DD HH:MM:SS'` 抓任意
-#     位置,不依赖列宽/对齐。
-#   - 空响应检测用 "匹配 YYYY-MM-DD 起始" 的行数,不靠 [ -n "$NEW" ](会被
-#     表头或 [] 误判为非空)。表头 "time ..." 不含日期,空表 0 数据行 → 继续轮询。
-#   - 起始时间用群最近一条消息,避免 "since 一个很久以前的时间" 拉到一堆旧消息。
+#   poll-replies.sh 7cada00f-... --as codex-xihua --once            # 只看当前,不等
 set -euo pipefail
 
 print_usage() {
@@ -51,18 +47,20 @@ fi
 GID="$1"; shift
 
 AS=""
-SINCE=""
 MAX_ROUNDS=10
 INTERVAL=30
+LIMIT=10
+ONCE=false
 QUIET=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --as)         AS="$2"; shift 2;;
-    --since)      SINCE="$2"; shift 2;;
     --max-rounds) MAX_ROUNDS="$2"; shift 2;;
     --interval)   INTERVAL="$2"; shift 2;;
-    --quiet)      QUIET=true; shift;;
+    --limit)      LIMIT="$2"; shift 2;;
+    --once)      ONCE=true; shift;;
+    --quiet)     QUIET=true; shift;;
     -h|--help)
       print_usage
       exit 0
@@ -85,49 +83,66 @@ if ! [[ "$MAX_ROUNDS" =~ ^[0-9]+$ ]] || [ "$MAX_ROUNDS" -lt 1 ]; then
   exit 1
 fi
 
-if ! [[ "$INTERVAL" =~ ^[0-9]+$ ]] || [ "$INTERVAL" -lt 1 ]; then
-  echo "--interval must be a positive integer (seconds)" >&2
+if ! [[ "$INTERVAL" =~ ^[0-9]+$ ]] || [ "$INTERVAL" -lt 0 ]; then
+  echo "--interval must be a non-negative integer (seconds)" >&2
   exit 1
 fi
 
-# ----- 解析 SINCE:缺省取群最近一条 -----
-# 关键:rotom 默认输出 JSON(`[{"time":"...",...}]`),[ -n "$NEW" ]/awk 抽列位
-# 会拉到一堆无意义字符,SINCE 就废了。强制 --pretty 出表格,再用 grep -oE
-# 把里面所有 YYYY-MM-DD HH:MM:SS(.mmm)? 模式抓出来(不依赖列宽/对齐)。
-if [ -z "$SINCE" ]; then
-  RAW=$(rotom --pretty --as="$AS" group history "$GID" --limit 1 2>/dev/null)
-  SINCE=$(printf '%s\n' "$RAW" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?' | tail -1)
-  if [ -z "$SINCE" ]; then
-    echo "[poll-replies] no SINCE: group history returned no messages or rotom failed (raw: ${RAW:-<empty>})" >&2
-    exit 3
-  fi
+if ! [[ "$LIMIT" =~ ^[0-9]+$ ]] || [ "$LIMIT" -lt 1 ]; then
+  echo "--limit must be a positive integer" >&2
+  exit 1
+fi
+
+# ----- 拉取函数 -----
+fetch_latest() {
+  # --clean 剥 [status:thinking]/[tool:exec] 等标记,--pretty 出表格
+  # 便于人/LLM 直读。返回内容用作哈希比较 + 最终 dump。
+  rotom --pretty --as="$AS" group history "$GID" --limit "$LIMIT" --clean 2>&1
+}
+
+# 哈希:去掉 [rotom] Resolving... 这类 stderr 前缀行,只对表格本体算哈希。
+# 这样 master 日志/agent 解析行不会污染比较。
+hash_output() {
+  printf '%s\n' "$1" | grep -v '^\[rotom\]' | shasum | cut -d' ' -f1
+}
+
+# ----- --once 模式:拉一次就走 -----
+if [ "$ONCE" = true ]; then
+  fetch_latest
+  exit 0
 fi
 
 # ----- 主循环 -----
-echo "[poll-replies] group=$GID as=$AS since=\"$SINCE\" rounds=$MAX_ROUNDS interval=${INTERVAL}s" >&2
+INITIAL=$(fetch_latest)
+INITIAL_HASH=$(hash_output "$INITIAL")
+if [ -z "$INITIAL_HASH" ]; then
+  echo "[poll-replies] initial fetch failed (empty output)" >&2
+  exit 3
+fi
+
+echo "[poll-replies] group=$GID as=$AS limit=$LIMIT rounds=$MAX_ROUNDS interval=${INTERVAL}s" >&2
 
 for i in $(seq 1 "$MAX_ROUNDS"); do
   sleep "$INTERVAL"
 
-  if ! NEW=$(rotom --pretty --as="$AS" group new-messages "$GID" --since "$SINCE" 2>/dev/null); then
-    echo "[poll-replies] round $i: rotom command failed, retry next round" >&2
+  CURRENT=$(fetch_latest)
+  CURRENT_HASH=$(hash_output "$CURRENT")
+
+  if [ -z "$CURRENT_HASH" ]; then
+    echo "[poll-replies] round $i: fetch failed, retry next round" >&2
     continue
   fi
 
-  # 计数数据行:匹配 YYYY-MM-DD 开头的行(表头 "time ..." 不含日期)。
-  # --pretty 表输出每条消息一行,日期开头,正好用来判断"有没有新消息"。
-  DATA_LINES=$(printf '%s\n' "$NEW" | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
-
-  if [ "$DATA_LINES" -gt 0 ]; then
-    echo "[poll-replies] round $i/$MAX_ROUNDS: found $DATA_LINES new message(s)" >&2
-    printf '%s\n' "$NEW"
+  if [ "$CURRENT_HASH" != "$INITIAL_HASH" ]; then
+    echo "[poll-replies] round $i/$MAX_ROUNDS: new message detected, dumping latest $LIMIT" >&2
+    printf '%s\n' "$CURRENT"
     exit 0
   fi
 
   if [ "$QUIET" = false ]; then
-    echo "[poll-replies] round $i/$MAX_ROUNDS: no new messages, waiting ${INTERVAL}s..." >&2
+    echo "[poll-replies] round $i/$MAX_ROUNDS: no change, waiting ${INTERVAL}s..." >&2
   fi
 done
 
-echo "[poll-replies] timed out after $MAX_ROUNDS rounds (~$((MAX_ROUNDS * INTERVAL))s)" >&2
+echo "[poll-replies] timed out after $MAX_ROUNDS rounds (~$((MAX_ROUNDS * INTERVAL))s), no new messages" >&2
 exit 2

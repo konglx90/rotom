@@ -355,14 +355,21 @@ export const connectionMethods = {
               // each send's broadcast only excludes its own target, causing
               // other mentioned agents to receive duplicate copies via
               // broadcast on top of their own direct delivery.
-              const mentionAgentIds = mentions
-                .map((name: string) => this.db.getAgentByName(name)?.id)
-                .filter((id: string | undefined): id is string => !!id);
-              this.broadcastToGroup(
-                msg.conversation.groupId,
-                outMsg,
-                [agentId, result.targetAgentId, ...mentionAgentIds],
-              );
+              //
+              // 单播群(unicast, type=a2a_direct):跳过广播。消息只进 group history,
+              // 无 WS push,非 target 成员的 worker 不会被 @ 自动触发。
+              // CLI --need-reply 显式点名才叫醒 target worker 回复。
+              const a2aDirect = this.db.getGroupById(msg.conversation.groupId)?.type === "a2a_direct";
+              if (!a2aDirect) {
+                const mentionAgentIds = mentions
+                  .map((name: string) => this.db.getAgentByName(name)?.id)
+                  .filter((id: string | undefined): id is string => !!id);
+                this.broadcastToGroup(
+                  msg.conversation.groupId,
+                  outMsg,
+                  [agentId, result.targetAgentId, ...mentionAgentIds],
+                );
+              }
             }
           }
 
@@ -442,9 +449,16 @@ export const connectionMethods = {
 
           // Group replies: broadcast to all members so everyone sees it in real-time
           // DM replies: send to original sender only
-          if (conversation?.type === "group" && conversation.groupId) {
+          // 单播群(unicast):跳过 broadcast(消息已入库,asker 通过 history 拉)。
+          //   不调 sendToAgent(target=asker)因为 asker 是 CLI 无 WS 连接,
+          //   推也推不到 —— 这正是 unicast 的设计:一对一点对点,免打扰。
+          const isA2aDirect = conversation?.groupId
+            ? this.db.getGroupById(conversation.groupId)?.type === "a2a_direct"
+            : false;
+          if (conversation?.type === "group" && conversation.groupId && !isA2aDirect) {
             this.broadcastToGroup(conversation.groupId, replyMsg as unknown as Parameters<typeof this.sendToAgent>[1], [agentId]);
-          } else {
+          } else if (conversation?.type !== "group") {
+            // DM only — unicast 路径到这里直接落入"什么都不发"分支
             this.sendToAgent(targetId, replyMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
           }
 
@@ -490,9 +504,14 @@ export const connectionMethods = {
             conversation,
           };
           // Send stream chunk to original sender only (streaming is per-session, no broadcast)
-          if (conversation?.type === "group" && conversation.groupId) {
+          // 单播群(unicast):跳过广播,asker 通过 history 拉最终内容(中途流式 UI 不可见,
+          //   但功能层面不受影响 —— 完整 reply 在 a2a_reply_end 入库)。
+          const isA2aDirect = conversation?.groupId
+            ? this.db.getGroupById(conversation.groupId)?.type === "a2a_direct"
+            : false;
+          if (conversation?.type === "group" && conversation.groupId && !isA2aDirect) {
             this.broadcastToGroup(conversation.groupId, chunkMsg, [agentId]);
-          } else {
+          } else if (conversation?.type !== "group") {
             this.sendToAgent(targetId, chunkMsg);
           }
         }
@@ -561,7 +580,11 @@ export const connectionMethods = {
           // Group stream end: broadcast a2a_message(带完整内容)给群成员,
           // 让其他 agent 的 worker 能处理(worker 只认 a2a_message,不认 a2a_stream_end)。
           // a2a_stream_end 只发给原始 target,用于 Dashboard 流式 UI 收尾。
-          if (conversation?.type === "group" && conversation.groupId) {
+          // 单播群(unicast):跳过 broadcast,消息已经入库(本 handler 上方 addGroupMessage)。
+          const isA2aDirect = conversation?.groupId
+            ? this.db.getGroupById(conversation.groupId)?.type === "a2a_direct"
+            : false;
+          if (conversation?.type === "group" && conversation.groupId && !isA2aDirect) {
             const groupMsg = enrichWorkerDispatch(this, {
               type: "a2a_message" as const,
               requestId: msg.requestId,

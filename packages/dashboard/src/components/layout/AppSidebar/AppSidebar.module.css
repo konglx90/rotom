@@ -335,6 +335,30 @@
   flex-shrink: 0;
 }
 
+.typeBadge {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color-light);
+  flex-shrink: 0;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.typePatrol {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.typeUnicast {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
 .pinBtn {
   flex-shrink: 0;
   padding: 3px 8px;

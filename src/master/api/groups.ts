@@ -93,6 +93,20 @@ export function registerGroupRoutes(
       }
     }
 
+    // 单播群(unicast):消息不广播、worker 不被消息自动唤醒,只通过 CLI
+    // --need-reply 显式点名叫醒对方回话。建群 ≥2 成员,不限上限。
+    if (type === "a2a_direct") {
+      const picked = Array.isArray(memberNames) ? memberNames.filter((n): n is string => typeof n === "string" && !!n.trim()) : [];
+      if (picked.length < 2) {
+        res.status(400).json({ error: "单播群至少需要 2 个成员" });
+        return;
+      }
+      if (new Set(picked).size !== picked.length) {
+        res.status(400).json({ error: "单播群成员不能重复" });
+        return;
+      }
+    }
+
     const id = randomUUID();
     let workDir: string;
     if (typeof workingDir === "string" && workingDir.trim()) {
