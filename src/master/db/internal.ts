@@ -30,6 +30,7 @@ import { askBridgeMethods } from "./ask-bridges.js";
 import { guidanceTemplateMethods } from "./guidance-templates.js";
 import { schedulePatternMethods } from "./schedule-patterns.js";
 import { agentSessionMethods } from "./agent-sessions.js";
+import { issuePatrolMethods } from "./issues-patrol.js";
 
 export class MeshDb extends MeshDbCore {
   // ─── agents ────────────────────────────────────────────────────────────────
@@ -231,6 +232,16 @@ export class MeshDb extends MeshDbCore {
   declare deleteAgentSession: typeof agentSessionMethods.deleteAgentSession;
   declare findAgentSession: typeof agentSessionMethods.findAgentSession;
 
+  // issue_patrol —— 巡检 runs/logs
+  declare createPatrolRun: typeof issuePatrolMethods.createPatrolRun;
+  declare finishPatrolRun: typeof issuePatrolMethods.finishPatrolRun;
+  declare getPatrolRun: typeof issuePatrolMethods.getPatrolRun;
+  declare getPatrolRunByIssueId: typeof issuePatrolMethods.getPatrolRunByIssueId;
+  declare listPatrolRuns: typeof issuePatrolMethods.listPatrolRuns;
+  declare insertPatrolLog: typeof issuePatrolMethods.insertPatrolLog;
+  declare listPatrolLogsForRun: typeof issuePatrolMethods.listPatrolLogsForRun;
+  declare listPatrolLogs: typeof issuePatrolMethods.listPatrolLogs;
+
   constructor(dbPath: string) {
     super(dbPath);
     // Each method bag's `this` resolves to this instance at call time. The
@@ -249,5 +260,6 @@ export class MeshDb extends MeshDbCore {
     Object.assign(this, guidanceTemplateMethods);
     Object.assign(this, schedulePatternMethods);
     Object.assign(this, agentSessionMethods);
+    Object.assign(this, issuePatrolMethods);
   }
 }

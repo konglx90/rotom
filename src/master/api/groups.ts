@@ -76,6 +76,23 @@ export function registerGroupRoutes(
       res.status(400).json({ error: "name is required" });
       return;
     }
+
+    // 巡检群:全局限 1 个未归档 + 仅 1 个 agent(除 creator 外)
+    if (type === "patrol") {
+      const existing = db.listGroupsByType("patrol").filter((g) => g.archived_at == null);
+      if (existing.length > 0) {
+        res.status(400).json({
+          error: `已存在未归档的巡检群 "${existing[0].name}",需归档或删除后才能再建`,
+        });
+        return;
+      }
+      const picked = Array.isArray(memberNames) ? memberNames.filter((n): n is string => typeof n === "string" && !!n.trim()) : [];
+      if (picked.length !== 1) {
+        res.status(400).json({ error: "巡检群限选 1 个 agent(该 agent 即巡检员)" });
+        return;
+      }
+    }
+
     const id = randomUUID();
     let workDir: string;
     if (typeof workingDir === "string" && workingDir.trim()) {
@@ -103,6 +120,48 @@ export function registerGroupRoutes(
       db.addGroupMembers(id, memberNames);
     }
     log.info(`Group created: "${name.trim()}" (${id}) type=${type || "default"} cwd=${workDir}`);
+
+    // 巡检群:建群后自动建 issue-patrol 定时任务 + 绑定规则 skill
+    if (type === "patrol") {
+      const patrolAgentName = (Array.isArray(memberNames) ? memberNames : []).find(
+        (n): n is string => typeof n === "string" && !!n.trim(),
+      );
+      if (patrolAgentName) {
+        const payload = {
+          patrolGroupId: id,
+          patrolAgentName,
+          throughputCap: 3,
+          candidateCap: 3,
+          scanBatch: 10,
+        };
+        db.createScheduledTask({
+          name: "Issue 巡检",
+          groupId: id,
+          mode: "agent", // handler 模式下 mode 不被使用,但 schema NOT NULL,保留 agent
+          agentName: patrolAgentName,
+          scheduleKind: "interval",
+          intervalSec: 3600,
+          prompt: "", // handler 模式不用 prompt,但 schema NOT NULL
+          enabled: true,
+          handlerKey: "issue-patrol",
+          handlerPayload: JSON.stringify(payload),
+        });
+        const skill = db.getSkillByName("issue-patrol-rules");
+        if (skill) {
+          db.bindSkill({
+            groupId: id,
+            agentName: patrolAgentName,
+            skillId: skill.id,
+            createdBy: "system:patrol-bootstrap",
+          });
+          log.info(`Patrol group ${id}: bound issue-patrol-rules to ${patrolAgentName}`);
+        } else {
+          log.warn(`Patrol group ${id}: issue-patrol-rules skill not found, skip binding`);
+        }
+        log.info(`Patrol group ${id}: auto-created issue-patrol schedule (interval 3600s, enabled)`);
+      }
+    }
+
     res.status(201).json({ id, name: name.trim(), working_dir: workDir, type: type || null, memberCount: Array.isArray(memberNames) ? memberNames.length : 0 });
   });
 

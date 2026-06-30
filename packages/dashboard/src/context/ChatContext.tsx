@@ -226,7 +226,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       try {
         const created = await groupsApi.create({
           name,
-          memberNames: [...memberNames, myAgentName],
+          memberNames: type === 'patrol' ? memberNames : [...memberNames, myAgentName],
           workingDir,
           type,
         })

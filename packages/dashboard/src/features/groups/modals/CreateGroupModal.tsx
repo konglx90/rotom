@@ -44,6 +44,10 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
 
   const handleCreate = async () => {
     if (!groupName.trim() || submitting) return
+    if (isPatrol && selectedMembers.length !== 1) {
+      window.alert('巡检群必须且只能选 1 个 agent 作为巡检员')
+      return
+    }
     setSubmitting(true)
     try {
       await onCreate(
@@ -72,7 +76,8 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
 
   const otherAgents = agents.filter(a => a.name !== myAgentName)
   const isE2ed = groupType === 'e2ed'
-  const maxMembers = isE2ed ? 2 : Infinity
+  const isPatrol = groupType === 'patrol'
+  const maxMembers = isPatrol ? 1 : (isE2ed ? 2 : Infinity)
 
   const toggleMember = (name: string) => {
     setSelectedMembers(prev => {
@@ -110,20 +115,34 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
       </div>
       <div className={styles.formField}>
         <label className={styles.formLabel}>群类型:</label>
-        <select value={groupType} onChange={e => setGroupType(e.target.value)} className={styles.formSelect}>
+        <select value={groupType} onChange={e => {
+          const t = e.target.value
+          setGroupType(t)
+          if (t === 'patrol' && !groupName.trim()) {
+            setGroupName('全局issue巡检群')
+          }
+        }} className={styles.formSelect}>
           <option value="">普通群</option>
+          <option value="patrol">巡检群</option>
           {/* <option value="e2ed">E2ED（端到端需求交付）</option> */}
         </select>
+        {isPatrol && (
+          <p style={{ fontSize: 11, color: 'var(--color-info)', margin: '6px 2px 0' }}>
+            巡检群全局限 1 个(归档/删除后才能再建),只选 1 个 agent 作为巡检员。
+            建群后自动创建每小时巡检任务,可在工具箱「Issue 巡检」开关。
+          </p>
+        )}
       </div>
       <div className={styles.formField}>
         <label className={styles.formLabel}>
           选择成员:
           {isE2ed && <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 8, color: 'var(--color-info)' }}>E2ED 模式限选 {maxMembers} 人</span>}
+          {isPatrol && <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 8, color: 'var(--color-info)' }}>巡检群限选 {maxMembers} 人(即巡检员)</span>}
         </label>
         <div className={styles.agentCheckList}>
           {otherAgents.map(agent => {
             const checked = selectedMembers.includes(agent.name)
-            const disabled = isE2ed && !checked && selectedMembers.length >= maxMembers
+            const disabled = (isE2ed || isPatrol) && !checked && selectedMembers.length >= maxMembers
             return (
               <label key={agent.id} className={styles.agentCheckItem} style={disabled ? { opacity: 0.4 } : undefined}>
                 <input type="checkbox" checked={checked} disabled={disabled}

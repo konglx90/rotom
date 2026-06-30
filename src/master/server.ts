@@ -23,6 +23,7 @@ import { createApi } from "./api/index.js";
 import { TerminalHub } from "./terminal-hub.js";
 import { Scheduler } from "./scheduler.js";
 import { ShareTokenStore } from "./share-tokens.js";
+import { handlePatrolIssueTerminal } from "./patrol-terminal.js";
 import { DEFAULT_MASTER_PORT, DEFAULT_MASTER_HOST } from "../shared/constants.js";
 import os from "node:os";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
@@ -93,10 +94,16 @@ async function main(): Promise<void> {
     const issue = db.getIssueById(issueId);
     if (!issue) return;
     const group = db.getGroupByIdFull(issue.group_id);
-    if (group?.type !== "e2ed") return;
-    import("../e2ed/sync.js").then(({ syncRequirementFromIssues }) => {
-      syncRequirementFromIssues(db, issue.group_id);
-    }).catch(() => { /* non-fatal */ });
+    if (group?.type === "e2ed") {
+      import("../e2ed/sync.js").then(({ syncRequirementFromIssues }) => {
+        syncRequirementFromIssues(db, issue.group_id);
+      }).catch(() => { /* non-fatal */ });
+      return;
+    }
+    if (group?.type === "patrol") {
+      handlePatrolIssueTerminal(db, issue);
+      return;
+    }
   };
 
   // Reset stale online status from previous run
