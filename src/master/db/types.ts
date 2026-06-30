@@ -99,14 +99,7 @@ export interface IssueRow {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
-  // Collaboration fields
   type: string;
-  collaboration_goal: string | null;
-  max_rounds: number | null;
-  current_round: number | null;
-  participants: string;
-  owner: string | null;
-  summary: string | null;
   // Session continuation (added in migration 013)
   session_id: string | null;
   cli_tool: string | null;

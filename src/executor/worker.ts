@@ -93,7 +93,7 @@ function sumIfNum(x?: number, y?: number): number | undefined {
 
 export class ExecutorWorker {
   // ── Shared mutable state (touched by handlers + WS router) ────────
-  // activeTasks key shape: issueId | `chat:${requestId}` | `collab-${issueId}`
+  // activeTasks key shape: issueId | `chat:${requestId}`
   activeTasks = new Map<string, { aborted: boolean; interrupted?: boolean; controller: AbortController }>();
   /**
    * Approvals awaiting the user's Accept/Deny. Keyed by approvalId (the same
@@ -134,7 +134,7 @@ export class ExecutorWorker {
   readonly cliTool: string;
   /** agents.profile 解析后缓存,供 composePrompt() 渲染 agent-role 层。
    *  初始值来自 executor.config.json,运行时收到带 agentProfile 字段的
-   *  WS 消息(issue_assigned/continue/append、a2a_message、collaboration_started)
+   *  WS 消息(issue_assigned/continue/append、a2a_message)
    *  时由 setAgentProfile() 更新 —— 这是 Dashboard 编辑后下一条消息即生效的入口。 */
   agentProfile: AgentProfile | null;
 
@@ -489,20 +489,6 @@ ${prompt}`;
       } else {
         console.log(`${this.tag} SKIP group message from ${fromName}: not @mentioned (looking for @${this.config.name})`);
       }
-    }
-
-    // Collaboration started notification
-    if (msg.type === "collaboration_started") {
-      const { issueId, title, collaborationGoal, participants, maxRounds, round, groupId, agentProfile, cwd: overrideCwd } = msg as any;
-      if (agentProfile) this.setAgentProfile(agentProfile as AgentProfile);
-      console.log(`${this.tag} Collaboration started: "${title}" round=${round}/${maxRounds}`);
-      this.chat.handleCollaborationStarted(issueId, title, collaborationGoal, participants, round, maxRounds, groupId, overrideCwd);
-    }
-
-    // Collaboration concluded notification
-    if (msg.type === "collaboration_concluded") {
-      const { title, summary } = msg as any;
-      console.log(`${this.tag} Collaboration concluded: ${title}`);
     }
 
     // Session management — master asks for visibility / control over the

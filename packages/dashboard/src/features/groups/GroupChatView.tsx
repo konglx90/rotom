@@ -383,23 +383,6 @@ export function GroupChatView() {
     }
   }
 
-  const handleCreateCollaboration = async (data: {
-    title: string
-    collaborationGoal: string
-    participants: string[]
-    maxRounds: number
-    owner?: string
-    createdBy: string
-  }) => {
-    if (!selectedGroupId) return
-    try {
-      await issuesApi.createCollaboration(selectedGroupId, data)
-      loadIssues()
-    } catch (error) {
-      console.error('Failed to create collaboration:', error)
-    }
-  }
-
   // activePanels / processTab 持久化。widths 由 useResizablePanels 单独管。
   useEffect(() => {
     try {
@@ -528,15 +511,9 @@ export function GroupChatView() {
             <CreateIssueDialog
               open
               agents={agents}
-              groupMembers={groupMembers}
-              myAgentName={myAgentName}
               onClose={() => setCreateDialog(null)}
               onCreateIssue={(data) => {
                 handleCreateIssue(data)
-                setCreateDialog(null)
-              }}
-              onCreateCollaboration={(data) => {
-                handleCreateCollaboration(data)
                 setCreateDialog(null)
               }}
             />

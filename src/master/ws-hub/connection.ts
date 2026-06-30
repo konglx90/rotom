@@ -14,7 +14,7 @@
  *
  * Methods attach via `Object.assign(this, connectionMethods)` in the WSHub
  * composition root. `this` is typed as `WSHubSelf` so cross-module calls
- * (broadcast, enrichConversationWithCollaboration, trackCollaborationTurn,
+ * (broadcast, enrichGroupConversation,
  * logMessage, etc.) compile.
  */
 
@@ -313,7 +313,7 @@ export const connectionMethods = {
         let queued = false;
 
         if (result.targetAgentId) {
-          const enrichedConversation = this.enrichConversationWithCollaboration(msg.conversation, result.targetName);
+          const enrichedConversation = this.enrichGroupConversation(msg.conversation, result.targetName);
           const outMsg = enrichWorkerDispatch(this, {
             type: "a2a_message" as const,
             requestId: msg.requestId,
@@ -362,11 +362,6 @@ export const connectionMethods = {
                 outMsg,
                 [agentId, result.targetAgentId, ...mentionAgentIds],
               );
-
-              // 协作轮次:mesh_group_send 走的也是 a2a_send,需要同样计入贡献,
-              // 否则 firstParticipant 用工具 @ 别人这一步永远不会被算作"已发言",
-              // 导致整轮永远不完成、轮数不推进、自动总结永远不触发。
-              this.trackCollaborationTurn(msg.conversation.groupId, fromName, msg.payload?.message || "");
             }
           }
 
@@ -416,7 +411,7 @@ export const connectionMethods = {
           const conn = this.connections.get(agentId);
           const fromName = conn?.name || "unknown";
           const targetAgent = this.db.getAgentById(targetId);
-          const enrichedConversation = this.enrichConversationWithCollaboration(conversation, targetAgent?.name);
+          const enrichedConversation = this.enrichGroupConversation(conversation, targetAgent?.name);
           const replyMsg = enrichWorkerDispatch(this, {
             type: "a2a_message" as const,
             requestId: msg.requestId,
@@ -440,9 +435,6 @@ export const connectionMethods = {
           // DM replies: send to original sender only
           if (conversation?.type === "group" && conversation.groupId) {
             this.broadcastToGroup(conversation.groupId, replyMsg as unknown as Parameters<typeof this.sendToAgent>[1], [agentId]);
-
-            // Track collaboration turns if there's an active collaboration in this group
-            this.trackCollaborationTurn(conversation.groupId, fromName, msg.payload?.message || "");
           } else {
             this.sendToAgent(targetId, replyMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
           }
@@ -559,17 +551,12 @@ export const connectionMethods = {
               from: { name: fromName, domain: conn?.domain, status: "online" as const },
               payload: msg.payload,
               routeType: "reply" as const,
-              conversation: this.enrichConversationWithCollaboration(conversation),
+              conversation: this.enrichGroupConversation(conversation),
             } as ServerMessage, undefined, conversation.groupId);
             this.broadcastToGroup(conversation.groupId, groupMsg as unknown as Parameters<typeof this.sendToAgent>[1], [agentId]);
-            // a2a_stream_end 发给原始 target(发起方 Dashboard 收尾流式 UI)
-            this.sendToAgent(targetId, endMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
-            if (!cancelled) {
-              this.trackCollaborationTurn(conversation.groupId, fromName, msg.payload?.message || "");
-            }
-          } else {
-            this.sendToAgent(targetId, endMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
           }
+          // a2a_stream_end 发给原始 target(发起方 Dashboard 收尾流式 UI)
+          this.sendToAgent(targetId, endMsg as unknown as Parameters<typeof this.sendToAgent>[1]);
 
           // Log complete reply with latency. toName 优先用 @ 到的 agent。
           const sendTs = this.sendTimestamps.get(msg.requestId);

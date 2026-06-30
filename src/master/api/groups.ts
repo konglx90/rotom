@@ -409,12 +409,11 @@ export function registerGroupRoutes(
         hub.broadcastToGroupPublic(req.params.id, wireMsg, [senderAgent.id, ...mentionAgentIds]);
       }
 
-      // 对齐 ws-hub a2a_reply 路径(connection.ts:403-404 + trackCollaborationTurn):
+      // 对齐 ws-hub a2a_reply 路径(connection.ts:403-404):
       // 真人 @ 回复也要走 bridge 检测,否则 pending bridge 不会在入库时 mark answered,
       // 20s 后 handler 兜底会再发一条 system 复述,跟真人原始 @ 重复(见群 34dd5eee)。
       hub.autoCreateBridgeOnMention(req.params.id, sender, resolvedMentions, msgId);
       hub.checkAndCancelBridgesForMessage(req.params.id, sender, resolvedMentions, msgId);
-      hub.trackCollaborationTurn(req.params.id, sender, content);
     }
 
     db.logMessage({

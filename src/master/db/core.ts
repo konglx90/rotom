@@ -50,7 +50,6 @@ export interface MeshDbSelf {
   /** 覆盖式写入 issues.latest_todos_json。供 ws-hub 处理 issue_todos_update 时调用。 */
   updateIssueTodos(issueId: string, todos: unknown[]): void;
   listGroups(): (GroupRow & { member_count: number })[];
-  getRoundTracker(issueId: string, round: number): { agent_name: string; has_contributed: number }[];
   getScheduledTask(id: number): ScheduledTaskRow | undefined;
   /** guidance_templates 模块:create/update/delete 内部回查用。 */
   getGuidanceTemplate(id: number): GuidanceTemplateRow | undefined;

@@ -91,12 +91,12 @@ export interface ExecuteOptions {
   onApprovalRequest?: (req: ApprovalRequestInput) => Promise<ApprovalDecision>;
   /**
    * Task kind. Determines whether the executor wraps the prompt with the
-   * rotom-a2a-communicate skill prefix. Only "chat" and "collab" tasks need
-   * to send messages via rotom; "issue" tasks (the default) execute the
-   * prompt directly without any communication wrapper — otherwise the model
-   * is misled into treating the issue body as a "send a message" request.
+   * rotom-a2a-communicate skill prefix. Only "chat" tasks need to send
+   * messages via rotom; "issue" tasks (the default) execute the prompt
+   * directly without any communication wrapper — otherwise the model is
+   * misled into treating the issue body as a "send a message" request.
    */
-  kind?: "issue" | "chat" | "collab";
+  kind?: "issue" | "chat";
   /**
    * Slash command 声明（如 "/plan"）。由 master 端解析 issue title 后下发。
    * 各 executor 据此切换底层 CLI 的执行模式：

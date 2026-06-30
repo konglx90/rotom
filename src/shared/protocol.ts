@@ -5,7 +5,7 @@
  */
 
 // ---------------------------------------------------------------------------
-// Real person enum (human team members who can own collaboration issues)
+// Real person enum (human team members who can own issues / approve)
 // ---------------------------------------------------------------------------
 
 export const REAL_PERSONS = ["孔令飞"] as const;
@@ -61,11 +61,10 @@ export interface ConversationContext {
   type: "single" | "group";
   groupId?: string;
   groupName?: string;
-  collaboration?: CollaborationContext;
   /**
-   * Active task issues in the group (non-collaboration). Master attaches this
-   * so agents can decide whether file writes are allowed. Empty/undefined
-   * means agents must Read-only and ask for an issue first.
+   * Active task issues in the group. Master attaches this so agents can
+   * decide whether file writes are allowed. Empty/undefined means agents
+   * must Read-only and ask for an issue first.
    */
   activeIssues?: ActiveIssueRef[];
   /**
@@ -99,21 +98,6 @@ export interface GroupConversation {
   memoryCounts?: { group: number; global: number };
   /** 当前 agent 在该群绑定的 skill 数(极简指针注入用,per-agent)。 */
   skillCount?: number;
-}
-
-/** Active collaboration metadata for an in-flight group message. */
-export interface CollaborationContext {
-  issueId: string;
-  title: string;
-  goal: string;
-  participants: string[];
-  currentRound: number;
-  maxRounds: number;
-  owner?: string;
-  /** Full text of all turns recorded in the previous round (round = currentRound - 1). */
-  lastRoundTurns: { agentName: string; content: string }[];
-  /** Names of agents who already spoke in rounds earlier than the previous one. */
-  earlierSpeakers: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +221,7 @@ export interface ClientA2AReplyEndMessage {
    * Set when the reply was interrupted mid-stream (user clicked ⏹ or sent a
    * new message that auto-cancels this one). `payload.message` carries the
    * partial content streamed before the abort; master still persists it so
-   * the user keeps the context, but skips collaboration-turn tracking.
+   * the user keeps the context.
    */
   cancelled?: boolean;
 }
@@ -509,8 +493,6 @@ export type ServerMessage =
   | ServerIssueAssignedMessage
   | ServerIssueUpdateAckMessage
   | ServerIssueApprovalResponseMessage
-  | ServerCollaborationStartedMessage
-  | ServerCollaborationConcludedMessage
   | ServerIssueCancelledMessage
   | ServerChatCancelledMessage
   | ServerIssueChangedMessage
@@ -655,40 +637,6 @@ export interface ServerIssueApprovalResponseMessage {
    *  reason the user typed so executors can pass it to the underlying CLI as
    *  a meaningful denial reason. */
   feedback?: string;
-}
-
-// --- Collaboration system (Master → Client) ---
-
-/** 通知 Agent 有新的协作开始 */
-export interface ServerCollaborationStartedMessage {
-  type: "collaboration_started";
-  issueId: string;
-  groupId: string;
-  title: string;
-  collaborationGoal: string;
-  participants: string[];
-  maxRounds: number;
-  /** 可选：协作负责人（真人）。不填则没有负责人 */
-  owner?: string;
-  round: number;
-  /** 群默认 workingDir，agent 执行时若有则作为 cwd 优先于自身 workingDir。 */
-  workingDir?: string;
-  /** Master dispatch 时从 agents.profile 注入;worker 收到后更新本地缓存,
-   *  供 prompt-composer 渲染 agent-role 层。字段缺失时沿用 executor.config.json
-   *  的兜底值。 */
-  agentProfile?: AgentProfile;
-}
-
-/** 协作结论广播 */
-export interface ServerCollaborationConcludedMessage {
-  type: "collaboration_concluded";
-  issueId: string;
-  groupId: string;
-  title: string;
-  summary: string;
-  totalRounds: number;
-  /** 可选：协作负责人。不填则没有负责人 */
-  owner?: string;
 }
 
 /**

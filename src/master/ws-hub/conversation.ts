@@ -1,17 +1,16 @@
 /**
- * Collaboration — multi-agent round tracking + conversation enrichment.
+ * Conversation enrichment + HTTP-side send + ask-bridge helpers.
  *
- * `enrichConversationWithCollaboration` attaches workingDir / activeIssues /
- * collaboration metadata to outgoing conversation payloads so agents and
- * dashboards see what the group is doing. Called from the connection
- * handler's a2a_send / a2a_reply / a2a_reply_end paths.
+ * `enrichGroupConversation` attaches workingDir / activeIssues / memoryCounts /
+ * skillCount / guidancePrompt to outgoing conversation payloads so agents and
+ * dashboards see what the group is doing. Called from the connection handler's
+ * a2a_send / a2a_reply / a2a_reply_end paths.
  *
- * `trackCollaborationTurn` records a group message as a turn in the active
- * collaboration. When the round is complete it either advances to the next
- * round or calls `concludeCollaboration` to generate a summary.
+ * `sendAsAgent` is the HTTP-side mirror of `a2a_send` — used by REST handlers
+ * (CLI, dashboard API) to send messages on behalf of an agent.
  *
- * `sendAsAgent` is the HTTP-side mirror of `a2a_send` — used by REST
- * handlers (CLI, dashboard API) to send messages on behalf of an agent.
+ * `autoCreateBridgeOnMention` / `checkAndCancelBridgesForMessage` drive the
+ * implicit ask-bridge timer when agents @ each other with #reply.
  *
  * Methods attach via Object.assign.
  */
@@ -22,11 +21,10 @@ import type { WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 import { TIMER_PERSONA_NAME } from "../util/persona.js";
 
-export const collaborationMethods = {
+export const conversationMethods = {
   /**
-   * If the conversation targets a group with an active collaboration, return a
-   * cloned conversation with `collaboration` metadata attached. Returns the
-   * original otherwise.
+   * Attach workingDir / activeIssues / memoryCounts / skillCount /
+   * guidancePrompt to a conversation payload.
    *
    * `targetAgentName` 让 workingDir 走成员级 override 优先:dashboard 在
    * MemberListModal 里设的 per-(group, agent) working_dir 写到了
@@ -36,7 +34,7 @@ export const collaborationMethods = {
    * spawn cwd —— 后者必须走本机 `resolveIssueCwd` 派生(见 worker.ts
    * "跨机器部署安全"注释),否则多机部署下会把 master 本地路径推给别的机器。
    */
-  enrichConversationWithCollaboration<T extends { type?: string; groupId?: string } | undefined>(
+  enrichGroupConversation<T extends { type?: string; groupId?: string } | undefined>(
     this: WSHubSelf,
     conversation: T,
     targetAgentName?: string,
@@ -56,8 +54,8 @@ export const collaborationMethods = {
       return workingDir ? ({ ...conversation, workingDir } as T) : conversation;
     }
 
-    // Active task issues (non-collaboration) for the group — used by agents to
-    // decide whether file writes are permitted. Cap at 8 to keep prompt small.
+    // Active task issues for the group — used by agents to decide whether
+    // file writes are permitted. Cap at 8 to keep prompt small.
     const openIssues = this.db
       .listIssuesByGroup(conversation.groupId, "open", "task")
       .slice(0, 8);
@@ -83,36 +81,7 @@ export const collaborationMethods = {
       ? this.db.countSkillsForAgent(conversation.groupId, targetAgentName)
       : 0;
 
-    const collabs = this.db.getActiveCollaborationsByGroup(conversation.groupId);
-    if (collabs.length === 0) {
-      // No collaboration but still attach activeIssues so agents can see them.
-      return { ...conversation, activeIssues, workingDir, memoryCounts, skillCount, guidancePrompt: group?.guidance_prompt || undefined } as T;
-    }
-    const collab = collabs[0]; // single active collaboration per group
-    const currentRound = collab.current_round ?? 1;
-    const { lastRoundTurns, earlierSpeakers } = this.db.buildCollaborationContext(collab.id, currentRound);
-    const participants: string[] = (() => {
-      try { return JSON.parse(collab.participants || "[]"); } catch { return []; }
-    })();
-    return {
-      ...conversation,
-      activeIssues,
-      workingDir,
-      memoryCounts,
-      skillCount,
-      guidancePrompt: group?.guidance_prompt || undefined,
-      collaboration: {
-        issueId: collab.id,
-        title: collab.title,
-        goal: collab.collaboration_goal || "",
-        participants,
-        currentRound,
-        maxRounds: collab.max_rounds ?? 1,
-        owner: collab.owner || undefined,
-        lastRoundTurns,
-        earlierSpeakers,
-      },
-    } as T;
+    return { ...conversation, activeIssues, workingDir, memoryCounts, skillCount, guidancePrompt: group?.guidance_prompt || undefined } as T;
   },
 
   /**
@@ -149,7 +118,7 @@ export const collaborationMethods = {
       if (existing) continue;
       // 建 bridge
       const bridgeId = randomUUID();
-      const bridge = this.db.createAskBridge({
+      this.db.createAskBridge({
         id: bridgeId,
         groupId,
         asker: sender,
@@ -197,95 +166,6 @@ export const collaborationMethods = {
     }
   },
 
-  /** Track a group message as a collaboration turn if applicable. */
-  trackCollaborationTurn(this: WSHubSelf, groupId: string, agentName: string, content?: string): void {
-    // Find active collaborations in this group
-    const collaborations = this.db.getActiveCollaborationsByGroup(groupId);
-    if (collaborations.length === 0) return;
-
-    for (const collab of collaborations) {
-      const participants: string[] = JSON.parse(collab.participants || "[]");
-      if (!participants.includes(agentName)) continue;
-
-      const currentRound = collab.current_round ?? 1;
-
-      // Skip if agent already contributed this round
-      if (this.db.hasAgentContributedThisRound(collab.id, agentName, currentRound)) continue;
-
-      // Record the contribution
-      this.db.recordCollaborationTurn(collab.id, agentName, currentRound, content);
-      this.logger.info(`[mesh] Collaboration turn: ${agentName} in round ${currentRound} of "${collab.title}" (${collab.id})`);
-      this.notifyIssueChanged(collab.id, groupId, "event_appended");
-
-      // Check if the round is complete
-      if (this.db.isRoundComplete(collab.id, currentRound)) {
-        const maxRounds = collab.max_rounds ?? 1;
-        if (currentRound >= maxRounds) {
-          // Collaboration complete — generate summary
-          this.concludeCollaboration({
-            id: collab.id,
-            title: collab.title,
-            group_id: collab.group_id,
-            max_rounds: collab.max_rounds,
-            owner: collab.owner,
-          }, participants);
-        } else {
-          // Advance to next round
-          this.db.advanceCollaborationRound(collab.id, participants);
-          const nextRound = currentRound + 1;
-
-          // 协作式:不再主动广播 collaboration_started 给所有参与者;
-          // 由最近发言的 agent 通过 @ 显式选择下一个发言人。
-          this.postSystemToGroup(groupId, `🔁 [协作进展] 协作任务「${collab.title}」进入第 ${nextRound}/${maxRounds} 轮,等待当前发言人 @ 下一位或主动结束。`);
-          this.notifyIssueChanged(collab.id, groupId, "updated");
-
-          this.logger.info(`[mesh] Collaboration "${collab.title}" advanced to round ${nextRound}`);
-        }
-      }
-    }
-  },
-
-  /** Conclude a collaboration by generating a summary from all turns. */
-  concludeCollaboration(
-    this: WSHubSelf,
-    collab: { id: string; title: string; group_id: string; max_rounds: number | null; owner: string | null },
-    participants: string[],
-  ): void {
-    const events = this.db.getIssueEvents(collab.id);
-    const turnEvents = events.filter((e) => e.event_type === "collaboration_turn");
-
-    // Build a simple summary from the collected turns
-    const turnSummary = turnEvents.map((e) => `${e.agent_name}: ${e.content}`).join("\n");
-    const summary = `协作任务「${collab.title}」已完成,共 ${collab.max_rounds ?? 0} 轮。\n\n参与者的贡献:\n\n${turnSummary}`;
-
-    this.db.completeCollaboration(collab.id, summary);
-
-    // Broadcast conclusion to all participants
-    const conclusionMsg = {
-      type: "collaboration_concluded" as const,
-      issueId: collab.id,
-      groupId: collab.group_id,
-      title: collab.title,
-      summary,
-      totalRounds: collab.max_rounds ?? 0,
-      owner: collab.owner || undefined,
-    };
-
-    for (const participant of participants) {
-      const agent = this.db.getAgentByName(participant);
-      if (agent) {
-        this.sendToAgent(agent.id, conclusionMsg);
-      }
-    }
-
-    // Post system message to group
-    const ownerLine = collab.owner ? `负责人:${collab.owner}` : "无负责人";
-    this.postSystemToGroup(collab.group_id, `🏁 [协作完成] 协作任务「${collab.title}」已完成,共 ${collab.max_rounds ?? 0} 轮协作。${ownerLine}`);
-    this.notifyIssueChanged(collab.id, collab.group_id, "updated");
-
-    this.logger.info(`[mesh] Collaboration concluded: "${collab.title}" (${collab.id})`);
-  },
-
   /**
    * Send a message on behalf of an agent, mirroring the WS `a2a_send` path
    * for HTTP/CLI callers. If `groupId` is provided the message is treated as
@@ -321,7 +201,7 @@ export const collaborationMethods = {
     let queued = false;
     let messageId: number | undefined;
     if (result.targetAgentId) {
-      const enrichedConversation = this.enrichConversationWithCollaboration(conversation);
+      const enrichedConversation = this.enrichGroupConversation(conversation);
       const wireMsg = enrichWorkerDispatch(this, {
         type: "a2a_message" as const,
         requestId,
@@ -352,7 +232,6 @@ export const collaborationMethods = {
 
         const mentions = sendAsMentions;
         messageId = this.db.addGroupMessage(opts.groupId, opts.fromName, opts.message, mentions);
-        this.trackCollaborationTurn(opts.groupId, opts.fromName, opts.message);
         this.autoCreateBridgeOnMention(opts.groupId, opts.fromName, mentions, messageId);
         this.checkAndCancelBridgesForMessage(opts.groupId, opts.fromName, mentions, messageId);
       }

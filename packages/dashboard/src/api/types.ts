@@ -214,14 +214,7 @@ export interface Issue {
   completed_at: string | null
   created_at: string
   updated_at: string
-  // Collaboration fields
-  type: 'task' | 'collaboration' | 'delivery' | 'review'
-  collaboration_goal: string | null
-  max_rounds: number | null
-  current_round: number | null
-  participants: string
-  owner: string | null
-  summary: string | null
+  type: 'task'
   /** Slash command 声明（如 "/plan"）。由 master 端解析 title 前缀写入，UI 显示徽标。 */
   slash_command: string | null
   /** 工具调用审批策略。后端默认 .rw_allow.（写需人工审批，读放行）；
@@ -362,15 +355,6 @@ export interface SchedulePattern {
   is_default: number
   created_at: number
   updated_at: number
-}
-
-export interface CreateCollaborationDto {
-  title: string
-  collaborationGoal: string
-  participants: string[]
-  maxRounds: number
-  owner?: string
-  createdBy: string
 }
 
 // Artifact Types

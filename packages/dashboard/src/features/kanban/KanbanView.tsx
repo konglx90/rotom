@@ -71,8 +71,8 @@ function KanbanCard({
       onClick={onOpen}
     >
       <div className={styles.cardTopRow}>
-        <span className={`${styles.typeTag} ${issue.type === 'collaboration' ? styles.typeCollab : styles.typeTask}`}>
-          {issue.type === 'collaboration' ? '协作' : '任务'}
+        <span className={`${styles.typeTag} ${styles.typeTask}`}>
+          任务
         </span>
         {issue.slash_command && (
           <span className={styles.slashTag} title="计划模式">{issue.slash_command}</span>
@@ -101,9 +101,6 @@ function KanbanCard({
         >
           {elapsedIcon} {elapsedLabel}
         </span>
-        {issue.type === 'collaboration' && issue.current_round != null && (
-          <span className={styles.round}>R{issue.current_round}/{issue.max_rounds}</span>
-        )}
       </div>
     </button>
   )

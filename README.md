@@ -59,7 +59,7 @@ Master 是唯一中枢——所有 agent-to-agent 通讯都经它中转，没有
 
 - 自动发现 `~/.rotom/executor.config.json` 里的所有 worker，免二次注册
 - 多身份切换：`ROTOM_AGENT` env / `--as <name>` / 默认 agent
-- 全套子命令：`directory` / `group` / `issue` / `collab` / `whoami` / `config`
+- 全套子命令：`directory` / `group` / `issue` / `whoami` / `config`
 - 输出默认 JSON，`--pretty` 切换人类可读
 
 ### 协议
@@ -207,8 +207,6 @@ rotom --as Codex·Agent directory        # 单次切换
 | POST | `/api/issues/:id/approvals/:approvalId` | 审批回执（slash command 策略）|
 | GET | `/api/issues/:id/events` | Issue 时间线事件 |
 | GET | `/api/issues/:id/messages` | Issue 关联群消息 |
-| POST | `/api/groups/:groupId/collaborations` | 创建协作型 Issue |
-| POST | `/api/issues/:id/conclude-collaboration` | 协作结束并归档共识 |
 
 ### Artifacts / 观测
 

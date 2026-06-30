@@ -5,7 +5,7 @@
  * `src/master/*.ts` and `tests/*.ts` need no edits.
  *
  * Domain modules (./connection.ts, ./routing.ts, ./directory.ts,
- * ./sessions.ts, ./collaboration.ts) export method bags whose `this` is
+ * ./sessions.ts, ./conversation.ts) export method bags whose `this` is
  * typed as `WSHubSelf` (declared in ./hub.ts) — a structural shape with the
  * cross-module surface (db, auth, router, offlineQueue, logger, connections,
  * send, broadcast, etc.) so methods in one bag can call methods in another.
@@ -22,7 +22,7 @@ import { connectionMethods } from "./connection.js";
 import { routingMethods } from "./routing.js";
 import { directoryMethods } from "./directory.js";
 import { sessionsMethods } from "./sessions.js";
-import { collaborationMethods } from "./collaboration.js";
+import { conversationMethods } from "./conversation.js";
 import type { MeshDb } from "../db/index.js";
 import type { AuthService } from "../auth.js";
 import type { Router } from "../router.js";
@@ -63,13 +63,11 @@ export class WSHub extends WSHubCore {
   declare findSessionEntry: typeof sessionsMethods.findSessionEntry;
   declare routeToExecutor: typeof sessionsMethods.routeToExecutor;
 
-  // ─── collaboration ────────────────────────────────────────────────────────
-  declare enrichConversationWithCollaboration: typeof collaborationMethods.enrichConversationWithCollaboration;
-  declare trackCollaborationTurn: typeof collaborationMethods.trackCollaborationTurn;
-  declare checkAndCancelBridgesForMessage: typeof collaborationMethods.checkAndCancelBridgesForMessage;
-  declare autoCreateBridgeOnMention: typeof collaborationMethods.autoCreateBridgeOnMention;
-  declare concludeCollaboration: typeof collaborationMethods.concludeCollaboration;
-  declare sendAsAgent: typeof collaborationMethods.sendAsAgent;
+  // ─── conversation ─────────────────────────────────────────────────────────
+  declare enrichGroupConversation: typeof conversationMethods.enrichGroupConversation;
+  declare checkAndCancelBridgesForMessage: typeof conversationMethods.checkAndCancelBridgesForMessage;
+  declare autoCreateBridgeOnMention: typeof conversationMethods.autoCreateBridgeOnMention;
+  declare sendAsAgent: typeof conversationMethods.sendAsAgent;
 
   constructor(
     httpServer: Server,
@@ -86,6 +84,6 @@ export class WSHub extends WSHubCore {
     Object.assign(this, routingMethods);
     Object.assign(this, directoryMethods);
     Object.assign(this, sessionsMethods);
-    Object.assign(this, collaborationMethods);
+    Object.assign(this, conversationMethods);
   }
 }

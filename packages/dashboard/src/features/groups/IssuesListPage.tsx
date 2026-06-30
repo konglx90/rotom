@@ -40,12 +40,8 @@ function IssueLinkItem({ issue, groupId }: { issue: Issue; groupId: string }) {
         style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
       >
         <div className={styles.issueTitleRow}>
-          <span
-            className={`${styles.issueTypeLabel} ${
-              issue.type === 'collaboration' ? styles.collabLabel : styles.taskLabel
-            }`}
-          >
-            {issue.type === 'collaboration' ? '协作' : '任务'}
+          <span className={`${styles.issueTypeLabel} ${styles.taskLabel}`}>
+            任务
           </span>
           {issue.slash_command && (
             <span
@@ -66,15 +62,8 @@ function IssueLinkItem({ issue, groupId }: { issue: Issue; groupId: string }) {
         </div>
         <div className={styles.issueMeta}>
           <Badge tone="status" value={issue.status}>
-            {issue.status === 'in_progress' && issue.type === 'collaboration'
-              ? '协作中'
-              : STATUS_LABEL[issue.status]}
+            {STATUS_LABEL[issue.status]}
           </Badge>
-          {issue.type === 'collaboration' && issue.current_round != null && (
-            <span style={{ fontSize: 11, color: '#888' }}>
-              R{issue.current_round}/{issue.max_rounds}
-            </span>
-          )}
           <span
             className={`${styles.issueElapsed} ${elapsedClass}`}
             title={elapsedMs == null ? '尚未开始' : isFinal ? '总耗时' : '当前区间耗时(实时刷新)'}

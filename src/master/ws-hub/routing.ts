@@ -25,8 +25,8 @@ export const routingMethods = {
     return true;
   },
 
-  /** Lowest-level transport: serialize + ws.send. Public because connection,
-   *  directory, and collaboration modules all need to push directly. */
+  /** Lowest-level transport: serialize + ws.send. Public since connection,
+   *  directory, and conversation modules all need to push directly. */
   send(this: WSHubSelf, ws: WebSocket, msg: ServerMessage): void {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(msg));

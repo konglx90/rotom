@@ -126,7 +126,7 @@ export const groupMethods = {
 
   /**
    * Archive or unarchive a group. Archived groups are read-only: no new messages,
-   * issues, or collaboration. Passing `true` sets archived_at to "now";
+   * issues. Passing `true` sets archived_at to "now";
    * passing `false` clears it.
    */
   updateGroupArchived(this: MeshDbSelf, id: string, archived: boolean): string | null {

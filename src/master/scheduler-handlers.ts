@@ -14,7 +14,6 @@
  * 未来可加:
  *   - issue-stale-check:Issue 长时间无进展自动告警
  *   - agent-offline-alert:agent 离线超阈值通知真人
- *   - collab-round-advance:协作 Issue 超时自动推进轮次
  */
 
 import { randomUUID } from "node:crypto";

@@ -4,7 +4,6 @@
  * Methods attach to a `MeshDb` instance via `Object.assign`. Cross-module:
  *   - `updateIssueStatus` fires `_onIssueTerminal` hook (set by server.ts for
  *     E2ED auto-sync).
- *   - `addIssueEvent` is shared with `./collaboration.ts` for round events.
  *
  * Event timeline pagination (getIssueEvents) keeps the head of progress
  * chunks and tail of recent chunks, with a virtual `progress_truncated`
@@ -134,7 +133,7 @@ export const issueMethods = {
   /**
    * 查该 (cliTool, groupId) 下最新的 issue。Debug Sessions 视图用:
    * worker SessionStore 跟 issues.session_id 是两条独立路径(SessionStore
-   * 只在 chat/collab 路径更新,issue 执行不写 SessionStore),所以反查
+   * 只在 chat 路径更新,issue 执行不写 SessionStore),所以反查
    * session_id 经常落空。改用 (cliTool, groupId) 取最新一条 issue,展示
    * 「上次 claude/codex 在这个群里跑了多少 token」更贴近用户预期。
    */
@@ -200,8 +199,8 @@ export const issueMethods = {
   },
 
   /**
-   * Get all comment/collaboration messages for an issue, with reply-to
-   * resolution (quoted message content + author embedded in the result).
+   * Get all comment messages for an issue, with reply-to resolution (quoted
+   * message content + author embedded in the result).
    */
   getIssueMessages(this: MeshDbSelf, issueId: string): Array<{
     id: number;
@@ -216,7 +215,7 @@ export const issueMethods = {
   }> {
     const rows = this.db.prepare(`
       SELECT * FROM issue_events
-      WHERE issue_id = ? AND event_type IN ('comment', 'collaboration_turn')
+      WHERE issue_id = ? AND event_type = 'comment'
       ORDER BY created_at ASC
     `).all(issueId) as IssueEventRow[];
 

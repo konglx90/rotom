@@ -247,10 +247,8 @@ rotom group list --pretty
 rotom directory --online --pretty
 rotom group history <groupId> --limit 30 --pretty
 rotom group send <groupId> <target> "@target 你好"
-rotom issue list <groupId> --type collaboration
+rotom issue list <groupId> --type task
 rotom issue create <groupId> --title T --description D --priority high
-rotom collab create <groupId> --title T --goal G --participants A,B --max-rounds 3
-rotom collab conclude <issueId> --summary "..."
 ```
 
 完整列表：`rotom help`。

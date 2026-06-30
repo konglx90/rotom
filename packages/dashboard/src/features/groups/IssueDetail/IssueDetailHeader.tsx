@@ -53,8 +53,6 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
   // 快捷键和「中断」按钮在 paused 下都不显示 —— 没有活跃步骤可中断。
   const isInProgress = issue.status === 'in_progress'
 
-  const showAssign = issue.type !== 'collaboration'
-
   // 中断当前步骤(对齐 codex CLI 的 ESC + flush steers):POST /issues/:id/append
   // 把 pendingQueue 里的草稿逐条 flush 给 worker → POST /issues/:id/interrupt →
   // worker abort 当前 CLI → runIssueExecution finally 块(worker.ts:964-998)
@@ -243,9 +241,8 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
           {!readOnly && (
           <div className={styles.controlsRow}>
             <div className={styles.settingsCluster}>
-              {showAssign && (
-                <div className={styles.fieldGroup}>
-                  <label className={styles.fieldLabel}>指派给</label>
+              <div className={styles.fieldGroup}>
+                <label className={styles.fieldLabel}>指派给</label>
                   <Select
                     size="sm"
                     className={styles.inlineSelect}
@@ -281,7 +278,6 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
                     <span className={styles.fieldHint}>群内暂无可指派的 Agent</span>
                   )}
                 </div>
-              )}
 
               {/* 审批策略：rw_allow（写自动通过，读自动通过，默认）/ r_allow（写需审批，读放行）。
                   读类工具始终放行；本项只影响写类工具是否走 dashboard 人工审批。

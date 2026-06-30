@@ -9,10 +9,9 @@ import { parseSlashCommand } from "../../shared/slash-commands.js";
 import { truncateTitle } from "../../shared/title.js";
 import { ISSUE_STATUSES } from "../../shared/constants.js";
 import { resolveGroupAgentWorkingDir } from "../group-paths.js";
-import { enrichWorkerDispatch } from "../ws-hub/dispatch-enrich.js";
 import { createLogger } from "../../shared/logger.js";
 import type { IssueRow } from "../db/types.js";
-import type { ServerMessage, TodoItem } from "../../shared/protocol.js";
+import type { TodoItem } from "../../shared/protocol.js";
 
 const log = createLogger("mesh-api");
 
@@ -605,135 +604,6 @@ export function registerIssueRoutes(
     }
     db.deleteIssue(req.params.id);
     if (hub) hub.notifyIssueChanged(req.params.id, issue.group_id, "deleted");
-    res.json({ ok: true });
-  });
-
-  // ── Collaborations ──────────────────────────────────────────────────────
-
-  apiRouter.post("/groups/:groupId/collaborations", (req, res) => {
-    const group = db.getGroupById(req.params.groupId);
-    if (!group) {
-      res.status(404).json({ error: "Group not found" });
-      return;
-    }
-    if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot create collaborations" }); return; }
-    const { title, collaborationGoal, participants, maxRounds, owner, createdBy } = req.body;
-    if (!title || !collaborationGoal || !participants?.length) {
-      res.status(400).json({ error: "title, collaborationGoal, and participants are required" });
-      return;
-    }
-    if (owner) {
-      const ownerAgent = db.getAgentByName(owner);
-      if (!ownerAgent) {
-        res.status(400).json({ error: `Owner "${owner}" is not a registered agent` });
-        return;
-      }
-      try {
-        const ownerProfile = ownerAgent.profile ? JSON.parse(ownerAgent.profile) : {};
-        if (ownerProfile.category !== "真人") {
-          res.status(400).json({ error: `Owner must be a "真人" type agent` });
-          return;
-        }
-      } catch {
-        res.status(400).json({ error: `Owner profile parse error` });
-        return;
-      }
-    }
-    if (participants.length < 2) {
-      res.status(400).json({ error: "At least 2 participants are required" });
-      return;
-    }
-    const id = randomUUID();
-    db.createCollaborationIssue({
-      id,
-      groupId: req.params.groupId,
-      title,
-      collaborationGoal,
-      participants,
-      maxRounds: maxRounds || 3,
-      owner: owner || "",
-      createdBy: createdBy || "dashboard",
-    });
-    log.info(`Collaboration created: "${title}" (${id}) in group ${req.params.groupId}`);
-
-    if (hub) {
-      const firstParticipant = participants[0];
-      const agent = db.getAgentByName(firstParticipant);
-      if (agent) {
-        const sent = hub.sendToAgent(agent.id, enrichWorkerDispatch({ db }, {
-          type: "collaboration_started",
-          issueId: id,
-          groupId: req.params.groupId,
-          title,
-          collaborationGoal,
-          participants,
-          maxRounds: maxRounds || 3,
-          owner: owner || undefined,
-          round: 1,
-        } as ServerMessage, firstParticipant, req.params.groupId));
-        log.info(`Collaboration notify ${firstParticipant} (agentId=${agent.id}): sent=${sent}`);
-      } else {
-        log.warn(`Collaboration first participant "${firstParticipant}" not found in DB`);
-      }
-
-      const ownerLine = owner ? `\n\n负责人：${owner}` : "";
-      const startupContent =
-        `@${firstParticipant} 🤝 [协作启动] 由你担任发起人，请开始协作任务「${title}」\n\n` +
-        `目标：\n${collaborationGoal}\n\n` +
-        `参与者：\n${participants.join("、")}\n\n` +
-        `最大轮数：\n${maxRounds || 3}` + ownerLine + `\n\n` +
-        `IssueId：${id}`;
-      hub.postSystemToGroup(req.params.groupId, startupContent, [], [firstParticipant]);
-      hub.notifyIssueChanged(id, req.params.groupId, "created");
-    } else {
-      log.warn("Collaboration created but hub is not available for WS notification");
-    }
-
-    res.status(201).json({ id, title, status: "in_progress", type: "collaboration" });
-  });
-
-  apiRouter.post("/issues/:id/conclude-collaboration", (req, res) => {
-    const issue = db.getIssueById(req.params.id);
-    if (!issue) {
-      res.status(404).json({ error: "Issue not found" });
-      return;
-    }
-    if (issue.type !== "collaboration") {
-      res.status(400).json({ error: "Not a collaboration issue" });
-      return;
-    }
-    if (issue.status !== "in_progress") {
-      res.status(400).json({ error: "Collaboration is not in progress" });
-      return;
-    }
-    const { summary } = req.body;
-    if (!summary) {
-      res.status(400).json({ error: "summary is required" });
-      return;
-    }
-    const participants: string[] = JSON.parse(issue.participants || "[]");
-    db.completeCollaboration(req.params.id, summary);
-
-    if (hub) {
-      for (const participant of participants) {
-        const agent = db.getAgentByName(participant);
-        if (agent) {
-          hub.sendToAgent(agent.id, {
-            type: "collaboration_concluded",
-            issueId: req.params.id,
-            groupId: issue.group_id,
-            title: issue.title,
-            summary,
-            totalRounds: issue.current_round ?? 0,
-            owner: issue.owner || undefined,
-          });
-        }
-      }
-      hub.postSystemToGroup(issue.group_id, `🏁 [协作结束] 协作任务「${issue.title}」已由 dashboard 主动结束。\n\n${summary}`);
-      hub.notifyIssueChanged(req.params.id, issue.group_id, "updated");
-    }
-
-    log.info(`Collaboration concluded: "${issue.title}" (${req.params.id})`);
     res.json({ ok: true });
   });
 

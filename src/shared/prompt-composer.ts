@@ -6,7 +6,7 @@
  *  - agent-role: 来自 `agents.profile` JSON,per-agent
  *  - group-basic: 群上下文 + 活跃 issue 列表,群内所有 agent 一致
  *  - cwd: 工作目录只读头(如有 cwd)
- *  - task: chat 模式 = 用户原消息;issue 模式 = title + description;collab 模式 = 开场白
+ *  - task: chat 模式 = 用户原消息;issue 模式 = title + description
  *
  * 设计:这是**纯函数**,无 IO。worker 调它,拿到 ComposedPrompt 后:
  *  1. `prompt = composed.final` 喂给 executor
@@ -35,18 +35,18 @@ export interface ComposedPrompt {
 }
 
 export interface ComposeContext {
-  mode: "chat" | "issue" | "collab";
+  mode: "chat" | "issue";
   agentName: string;
   agentProfile: AgentProfile | null;
   /** 群内调用时填;DM / 单 issue 可空 */
   group?: { id: string; name: string; activeIssues: ActiveIssueRef[]; guidancePrompt?: string | null; memoryCounts?: { group: number; global: number }; skillCount?: number } | null;
   cwd: string | null;
-  /** chat 模式时填,告诉 agent 这条消息是谁发的。issue/collab 模式不需要,留空。 */
+  /** chat 模式时填,告诉 agent 这条消息是谁发的。issue 模式不需要,留空。 */
   fromName?: string | null;
-  /** chat 模式 = 用户原消息(已剥 @self);issue 模式 = title + "\n\n" + description;collab 模式 = 开场白 */
+  /** chat 模式 = 用户原消息(已剥 @self);issue 模式 = title + "\n\n" + description */
   body: string;
   /**
-   * 工具调用审批策略(issue / collab 模式才用)。未传视为 'rw_allow' —— 与
+   * 工具调用审批策略(issue 模式才用)。未传视为 'rw_allow' —— 与
    * master 端 normalizeApprovalPolicy 收敛口径一致。'r_allow' 下写盘需
    * dashboard 审批(agent 调 Write/Edit/写 Bash 时会被 PreToolUse hook
    * 挂住,等用户在 dashboard 上 Accept/Deny),'rw_allow' 写盘直接放行。
@@ -58,7 +58,7 @@ export interface ComposeContext {
 
 const SOURCE_ROTOM_CLI = "src/shared/rotom-cli-prompt.ts (constant)";
 const SOURCE_AGENT_PROFILE = "agents.profile JSON (edit via Dashboard 员工介绍)";
-const SOURCE_GROUP_BASIC = "groups + active_issues (runtime, from master enrichConversationWithCollaboration)";
+const SOURCE_GROUP_BASIC = "groups + active_issues (runtime, from master enrichGroupConversation)";
 const SOURCE_GROUP_GUIDANCE = "groups.guidance_prompt (edit via Dashboard 群设置 / PATCH /groups/:id)";
 const SOURCE_CWD = "<worker.executor>.resolveIssueCwd(groupId)";
 
@@ -152,10 +152,6 @@ function buildTaskLayer(body: string, mode: ComposeContext["mode"], fromName?: s
       source = "issues.title + issues.description (db.ts:executeIssue)";
       content = body;
       break;
-    case "collab":
-      source = "handleCollaborationStarted inline template (worker.ts:757-771)";
-      content = body;
-      break;
   }
   return { layer: "task", content, source };
 }
@@ -192,7 +188,7 @@ function buildSkillPointerLayer(count: number, groupId?: string): PromptLayer | 
 export function composePrompt(ctx: ComposeContext): ComposedPrompt {
   const layers: PromptLayer[] = [];
   // Issue 模式的 prompt 不含 rotom CLI 使用规则:agent 直接执行任务描述,
-  // 不需要 rotom CLI 语法心智负担。该规则对群聊(chat)和协作(collab)仍保留。
+  // 不需要 rotom CLI 语法心智负担。该规则对群聊(chat)仍保留。
   if (ctx.mode !== "issue") {
     layers.push(buildRotomCliLayer());
   }

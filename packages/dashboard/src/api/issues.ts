@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Issue, IssueEvent, CreateIssueDto, CreateCollaborationDto } from './types'
+import type { Issue, IssueEvent, CreateIssueDto } from './types'
 
 export interface IssueDetail extends Issue {
   events: IssueEvent[]
@@ -29,14 +29,6 @@ export const issuesApi = {
 
   async create(groupId: string, data: CreateIssueDto): Promise<{ id: string; title: string; status: string }> {
     return api.post<{ id: string; title: string; status: string }>(`/groups/${groupId}/issues`, data)
-  },
-
-  async createCollaboration(groupId: string, data: CreateCollaborationDto): Promise<{ id: string; title: string; status: string; type: string }> {
-    return api.post<{ id: string; title: string; status: string; type: string }>(`/groups/${groupId}/collaborations`, data)
-  },
-
-  async concludeCollaboration(id: string, summary: string): Promise<{ ok: boolean }> {
-    return api.post<{ ok: boolean }>(`/issues/${id}/conclude-collaboration`, { summary })
   },
 
   async getById(id: string): Promise<IssueDetail> {

@@ -36,8 +36,8 @@ function IssueListItem({
       onClick={onSelect}
     >
       <div className={styles.issueTitleRow}>
-        <span className={`${styles.issueTypeLabel} ${issue.type === 'collaboration' ? styles.collabLabel : styles.taskLabel}`}>
-          {issue.type === 'collaboration' ? '协作' : '任务'}
+        <span className={`${styles.issueTypeLabel} ${styles.taskLabel}`}>
+          任务
         </span>
         {issue.slash_command && (
           <span
@@ -59,14 +59,11 @@ function IssueListItem({
       <div className={styles.issueMeta}>
         <Badge tone="status" value={issue.status}>
           {issue.status === 'open' ? '待处理' :
-           issue.status === 'in_progress' ? (issue.type === 'collaboration' ? '协作中' : '执行中') :
+           issue.status === 'in_progress' ? '执行中' :
            issue.status === 'paused' ? '待继续' :
            issue.status === 'completed' ? '已完成' :
            issue.status === 'failed' ? '失败' : '已取消'}
         </Badge>
-        {issue.type === 'collaboration' && issue.current_round != null && (
-          <span style={{ fontSize: 11, color: '#888' }}>R{issue.current_round}/{issue.max_rounds}</span>
-        )}
         <span
           className={`${styles.issueElapsed} ${elapsedClass}`}
           title={elapsedMs == null ? '尚未开始' : isFinal ? '总耗时' : '当前区间耗时(实时刷新)'}

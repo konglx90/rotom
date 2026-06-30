@@ -38,7 +38,6 @@ import { cmdIssue } from "./issue.js";
 import { cmdNote } from "./note.js";
 import { cmdMemory } from "./memory.js";
 import { cmdSkill } from "./skill.js";
-import { cmdCollab } from "./collab.js";
 import { cmdSchedule } from "./schedule.js";
 import { cmdAsk } from "./ask.js";
 import { cmdMaster, colonExpand } from "./master.js";
@@ -88,7 +87,7 @@ Read:
   group history <groupId> [--limit N]
   group archive <groupId>
   group unarchive <groupId>
-  issue list <groupId> [--status S] [--type task|collaboration]
+  issue list <groupId> [--status S] [--type task]
   issue show <issueId>
   issue events <issueId>
   issue messages <issueId>
@@ -97,7 +96,7 @@ Read:
 Send:
   group send <groupId> <target> <message...>
 
-Issue / collaboration:
+Issue:
   issue create <groupId> --description D [--title T] [--priority low|medium|high|critical]
                          [--assignee <agent>] [--approval-policy r_allow|rw_allow] [--run]
     description 是主输入;title 可选,未传时由后端从前 40 字符自动截断生成。
@@ -116,8 +115,6 @@ Issue / collaboration:
     --status 低层 setter,可任意切换(含 reopen cancelled→open),无状态机限制。
   issue cancel <issueId>
   issue delete <issueId>
-  collab create <groupId> --title T --goal G --participants a,b[,c] [--max-rounds 3] [--owner X]
-  collab conclude <issueId> --summary S
 
 Note (极简文字记录,纯 CRUD):
   note list <groupId>
@@ -218,7 +215,6 @@ async function main(): Promise<void> {
     case "note":            return cmdNote(agent, rest, flags);
     case "memory":          return cmdMemory(agent, rest, flags);
     case "skill":           return cmdSkill(agent, rest, flags);
-    case "collab":          return cmdCollab(agent, rest, flags);
     case "schedule":        return cmdSchedule(agent, rest, flags);
     case "ask":             return cmdAsk(agent, rest, flags);
     default: fail(`unknown command: ${cmd}\nRun 'rotom help' for usage.`);

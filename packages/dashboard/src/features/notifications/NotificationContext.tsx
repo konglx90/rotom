@@ -233,17 +233,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     return subscribe((msg) => {
       switch (msg.type) {
-        case 'collaboration_concluded': {
-          apiRef.current.success(`协作「${msg.title}」已完成`, {
-            description: msg.summary,
-            actions: [{
-              label: '查看详情',
-              primary: true,
-              onClick: () => navigate(`/dashboard/groups/${msg.groupId}/issues/${msg.issueId}`),
-            }],
-          })
-          break
-        }
         case 'a2a_stream_end': {
           // 只通知"当前打开的群",其他群不弹(避免噪音)。
           const currentGroupId = (() => {

@@ -93,7 +93,6 @@ Client 通过 rotom CLI 与 Mesh 交互 (LLM 用 Bash 调用):
   rotom group send <groupId> <target> <msg>   ──► 群内 @某人
   rotom issue create <groupId> --title T ...  ──► 在群中创建 Issue 给 Agent 抢单
   rotom issue list / show / events / cancel   ──► 查询 / 管理 issue
-  rotom collab create / conclude              ──► 多 Agent 协作 issue
 
   rotom 通过 Authorization: Bearer mesh_xxx 调用 Master 的 HTTP API
   (端口与 WS 同源)。LLM 不再直接持有 mesh_* 工具，所有 mesh 操作
@@ -109,7 +108,7 @@ Agent 是统一的「员工」概念，由 `executor` 进程承载（`src/execut
 - 独立任务队列（最大并发数可配置）
 
 `AgentProfile.category` 字段（`src/shared/protocol.ts`）目前只有一个有特殊含义的取值：
-- `"真人"` — 真实人类团队成员，可作为协作 Issue 的 owner；不参与 Issue 抢单。
+- `"真人"` — 真实人类团队成员，可作为 Issue 的 owner / 审批人；不参与 Issue 抢单。
 - 其余（包括未设置）— 普通 Agent，会被自动派单 / 可被指派执行 Issue / 群内 @ 时通过 CLI 后端生成回复。
 
 启动方式：
@@ -144,7 +143,7 @@ flowchart TB
   end
 
   subgraph CLI_["rotom CLI (src/cli/rotom.ts)"]
-    ROT["rotom<br/>whoami / directory<br/>send / group send<br/>group members/history<br/>issue / collab"]
+    ROT["rotom<br/>whoami / directory<br/>send / group send<br/>group members/history<br/>issue"]
   end
 
   subgraph Executor["Executor (src/executor) — Agent"]
@@ -245,7 +244,6 @@ Issue 系统新增的消息（`src/shared/protocol.ts`）：
 | master→agent | `issue_continue` / `issue_append` | 续聊：完成态后追加 prompt / 进行中追加 prompt |
 | master→agent | `issue_cancelled` | 通知中止当前 CLI 进程 |
 | master→agent | `issue_changed` | 给整个群广播 issue 状态变化，dashboard 据此停轮询 |
-| master→agent | `collaboration_started` / `collaboration_concluded` | 协作 Issue 开始 / 结束广播 |
 
 ## 4. 群消息时序
 
@@ -466,11 +464,9 @@ Agent 的 master URL + mesh token 来自注册的配置文件：
 | `rotom group history <groupId> [--limit N]` | `GET /api/groups/:id/messages` | 群历史 |
 | `rotom group send <groupId> <target> <msg>` | `POST /api/cli/groups/:id/send` | 群内 @ |
 | `rotom issue create <groupId> --title T [--description D] [--priority P]` | `POST /api/groups/:id/issues` | 创建 Issue |
-| `rotom issue list <groupId> [--status S] [--type task\|collaboration]` | `GET /api/groups/:id/issues` | 列 Issue |
+| `rotom issue list <groupId> [--status S] [--type task]` | `GET /api/groups/:id/issues` | 列 Issue |
 | `rotom issue show <issueId>` / `events` / `messages` | `GET /api/issues/:id[/events\|/messages]` | Issue 详情 / 时间线 |
 | `rotom issue cancel <issueId>` / `delete <issueId>` | `POST /cancel` / `DELETE` | |
-| `rotom collab create <groupId> --title T --goal G --participants a,b[,c]` | `POST /api/groups/:id/collaborations` | 创建多 Agent 协作 Issue |
-| `rotom collab conclude <issueId> --summary S` | `POST /api/issues/:id/conclude-collaboration` | 结束协作 |
 
 所有 HTTP 请求携带 `Authorization: Bearer <mesh_token>`；Master 使用该 token 反查 Agent 身份，后端 API 无需也不允许前端传 `from`。
 

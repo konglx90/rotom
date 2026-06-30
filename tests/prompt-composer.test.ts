@@ -8,8 +8,8 @@
  *   - 无 profile / profile 全空: role 层折叠(null),不再占位
  *   - profile 部分字段缺失: 只输出非空字段
  *   - chat 模式 + fromName: 注入到 task 层头部一行([from=xxx])
- *   - issue/collab 模式 + fromName: 不注入(只有 chat 才有 fromName 语义)
- *   - 三种 mode 的 task.source 不同
+ *   - issue 模式 + fromName: 不注入(只有 chat 才有 fromName 语义)
+ *   - chat / issue 两种 mode 的 task.source 不同
  *   - ROTOM_CLI_PROMPT 文本 golden string 锁定(防止以后被改)
  *   - final 顺序与 layers 顺序一致(layers.join("\n"))
  *   - promptVersion 透出 ROTOM_CLI_PROMPT_VERSION
@@ -118,16 +118,13 @@ describe("composePrompt", () => {
     assert.ok(!role.content.includes("bio"));
   });
 
-  it("三种 mode 的 task.source 不同", () => {
+  it("chat / issue 两种 mode 的 task.source 不同", () => {
     const chat = composePrompt(baseCtx({ mode: "chat", body: "x" }));
     const issue = composePrompt(baseCtx({ mode: "issue", body: "x" }));
-    const collab = composePrompt(baseCtx({ mode: "collab", body: "x" }));
     const taskChat = chat.layers.find((l) => l.layer === "task")!;
     const taskIssue = issue.layers.find((l) => l.layer === "task")!;
-    const taskCollab = collab.layers.find((l) => l.layer === "task")!;
     assert.ok(taskChat.source.includes("user message"));
     assert.ok(taskIssue.source.includes("issues.title"));
-    assert.ok(taskCollab.source.includes("handleCollaborationStarted"));
   });
 
   it("final 顺序 = layers.content.join(\"\\n\")", () => {
@@ -290,13 +287,10 @@ describe("composePrompt", () => {
     assert.ok(!composed.layers.some((l) => l.layer === "memory-pointer"));
   });
 
-  it("issue/collab 模式 + fromName: fromName 不注入(只有 chat 才有 fromName 语义)", () => {
+  it("issue 模式 + fromName: fromName 不注入(只有 chat 才有 fromName 语义)", () => {
     const issueOut = composePrompt(baseCtx({ mode: "issue", fromName: "X", body: "任务" }));
-    const collabOut = composePrompt(baseCtx({ mode: "collab", fromName: "X", body: "开场白" }));
     const issueTask = issueOut.layers.find((l) => l.layer === "task")!;
-    const collabTask = collabOut.layers.find((l) => l.layer === "task")!;
     assert.strictEqual(issueTask.content, "任务");
-    assert.strictEqual(collabTask.content, "开场白");
   });
 
   it("group-basic 不再含 fromName(只在 task 层)", () => {
@@ -334,11 +328,11 @@ describe("composePrompt", () => {
     assert.ok(!c.content.includes("Accept/Deny"));
   });
 
-  it("cwd 层 collab 模式 + r_allow: 同 issue,既有挂起语义也有只读 Bash 放行语义", () => {
-    const ctx = baseCtx({ mode: "collab", cwd: "/Users/kong/work", approvalPolicy: "r_allow" });
+  it("cwd 层 issue 模式 + r_allow: 既有挂起语义也有只读 Bash 放行语义", () => {
+    const ctx = baseCtx({ mode: "issue", cwd: "/Users/kong/work", approvalPolicy: "r_allow" });
     const out = composePrompt(ctx);
     const c = out.layers.find((l) => l.layer === "cwd")!;
-    assert.ok(c.content.includes("collab"));
+    assert.ok(c.content.includes("r_allow"));
     assert.ok(c.content.includes("可写"));
     assert.ok(c.content.includes("Accept/Deny"));
     assert.ok(c.content.includes("只读 Bash"));

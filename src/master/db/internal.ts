@@ -24,7 +24,6 @@ import { issueMethods } from "./issues.js";
 import { noteMethods } from "./notes.js";
 import { memoryMethods } from "./memory.js";
 import { skillMethods } from "./skills.js";
-import { collaborationMethods } from "./collaboration.js";
 import { scheduleMethods } from "./schedules.js";
 import { askBridgeMethods } from "./ask-bridges.js";
 import { guidanceTemplateMethods } from "./guidance-templates.js";
@@ -171,17 +170,6 @@ export class MeshDb extends MeshDbCore {
   declare listSkillsForAgent: typeof skillMethods.listSkillsForAgent;
   declare promoteMemoryToSkill: typeof skillMethods.promoteMemoryToSkill;
 
-  // ─── collaboration ─────────────────────────────────────────────────────────
-  declare createCollaborationIssue: typeof collaborationMethods.createCollaborationIssue;
-  declare getActiveCollaborationsByGroup: typeof collaborationMethods.getActiveCollaborationsByGroup;
-  declare recordCollaborationTurn: typeof collaborationMethods.recordCollaborationTurn;
-  declare buildCollaborationContext: typeof collaborationMethods.buildCollaborationContext;
-  declare hasAgentContributedThisRound: typeof collaborationMethods.hasAgentContributedThisRound;
-  declare getRoundTracker: typeof collaborationMethods.getRoundTracker;
-  declare isRoundComplete: typeof collaborationMethods.isRoundComplete;
-  declare advanceCollaborationRound: typeof collaborationMethods.advanceCollaborationRound;
-  declare completeCollaboration: typeof collaborationMethods.completeCollaboration;
-
   // ─── schedules ─────────────────────────────────────────────────────────────
   declare listScheduledTasks: typeof scheduleMethods.listScheduledTasks;
   declare getScheduledTask: typeof scheduleMethods.getScheduledTask;
@@ -254,7 +242,6 @@ export class MeshDb extends MeshDbCore {
     Object.assign(this, noteMethods);
     Object.assign(this, memoryMethods);
     Object.assign(this, skillMethods);
-    Object.assign(this, collaborationMethods);
     Object.assign(this, scheduleMethods);
     Object.assign(this, askBridgeMethods);
     Object.assign(this, guidanceTemplateMethods);

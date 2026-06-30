@@ -3,7 +3,7 @@
  *
  * The class shell here owns the persistent in-memory state (connection map,
  * pending session requests, snapshot cache) and the wss instance. Domain
- * modules (./connection.ts, ./routing.ts, ./collaboration.ts, ...) attach
+ * modules (./connection.ts, ./routing.ts, ./conversation.ts, ...) attach
  * their methods to the WSHub class via `Object.assign(this, ...)` in the
  * composition root (./internal.ts). The `this` inside each method is typed
  * as `WSHubSelf` — a structural shape that exposes the cross-module surface
@@ -77,8 +77,8 @@ export type PendingSession = {
  * Structural surface every domain method sees when typed as `this: WSHubSelf`.
  * Includes both fields declared on WSHubCore and method signatures referenced
  * across modules (e.g. connection.ts needs `send`, `broadcastToGroup`,
- * `broadcastDirectory`, `getDirectory`, `enrichConversationWithCollaboration`,
- * `trackCollaborationTurn`, `logMessage`, etc.).
+ * `broadcastDirectory`, `getDirectory`, `enrichGroupConversation`,
+ * `logMessage`, etc.).
  */
 export interface WSHubSelf {
   readonly db: MeshDb;
@@ -121,13 +121,11 @@ export interface WSHubSelf {
   handleDisconnect(agentId: string, generation: number, reason: string): void;
 
   // ─── Cross-module message helpers ──────────────────────────────────────
-  /** Attach collaboration/workingDir metadata to a conversation payload. */
-  enrichConversationWithCollaboration<T extends { type?: string; groupId?: string } | undefined>(
+  /** Attach workingDir/activeIssues/memoryCounts/skillCount/guidancePrompt metadata to a conversation payload. */
+  enrichGroupConversation<T extends { type?: string; groupId?: string } | undefined>(
     conversation: T,
     targetAgentName?: string,
   ): T;
-  /** Track a group message as a collaboration turn if applicable. */
-  trackCollaborationTurn(groupId: string, agentName: string, content?: string): void;
   /** 事件式 bridge 检测:群消息落库后调,若答中 pending bridge 即 cancel + 注入 system 上下文。 */
   checkAndCancelBridgesForMessage(groupId: string, sender: string, mentions: string[], msgId: number): void;
   /** 隐式 bridge 创建:群消息落库后调,若 sender @ 了 agent B,自动建 bridge。 */
@@ -144,13 +142,8 @@ export interface WSHubSelf {
   unsubscribeAllIssues(agentId: string): void;
   /** Push a ServerMessage to every agent currently subscribed to the issue. */
   sendToIssueSubscribers(issueId: string, msg: ServerMessage): void;
-  /** Post a system message to a group (used by collaboration conclude/advance). */
+  /** Post a system message to a group (used by ask-bridge / issue conclude). */
   postSystemToGroup(groupId: string, content: string, excludeAgentNames?: string[], ensureRecipientNames?: string[]): void;
-  /** Conclude a collaboration (called when a round hits max_rounds). */
-  concludeCollaboration(
-    collab: { id: string; title: string; group_id: string; max_rounds: number | null; owner: string | null },
-    participants: string[],
-  ): void;
   /** Re-broadcast directory after an update_info from an agent. */
   broadcastAgentUpdate(agentId: string): void;
 }

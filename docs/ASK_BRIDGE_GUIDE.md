@@ -297,7 +297,7 @@ rotom issue list <groupId> --pretty
 | `src/master/db/index.ts` | 类型导出 |
 | `src/master/scheduler.ts` | `runBridgeTick()` + `createBridgeTimeoutIssue()` |
 | `src/master/api/groups.ts` | `POST /groups/:id/asks` 等 4 个端点 |
-| `src/master/ws-hub/collaboration.ts` | `sendAsAgent` 返回 `messageId` |
+| `src/master/ws-hub/conversation.ts` | `sendAsAgent` 返回 `messageId` |
 | `src/cli/ask.ts` | `rotom ask` 子命令 |
 | `src/cli/rotom.ts` | 注册 + help 文本 |
 | `src/shared/rotom-cli-prompt.ts` | inline prompt（c 版本） |

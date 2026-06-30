@@ -30,7 +30,7 @@ interface Props {
 
 const MENTION_RE = /@([\w一-鿿][\w.一-鿿-]*)/g
 // #reply 标记:agent 提问其他 agent 时在正文末尾加的 marker,系统据此建 5min
-// 超时 bridge(见 collaboration.ts:119)。负向 lookbehind 排除 `##reply` / `abc#reply`
+// 超时 bridge(见 ws-hub/conversation.ts autoCreateBridgeOnMention)。负向 lookbehind 排除 `##reply` / `abc#reply`
 // 这类不应被识别为 marker 的写法;尾部 \b 排除 `#replies` / `#replyxxx`。
 const REPLY_TAG_RE = /(?<![\w#])#reply\b/g
 

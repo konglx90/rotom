@@ -15,7 +15,7 @@
  *     - GET /api/share/:token/groups/:id/messages             group messages
  *     - GET /api/share/:token/groups/:groupId/issues          issues in the group
  *     - GET /api/share/:token/issues/:id                      one issue + events
- *     - GET /api/share/:token/issues/:id/messages             issue comments / collab turns
+ *     - GET /api/share/:token/issues/:id/messages             issue comments
  *     - GET /api/share/:token/issues/:id/events               issue event timeline
  *     - GET /api/share/:token/groups/:groupId/artifacts       artifact tree
  *     - GET /api/share/:token/groups/:groupId/artifacts/content  single file

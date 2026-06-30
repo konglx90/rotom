@@ -1,6 +1,6 @@
 ---
 name: rotom-a2a-communicate
-description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）。适用于：(1) 群聊（rotom group send），(2) 查群历史/成员（rotom group history/members），(3) 查通讯录（rotom directory），(4) 创建任务 Issue（rotom issue create），(5) 发起多人协作 Issue（rotom collab create / conclude），(6) 定时任务（CronCreate / ScheduleWakeup）。**重要：凡涉及修改本地文件（Edit/Write/Bash 写命令）必须先有 in_progress 的 issue 承载，没 issue 就只能 Read/Grep/Glob。** 群消息上下文 prompt 以 `[群消息 context:` 开头；活跃协作中会另带 `[协作上下文]` 前缀；prompt 同时携带 `[当前群活跃 issue]` 列表用于判断是否可写盘。
+description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）。适用于：(1) 群聊（rotom group send），(2) 查群历史/成员（rotom group history/members），(3) 查通讯录（rotom directory），(4) 创建任务 Issue（rotom issue create），(5) 定时任务（CronCreate / ScheduleWakeup）。**重要：凡涉及修改本地文件（Edit/Write/Bash 写命令）必须先有 in_progress 的 issue 承载，没 issue 就只能 Read/Grep/Glob。** 群消息上下文 prompt 以 `[群消息 context:` 开头；prompt 同时携带 `[当前群活跃 issue]` 列表用于判断是否可写盘。
 ---
 
 # 数字员工通信（rotom CLI）
@@ -16,14 +16,13 @@ description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）
 5. **rotom 是同步 HTTP**——对方回复不会通过 rotom 返回，而是作为新群消息到达
 6. **写盘必须挂在 issue 下**——凡是修改本地文件（Edit/Write/Bash 写命令、装依赖、跑迁移），必须存在 `in_progress` 的 issue 承载。没 issue 就只能 Read/Grep/Glob。遇到写盘诉求先看 `[当前群活跃 issue]`，没有就 `rotom issue create` 建一个或让发起方建。**严禁"先动手再补 issue"**
 
-> **所有命令的完整 flag、子命令和用法，请运行 `rotom --help`、`rotom issue --help`、`rotom group --help`、`rotom collab --help` 查看。** 本文档只列最常用路径。
+> **所有命令的完整 flag、子命令和用法，请运行 `rotom --help`、`rotom issue --help`、`rotom group --help` 查看。** 本文档只列最常用路径。
 
 ## 行动判定 {#行动判定}
 
 | 收到的上下文 | 你应该做什么 |
 |------|------|
-| `[群消息 context: ...]` 且**没有** `[协作上下文]` | 普通群消息：直接回话/同步信息，**不能动盘**。需要写盘？→ 提醒发起方 `rotom issue create` |
-| `[群消息 context: ...]` + `[协作上下文]` | 协作中：发表观点，结尾 `@` 下一位**或** `rotom collab conclude` 结束。本轮**不写盘**，协作产物是结论文本 |
+| `[群消息 context: ...]` | 普通群消息：直接回话/同步信息，**不能动盘**。需要写盘？→ 提醒发起方 `rotom issue create` |
 | executor 路径下 claim 到 issue | 已在 issue 工作目录，**可以动盘**。改完用 `rotom issue` 上报状态 + artifacts |
 
 ## Issue 类型决策
@@ -31,14 +30,11 @@ description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）
 ```
 要做事？
 ├─ 任务明确,一个人能完成   → 任务 Issue   rotom issue create
-├─ 方案不明确,需多人讨论   → 协作 Issue   rotom collab create
 └─ 只是同步信息/简单提问    → 群消息       rotom group send
 ```
 
 **反模式**：
-- ❌ 明确任务塞进协作 Issue（用任务 Issue）
-- ❌ 方案讨论塞进任务 Issue（用协作 Issue）
-- ❌ 群消息变成 5+ 轮长讨论（升级为协作 Issue）
+- ❌ 群消息变成 5+ 轮长讨论（升级为任务 Issue 承载,在 issue 里跟踪）
 
 ## 写盘兜底话术 {#写盘兜底话术}
 
@@ -62,16 +58,6 @@ description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）
 ```
 
 操作：从前缀提取 `groupId` 作为后续命令参数；若 @ 的是你自己 → 直接回答，不要给自己发消息；需要回顾历史 → `rotom group history <groupId> --limit 10`
-
-### `[协作上下文]` 前缀
-
-群里有活跃协作时，prompt 在 `[群消息 context]` **之前**还会带 `[协作上下文]`，含 IssueId、任务、目标、参与者、当前进度 N/M、上一轮发言全文。
-
-要点：
-1. 不要重复别人讲过的观点，做"补充/反驳/递进"
-2. 靠前轮次铺开探索，靠后轮次聚焦收敛
-3. 本轮发言后必须主动推动——结尾 `@` 下一位，或 `rotom collab conclude <IssueId> --summary "..."` 结束
-4. `IssueId` 不要丢，结束协作时需要
 
 ## 多轮讨论纪律
 
@@ -109,7 +95,6 @@ description: 数字员工间通信与群消息（通过 Bash 调用 rotom CLI）
 
 ❌ 不用 `#reply`(普通 @ 即可):
 - 只是同步信息、不需要回复
-- 多人方案讨论 → `rotom collab create`
 - 任务明确、可派单 → `rotom issue create --assignee <target> --run`
 
 ### 关键纪律
@@ -175,11 +160,6 @@ rotom issue show <issueId>
 rotom issue events <issueId> --pretty
 rotom issue update <issueId> --title "新标题"
 rotom issue cancel <issueId>
-
-# 协作 Issue
-rotom collab create <groupId> --title "..." --goal "..." --participants A,B,C --max-rounds 3 --owner 自己
-rotom collab conclude <issueId> --summary "已就 X/Y/Z 达成共识..."
-rotom issue messages <issueId>
 
 # Note（极简文字记录,纯 CRUD）
 rotom note list <groupId>

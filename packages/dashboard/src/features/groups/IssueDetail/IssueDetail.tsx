@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { issuesApi, type IssueMessage } from '../../../api/issues'
+import { issuesApi } from '../../../api/issues'
 import type { Agent, Issue, IssueEvent, TokenUsage } from '../../../api/types'
 import { AsyncBoundary } from '../../../components/async/AsyncBoundary'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
 import { useSocket } from '../../../context/SocketContext'
 import shared from './_shared.module.css'
 import styles from './IssueDetail.module.css'
-import { CollaborationMessages } from './CollaborationMessages'
 import { ContinueInputBar } from './ContinueInputBar'
 import { IssueDetailHeader } from './IssueDetailHeader'
 import { IssueEditForm } from './IssueEditForm'
@@ -39,7 +38,7 @@ interface IssueDetailProps {
 }
 
 export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBack, standalone = false, readOnly = false, onArtifactClick }: IssueDetailProps) {
-  const { issue, events, messages, loading, reload } = useIssueData(issueId, refreshSignal)
+  const { issue, events, loading, reload } = useIssueData(issueId, refreshSignal)
   const edit = useIssueEdit(issue, reload)
 
   return (
@@ -53,7 +52,6 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
         <IssueDetailBody
           issue={data}
           events={events}
-          messages={messages}
           edit={edit}
           reload={reload}
           issueId={issueId}
@@ -72,7 +70,6 @@ export function IssueDetail({ issueId, refreshSignal, agents, groupMembers, onBa
 interface IssueDetailBodyProps {
   issue: Issue
   events: IssueEvent[]
-  messages: IssueMessage[]
   edit: ReturnType<typeof useIssueEdit>
   reload: () => Promise<void>
   issueId: string
@@ -87,7 +84,6 @@ interface IssueDetailBodyProps {
 function IssueDetailBody({
   issue,
   events,
-  messages,
   edit,
   reload,
   issueId,
@@ -354,10 +350,6 @@ function IssueDetailBody({
             onApprovalResolved={reload}
           />
 
-          {issue.type === 'collaboration' && (
-            <CollaborationMessages messages={messages} maxRounds={issue.max_rounds} />
-          )}
-
           {artifacts.length > 0 && (
             <div className={shared.artifactsSection}>
               <div className={shared.artifactsTitle}>产物 ({artifacts.length})</div>
@@ -376,7 +368,7 @@ function IssueDetailBody({
 
           {issue.result && (
             <div className={shared.artifactsSection}>
-              <div className={shared.artifactsTitle}>{issue.type === 'review' ? '评审报告' : '执行结果'}</div>
+              <div className={shared.artifactsTitle}>执行结果</div>
               <div className={styles.issueDescription}>
                 <MarkdownContent content={issue.result} />
               </div>

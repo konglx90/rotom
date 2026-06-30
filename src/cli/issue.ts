@@ -19,7 +19,7 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
   const sub = rest[0];
 
   if (sub === "list") {
-    const groupId = rest[1]; if (!groupId) fail("usage: rotom issue list <groupId> [--status S] [--type task|collaboration]");
+    const groupId = rest[1]; if (!groupId) fail("usage: rotom issue list <groupId> [--status S] [--type task]");
     const qs = new URLSearchParams();
     const status = flagStr(flags, "status"); if (status) qs.set("status", status);
     const type = flagStr(flags, "type"); if (type) qs.set("type", type);
