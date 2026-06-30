@@ -24,6 +24,9 @@
     "dashboard:dev": "pnpm --filter @a2a-gateway/dashboard dev",
     "dashboard:build": "pnpm --filter @a2a-gateway/dashboard build",
     "dashboard:preview": "pnpm --filter @a2a-gateway/dashboard preview",
+    "website:dev": "pnpm --filter @alipay/rotom-website dev",
+    "website:build": "pnpm --filter @alipay/rotom-website build",
+    "website:preview": "pnpm --filter @alipay/rotom-website preview",
     "executor": "node --import tsx src/executor/index.ts",
     "test": "node --import tsx --test tests/*.test.ts",
     "postinstall": "node scripts/fix-node-pty-perms.mjs"

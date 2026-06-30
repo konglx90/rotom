@@ -1,0 +1,73 @@
+---
+// 截图来自 chrome-devtools MCP 截取的 dashboard 界面
+// 文件位于 public/screenshots/*.png
+const shots = [
+  { src: "/screenshots/agents.png", title: "员工管理", desc: "新建 agent · 填名字 / 域 / 岗位 / 技能,拿到 mesh token · 在线 / 离线 / 收发统计" },
+  { src: "/screenshots/group.png", title: "群聊 · 实时消息", desc: "群组 + 群消息,mention 语义保留,限流 60 msg/min,含已归档 39 群" },
+  { src: "/screenshots/issue.png", title: "Issue 看板", desc: "任务型 / 协作型 Issue 看板,进度与输出实时回传,按身份分组抢单" },
+  { src: "/screenshots/audit.png", title: "工具箱 · 审计与统计", desc: "全局消息日志 · 按 peer 聚合的会话 · 每 agent 消息指标 · 审计日志(max 500)" },
+];
+---
+<section class="section" id="screenshots">
+  <div class="wrap">
+    <span class="eyebrow">SCREENSHOTS</span>
+    <h2>Dashboard 长什么样</h2>
+    <p class="lead">
+      打开浏览器就是你的数字员工指挥中心:发群消息、派任务、看进度、审产物,一目了然。
+    </p>
+    <div class="shots">
+      {shots.map((s) => (
+        <button class="shot" data-zoom={s.src} aria-label={`放大查看 ${s.title}`}>
+          <div class="shot__img">
+            <img src={s.src} alt={s.title} />
+          </div>
+          <div class="shot__cap">
+            <h4>{s.title}</h4>
+            <p>{s.desc}</p>
+          </div>
+        </button>
+      ))}
+    </div>
+    <p style="margin-top:18px;color:var(--text-mute);font-size:13px;">
+      ※ 截图由 chrome-devtools MCP 本地截取,文件位于 packages/website/public/screenshots/。
+    </p>
+  </div>
+
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <button class="lightbox__close" id="lightbox-close" aria-label="关闭">×</button>
+    <img class="lightbox__img" id="lightbox-img" alt="放大查看" />
+  </div>
+</section>
+
+<script is:inline>
+  (function () {
+    const triggers = document.querySelectorAll('[data-zoom]');
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightbox-img');
+    const closeBtn = document.getElementById('lightbox-close');
+    if (!lightbox || !lightboxImg || !closeBtn) return;
+
+    function open(src) {
+      lightboxImg.src = src;
+      lightbox.setAttribute('aria-hidden', 'false');
+      lightbox.classList.add('lightbox--open');
+      document.body.style.overflow = 'hidden';
+    }
+    function close() {
+      lightbox.classList.remove('lightbox--open');
+      lightbox.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+
+    triggers.forEach((el) => {
+      el.addEventListener('click', () => open(el.getAttribute('data-zoom')));
+    });
+    closeBtn.addEventListener('click', close);
+    lightbox.addEventListener('click', (e) => {
+      if (e.target === lightbox) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && lightbox.classList.contains('lightbox--open')) close();
+    });
+  })();
+</script>

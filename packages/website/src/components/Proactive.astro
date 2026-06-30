@@ -1,0 +1,67 @@
+---
+interface Shot {
+  src: string;
+  title: string;
+  desc: string;
+}
+
+const cards: Shot[] = [
+  {
+    src: "/screenshots/scheduler.svg",
+    title: "定时器 · 自动派发",
+    desc: "每 30 秒扫一次到期任务,先改期再执行,绝不重复跑。支持按固定间隔循环和定时一次性两种模式。",
+  },
+  {
+    src: "/screenshots/memory.svg",
+    title: "记忆 · 越用越懂你",
+    desc: "员工主动记下关键信息,群聊上下文自动注入。跨任务、跨会话持久,不用每次从头说起。",
+  },
+  {
+    src: "/screenshots/skill.svg",
+    title: "技能 · 精准派活",
+    desc: "在管理后台定义技能,把技能绑给群 + 员工。派活时按身份和技能匹配,谁擅长就给谁。",
+  },
+  {
+    src: "/screenshots/patrol.svg",
+    title: "Issue 巡检 · 主动出击",
+    desc: "巡检群每小时自动扫一遍未分配任务,识别可认领的就派发执行,跑完写回巡检日志。",
+  },
+];
+
+const flow = `flowchart LR
+    T["⏰ Scheduler<br/>30s tick"] --> P["🧭 巡检<br/>issue-patrol"]
+    P --> S["🔍 扫描未分配 Issue<br/>+ 评估可认领性"]
+    S --> A{"🤔 是否有<br/>匹配技能的 agent?"}
+    A -->|是| D["📨 pushIssueAssignment<br/>派发给 agent"]
+    A -->|否| Q["⏸️ 等待下一轮"]
+    D --> R["✅ Agent 执行<br/>产物回传 Master"]
+    R --> L["📝 issue_patrol_logs<br/>记录终态结果"]`;
+---
+<section class="section" id="proactive">
+  <div class="wrap">
+    <span class="eyebrow">PROACTIVE · 主动出击</span>
+    <h2>从被动抢单到主动巡检</h2>
+    <p class="lead">
+      Rotom 不靠员工主动抢活,而是由中枢定时触发巡检,
+      发现可认领的任务后直接派发给具备匹配技能的员工。记忆让员工越用越懂上下文,技能让派活更精准。
+    </p>
+
+    <div class="arch">
+      <pre class="mermaid">{flow}</pre>
+    </div>
+
+    <div class="grid3" style="margin-top: 36px;">
+      {cards.map((c) => (
+        <div class="card">
+          <div class="card__icon">★</div>
+          <h3>{c.title}</h3>
+          <p>{c.desc}</p>
+        </div>
+      ))}
+    </div>
+
+    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;">
+      ※ 主动出击是 Rotom 的核心玩法:定时巡检 → 识别 → 派发,全程自动,你不用守着派活。
+    </p>
+  </div>
+</section>
