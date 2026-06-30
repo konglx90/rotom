@@ -89,17 +89,11 @@ async function main(): Promise<void> {
   // Database
   const db = new MeshDb(path.join(config.dataDir, "mesh.db"));
 
-  // E2ED auto-sync: when an issue reaches terminal state, advance requirement status
+  // Patrol auto-sync: when an issue reaches terminal state, advance patrol state
   db._onIssueTerminal = (issueId: string) => {
     const issue = db.getIssueById(issueId);
     if (!issue) return;
     const group = db.getGroupByIdFull(issue.group_id);
-    if (group?.type === "e2ed") {
-      import("../e2ed/sync.js").then(({ syncRequirementFromIssues }) => {
-        syncRequirementFromIssues(db, issue.group_id);
-      }).catch(() => { /* non-fatal */ });
-      return;
-    }
     if (group?.type === "patrol") {
       handlePatrolIssueTerminal(db, issue);
       return;

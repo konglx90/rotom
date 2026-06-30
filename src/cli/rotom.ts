@@ -30,7 +30,6 @@ import {
   fail,
 } from "./common.js";
 import { cmdConfig } from "./config.js";
-import { cmdE2ed } from "./e2ed.js";
 import { cmdWhoami } from "./identity.js";
 import { cmdStatus } from "./identity.js";
 import { cmdDirectory } from "./directory.js";
@@ -45,17 +44,6 @@ import { cmdAsk } from "./ask.js";
 import { cmdMaster, colonExpand } from "./master.js";
 import { cmdExecutor } from "./executor.js";
 import { cmdInit } from "./init.js";
-
-/**
-E2ED (End-to-End Delivery):
-  e2ed start <file|text> [--title T] [--cwd DIR]     create requirement
-  e2ed ls                                              list requirements
-  e2ed show <groupId>                                  show requirement details
-  e2ed deliver <groupId> [--plan-only|--code-only] [--fix]  start delivery
-  e2ed review <groupId> [--type requirement|plan|code]      start review
-  e2ed metrics <groupId>                               show metrics
-  e2ed timeline <groupId>                              show event timeline
- */
 
 const HELP = `rotom — Mesh CLI
 
@@ -206,7 +194,6 @@ async function main(): Promise<void> {
 
   // Commands that don't need an agent
   if (cmd === "config") return cmdConfig(rest, flags);
-  if (cmd === "e2ed")   return cmdE2ed(rest, flags);
   if (cmd === "init")   return cmdInit(rest, flags);
 
   // Master / executor / status — no agent required

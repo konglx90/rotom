@@ -75,14 +75,12 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
   }
 
   const otherAgents = agents.filter(a => a.name !== myAgentName)
-  const isE2ed = groupType === 'e2ed'
   const isPatrol = groupType === 'patrol'
-  const maxMembers = isPatrol ? 1 : (isE2ed ? 2 : Infinity)
+  const maxMembers = isPatrol ? 1 : Infinity
 
   const toggleMember = (name: string) => {
     setSelectedMembers(prev => {
       if (prev.includes(name)) return prev.filter(n => n !== name)
-      if (isE2ed && prev.length >= maxMembers) return prev
       return [...prev, name]
     })
   }
@@ -124,7 +122,6 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
         }} className={styles.formSelect}>
           <option value="">普通群</option>
           <option value="patrol">巡检群</option>
-          {/* <option value="e2ed">E2ED（端到端需求交付）</option> */}
         </select>
         {isPatrol && (
           <p style={{ fontSize: 11, color: 'var(--color-info)', margin: '6px 2px 0' }}>
@@ -136,13 +133,12 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
       <div className={styles.formField}>
         <label className={styles.formLabel}>
           选择成员:
-          {isE2ed && <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 8, color: 'var(--color-info)' }}>E2ED 模式限选 {maxMembers} 人</span>}
           {isPatrol && <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 8, color: 'var(--color-info)' }}>巡检群限选 {maxMembers} 人(即巡检员)</span>}
         </label>
         <div className={styles.agentCheckList}>
           {otherAgents.map(agent => {
             const checked = selectedMembers.includes(agent.name)
-            const disabled = (isE2ed || isPatrol) && !checked && selectedMembers.length >= maxMembers
+            const disabled = isPatrol && !checked && selectedMembers.length >= maxMembers
             return (
               <label key={agent.id} className={styles.agentCheckItem} style={disabled ? { opacity: 0.4 } : undefined}>
                 <input type="checkbox" checked={checked} disabled={disabled}

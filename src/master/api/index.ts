@@ -23,7 +23,6 @@ import { registerMemoryRoutes } from "./memory.js";
 import { registerSkillRoutes } from "./skills.js";
 import { registerArtifactRoutes } from "./artifacts.js";
 import { registerUploadRoutes } from "./uploads.js";
-import { registerE2edRoutes } from "./e2ed.js";
 import { registerSessionRoutes } from "./sessions.js";
 import { registerScheduleRoutes } from "./schedules.js";
 import { registerShareRoutes } from "./share.js";
@@ -86,7 +85,6 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
   registerSkillRoutes(apiRouter, db);
   registerArtifactRoutes(apiRouter, db);
   registerUploadRoutes(apiRouter, db);
-  registerE2edRoutes(apiRouter, db);
   registerSessionRoutes(apiRouter, db, auth, hub);
   registerScheduleRoutes(apiRouter, db);
   registerShareRoutes(apiRouter, db, shareTokens);
