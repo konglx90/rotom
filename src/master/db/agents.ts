@@ -1,3 +1,4 @@
+import { nowBeijing } from "../../shared/time.js";
 /**
  * Agents — CRUD + presence lifecycle (online/offline/heartbeat).
  *
@@ -144,7 +145,7 @@ export const agentMethods = {
       "UPDATE agents SET token_hash = ?, token = ?, updated_at = datetime('now') WHERE id = ?",
     ).run(tokenHash, token, id);
     // Record token refresh timestamp for JWT iat validation.
-    this.setConfig(`token_refreshed_at:${id}`, new Date().toISOString());
+    this.setConfig(`token_refreshed_at:${id}`, nowBeijing());
   },
 
   /** Get the timestamp when an agent's token was last refreshed. */

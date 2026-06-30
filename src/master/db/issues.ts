@@ -1,3 +1,4 @@
+import { nowBeijing, shiftBeijing } from "../../shared/time.js";
 /**
  * Issues — task CRUD, event timeline, comments/quotas, approval lifecycle.
  *
@@ -21,7 +22,7 @@ export const issueMethods = {
     approvalPolicy?: "r_allow" | "rw_allow";
     type?: string; assignedTo?: string;
   }): void {
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     this.db.prepare(`
       INSERT INTO issues (id, group_id, title, description, priority, created_by, working_dir, type, slash_command, approval_policy, assigned_to, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -76,7 +77,7 @@ export const issueMethods = {
     /** Model name the backend reported (added in migration 025). */
     model?: string | null;
   }): void {
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     const sets: string[] = ["status = ?", "updated_at = ?"];
     const values: unknown[] = [status, now];
     if (extra?.assignedTo !== undefined) { sets.push("assigned_to = ?"); values.push(extra.assignedTo); }
@@ -106,7 +107,7 @@ export const issueMethods = {
   updateIssueWorkingDir(this: MeshDbSelf, id: string, workingDir: string | null): void {
     this.db.prepare(
       "UPDATE issues SET working_dir = ?, updated_at = ? WHERE id = ?",
-    ).run(workingDir, new Date().toISOString(), id);
+    ).run(workingDir, nowBeijing(), id);
   },
 
   /**
@@ -117,7 +118,7 @@ export const issueMethods = {
   updateIssueTodos(this: MeshDbSelf, id: string, todos: unknown[]): void {
     this.db.prepare(
       "UPDATE issues SET latest_todos_json = ?, updated_at = ? WHERE id = ?",
-    ).run(JSON.stringify(todos), new Date().toISOString(), id);
+    ).run(JSON.stringify(todos), nowBeijing(), id);
   },
 
   /**
@@ -157,7 +158,7 @@ export const issueMethods = {
     `).get() as IssueRow | undefined;
     if (!issue) return undefined;
     // Atomic update: only claim if still unassigned
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     const result = this.db.prepare(
       "UPDATE issues SET assigned_to = ?, status = 'in_progress', started_at = ?, updated_at = ? WHERE id = ? AND assigned_to IS NULL",
     ).run(agentName, now, now, issue.id);
@@ -179,7 +180,7 @@ export const issueMethods = {
     `).run(
       event.issueId, event.eventType, event.agentName,
       event.content || "", JSON.stringify(event.metadata || {}),
-      new Date().toISOString(),
+      nowBeijing(),
     );
   },
 
@@ -193,7 +194,7 @@ export const issueMethods = {
       VALUES (?, 'comment', ?, ?, '{}', ?, ?)
     `).run(
       issueId, agentName, content, replyToId ?? null,
-      new Date().toISOString(),
+      nowBeijing(),
     );
     return Number(result.lastInsertRowid);
   },
@@ -325,8 +326,8 @@ export const issueMethods = {
     // marker 插在 head 最后一条之后、tail 第一条之前。
     // created_at 取 head 末尾 +1ms,确保排序落在 head 和 tail 之间。
     const markerTime = head.length > 0
-      ? new Date(Date.parse(head[head.length - 1].created_at) + 1).toISOString()
-      : (trimmedTail[0]?.created_at ?? new Date().toISOString());
+      ? shiftBeijing(head[head.length - 1].created_at, 1)
+      : (trimmedTail[0]?.created_at ?? nowBeijing());
 
     const marker: IssueEventRow = {
       id: -1,
@@ -395,7 +396,7 @@ export const issueMethods = {
     try { meta = JSON.parse(row.metadata || "{}"); } catch { /* fall back to empty */ }
     meta.status = status;
     meta.resolvedBy = resolvedBy;
-    meta.resolvedAt = new Date().toISOString();
+    meta.resolvedAt = nowBeijing();
     if (status === "denied" && feedback) meta.feedback = feedback;
     const result = this.db.prepare(
       "UPDATE issue_events SET metadata = ? WHERE id = ?",

@@ -1,3 +1,4 @@
+import { toBeijing } from "../../shared/time.js";
 /**
  * Digital Employee Mesh — Share / Visitor API
  *
@@ -274,7 +275,7 @@ export function registerShareRoutes(
             path: relPath,
             absPath: fullPath,
             size: 0,
-            modifiedTime: fs.statSync(fullPath).mtime.toISOString(),
+            modifiedTime: toBeijing(fs.statSync(fullPath).mtime),
             type: "directory",
             children: walkDir(fullPath, base),
           });
@@ -285,7 +286,7 @@ export function registerShareRoutes(
             path: relPath,
             absPath: fullPath,
             size: stat.size,
-            modifiedTime: stat.mtime.toISOString(),
+            modifiedTime: toBeijing(stat.mtime),
             type: "file",
           });
         }

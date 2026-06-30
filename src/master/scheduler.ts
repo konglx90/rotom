@@ -1,3 +1,4 @@
+import { toBeijing } from "../shared/time.js";
 /**
  * Scheduler — 群内定时任务调度器
  *
@@ -100,7 +101,7 @@ export class Scheduler {
         const next = now + task.interval_sec! * 1000;
         this.db.rescheduleTask(task.id, next);
         log.info(
-          `task #${task.id} "${task.name}" stale, fast-forward to ${new Date(next).toISOString()}`,
+          `task #${task.id} "${task.name}" stale, fast-forward to ${toBeijing(next)}`,
         );
         return;
       }

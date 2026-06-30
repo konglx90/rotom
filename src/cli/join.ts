@@ -37,18 +37,57 @@ function parseMasterSpec(spec: string): { host: string; port: number; httpUrl: s
   return { host, port, httpUrl: `http://${host}:${port}`, wsUrl: `ws://${host}:${port}` };
 }
 
+const VALID_CLI_TOOLS = ["claude", "codex", "hermes", "openclaw"] as const;
+type CliTool = typeof VALID_CLI_TOOLS[number];
+
+function detectCliTool(): CliTool | null {
+  // 跟 rotom init 的 detectCliTools 同款逻辑,但只返回第一个命中的。
+  for (const tool of VALID_CLI_TOOLS) {
+    try {
+      const { execSync } = require("node:child_process");
+      const p = execSync(`command -v ${tool}`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+      if (p) return tool;
+    } catch { /* not installed */ }
+  }
+  return null;
+}
+
 export async function cmdJoin(rest: string[], flags: Record<string, string | boolean>): Promise<void> {
   const masterSpec = rest[0];
   if (!masterSpec) {
     fail(
-      "usage: rotom join <masterHost:port> --name <agentName> --domain <domain> [--force]\n" +
-      "  首次申请 token 落盘到 ~/.rotom/。之后 `rotom --as <name> ...` 自动解出 master+token。",
+      "usage: rotom join <masterHost:port> --name <agentName> --domain <domain>\n" +
+      "                            --cli-tool <claude|codex|hermes|openclaw> [--working-dir PATH]\n" +
+      "                            [--profile-position P] [--profile-bio B] [--force]\n" +
+      "  首次申请 token 落盘到 ~/.rotom/。一个机器一个 CLI 一个 agent:每次换 CLI 用不同\n" +
+      "  --name + --cli-tool 注册,之后 `rotom --as <name> ...` 自动解出 master+token+cliTool。",
     );
   }
   const name = flagStr(flags, "name");
   const domain = flagStr(flags, "domain");
   if (!name) fail("--name is required (the agent name you want to register on master)");
   if (!domain) fail("--domain is required (use an existing domain on master; see dashboard)");
+
+  let cliToolRaw = flagStr(flags, "cli-tool");
+  if (!cliToolRaw) {
+    cliToolRaw = detectCliTool() ?? "";
+    if (!cliToolRaw) {
+      fail(`--cli-tool not given and auto-detect failed (none of ${VALID_CLI_TOOLS.join(",")} found in PATH)`);
+    }
+    process.stderr.write(`[rotom] --cli-tool not given, auto-detected: ${cliToolRaw}\n`);
+  }
+  if (!VALID_CLI_TOOLS.includes(cliToolRaw as CliTool)) {
+    fail(`--cli-tool must be one of ${VALID_CLI_TOOLS.join("|")} (got: ${cliToolRaw})`);
+  }
+  const cliTool = cliToolRaw as CliTool;
+
+  const workingDir = flagStr(flags, "working-dir") || process.cwd();
+  const profilePosition = flagStr(flags, "profile-position");
+  const profileBio = flagStr(flags, "profile-bio");
+  const profile: Record<string, string> = {};
+  if (profilePosition) profile.position = profilePosition;
+  if (profileBio) profile.bio = profileBio;
+
   const force = flags.force === true;
 
   const { httpUrl, wsUrl } = parseMasterSpec(masterSpec);
@@ -95,24 +134,22 @@ export async function cmdJoin(rest: string[], flags: Record<string, string | boo
     fail(`master did not return token/id in registration response: ${text}`);
   }
 
-  // 2. 落盘 configTemplate(即 openclaw.json 格式)到 ~/.rotom/agents/<name>.json
+  // 2. 落盘到 ~/.rotom/agents/<name>.json —— 扁平结构,对齐 executor.config.json
+  //    workers[] 单条 entry + master 字段。{ master, name, token, cliTool, workingDir, profile }
   const agentsDir = path.join(ROTOM_HOME, "agents");
   fs.mkdirSync(agentsDir, { recursive: true });
   const agentFile = path.join(agentsDir, `${name}.json`);
-  // 优先用 master 返回的 configTemplate(已含正确 master URL + token + name),
-  // 兜底自构(老版本 master 可能不返回 configTemplate)。
-  const agentConfig = data.configTemplate ?? {
-    channels: {
-      "a2a-gateway": {
-        master: wsUrl,
-        name,
-        token,
-      },
-    },
+  const agentConfig: Record<string, unknown> = {
+    master: wsUrl,
+    name,
+    token,
+    cliTool,
+    workingDir,
   };
+  if (Object.keys(profile).length > 0) agentConfig.profile = profile;
   fs.writeFileSync(agentFile, JSON.stringify(agentConfig, null, 2));
 
-  // 3. 写 ~/.rotom/config.json 的 agents[name] = { configPath, kind: "openclaw" }
+  // 3. 写 ~/.rotom/config.json 的 agents[name] = { configPath, kind: "local" }
   fs.mkdirSync(ROTOM_HOME, { recursive: true });
   let cfg: any = {};
   if (cfgExists) {
@@ -121,7 +158,7 @@ export async function cmdJoin(rest: string[], flags: Record<string, string | boo
   if (!cfg.agents || typeof cfg.agents !== "object") cfg.agents = {};
   cfg.agents[name] = {
     configPath: agentFile,
-    kind: "openclaw",
+    kind: "local",
   };
   // 4. 若 defaultAgent 未设 → 设为 name
   let defaultSet = false;
@@ -135,6 +172,8 @@ export async function cmdJoin(rest: string[], flags: Record<string, string | boo
     id: agentId,
     name,
     master: wsUrl,
+    cliTool,
+    workingDir,
     configFile: agentFile,
     defaultAgent: defaultSet ? name : "(unchanged)",
     hint: `验证: rotom whoami   # 应显示 ${name}`,

@@ -1,3 +1,4 @@
+import { nowBeijing } from "../../shared/time.js";
 /**
  * Connection handling — WebSocket lifecycle and message dispatch.
  *
@@ -516,7 +517,7 @@ export const connectionMethods = {
               fromName,
               msg.payload?.message || "",
               [],
-              cancelled ? { cancelledAt: new Date().toISOString() } : undefined,
+              cancelled ? { cancelledAt: nowBeijing() } : undefined,
             );
             const mentions = (msg.payload?.message || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
             this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
@@ -532,7 +533,7 @@ export const connectionMethods = {
                   msgId,
                   JSON.stringify(cp.layers),
                   cp.final,
-                  cp.generatedAt ?? new Date().toISOString(),
+                  cp.generatedAt ?? nowBeijing(),
                   cp.promptVersion ?? "unknown",
                 );
               } catch (err: any) {

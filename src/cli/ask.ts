@@ -1,3 +1,4 @@
+import { toBeijing } from "../shared/time.js";
 /**
  * rotom ask —— ask-bridge 查询/取消(提问用 #reply 标记,系统自动建 bridge)。
  *
@@ -25,8 +26,8 @@ function formatBridgeRow(b: any) {
     target: b.target,
     status: b.status,
     escalate_to: b.escalate_to || "-",
-    created: b.created_at ? new Date(b.created_at).toISOString().slice(11, 19) : "-",
-    expires: b.expires_at ? new Date(b.expires_at).toISOString().slice(11, 19) : "-",
+    created: b.created_at ? toBeijing(b.created_at).slice(11, 19) : "-",
+    expires: b.expires_at ? toBeijing(b.expires_at).slice(11, 19) : "-",
     reply_msg: b.reply_msg_id ?? "-",
     issue: b.issue_id ? b.issue_id.slice(0, 8) : "-",
   };

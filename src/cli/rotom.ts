@@ -43,6 +43,7 @@ import { cmdAsk } from "./ask.js";
 import { cmdMaster, colonExpand } from "./master.js";
 import { cmdExecutor } from "./executor.js";
 import { cmdInit } from "./init.js";
+import { cmdJoin } from "./join.js";
 
 const HELP = `rotom — Mesh CLI
 
@@ -76,12 +77,28 @@ Bootstrap (first-time setup):
       --yes / -y             accept all defaults, do not overwrite without confirm
       --force                overwrite existing executor.config.json without prompt
 
+  join <masterHost:port> --name <n> --domain <d> --cli-tool <claude|codex|hermes|openclaw>
+                                               [--working-dir PATH] [--profile-position P]
+                                               [--profile-bio B] [--force]
+                                               首次申请 token 落盘到 ~/.rotom/(本地
+                                               交互式 CLI 作为 mesh host 用,不起
+                                               executor daemon)。一个机器一个 CLI 一个
+                                               agent:每次换 CLI 用不同 --name + --cli-tool。
+                                               --cli-tool 缺省时按 PATH 自动探测。落盘结构
+                                               对齐 executor.config.json workers[](含
+                                               cliTool/workingDir/profile),master 侧不存
+                                               cliTool(REST-only,不维持 WS)。
+
 Identity:
   whoami
   status                                        master health check (no agent needed)
 
 Read:
   directory [--online] [--domain D]
+  group create <title> --agents <a,b[,c]> [--message M] [--note D|--note-file F] [--cwd PATH] [--no-template]
+                                               一键建群+拉人。默认加载"群内讨论方案设计"
+                                               guidance 模板(可 --no-template 跳过)。
+                                               预检 --agents 名字都已注册,未注册 → fail 不建群。
   group list
   group members <groupId>
   group history <groupId> [--limit N]
@@ -192,6 +209,7 @@ async function main(): Promise<void> {
   // Commands that don't need an agent
   if (cmd === "config") return cmdConfig(rest, flags);
   if (cmd === "init")   return cmdInit(rest, flags);
+  if (cmd === "join")   return cmdJoin(rest, flags);
 
   // Master / executor / status — no agent required
   if (cmd === "master" || cmd === "master:start" || cmd === "master:stop" ||

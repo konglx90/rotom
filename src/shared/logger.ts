@@ -1,3 +1,4 @@
+import { nowBeijing } from "./time.js";
 /**
  * Digital Employee Mesh — Logger
  *
@@ -33,7 +34,7 @@ let currentFd: number | null = null;
 const LOG_RETAIN_DAYS = 30;
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10); // "2026-03-23"
+  return nowBeijing().slice(0, 10); // "2026-03-23"
 }
 
 function ensureFd(): number | null {
@@ -104,7 +105,7 @@ export function closeFileLogging(): void {
 }
 
 function ts(): string {
-  return new Date().toISOString();
+  return nowBeijing();
 }
 
 /** Create a logger with a module prefix, e.g. createLogger("mesh-master") */

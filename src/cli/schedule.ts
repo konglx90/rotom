@@ -1,3 +1,4 @@
+import { toBeijing } from "../shared/time.js";
 /**
  * rotom schedule — schedule list/show/add/update/remove/enable/disable/trigger.
  */
@@ -34,7 +35,7 @@ function parseDuration(input: string): number | null {
 
 function formatNextRun(ms: number): string {
   if (!ms) return "-";
-  try { return new Date(ms).toISOString(); } catch { return String(ms); }
+  try { return toBeijing(ms); } catch { return String(ms); }
 }
 
 export async function cmdSchedule(agent: ResolvedAgent, rest: string[], flags: Record<string, string | boolean>): Promise<void> {

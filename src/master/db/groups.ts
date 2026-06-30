@@ -1,3 +1,4 @@
+import { nowBeijing, shiftBeijing } from "../../shared/time.js";
 /**
  * Groups — group CRUD, member management, per-member working_dir overrides,
  * and the chat log (group_messages + composed_prompt snapshots).
@@ -118,7 +119,7 @@ export const groupMethods = {
    * Passing `null` unpins; passing a value pins to "now" (UTC string).
    */
   updateGroupPinned(this: MeshDbSelf, id: string, pinned: boolean): string | null {
-    const next = pinned ? new Date().toISOString() : null;
+    const next = pinned ? nowBeijing() : null;
     this.db.prepare("UPDATE groups SET pinned_at = ? WHERE id = ?")
       .run(next, id);
     return next;
@@ -130,7 +131,7 @@ export const groupMethods = {
    * passing `false` clears it.
    */
   updateGroupArchived(this: MeshDbSelf, id: string, archived: boolean): string | null {
-    const next = archived ? new Date().toISOString() : null;
+    const next = archived ? nowBeijing() : null;
     this.db.prepare("UPDATE groups SET archived_at = ? WHERE id = ?")
       .run(next, id);
     return next;
@@ -315,7 +316,7 @@ export const groupMethods = {
       ON CONFLICT(group_id, agent_name) DO UPDATE SET
         profile     = excluded.profile,
         updated_at  = excluded.updated_at
-    `).run(groupId, agentName, profileJson, new Date().toISOString());
+    `).run(groupId, agentName, profileJson, nowBeijing());
   },
 
   upsertGroupMemberSetting(this: MeshDbSelf, groupId: string, agentName: string, workingDir: string): void {
@@ -325,7 +326,7 @@ export const groupMethods = {
       ON CONFLICT(group_id, agent_name) DO UPDATE SET
         working_dir = excluded.working_dir,
         updated_at  = excluded.updated_at
-    `).run(groupId, agentName, workingDir, new Date().toISOString());
+    `).run(groupId, agentName, workingDir, nowBeijing());
   },
 
   clearGroupMemberSetting(this: MeshDbSelf, groupId: string, agentName: string): boolean {
@@ -434,8 +435,8 @@ export const groupMethods = {
     // marker 的 created_at 取 head 末尾 +1ms,落在 head 和 tail 之间,
     // 前端按 timestamp 排序时位置正确。
     const markerTime = head.length > 0
-      ? new Date(Date.parse(head[head.length - 1].created_at.replace(" ", "T") + "Z") + 1).toISOString()
-      : (tail[0]?.created_at ?? new Date().toISOString());
+      ? shiftBeijing(head[head.length - 1].created_at, 1)
+      : (tail[0]?.created_at ?? nowBeijing());
     const marker: GroupMessageRow = {
       id: -1,
       sender: "__truncated",

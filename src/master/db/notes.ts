@@ -1,3 +1,4 @@
+import { nowBeijing } from "../../shared/time.js";
 /**
  * Notes — 兼容层。notes 表已升级为 agent_memory(见 migration 040)。
  *
@@ -31,7 +32,7 @@ export const noteMethods = {
     id: string; groupId: string; title: string;
     description?: string; createdBy: string;
   }): void {
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     this.db.prepare(`
       INSERT INTO agent_memory (
         id, group_id, scope, category, source_type, source_ref,

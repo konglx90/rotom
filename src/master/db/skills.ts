@@ -1,3 +1,4 @@
+import { nowBeijing } from "../../shared/time.js";
 /**
  * Skills — 全局 skill 知识库 + (group, agent, skill) 绑定关系。
  *
@@ -107,7 +108,7 @@ export const skillMethods = {
   },
 
   createSkill(this: MeshDbSelf, input: SkillInput): void {
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     this.db.prepare(`
       INSERT INTO agent_skills (id, name, description, content, category, source_type, source_ref, created_by, created_at, updated_at, active, view_count, last_viewed_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, NULL)
@@ -149,7 +150,7 @@ export const skillMethods = {
 
   /** 绑定 (group, agent, skill)。UNIQUE 冲突时 ignore。 */
   bindSkill(this: MeshDbSelf, input: { groupId: string; agentName: string; skillId: string; createdBy: string }): boolean {
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     const result = this.db.prepare(
       `INSERT OR IGNORE INTO agent_skill_bindings (group_id, agent_name, skill_id, created_by, created_at)
        VALUES (?, ?, ?, ?, ?)`,
@@ -216,7 +217,7 @@ export const skillMethods = {
     if (!name) throw new Error("skill name 不能为空(memory.key 为空且未传 --name)");
     const description = (opts.description ?? mem.summary ?? mem.value.slice(0, 120)).trim();
     const skillId = randomUUIDLike();
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     this.db.prepare(`
       INSERT INTO agent_skills (id, name, description, content, category, source_type, source_ref, created_by, created_at, updated_at, active, view_count, last_viewed_at)
       VALUES (?, ?, ?, ?, 'playbook', 'promoted', ?, ?, ?, ?, 1, 0, NULL)

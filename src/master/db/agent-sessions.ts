@@ -1,3 +1,4 @@
+import { nowBeijing } from "../../shared/time.js";
 /**
  * Agent sessions — persistent session registry stored in master DB.
  *
@@ -57,7 +58,7 @@ export const agentSessionMethods = {
   /** 插入或更新一行。usage/model/cumulative 等字段全量覆盖;created_at
    *  首次插入时写入,后续 upsert 不动;last_used_at 每次 upsert 刷新。 */
   upsertAgentSession(this: MeshDbSelf, s: AgentSessionUpsert): void {
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     const u = s.usage;
     this.db.prepare(`
       INSERT INTO agent_sessions (
@@ -119,7 +120,7 @@ export const agentSessionMethods = {
 
   /** 标记失效:不删除行,只打 invalidated_at 戳。保留历史。 */
   invalidateAgentSession(this: MeshDbSelf, cliTool: string, groupId: string, sessionId: string): boolean {
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     const r = this.db.prepare(
       "UPDATE agent_sessions SET invalidated_at = ? WHERE cli_tool = ? AND group_id = ? AND session_id = ?",
     ).run(now, cliTool, groupId, sessionId);

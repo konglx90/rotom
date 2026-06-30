@@ -1,3 +1,4 @@
+import { nowBeijing, toBeijing } from "../shared/time.js";
 /**
  * scheduler-handlers —— 定时器到点跑硬编码逻辑的 handler 注册表。
  *
@@ -113,7 +114,7 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
     const issueId = randomUUID();
     const questionContent = ctx.db.getGroupMessageContent(bridge.question_msg_id) || "(原问题已删除)";
     const qSnippet = questionContent.slice(0, 200);
-    const createdIso = new Date(bridge.created_at).toISOString();
+    const createdIso = toBeijing(bridge.created_at);
     const minutes = Math.max(1, Math.round(bridge.timeout_ms / 60_000));
     const escalateTo = resolveEscalateTo(ctx, bridge);
     const title = `[ask-bridge] ${bridge.target} 未回复,需升级`;
@@ -210,7 +211,7 @@ registerSchedulerHandler("issue-patrol", async (payload, ctx) => {
   }
 
   const runId = randomUUID();
-  const startedAt = new Date().toISOString();
+  const startedAt = nowBeijing();
 
   // 1. 防 overlap:查该 patrol 群最近一次 run,若 patrol_issue 仍 in_progress 则跳过
   const recentRuns = ctx.db.listPatrolRuns({ patrolGroupId, limit: 1 });

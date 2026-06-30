@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import type { MeshDb } from "../db.js";
 import { resolveGroupArtifactRoot } from "../group-paths.js";
+import { toBeijing } from "../../shared/time.js";
 
 /** Walk up from `startPath` looking for a `.git` directory. Returns the repo
  *  root or null if we hit the filesystem root without finding one. Shared
@@ -65,7 +66,7 @@ export function registerArtifactRoutes(
             path: relPath,
             absPath: fullPath,
             size: 0,
-            modifiedTime: fs.statSync(fullPath).mtime.toISOString(),
+            modifiedTime: toBeijing(fs.statSync(fullPath).mtime),
             type: "directory",
             children: walkDir(fullPath, base),
           });
@@ -76,7 +77,7 @@ export function registerArtifactRoutes(
             path: relPath,
             absPath: fullPath,
             size: stat.size,
-            modifiedTime: stat.mtime.toISOString(),
+            modifiedTime: toBeijing(stat.mtime),
             type: "file",
           });
         }

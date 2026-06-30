@@ -1,5 +1,5 @@
 /**
- * rotom group — group list/members/history/send/archive/unarchive.
+ * rotom group — group create/list/members/history/send/upload/archive/unarchive.
  */
 
 import fs from "node:fs";
@@ -14,6 +14,7 @@ import {
   fail,
   flagInt,
   flagStr,
+  requireFlag,
 } from "./common.js";
 
 // Minimal MIME sniff table — keep it inline; we accept only the 4 formats the
@@ -33,6 +34,89 @@ function guessMime(filePath: string): string | null {
 
 export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Record<string, string | boolean>): Promise<void> {
   const sub = rest[0];
+  if (sub === "create") {
+    const title = rest[1];
+    if (!title) fail("usage: rotom group create <title> --agents <a,b[,c]> [--message M] [--note D] [--note-file F] [--cwd PATH] [--no-template]");
+    const agentsFlag = requireFlag(flags, "agents");
+    const agents = agentsFlag.split(",").map((s) => s.trim()).filter(Boolean);
+    if (agents.length === 0) fail("--agents must list at least one agent name (comma-separated)");
+    const message = flagStr(flags, "message");
+    const noteInline = flagStr(flags, "note");
+    const noteFile = flagStr(flags, "note-file");
+    if (noteInline && noteFile) fail("--note and --note-file are mutually exclusive");
+    const cwd = flagStr(flags, "cwd");
+    const noTemplate = flags["no-template"] === true;
+
+    // 预检:校验 --agents 名字都已注册,未注册 → fail 不建群
+    const allAgents = await api(agent, "GET", "/agents") as any[];
+    const knownNames = new Set(allAgents.map((a) => a.name));
+    const unknown = agents.filter((n) => !knownNames.has(n));
+    if (unknown.length > 0) {
+      fail(
+        `--agents contains unregistered name(s): ${unknown.join(", ")}\n` +
+        `  注册过的 agent 见 \`rotom directory\`。建群中止,未产生任何副作用。`,
+      );
+    }
+
+    // 建群 + 拉人(一次 API 调用,master 内部 addGroupMembers)
+    const createBody: Record<string, unknown> = { name: title, memberNames: agents };
+    if (cwd) createBody.workingDir = cwd;
+    const created = await api(agent, "POST", "/groups", createBody) as { id: string; name: string; working_dir: string };
+    const groupId = created.id;
+
+    // 默认加载"群内讨论方案设计" guidance template
+    let guidanceTemplate: string | null = null;
+    if (!noTemplate) {
+      try {
+        const templates = await api(agent, "GET", "/guidance-templates") as any[];
+        const tpl = templates.find((t) => t.name === "群内讨论方案设计");
+        if (tpl?.prompt_text) {
+          await api(agent, "PATCH", `/groups/${encodeURIComponent(groupId)}`, { guidancePrompt: tpl.prompt_text });
+          guidanceTemplate = tpl.name;
+        } else {
+          process.stderr.write(`[rotom] warn: guidance template "群内讨论方案设计" not found on master, skip (group still created)\n`);
+        }
+      } catch (e) {
+        process.stderr.write(`[rotom] warn: failed to load guidance template: ${(e as Error).message} (group still created)\n`);
+      }
+    }
+
+    // 可选:建群即发开场消息
+    let messagePosted = false;
+    if (message) {
+      await api(agent, "POST", `/cli/groups/${encodeURIComponent(groupId)}/send`, { target: "全体", message });
+      messagePosted = true;
+    }
+
+    // 可选:建群即建 note
+    let noteId: string | undefined;
+    if (noteInline || noteFile) {
+      let noteDescription = "";
+      if (noteFile) {
+        const expanded = noteFile.startsWith("~/") ? path.join(process.env.HOME || "", noteFile.slice(2)) : noteFile;
+        if (!fs.existsSync(expanded)) fail(`--note-file not found: ${expanded}`);
+        noteDescription = fs.readFileSync(expanded, "utf-8");
+      } else if (noteInline) {
+        noteDescription = noteInline;
+      }
+      const noteRes = await api(agent, "POST", `/groups/${encodeURIComponent(groupId)}/notes`, {
+        title, description: noteDescription, createdBy: agent.name,
+      }) as { id?: string };
+      noteId = noteRes?.id;
+    }
+
+    printJson({
+      id: groupId,
+      name: created.name,
+      working_dir: created.working_dir,
+      memberCount: agents.length,
+      guidanceTemplate,
+      messagePosted,
+      noteId,
+      hint: `验证: rotom group members ${groupId}   |   rotom group history ${groupId} --limit 20`,
+    });
+    return;
+  }
   if (sub === "list") {
     const data = await api(agent, "GET", "/groups");
     printTable(
@@ -109,8 +193,10 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
   }
   if (sub === "send") {
     const groupId = rest[1]; const target = rest[2]; const message = rest.slice(3).join(" ");
-    if (!groupId || !target || !message) fail("usage: rotom group send <groupId> <target> <message...>");
-    const data = await api(agent, "POST", `/cli/groups/${encodeURIComponent(groupId)}/send`, { target, message });
+    if (!groupId || !target || !message) fail("usage: rotom group send <groupId> <target> <message...> [--no-dispatch]");
+    const body: Record<string, unknown> = { target, message };
+    if (flags["no-dispatch"] === true) body.noDispatch = true;
+    const data = await api(agent, "POST", `/cli/groups/${encodeURIComponent(groupId)}/send`, body);
     printJson(data);
     return;
   }

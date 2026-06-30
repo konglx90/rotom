@@ -1,3 +1,4 @@
+import { nowBeijing } from "../../shared/time.js";
 /**
  * Issue 巡检 —— runs/logs CRUD。
  *
@@ -60,7 +61,7 @@ export const issuePatrolMethods = {
       status?: IssuePatrolRunRow["status"];
     },
   ): void {
-    const now = input.startedAt ?? new Date().toISOString();
+    const now = input.startedAt ?? nowBeijing();
     this.db.prepare(`
       INSERT INTO issue_patrol_runs
         (run_id, patrol_group_id, patrol_issue_id, started_at, in_progress_count, candidates_scanned, candidates_ready, status, note)
@@ -83,7 +84,7 @@ export const issuePatrolMethods = {
     opts?: { scanned?: number; ready?: number; note?: string | null },
   ): void {
     const sets: string[] = ["finished_at = ?", "status = ?"];
-    const params: unknown[] = [new Date().toISOString(), status];
+    const params: unknown[] = [nowBeijing(), status];
     if (opts?.scanned !== undefined) { sets.push("candidates_scanned = ?"); params.push(opts.scanned); }
     if (opts?.ready !== undefined) { sets.push("candidates_ready = ?"); params.push(opts.ready); }
     if (opts?.note !== undefined) { sets.push("note = ?"); params.push(opts.note); }
@@ -117,7 +118,7 @@ export const issuePatrolMethods = {
   },
 
   insertPatrolLog(this: MeshDbSelf, input: InsertPatrolLogInput): void {
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     this.db.prepare(`
       INSERT INTO issue_patrol_logs
         (id, run_id, patrol_group_id, issue_id, candidate_group_id, verdict, rule_matched, rationale, raw, created_at)

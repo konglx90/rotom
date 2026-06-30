@@ -1,3 +1,4 @@
+import { nowBeijing } from "../../shared/time.js";
 /**
  * Memory — 统一的记忆/便签载体(agent_memory 表)。
  *
@@ -189,7 +190,7 @@ export const memoryMethods = {
   },
 
   addMemory(this: MeshDbSelf, input: MemoryInput): void {
-    const now = new Date().toISOString();
+    const now = nowBeijing();
     const summary = input.summary ?? input.value.slice(0, 80);
     const scope = input.scope ?? "group";
     const groupId = scope === "global" ? null : (input.groupId ?? null);

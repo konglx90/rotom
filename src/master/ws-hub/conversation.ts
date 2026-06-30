@@ -177,6 +177,10 @@ export const conversationMethods = {
     message: string;
     groupId?: string;
     groupName?: string;
+    /** 跳过给 target 的 direct WS 推送 + broadcast 排除 target。
+     *  消息仍入库 + 广播给其他群成员(他们看得到),但 target 的 worker 不会被
+     *  trigger 起来回复。用于"只同步信息,不想要对方自动接力回复"的场景。 */
+    noDispatch?: boolean;
   }): { requestId: string; delivered: boolean; queued: boolean; error?: string; messageId?: number } {
     const fromAgent = this.db.getAgentByName(opts.fromName);
     if (!fromAgent) return { requestId: "", delivered: false, queued: false, error: `Sender agent "${opts.fromName}" not found` };
@@ -210,7 +214,12 @@ export const conversationMethods = {
         routeType: "exact" as const,
         conversation: enrichedConversation,
       } as ServerMessage, result.targetName, enrichedConversation?.groupId);
-      delivered = this.sendToAgent(result.targetAgentId, wireMsg);
+
+      // noDispatch:不直接推给 target 的 WS,也不入 offline_queue。
+      // 消息仍会广播给其他群成员 + 入库,target 只能通过 group history 看到。
+      if (!opts.noDispatch) {
+        delivered = this.sendToAgent(result.targetAgentId, wireMsg);
+      }
 
       if (opts.groupId) {
         // 兜底:发信人不在 group_members 时自动 addMembers(防"自激丢消息" +
@@ -236,7 +245,7 @@ export const conversationMethods = {
         this.checkAndCancelBridgesForMessage(opts.groupId, opts.fromName, mentions, messageId);
       }
 
-      if (!delivered) {
+      if (!opts.noDispatch && !delivered) {
         queued = this.offlineQueue.enqueue(
           result.targetAgentId, opts.fromName, fromAgent.domain || undefined,
           { message: opts.message }, "exact",

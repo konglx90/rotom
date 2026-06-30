@@ -18,7 +18,7 @@ export const DEFAULT_EXECUTOR_CONFIG = path.join(ROTOM_HOME, "executor.config.js
 
 export interface RotomAgentEntry {
   configPath: string;
-  kind: "openclaw" | "executor";
+  kind: "openclaw" | "executor" | "local";
 }
 
 export interface RotomConfig {
@@ -30,8 +30,15 @@ export interface ResolvedAgent {
   name: string;
   master: string;
   token: string;
-  kind: "openclaw" | "executor";
+  kind: "openclaw" | "executor" | "local";
   configPath: string;
+  /** 本地 join 模式声明的 CLI 后端(claude/codex/hermes/openclaw)。executor 模式从
+   *  executor.config.json workers[].cliTool 也能拿到。openclaw 模式无此字段。 */
+  cliTool?: string;
+  /** 本地 join 模式声明的工作目录;executor 模式从 worker 配置拿。 */
+  workingDir?: string;
+  /** agent profile(position/bio/category),executor 模式从 worker 配置拿。 */
+  profile?: { position?: string; bio?: string; category?: string };
 }
 
 // ── Path helpers ──────────────────────────────────────────────────────────
@@ -85,7 +92,12 @@ export function resolveFromExecutorConfig(name: string, configPath: string): Res
   if (!master || !w.token) {
     fail(`executor config ${configPath} missing master/token for "${name}"`);
   }
-  return { name, master, token: w.token, kind: "executor", configPath };
+  return {
+    name, master, token: w.token, kind: "executor", configPath,
+    ...(w.cliTool ? { cliTool: w.cliTool } : {}),
+    ...(w.workingDir ? { workingDir: w.workingDir } : {}),
+    ...(w.profile ? { profile: w.profile } : {}),
+  };
 }
 
 export function listExecutorWorkers(configPath: string): string[] {
@@ -113,6 +125,23 @@ export function resolveAgentFromEntry(name: string, entry: RotomAgentEntry): Res
       fail(`agent name mismatch: rotom expects "${name}" but ${p} declares "${ch.name}"`);
     }
     return { name, master: ch.master, token: ch.token, kind: "openclaw", configPath: p };
+  }
+
+  if (entry.kind === "local") {
+    // rotom join 产物:扁平结构,对齐 executor.config.json workers[] 单条 entry + master 字段。
+    // { master, name, token, cliTool?, workingDir?, profile? }
+    if (!raw?.token || !raw?.master || !raw?.name) {
+      fail(`local agent config ${p} missing {master,token,name}`);
+    }
+    if (raw.name !== name) {
+      fail(`agent name mismatch: rotom expects "${name}" but ${p} declares "${raw.name}"`);
+    }
+    return {
+      name, master: raw.master, token: raw.token, kind: "local", configPath: p,
+      ...(raw.cliTool ? { cliTool: raw.cliTool } : {}),
+      ...(raw.workingDir ? { workingDir: raw.workingDir } : {}),
+      ...(raw.profile ? { profile: raw.profile } : {}),
+    };
   }
 
   const resolved = resolveFromExecutorConfig(name, p);

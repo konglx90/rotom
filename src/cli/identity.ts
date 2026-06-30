@@ -1,3 +1,4 @@
+import { nowBeijing } from "../shared/time.js";
 /**
  * rotom identity — whoami / status commands.
  */
@@ -15,7 +16,7 @@ import {
 } from "./common.js";
 
 export async function cmdWhoami(agent: ResolvedAgent): Promise<void> {
-  const data = await api(agent, "GET", "/agents/me");
+  const data = await api(agent, "GET", "/whoami");
   printJson(data);
 }
 
@@ -44,7 +45,7 @@ export async function cmdStatus(_rest: string[], _flags: Record<string, string |
         total: (data as any).total ?? null,
         online: (data as any).online ?? null,
         domains: (data as any).domains ?? null,
-        checkedAt: new Date().toISOString(),
+        checkedAt: nowBeijing(),
       });
       return;
     } catch (e) {

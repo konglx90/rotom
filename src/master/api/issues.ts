@@ -12,6 +12,7 @@ import { resolveGroupAgentWorkingDir } from "../group-paths.js";
 import { createLogger } from "../../shared/logger.js";
 import type { IssueRow } from "../db/types.js";
 import type { TodoItem } from "../../shared/protocol.js";
+import { nowBeijing } from "../../shared/time.js";
 
 const log = createLogger("mesh-api");
 
@@ -449,7 +450,7 @@ export function registerIssueRoutes(
       eventType: "appended",
       agentName: appendedBy,
       content: prompt,
-      metadata: { status: "queued", queuedAt: new Date().toISOString() },
+      metadata: { status: "queued", queuedAt: nowBeijing() },
     });
     let pushed = false;
     if (hub) {
