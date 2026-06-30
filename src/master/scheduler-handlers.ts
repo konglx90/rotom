@@ -156,6 +156,234 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
   return { status: "ok" };
 });
 
+// ── issue-patrol handler ────────────────────────────────────────────────────
+
+/**
+ * Issue 巡检 —— 主动出击 Phase 1。
+ *
+ * 每小时跑一次(interval 任务),挂在 patrol 群的 scheduled_tasks 行上。
+ * task.group_id / task.agent_name 即巡检群 / 巡检员。
+ * handler_payload: { patrolGroupId, patrolAgentName, throughputCap=3, candidateCap=3, scanBatch=10 }
+ *
+ * 流程(详见计划 atomic-beaming-hammock.md):
+ *   1. 防 overlap:上轮 patrol issue 仍 in_progress → skipped_overlap
+ *   2. 巡检员不在线 → agent_offline
+ *   3. 全局 in_progress ≥ throughputCap → skipped_quota
+ *   4. 取 open 候选(排除自己),按 priority 排,前 scanBatch 条
+ *   5. 组装 patrol issue(候选列表 + 规则 skill 全文 + 输出指令)
+ *   6. createIssue + pushIssueAssignment + createPatrolRun
+ *   7. fire-and-forget:巡检员完成后由 _onIssueTerminal hook 解析 result 落库
+ *
+ * Phase 1 不分配任何候选 issue,只产日志。
+ */
+interface IssuePatrolPayload {
+  patrolGroupId?: string;
+  patrolAgentName?: string;
+  throughputCap?: number;
+  candidateCap?: number;
+  scanBatch?: number;
+}
+
+const PATROL_PRIORITY_ORDER: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+function patrolPriorityRank(p: string): number {
+  return PATROL_PRIORITY_ORDER[p] ?? 99;
+}
+
+registerSchedulerHandler("issue-patrol", async (payload, ctx) => {
+  const p = (payload ?? {}) as IssuePatrolPayload;
+  const throughputCap = p.throughputCap ?? 3;
+  const candidateCap = p.candidateCap ?? 3;
+  const scanBatch = p.scanBatch ?? 10;
+
+  // task.group_id / task.agent_name 本应是 patrolGroupId / patrolAgentName,
+  // 但 HandlerContext 只暴露 db/hub,scheduler.runOne 没把 task 传进来。
+  // 所以 patrolGroupId/patrolAgentName 在 handler_payload 里显式携带
+  // (由 POST /api/groups 建 patrol 群时写入,PATCH /api/issues-patrol/config 可改)。
+  const { patrolGroupId, patrolAgentName } = p;
+  if (!patrolGroupId || !patrolAgentName) {
+    return { status: "error", error: "missing patrolGroupId/patrolAgentName in handler_payload" };
+  }
+
+  const runId = randomUUID();
+  const startedAt = new Date().toISOString();
+
+  // 1. 防 overlap:查该 patrol 群最近一次 run,若 patrol_issue 仍 in_progress 则跳过
+  const recentRuns = ctx.db.listPatrolRuns({ patrolGroupId, limit: 1 });
+  const lastRun = recentRuns[0];
+  if (lastRun && lastRun.patrol_issue_id && lastRun.status === "dispatched") {
+    const prevIssue = ctx.db.getIssueById(lastRun.patrol_issue_id);
+    if (prevIssue && prevIssue.status === "in_progress") {
+      ctx.db.createPatrolRun({
+        runId,
+        patrolGroupId,
+        startedAt,
+        inProgressCount: 0,
+        status: "skipped_overlap",
+      });
+      ctx.db.finishPatrolRun(runId, "skipped_overlap", { note: `prev patrol issue ${prevIssue.id} still in_progress` });
+      log.info(`patrol run ${runId}: skipped_overlap (prev ${prevIssue.id})`);
+      return { status: "skipped", error: "prev patrol issue in_progress" };
+    }
+  }
+
+  // 2. 巡检员在线检查
+  const agent = ctx.db.getAgentByName(patrolAgentName);
+  if (!agent || agent.status !== "online") {
+    ctx.db.createPatrolRun({
+      runId,
+      patrolGroupId,
+      startedAt,
+      inProgressCount: 0,
+      status: "agent_offline",
+    });
+    ctx.db.finishPatrolRun(runId, "agent_offline", { note: !agent ? "agent not found" : "agent offline" });
+    log.info(`patrol run ${runId}: agent_offline (${patrolAgentName})`);
+    return { status: "skipped", error: "patrol agent offline" };
+  }
+
+  // 3. 全局 in_progress 计数(排除 patrol 群自己)
+  const inProgress = ctx.db.listAllIssues("in_progress").filter((i) => i.group_id !== patrolGroupId);
+  const inProgressCount = inProgress.length;
+  if (inProgressCount >= throughputCap) {
+    ctx.db.createPatrolRun({
+      runId,
+      patrolGroupId,
+      startedAt,
+      inProgressCount,
+      status: "skipped_quota",
+    });
+    ctx.db.finishPatrolRun(runId, "skipped_quota", { note: `throughput cap reached (${inProgressCount}/${throughputCap})` });
+    log.info(`patrol run ${runId}: skipped_quota (in_progress=${inProgressCount})`);
+    return { status: "ok" };
+  }
+
+  // 4. 取候选 open issue(排除 patrol 群自己),按 priority 排
+  const slots = candidateCap - inProgressCount;
+  if (slots <= 0) {
+    ctx.db.createPatrolRun({
+      runId,
+      patrolGroupId,
+      startedAt,
+      inProgressCount,
+      status: "skipped_quota",
+    });
+    ctx.db.finishPatrolRun(runId, "skipped_quota", { note: `no slots (in_progress=${inProgressCount}, cap=${candidateCap})` });
+    log.info(`patrol run ${runId}: skipped_quota (no slots)`);
+    return { status: "ok" };
+  }
+
+  // 候选数量:既要喂饱巡检员找满 slots 个 ready,又不能扫太多浪费 token。
+  // 取 max(slots, scanBatch/2) 上限 scanBatch。
+  const take = Math.min(scanBatch, Math.max(slots, Math.ceil(scanBatch / 2)));
+  const openIssues = ctx.db.listAllIssues("open")
+    .filter((i) => i.group_id !== patrolGroupId && i.type === "task")
+    .sort((a, b) => {
+      const rankDiff = patrolPriorityRank(a.priority) - patrolPriorityRank(b.priority);
+      if (rankDiff !== 0) return rankDiff;
+      return a.created_at < b.created_at ? -1 : 1;
+    })
+    .slice(0, take);
+
+  if (openIssues.length === 0) {
+    ctx.db.createPatrolRun({
+      runId,
+      patrolGroupId,
+      startedAt,
+      inProgressCount,
+      status: "completed",
+    });
+    ctx.db.finishPatrolRun(runId, "completed", { scanned: 0, ready: 0, note: "no open candidates" });
+    log.info(`patrol run ${runId}: no open candidates`);
+    return { status: "ok" };
+  }
+
+  // 5. 取规则 skill 全文
+  const skill = ctx.db.getSkillByName("issue-patrol-rules");
+  const rulesText = skill?.content ?? "(rules skill not found;fall back to default judgment)";
+
+  // 6. 组装 patrol issue
+  const candidateList = openIssues.map((iss, idx) => {
+    return [
+      `### 候选 ${idx + 1}: ${iss.title}`,
+      `- issue_id: ${iss.id}`,
+      `- group_id: ${iss.group_id}`,
+      `- priority: ${iss.priority}`,
+      `- slash_command: ${iss.slash_command ?? "(无)"}`,
+      `- working_dir: ${iss.working_dir ?? "(默认)"}`,
+      `- created_at: ${iss.created_at}`,
+      `- description:`,
+      iss.description?.slice(0, 800) ?? "(空)",
+    ].join("\n");
+  }).join("\n\n");
+
+  const title = `[巡检] ${new Date().toLocaleString("zh-CN", { hour12: false })}`;
+  const description = [
+    `# Issue 巡检任务`,
+    ``,
+    `你是巡检员。本轮全局 in_progress=${inProgressCount}(cap ${throughputCap}),剩余 slot=${slots}。`,
+    `下面是 ${openIssues.length} 个候选 open issue,请逐个判断"是否可以直接认领开工"。`,
+    ``,
+    `## 巡检规则`,
+    ``,
+    rulesText,
+    ``,
+    `## 候选列表`,
+    ``,
+    candidateList,
+    ``,
+    `## 输出要求`,
+    ``,
+    `**不要**认领、分配、或操作任何候选 issue。只输出判断。`,
+    `result 字段必须是 JSON 数组,每条:`,
+    "```json",
+    `{`,
+    `  "issue_id": "<候选 id>",`,
+    `  "verdict": "ready" | "not_ready" | "uncertain",`,
+    `  "rule_matched": "<命中的规则名>",`,
+    `  "rationale": "<一句话理由>"`,
+    `}`,
+    "```",
+    `找满 ${slots} 个 ready 就可以停(不要继续往后扫)。`,
+  ].join("\n");
+
+  // 7. 派 issue + 写 run
+  const issueId = randomUUID();
+  ctx.db.createIssue({
+    id: issueId,
+    groupId: patrolGroupId,
+    title,
+    description,
+    priority: "medium",
+    createdBy: "system:issue-patrol",
+    workingDir: resolveGroupAgentWorkingDir(ctx.db, patrolGroupId, patrolAgentName),
+    assignedTo: patrolAgentName,
+  });
+
+  ctx.db.createPatrolRun({
+    runId,
+    patrolGroupId,
+    patrolIssueId: issueId,
+    startedAt,
+    inProgressCount,
+    status: "dispatched",
+  });
+
+  const pushed = ctx.hub.pushIssueAssignment(issueId, patrolAgentName);
+  if (!pushed) {
+    ctx.db.finishPatrolRun(runId, "error", { note: "pushIssueAssignment failed" });
+    log.warn(`patrol run ${runId}: pushIssueAssignment to ${patrolAgentName} failed`);
+    return { status: "error", error: "pushIssueAssignment failed", issueId };
+  }
+
+  log.info(`patrol run ${runId}: dispatched issue ${issueId} → ${patrolAgentName} (${openIssues.length} candidates, slots=${slots})`);
+  return { status: "ok", issueId };
+});
 /** cancel 对应 bridgeId 的 ask-bridge scheduled_task(disable,保留在列表里做审计)。
  *  按 handler_key + handler_payload 查,不依赖 name(name 已改成"星期五 · …"友好文案)。 */
 function cancelBridgeTask(ctx: HandlerContext, bridgeId: string): void {

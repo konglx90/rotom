@@ -13,6 +13,7 @@ const TABS = [
   { to: 'schedule-patterns', label: '定时任务模板管理', icon: '⏰' },
   { to: 'memory', label: '记忆', icon: '🧠' },
   { to: 'skills', label: '技能', icon: '⚡' },
+  { to: 'issue-patrol', label: 'Issue 巡检', icon: '🔍' },
   { to: 'terminal', label: '终端', icon: '⌨️' },
 ] as const
 
