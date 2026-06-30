@@ -102,6 +102,7 @@ Read:
   group list
   group members <groupId>
   group history <groupId> [--limit N]
+  group new-messages <groupId> --since <ISO>     只看某个时间点之后的新消息(轮询用)
   group archive <groupId>
   group unarchive <groupId>
   issue list <groupId> [--status S] [--type task]
@@ -111,7 +112,9 @@ Read:
   issue comment <issueId> --message M [--reply-to <eventId>]
 
 Send:
-  group send <groupId> <target> <message...>
+  group send <groupId> <target> <message...> [--no-dispatch] [--need-reply]
+    --no-dispatch  只入库+广播,不 trigger target 的 worker(同步信息用)
+    --need-reply   自动补 @target,master 硬剥回复里的 @asker 防回触发(一问一答)
 
 Issue:
   issue create <groupId> --description D [--title T] [--priority low|medium|high|critical]

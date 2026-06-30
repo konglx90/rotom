@@ -413,11 +413,19 @@ export const connectionMethods = {
           const fromName = conn?.name || "unknown";
           const targetAgent = this.db.getAgentById(targetId);
           const enrichedConversation = this.enrichGroupConversation(conversation, targetAgent?.name);
+          // qaMode:硬剥 @<asker> 防止 asker worker 被回触发(一问一答,不 chatter)
+          const qaAsker = this.qaModeAskers.get(msg.requestId);
+          let replyContent = msg.payload?.message || "";
+          if (qaAsker) {
+            replyContent = replyContent.replace(new RegExp(`@${qaAsker}\\b`, "g"), "");
+            this.qaModeAskers.delete(msg.requestId);
+          }
+          const replyPayload = { ...msg.payload, message: replyContent };
           const replyMsg = enrichWorkerDispatch(this, {
             type: "a2a_message" as const,
             requestId: msg.requestId,
             from: { name: fromName, domain: conn?.domain, status: "online" as const },
-            payload: msg.payload,
+            payload: replyPayload,
             routeType: "reply" as const,
             conversation: enrichedConversation,
           } as ServerMessage, targetAgent?.name, enrichedConversation?.groupId) as unknown as Record<string, unknown>;
@@ -425,9 +433,9 @@ export const connectionMethods = {
 
           // Persist to group history BEFORE sending (avoids race with history refresh)
           if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
-            const msgId = this.db.addGroupMessage(conversation.groupId, fromName, msg.payload?.message || "", []);
+            const msgId = this.db.addGroupMessage(conversation.groupId, fromName, replyContent, []);
             // 提取 mentions 走 bridge 检测(同 sendAsAgent 的 regex)
-            const mentions = (msg.payload?.message || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+            const mentions = replyContent.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
             this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
             this.checkAndCancelBridgesForMessage(conversation.groupId, fromName, mentions, msgId);
           }
@@ -507,6 +515,14 @@ export const connectionMethods = {
           };
           if (msg.cwd) endMsg.cwd = msg.cwd;
           if (cancelled) endMsg.cancelled = true;
+          // qaMode:硬剥 @<asker> 防止 asker worker 被回触发(一问一答,不 chatter)
+          const qaAsker = this.qaModeAskers.get(msg.requestId);
+          let endContent = msg.payload?.message || "";
+          if (qaAsker) {
+            endContent = endContent.replace(new RegExp(`@${qaAsker}\\b`, "g"), "");
+            this.qaModeAskers.delete(msg.requestId);
+          }
+          const endPayload = { ...msg.payload, message: endContent };
           // Persist to group history BEFORE sending (avoids race with history refresh).
           // Cancelled replies still persist their partial content (the user wants
           // to keep what was streamed before the interrupt) but stamp cancelled_at
@@ -515,11 +531,11 @@ export const connectionMethods = {
             const msgId = this.db.addGroupMessage(
               conversation.groupId,
               fromName,
-              msg.payload?.message || "",
+              endContent,
               [],
               cancelled ? { cancelledAt: nowBeijing() } : undefined,
             );
-            const mentions = (msg.payload?.message || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+            const mentions = endContent.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
             this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
             this.checkAndCancelBridgesForMessage(conversation.groupId, fromName, mentions, msgId);
             // 把 worker 回传的 composedPrompt 持久化,前端点击消息可直接读出来渲染分层。
@@ -550,7 +566,7 @@ export const connectionMethods = {
               type: "a2a_message" as const,
               requestId: msg.requestId,
               from: { name: fromName, domain: conn?.domain, status: "online" as const },
-              payload: msg.payload,
+              payload: endPayload,
               routeType: "reply" as const,
               conversation: this.enrichGroupConversation(conversation),
             } as ServerMessage, undefined, conversation.groupId);

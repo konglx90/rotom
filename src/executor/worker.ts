@@ -479,11 +479,13 @@ ${prompt}`;
       const fromName = from?.name || "unknown";
 
       // One-on-one: always process
-      // Group: only process if @mentioned
+      // Group: only process if @mentioned (qaMode 例外:master 用 --need-reply 触发,
+      // 已自动补 @target,但兜底也允许 qaMode 直接绕过 @ 检查)
       const isGroup = conversation?.type === "group";
       const isMentioned = content.includes(`@${this.config.name}`);
-      console.log(`${this.tag} a2a_message from ${fromName} requestId=${requestId} isGroup=${isGroup} isMentioned=${isMentioned} contentLen=${content.length} contentHead=${JSON.stringify(content.slice(0, 60))}`);
-      if (!isGroup || isMentioned) {
+      const qaMode = (msg as any).qaMode === true;
+      console.log(`${this.tag} a2a_message from ${fromName} requestId=${requestId} isGroup=${isGroup} isMentioned=${isMentioned} qaMode=${qaMode} contentLen=${content.length} contentHead=${JSON.stringify(content.slice(0, 60))}`);
+      if (!isGroup || isMentioned || qaMode) {
         console.log(`${this.tag} Chat from ${fromName}: ${content.slice(0, 80)}...`);
         this.chat.handleChatReply(requestId, content, fromName, conversation, overrideCwd);
       } else {

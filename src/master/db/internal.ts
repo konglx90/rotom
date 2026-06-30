@@ -108,6 +108,7 @@ export class MeshDb extends MeshDbCore {
   declare addChatMessagePrompt: typeof groupMethods.addChatMessagePrompt;
   declare getChatMessagePrompt: typeof groupMethods.getChatMessagePrompt;
   declare getGroupMessages: typeof groupMethods.getGroupMessages;
+  declare getGroupMessagesSince: typeof groupMethods.getGroupMessagesSince;
 
   // ─── issues ────────────────────────────────────────────────────────────────
   declare createIssue: typeof issueMethods.createIssue;

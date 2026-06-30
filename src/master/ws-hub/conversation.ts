@@ -181,6 +181,10 @@ export const conversationMethods = {
      *  消息仍入库 + 广播给其他群成员(他们看得到),但 target 的 worker 不会被
      *  trigger 起来回复。用于"只同步信息,不想要对方自动接力回复"的场景。 */
     noDispatch?: boolean;
+    /** Q&A 模式:自动补 @target 到正文(确保 worker 起来),并在 a2a_message
+     *  上带 qaMode=true。worker 收到后跳过 @-mention 检查直接处理;master 收到
+     *  对应 reply 时硬剥 @<asker> 防止 asker worker 被回触发。一问一答,不 chatter。 */
+    needReply?: boolean;
   }): { requestId: string; delivered: boolean; queued: boolean; error?: string; messageId?: number } {
     const fromAgent = this.db.getAgentByName(opts.fromName);
     if (!fromAgent) return { requestId: "", delivered: false, queued: false, error: `Sender agent "${opts.fromName}" not found` };
@@ -192,14 +196,27 @@ export const conversationMethods = {
       ? { type: "group" as const, groupId: opts.groupId, groupName: opts.groupName }
       : undefined;
 
+    // needReply: 自动补 @target 到正文开头(若没有),确保 worker 的 @-mention 检查命中。
+    let messageBody = opts.message;
+    const mentionTag = `@${opts.target}`;
+    if (opts.needReply && !messageBody.startsWith(mentionTag)) {
+      messageBody = `${mentionTag} ${messageBody}`;
+    }
+
     const result = this.router.route(fromAgent.id, {
       requestId,
       target: opts.target,
-      payload: { message: opts.message },
+      payload: { message: messageBody },
       ...(conversation ? { conversation } : {}),
+      ...(opts.needReply ? { qaMode: true } : {}),
     } as Parameters<typeof this.router.route>[1]);
 
     if (result.error) return { requestId, delivered: false, queued: false, error: result.error };
+
+    // needReply: 登记 requestId → asker,master 收到 reply 时据此硬剥 @<asker>
+    if (opts.needReply) {
+      this.qaModeAskers.set(requestId, opts.fromName);
+    }
 
     let delivered = false;
     let queued = false;
@@ -210,9 +227,10 @@ export const conversationMethods = {
         type: "a2a_message" as const,
         requestId,
         from: { name: opts.fromName, domain: fromAgent.domain || undefined, status: "online" as const },
-        payload: { message: opts.message },
+        payload: { message: messageBody },
         routeType: "exact" as const,
         conversation: enrichedConversation,
+        ...(opts.needReply ? { qaMode: true } : {}),
       } as ServerMessage, result.targetName, enrichedConversation?.groupId);
 
       // noDispatch:不直接推给 target 的 WS,也不入 offline_queue。
@@ -233,14 +251,23 @@ export const conversationMethods = {
         // 群消息:除打给 target 外广播给全群(对齐 a2a_reply L462-465)。
         // 排除列表含 target 防重复推送。同时排除所有 @mentioned agent 防
         // Dashboard 多次发送 a2a_send 导致的广播重复投递。
-        const sendAsMentions = opts.message.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+        //
+        // qaMode 不能漏给非 target 群成员:target 已通过 sendToAgent 收到
+        // qaMode=true 副本以 bypass @-mention 检查,但 broadcast 给其他成员
+        // 时若还带 qaMode=true,他们也会 bypass,导致群里全员被唤醒回复
+        // (典型症状:--need-reply 后群里非 @ 对象也冒泡接话)。
+        // 剥一份广播专用副本。
+        const sendAsMentions = messageBody.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
         const sendAsMentionAgentIds = sendAsMentions
           .map((name: string) => this.db.getAgentByName(name)?.id)
           .filter((id: string | undefined): id is string => !!id);
-        this.broadcastToGroup(opts.groupId, wireMsg, [fromAgent.id, result.targetAgentId, ...sendAsMentionAgentIds]);
+        const broadcastWire = (opts.needReply
+          ? { ...wireMsg, qaMode: undefined }
+          : wireMsg) as ServerMessage;
+        this.broadcastToGroup(opts.groupId, broadcastWire, [fromAgent.id, result.targetAgentId, ...sendAsMentionAgentIds]);
 
         const mentions = sendAsMentions;
-        messageId = this.db.addGroupMessage(opts.groupId, opts.fromName, opts.message, mentions);
+        messageId = this.db.addGroupMessage(opts.groupId, opts.fromName, messageBody, mentions);
         this.autoCreateBridgeOnMention(opts.groupId, opts.fromName, mentions, messageId);
         this.checkAndCancelBridgesForMessage(opts.groupId, opts.fromName, mentions, messageId);
       }

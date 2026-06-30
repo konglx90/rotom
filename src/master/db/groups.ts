@@ -62,16 +62,14 @@ function fetchGroupMessageRows(
   db: BetterSqlite3.Database,
   whereClause: string,
   groupId: string,
-  limit?: number,
+  ...bindParams: unknown[]
 ): GroupMessageRow[] {
   const sql = `SELECT m.id, m.sender, m.content, m.mentions, m.created_at, m.cancelled_at,
                  p.layers, p.final, p.generated_at, p.prompt_version
           FROM group_messages m
           LEFT JOIN chat_message_prompts p ON p.group_message_id = m.id
           ${whereClause}`;
-  const rows = (limit != null
-    ? db.prepare(sql).all(groupId, limit)
-    : db.prepare(sql).all(groupId)) as Array<{
+  const rows = db.prepare(sql).all(groupId, ...bindParams) as Array<{
       id: number; sender: string; content: string; mentions: string; created_at: string;
       cancelled_at: string | null;
       layers: string | null; final: string | null; generated_at: string | null; prompt_version: string | null;
@@ -449,5 +447,16 @@ export const groupMethods = {
     };
 
     return [...head, marker, ...tail];
+  },
+
+  /** 按 since 时间过滤群消息(UTC ISO 或北京时间字符串都行,字符串字典序比较)。
+   *  不走 head/tail 截断——轮询用,只看新增量。返回 ASC 排序。 */
+  getGroupMessagesSince(this: MeshDbSelf, groupId: string, sinceIso: string): GroupMessageRow[] {
+    return fetchGroupMessageRows(
+      this.db,
+      `WHERE m.group_id = ? AND m.created_at > ? ORDER BY m.created_at ASC, m.id ASC`,
+      groupId,
+      sinceIso,
+    );
   },
 };

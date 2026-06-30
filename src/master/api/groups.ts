@@ -349,6 +349,12 @@ export function registerGroupRoutes(
       res.status(404).json({ error: "Group not found" });
       return;
     }
+    // since=<ISO>:按时间过滤(轮询用),不走 head/tail 截断。
+    // 接受 UTC ISO(带 Z)或北京时间字符串(无 Z),字符串字典序比较都生效。
+    if (typeof req.query.since === "string" && req.query.since.trim()) {
+      res.json(db.getGroupMessagesSince(req.params.id, req.query.since.trim()));
+      return;
+    }
     // 新签名是 (headKeep, tailKeep)。?limit= 仍接受,当作 head+tail 总预算
     // 分配(head 固定 5);不带 limit 时走 db 层默认 head=5 / tail=295。
     if (Object.prototype.hasOwnProperty.call(req.query, "limit")) {

@@ -102,6 +102,13 @@ export interface WSHubSelf {
    */
   readonly issueSubscriptions: Map<string, Set<string>>;
 
+  /**
+   * requestId → asker name。`group send --need-reply` 触发时登记,worker 收到
+   * 的 a2a_message 带 qaMode=true,worker 回复时 master 据此硬剥 @<asker>
+   * 防止 asker 的 worker 被回触发(一问一答,不 chatter)。reply 处理完删除。
+   */
+  readonly qaModeAskers: Map<string, string>;
+
   // ─── Low-level transport ────────────────────────────────────────────────
   /** Send a ServerMessage on a raw ws. No-op if not OPEN. */
   send(ws: WebSocket, msg: ServerMessage): void;
@@ -189,6 +196,7 @@ export class WSHubCore {
    * 整个 agentId 条目从所有 Set 里清掉。
    */
   readonly issueSubscriptions = new Map<string, Set<string>>();
+  readonly qaModeAskers = new Map<string, string>();
 
   constructor(
     httpServer: Server,

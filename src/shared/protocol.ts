@@ -194,6 +194,10 @@ export interface ClientA2ASendMessage {
   target?: string;
   payload: MessagePayload;
   conversation?: ConversationContext;
+  /** Q&A 模式:worker 收到后跳过 @-mention 检查直接处理;master 收到对应
+   *  reply 时硬剥掉 @<asker> 防止 asker worker 被回触发。由 sendAsAgent
+   *  的 needReply=true 触发。 */
+  qaMode?: boolean;
 }
 
 export interface ClientA2AReplyMessage {

@@ -191,11 +191,38 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     );
     return;
   }
+  if (sub === "new-messages") {
+    const groupId = rest[1]; if (!groupId) fail("usage: rotom group new-messages <groupId> --since <ISO> [--content-len N] [--no-clean]");
+    const since = flagStr(flags, "since");
+    if (!since) fail("--since is required (北京时间字符串如 \"2026-06-30 18:02:04\" 或 UTC ISO)");
+    const contentLen = flagInt(flags, "content-len") ?? 200;
+    const clean = flags["clean"] !== false;
+    const data = await api(agent, "GET", `/groups/${encodeURIComponent(groupId)}/messages?since=${encodeURIComponent(since)}`);
+    printTable(
+      data.map((m: any) => {
+        let content = (m.content || "").replace(/\s+/g, " ");
+        if (clean) {
+          content = content
+            .replace(/\[(\w[\w-]*:\w[\w-]*)\].*?\[\/\1\]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+        return {
+          time: m.created_at,
+          sender: m.sender,
+          content: content.slice(0, contentLen),
+        };
+      }),
+      ["time", "sender", "content"],
+    );
+    return;
+  }
   if (sub === "send") {
     const groupId = rest[1]; const target = rest[2]; const message = rest.slice(3).join(" ");
-    if (!groupId || !target || !message) fail("usage: rotom group send <groupId> <target> <message...> [--no-dispatch]");
+    if (!groupId || !target || !message) fail("usage: rotom group send <groupId> <target> <message...> [--no-dispatch] [--need-reply]");
     const body: Record<string, unknown> = { target, message };
     if (flags["no-dispatch"] === true) body.noDispatch = true;
+    if (flags["need-reply"] === true) body.needReply = true;
     const data = await api(agent, "POST", `/cli/groups/${encodeURIComponent(groupId)}/send`, body);
     printJson(data);
     return;

@@ -77,11 +77,11 @@ UPDATE issues SET completed_at = strftime('%Y-%m-%d %H:%M:%S', datetime(substr(c
 
 UPDATE issue_events SET created_at = strftime('%Y-%m-%d %H:%M:%S', datetime(substr(created_at, 1, 19), '+8 hours')) || CASE WHEN length(created_at) > 19 THEN substr(created_at, 20) ELSE '' END WHERE created_at LIKE '____-__-__T__:__:__%Z';
 
--- notes / memory / agent_skills / scheduled_tasks / ask_bridges / agent_sessions /
--- issue_patrol_runs / issue_patrol_logs / audit_log / message_log 同样处理,
--- 但 schema 各异,这里只列常见的几个 text 时间列。新增列请走 nowBeijing()。
-UPDATE notes SET created_at = strftime('%Y-%m-%d %H:%M:%S', datetime(substr(created_at, 1, 19), '+8 hours')) || CASE WHEN length(created_at) > 19 THEN substr(created_at, 20) ELSE '' END WHERE created_at LIKE '____-__-__T__:__:__%Z';
-UPDATE notes SET updated_at = strftime('%Y-%m-%d %H:%M:%S', datetime(substr(updated_at, 1, 19), '+8 hours')) || CASE WHEN length(updated_at) > 19 THEN substr(updated_at, 20) ELSE '' END WHERE updated_at LIKE '____-__-__T__:__:__%Z';
+-- notes 表已在 040 里 RENAME 成 agent_memory,这里走新表名
+UPDATE agent_memory SET created_at = strftime('%Y-%m-%d %H:%M:%S', datetime(substr(created_at, 1, 19), '+8 hours')) || CASE WHEN length(created_at) > 19 THEN substr(created_at, 20) ELSE '' END WHERE created_at LIKE '____-__-__T__:__:__%Z';
+UPDATE agent_memory SET updated_at = strftime('%Y-%m-%d %H:%M:%S', datetime(substr(updated_at, 1, 19), '+8 hours')) || CASE WHEN length(updated_at) > 19 THEN substr(updated_at, 20) ELSE '' END WHERE updated_at LIKE '____-__-__T__:__:__%Z';
+UPDATE agent_memory SET expires_at = strftime('%Y-%m-%d %H:%M:%S', datetime(substr(expires_at, 1, 19), '+8 hours')) || CASE WHEN length(expires_at) > 19 THEN substr(expires_at, 20) ELSE '' END WHERE expires_at LIKE '____-__-__T__:__:__%Z';
+UPDATE agent_memory SET last_viewed_at = strftime('%Y-%m-%d %H:%M:%S', datetime(substr(last_viewed_at, 1, 19), '+8 hours')) || CASE WHEN length(last_viewed_at) > 19 THEN substr(last_viewed_at, 20) ELSE '' END WHERE last_viewed_at LIKE '____-__-__T__:__:__%Z';
 
 -- 整数毫秒时间戳(scheduled_tasks.next_run_at / ask_bridges.created_at 等)
 -- 不需要转换——代码侧用 Date(ms) / nowBeijing() 边界处统一处理。
