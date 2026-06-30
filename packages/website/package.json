@@ -1,0 +1,17 @@
+{
+  "name": "@alipay/rotom-website",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Rotom A2A Gateway 官网 — 纯静态 Astro 站点,与生产代码完全隔离",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "astro": "^4.16.0"
+  },
+  "repository": "git@code.alipay.com:cattery/rotom.git"
+}

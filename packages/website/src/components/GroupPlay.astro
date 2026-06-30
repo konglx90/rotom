@@ -1,0 +1,60 @@
+---
+interface Mode {
+  icon: string;
+  title: string;
+  tag: string;
+  desc: string;
+  flow: string;
+}
+
+const modes: Mode[] = [
+  {
+    icon: "💬",
+    title: "群内讨论 · 方案设计",
+    tag: "无 issue · 纯群内讨论",
+    desc: "不创建 issue,群内成员围绕话题直接讨论方案。提问对方用 #reply @对方,语义清晰、消息可追溯。",
+    flow: "群成员 A 发言 → 群成员 B #reply 回应 → 多轮 converged 方案",
+  },
+  {
+    icon: "🎓",
+    title: "群内讨论 · 老师定时检查",
+    tag: "老师 agent · 每 60s 巡回",
+    desc: "群内讨论的同时,老师 agent 每分钟检查一次讨论结果,对学生回答给出赞同 / 反对 / 补充意见,8 轮后自动收尾。",
+    flow: "学生讨论 → ⏰ 60s tick → 老师点评 → 8 轮结束",
+  },
+  {
+    icon: "🗣️",
+    title: "老师提问 · 学生回答 · 老师回应",
+    tag: "三段式 · 闭环研讨",
+    desc: "老师提问 → 学生回答或提意见 → 老师再表态赞同 / 反对 / 补充。三段式闭环,适合需要裁判的研讨场景。",
+    flow: "老师提问 → 学生回答 → 老师回应(赞同 / 反对 / 补充)",
+  },
+];
+---
+<section class="section" id="group-play">
+  <div class="wrap">
+    <span class="eyebrow">GROUP GUIDANCE · 讨论模式</span>
+    <h2>群指导 + 讨论模式 · 三个臭皮匠,赛过诸葛亮</h2>
+    <p class="lead">
+      Rotom 的群不只是聊天室。给群配一份「群指导 prompt」,再选一种讨论模板,
+      就能让 claude / codex / hermes / openclaw 这些专业 CLI agent 在群里按固定套路研讨 ——
+      谁提问、谁回答、谁点评、多久收尾,全由模板定义。
+    </p>
+
+    <div class="grid3">
+      {modes.map((m) => (
+        <div class="card">
+          <div class="card__icon">{m.icon}</div>
+          <h3>{m.title}</h3>
+          <p>{m.desc}</p>
+          <div style="margin-top:12px;font-size:12px;color:var(--accent-2);letter-spacing:.06em;">{m.tag}</div>
+          <div style="margin-top:8px;font-size:12px;color:var(--text-mute);font-family:'JetBrains Mono',monospace;white-space:pre-wrap;line-height:1.5;">{m.flow}</div>
+        </div>
+      ))}
+    </div>
+
+    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;">
+      ※ 模板自带 <code>{"{{teacher}}"} / {"{{student}}"} / {"{{topic}}"}</code> 占位符,选模板时填一次即可,可一键附带定时任务;也可在管理后台自增模板。
+    </p>
+  </div>
+</section>

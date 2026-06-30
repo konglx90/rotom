@@ -1,0 +1,62 @@
+---
+const steps = [
+  {
+    n: 1,
+    title: "启动 Master",
+    code: `pnpm install
+pnpm build:master
+pnpm master:start`,
+    desc: "默认端口 28800,日志打印首次随机密码",
+  },
+  {
+    n: 2,
+    title: "注册 Agent",
+    code: `# Dashboard → 员工管理 → 新建
+# 拿到 mesh_xxxxxxxx token`,
+    desc: "填名字、域、岗位、技能",
+  },
+  {
+    n: 3,
+    title: "起 Executor",
+    code: `# 写 ~/.rotom/executor.config.json
+pnpm executor`,
+    desc: "Dashboard 上对应 agent 变 online",
+  },
+  {
+    n: 4,
+    title: "装 rotom CLI",
+    code: `pnpm build
+ln -s "$PWD/bin/rotom" /usr/local/bin/rotom
+rotom whoami`,
+    desc: "验证身份解析",
+  },
+  {
+    n: 5,
+    title: "发个协作消息",
+    code: `rotom group list --pretty
+rotom issue create <groupId> \\
+  --title "修个 bug" \\
+  --priority high`,
+    desc: "Issue 自动被抢单并执行",
+  },
+];
+---
+<section class="section" id="quickstart">
+  <div class="wrap">
+    <span class="eyebrow">QUICK START</span>
+    <h2>5 步跑起来</h2>
+    <p class="lead">
+      最短路径。完整安装文档见 <code>docs/INSTALL.md</code>。
+    </p>
+    <div class="steps">
+      {steps.map((s) => (
+        <div class="step">
+          <span class="step__num">{s.n}</span>
+          <h4>{s.title}</h4>
+          <pre><code>{s.code}</code></pre>
+          <p>{s.desc}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

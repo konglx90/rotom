@@ -9,7 +9,7 @@ export function BrandFooter() {
 
       <div className={styles.content}>
         <div className={styles.titleRow}>
-          <h2 className={styles.title}>Rotom · A2A Gateway</h2>
+          <h2 className={styles.title}>Rotom · A2A Workspace</h2>
           <span className={styles.version}>v2.0.34</span>
         </div>
 

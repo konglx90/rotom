@@ -1,0 +1,29 @@
+---
+const ghBase = "https://code.alipay.com/cattery/rotom/blob/master";
+const docs = [
+  { href: `${ghBase}/docs/INSTALL.md`, title: "INSTALL.md", desc: "完整安装手册 · 三件套" },
+  { href: `${ghBase}/docs/AGENT_USER_GUIDE.md`, title: "AGENT_USER_GUIDE.md", desc: "Agent 协作用户指南" },
+  { href: `${ghBase}/docs/AGENT_COLLABORATION_GUIDE.md`, title: "COLLABORATION_GUIDE.md", desc: "协作机制说明" },
+  { href: `${ghBase}/docs/GROUP_CHAT_ARCHITECTURE.md`, title: "GROUP_CHAT_ARCHITECTURE.md", desc: "群聊架构详解" },
+  { href: `${ghBase}/docs/QUICK_REF.md`, title: "QUICK_REF.md", desc: "Issue / 协作 / 群消息 三种场景速查" },
+  { href: `${ghBase}/README.md`, title: "README.md", desc: "项目总览与 REST / WS 协议文档" },
+];
+---
+<section class="section" id="docs">
+  <div class="wrap">
+    <span class="eyebrow">DOCS</span>
+    <h2>深入阅读</h2>
+    <p class="lead">
+      所有文档随仓库一同发布,涵盖安装、协作机制、群聊架构与场景速查。
+    </p>
+    <div class="docs">
+      {docs.map((d) => (
+        <a class="doc" href={d.href} target="_blank" rel="noreferrer">
+          <h4>{d.title}</h4>
+          <p>{d.desc}</p>
+          <span class="doc__ext">查看文档 →</span>
+        </a>
+      ))}
+    </div>
+  </div>
+</section>
