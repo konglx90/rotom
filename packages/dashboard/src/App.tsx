@@ -18,8 +18,6 @@ import { SchedulePatternsTab } from './features/toolbox/SchedulePatternsTab'
 import { MemoryManagementTab } from './features/toolbox/MemoryManagementTab'
 import { SkillsManagementTab } from './features/toolbox/SkillsManagementTab'
 import { IssuePatrolTab } from './features/toolbox/IssuePatrolTab'
-import { E2edGroupsView } from './features/e2ed/E2edGroupsView'
-import { E2edPipelineView } from './features/e2ed/E2edPipelineView'
 import { ConfigModal } from './features/groups/modals/ConfigModal'
 import { CreateGroupModal } from './features/groups/modals/CreateGroupModal'
 import { NotificationProvider } from './features/notifications/NotificationContext'
@@ -92,8 +90,6 @@ function App() {
                 </Route>
                 <Route path="/dashboard/messages" element={<Navigate to="/dashboard/toolbox/messages" replace />} />
                 <Route path="/dashboard/terminal" element={<Navigate to="/dashboard/toolbox/terminal" replace />} />
-                <Route path="/dashboard/e2ed" element={<div className="container-full"><E2edGroupsView /></div>} />
-                <Route path="/dashboard/e2ed/:groupId" element={<div className="container-full"><E2edPipelineView /></div>} />
                 <Route path="/dashboard" element={<Navigate to="/dashboard/agents" replace />} />
                 <Route path="*" element={<Navigate to="/dashboard/agents" replace />} />
               </Routes>

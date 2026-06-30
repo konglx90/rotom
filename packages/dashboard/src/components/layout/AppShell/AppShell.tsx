@@ -4,7 +4,6 @@ import { useZenMode } from '../../../context/ZenModeContext'
 import { useChatContext } from '../../../context/ChatContext'
 import { useVisitorMode } from '../../../context/VisitorContext'
 import { AppSidebar } from '../AppSidebar/AppSidebar'
-import { E2edSidebar } from '../../../features/e2ed/E2edSidebar'
 import { VisitorBanner } from '../VisitorBanner'
 import styles from './AppShell.module.css'
 
@@ -25,7 +24,6 @@ export function AppShell({ children }: AppShellProps) {
   const hideSidebar = /^\/dashboard\/groups\/[^/]+\/issues-single(\/|$)/.test(
     location.pathname,
   )
-  const isE2edRoute = location.pathname.startsWith('/dashboard/e2ed')
   const widthStorageKey = zenMode ? 'sidebar_width_zen' : 'sidebar_width_normal'
 
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -81,8 +79,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       )}
       <div className={styles.shellInner}>
-        {!isVisitor && !hideSidebar && !isE2edRoute && <AppSidebar width={sidebarWidth} onWidthChange={handleWidthChange} />}
-        {!isVisitor && isE2edRoute && <E2edSidebar />}
+        {!isVisitor && !hideSidebar && <AppSidebar width={sidebarWidth} onWidthChange={handleWidthChange} />}
         <main
           className={`${styles.main} ${zenMode ? styles.mainZen : ''} ${
             isFullBleed || isToolboxRoute ? styles.mainFullBleed : ''

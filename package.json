@@ -39,7 +39,6 @@
     "dist/executor",
     "dist/cli",
     "dist/shared",
-    "dist/e2ed",
     "migrations",
     "scripts",
     "skill"

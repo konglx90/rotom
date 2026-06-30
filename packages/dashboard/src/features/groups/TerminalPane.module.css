@@ -14,7 +14,12 @@
 }
 
 .terminalPane.expanded {
-  flex-basis: 420px;
+  /* Override the base `flex: 0 1 240px` — grow:1 lets the terminal claim
+     vertical space beyond its basis when the panel has room, instead of
+     being capped at 420px. 70vh basis + min-height 320px keeps it usable
+     on short screens while giving enough rows for real work on tall ones. */
+  flex: 1 1 70vh;
+  min-height: 320px;
 }
 
 .terminalPane.collapsed {
