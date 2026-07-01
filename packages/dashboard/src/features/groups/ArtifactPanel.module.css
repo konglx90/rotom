@@ -45,6 +45,51 @@
   background: var(--color-canvas);
 }
 
+.worktreeBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--color-slate);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color-light);
+  background: rgba(47, 122, 47, 0.04);
+}
+
+.worktreeIcon { flex-shrink: 0; }
+.worktreeLabel { color: var(--color-slate); flex-shrink: 0; }
+.worktreePath {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  color: var(--color-navy, #1a365d);
+}
+.worktreeBranch {
+  flex-shrink: 0;
+  color: var(--color-wise-green, #2f7a2f);
+  font-weight: 600;
+}
+.worktreeOk { flex-shrink: 0; color: var(--color-wise-green, #2f7a2f); }
+.worktreePending { flex-shrink: 0; color: var(--color-amber, #b8860b); }
+.worktreeCopyBtn {
+  flex-shrink: 0;
+  border: 1px solid var(--border-color-light, #ddd);
+  background: transparent;
+  color: var(--color-navy, #1a365d);
+  border-radius: 4px;
+  padding: 1px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.worktreeCopyBtn:hover { background: rgba(0,0,0,0.04); }
+
 .pathBarPath {
   flex: 1 1 auto;
   min-width: 0;

@@ -26,7 +26,7 @@ import { SessionStore } from "./session-store.js";
 import { WorkerConnection } from "./worker-connection.js";
 import { IssueHandler } from "./worker-issue.js";
 import { ChatHandler } from "./worker-chat.js";
-import { ensureBareCloneAsync, addWorktreeAsync, removeWorktree, checkoutWorktreeAsync, getBarePathForUrl } from "./repo-cache.js";
+import { ensureBareCloneAsync, addWorktreeAsync, removeWorktree, checkoutWorktreeAsync, getBarePathForUrl, getWorktreePathForUrl } from "./repo-cache.js";
 
 // ── Config ──────────────────────────────────────────────────────────────
 
@@ -303,39 +303,48 @@ export class ExecutorWorker {
     issueId: string,
     repoCtx: { repoUrl: string; repoBranch?: string; extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[]; worktreeMode?: string },
   ): Promise<string> {
+    // 全局布局:~/.rotom/repos/<repoName>-<repoId8>-wt/<slot>/
+    //   - group 模式:slot = group-<groupId8>(每 group 一个 worktree,跨群不共享)
+    //   - issue 模式:slot = <issueId8>(per-issue)
+    //
+    // bare clone(.git 对象库)全局共享,只克隆一次;worktree 各自一份 checkout,
+    // 跨群/跨 issue 改的是各自的工作树,互不干扰。group 模式下同 group 的 issue 共用
+    // 一个 worktree(切分支会互相打断,适合单分支线性);issue 模式完全并行。
     const mode = repoCtx.worktreeMode === "issue" ? "issue" : "group";
-
-    const worktreeRoot = mode === "group"
-      ? path.join(this.workingDir, groupId)
-      : path.join(this.workingDir, groupId, issueId);
-    const reposDir = path.join(worktreeRoot, "repos");
-    fs.mkdirSync(reposDir, { recursive: true });
-
+    const groupId8 = groupId.slice(0, 8);
     const issueId8 = issueId.slice(0, 8);
+    const slot = mode === "group" ? `group-${groupId8}` : issueId8;
+
+    // primary worktree
+    const { barePath: primaryBare } = await ensureBareCloneAsync(repoCtx.repoUrl);
+    const primaryWt = getWorktreePathForUrl(repoCtx.repoUrl, slot);
+    // group 模式:不传 issueId8(不派生分支),用 checkout 切目标分支
+    // issue 模式:传 issueId8,派生 <branch>-rotom-<issueId8>
     const primaryBranch = mode === "group" ? repoCtx.repoBranch : undefined;
     const primaryIssueId8 = mode === "group" ? undefined : issueId8;
-
-    const { barePath: primaryBare } = await ensureBareCloneAsync(repoCtx.repoUrl);
-    const primaryWt = path.join(reposDir, "primary");
     await addWorktreeAsync(primaryBare, primaryWt, primaryBranch, primaryIssueId8);
-
     if (mode === "group") {
       await checkoutWorktreeAsync(primaryWt, repoCtx.repoBranch);
     }
 
+    // extraRepo worktrees + symlink(挂到 primary 的 mountPath)
     for (const extra of repoCtx.extraRepos ?? []) {
       const { barePath: extraBare } = await ensureBareCloneAsync(extra.url);
-      const extraWt = path.join(reposDir, extra.id);
+      const extraWt = getWorktreePathForUrl(extra.url, slot);
       const extraBranch = mode === "group" ? extra.branch : undefined;
       const extraIssueId8 = mode === "group" ? undefined : issueId8;
       await addWorktreeAsync(extraBare, extraWt, extraBranch, extraIssueId8);
       if (mode === "group") {
         await checkoutWorktreeAsync(extraWt, extra.branch);
       }
+      // mountPath 形如 "repos/<repo-B>";在 primary 下建相对 symlink
+      // primary/repos/<repo-B> -> <extraWt绝对路径>(用相对,基于 primary 所在目录)
       if (extra.mountPath) {
         const linkPath = path.join(primaryWt, extra.mountPath);
         fs.mkdirSync(path.dirname(linkPath), { recursive: true });
         try { fs.rmSync(linkPath, { force: true }); } catch { /* 可能不存在 */ }
+        // primary 在 ~/.rotom/repos/<repo-id>-wt/<slot>/,extra 在 ~/.rotom/repos/<extra-id>-wt/<slot>/
+        // 相对路径:../../../../<extra-id>-wt/<slot>
         const target = path.relative(path.dirname(linkPath), extraWt);
         try {
           fs.symlinkSync(target, linkPath, "dir");
@@ -366,14 +375,13 @@ export class ExecutorWorker {
     if (!groupId || !issueId || !repoCtx?.repoUrl) return;
     // group 模式共享 worktree,不按 issue 清
     if (repoCtx.worktreeMode !== "issue") return;
-    const issueRoot = path.join(this.workingDir, groupId, issueId);
-    const reposDir = path.join(issueRoot, "repos");
-    if (!fs.existsSync(reposDir)) return;
+    // issue 模式:清 ~/.rotom/repos/<repo-id>-wt/<issueId8>/
+    const issueId8 = issueId.slice(0, 8);
 
     // primary
     try {
       const barePath = getBarePathForUrl(repoCtx.repoUrl);
-      const primaryWt = path.join(reposDir, "primary");
+      const primaryWt = getWorktreePathForUrl(repoCtx.repoUrl, issueId8);
       removeWorktree(barePath, primaryWt);
     } catch (err: any) {
       console.warn(`${this.tag} cleanup primary worktree failed for ${issueId}: ${err?.message ?? err}`);
@@ -382,15 +390,12 @@ export class ExecutorWorker {
     for (const extra of repoCtx.extraRepos ?? []) {
       try {
         const barePath = getBarePathForUrl(extra.url);
-        const wt = path.join(reposDir, extra.id);
+        const wt = getWorktreePathForUrl(extra.url, issueId8);
         removeWorktree(barePath, wt);
       } catch (err: any) {
         console.warn(`${this.tag} cleanup extra worktree ${extra.id} failed for ${issueId}: ${err?.message ?? err}`);
       }
     }
-    // 清理 issueRoot 残留(artifacts 目录保留,产物可能要存档)
-    // 不删 issueRoot 整体:artifacts 可能存着 agent 写的产物,留给 artifacts API 走
-    // 原有清理路径(group 删除 / 用户手动清)。
   }
 
 

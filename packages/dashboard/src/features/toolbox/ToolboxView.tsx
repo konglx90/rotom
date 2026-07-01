@@ -15,6 +15,7 @@ const TABS = [
   { to: 'skills', label: '技能', icon: '⚡' },
   { to: 'issue-patrol', label: 'Issue 巡检', icon: '🔍' },
   { to: 'gallery', label: '图册', icon: '🖼️' },
+  { to: 'worktrees', label: 'Worktrees', icon: '🌿' },
   { to: 'terminal', label: '终端', icon: '⌨️' },
 ] as const
 

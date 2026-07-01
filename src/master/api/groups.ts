@@ -6,6 +6,7 @@ import fs from "node:fs";
 import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import { defaultGroupWorkingDir } from "../group-paths.js";
+import { scanAllRepos, resolveGroupWorktreeInfo } from "../repo-scan.js";
 import { createLogger } from "../../shared/logger.js";
 import { parseAgentProfile, mergeGroupProfile } from "../../shared/agent-profile.js";
 
@@ -564,5 +565,21 @@ export function registerGroupRoutes(
     if (!ok) { res.status(409).json({ error: "Bridge not pending (already resolved)" }); return; }
     log.info(`Ask bridge cancelled: ${req.params.id}`);
     res.json({ ok: true });
+  });
+
+  // ── Worktree 视图(供 Dashboard 展示)───────────────────────────────────
+
+  /** GET /api/groups/:id/worktree —— 当前 group 的 worktree 推算信息。
+   *  返回 primary + extras 的路径(本机 FS 是否已存在)。没配 repo → 404。 */
+  apiRouter.get("/groups/:id/worktree", (req, res) => {
+    const info = resolveGroupWorktreeInfo(db, req.params.id);
+    if (!info) { res.status(404).json({ error: "group has no repo configured" }); return; }
+    res.json(info);
+  });
+
+  /** GET /api/repos/worktrees —— 全局所有 repo + worktree 列表(工具箱视图用)。
+   *  扫描本机 ~/.rotom/repos/,跨机器部署时返回空。 */
+  apiRouter.get("/repos/worktrees", (_req, res) => {
+    res.json(scanAllRepos());
   });
 }

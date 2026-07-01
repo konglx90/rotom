@@ -36,8 +36,31 @@ export function repoIdFor(url: string): string {
   return createHash("sha1").update(u).digest("hex").slice(0, 12);
 }
 
-function barePath(repoId: string): string {
-  return path.join(REPOS_ROOT, `${repoId}.git`);
+/**
+ * 从 URL 提取仓库名(最后一段,去 .git 后缀)。用于路径可读性,让人一眼看出
+ * 是哪个仓库。仅做展示,唯一性仍由 repoId 保证。
+ *
+ * 例:
+ *   git@github.com:org/repo.git        → repo
+ *   https://code.alipay.com/kael/kael-trade-h5.git → kael-trade-h5
+ *   /tmp/origin.git                    → origin
+ */
+export function repoNameFor(url: string): string {
+  let u = url.trim();
+  if (u.endsWith(".git")) u = u.slice(0, -4);
+  // 取最后一段(去 query/hash/trailing slash)
+  u = u.split("?")[0].split("#")[0].replace(/\/$/, "");
+  const last = u.split("/").pop() || "repo";
+  // 兜底:若 last 为空(如 URL 是 host 根),用 "repo"
+  return last || "repo";
+}
+
+/** bare clone 路径:`~/.rotom/repos/<repoName>-<repoId8>.git/`。
+ *  repoName 做可读性,repoId8 做唯一性(避免同名不同 URL 冲突)。 */
+function barePath(url: string): string {
+  const repoId = repoIdFor(url);
+  const repoName = repoNameFor(url);
+  return path.join(REPOS_ROOT, `${repoName}-${repoId.slice(0, 8)}.git`);
 }
 
 interface GitResult {
@@ -105,7 +128,23 @@ function ensureReposRoot(): void {
 /** 给定 URL 算出 bare clone 路径(不克隆,只算路径)。用于 cleanup 时
  *  拿到 barePath 做 `git worktree remove` 的 cwd,不需要真的 clone。 */
 export function getBarePathForUrl(url: string): string {
-  return barePath(repoIdFor(url));
+  return barePath(url);
+}
+
+/**
+ * 算出 worktree 的全局路径(不创建,只算路径)。
+ *
+ * 布局:~/.rotom/repos/<repo-id>-wt/<slot>/
+ *   - group 模式:slot = `group-<groupId8>`(每 group 一个 worktree,跨群不共享)
+ *   - issue 模式:slot = `<issueId8>`(per-issue)
+ *
+ * 全局放,不跟 group 走(用户需求:worktree 是机器级资源,不属于某个 group)。
+ * bare clone 对象库仍全局共享,worktree 只占 checkout 文件空间。
+ */
+export function getWorktreePathForUrl(url: string, slot: string): string {
+  const repoId = repoIdFor(url);
+  const repoName = repoNameFor(url);
+  return path.join(REPOS_ROOT, `${repoName}-${repoId.slice(0, 8)}-wt`, slot);
 }
 
 /**
@@ -120,7 +159,7 @@ export function getBarePathForUrl(url: string): string {
 export function ensureBareClone(url: string): { repoId: string; barePath: string } {
   ensureReposRoot();
   const repoId = repoIdFor(url);
-  const bp = barePath(repoId);
+  const bp = barePath(url);
   const alreadyExists = fs.existsSync(bp);
 
   if (!alreadyExists) {
@@ -393,7 +432,7 @@ function dirSize(p: string): number {
 export async function ensureBareCloneAsync(url: string): Promise<{ repoId: string; barePath: string }> {
   ensureReposRoot();
   const repoId = repoIdFor(url);
-  const bp = barePath(repoId);
+  const bp = barePath(url);
   const alreadyExists = fs.existsSync(bp);
 
   if (!alreadyExists) {
@@ -414,9 +453,13 @@ export async function ensureBareCloneAsync(url: string): Promise<{ repoId: strin
  * 显式 fetch 某 bare clone(供 `rotom repo fetch` 用)。
  * 返回 git 输出供 CLI 展示。
  */
-export function fetchBareClone(repoId: string): { ok: boolean; output: string } {
-  const bp = barePath(repoId);
-  if (!fs.existsSync(bp)) return { ok: false, output: `repo ${repoId} not found` };
+/**
+ * 显式 fetch 某 bare clone(供 `rotom repo fetch` 用)。
+ * repoKey 是 listBareClones 返回的 repoId 字段(完整目录名,含 repoName)。
+ */
+export function fetchBareClone(repoKey: string): { ok: boolean; output: string } {
+  const bp = path.join(REPOS_ROOT, `${repoKey}.git`);
+  if (!fs.existsSync(bp)) return { ok: false, output: `repo ${repoKey} not found` };
   const r = runGit(["fetch", "--prune"], { cwd: bp });
   return { ok: r.ok, output: r.ok ? r.stdout : `${r.stderr || r.stdout}` };
 }
@@ -424,17 +467,17 @@ export function fetchBareClone(repoId: string): { ok: boolean; output: string } 
 /**
  * 删除 bare clone。要求无活跃 worktree(否则 git 会拒绝,我们也再保险一层)。
  * 供 `rotom repo remove` 用。bare clone 全局共享,删除前必须确认。
+ * repoKey 是 listBareClones 返回的 repoId 字段(完整目录名)。
  */
-export function removeBareClone(repoId: string): { ok: boolean; error?: string } {
-  const bp = barePath(repoId);
-  if (!fs.existsSync(bp)) return { ok: false, error: `repo ${repoId} not found` };
+export function removeBareClone(repoKey: string): { ok: boolean; error?: string } {
+  const bp = path.join(REPOS_ROOT, `${repoKey}.git`);
+  if (!fs.existsSync(bp)) return { ok: false, error: `repo ${repoKey} not found` };
   // 检查 worktree list 是否除了 bare 自己以外还有其他 worktree
   const list = runGit(["worktree", "list"], { cwd: bp });
   if (list.ok) {
-    // 第一行是 bare clone 自己,之后每行一个 worktree
     const lines = list.stdout.split("\n").filter(l => l.trim());
     if (lines.length > 1) {
-      return { ok: false, error: `repo ${repoId} 仍有 ${lines.length - 1} 个活跃 worktree,先清理它们` };
+      return { ok: false, error: `repo ${repoKey} 仍有 ${lines.length - 1} 个活跃 worktree,先清理它们` };
     }
   }
   fs.rmSync(bp, { recursive: true, force: true });

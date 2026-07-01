@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import { artifactsApi, type ArtifactRefs } from '../../api/artifacts'
+import { reposApi, type GroupWorktreeInfo } from '../../api/repos'
 import type { ArtifactFile, ArtifactContent, ArtifactOriginal } from '../../api/types'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
@@ -276,6 +277,8 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
   const [search, setSearch] = useState('')
   const [copiedHint, setCopiedHint] = useState(false)
   const [mode, setMode] = useState<'view' | 'diff'>('view')
+  const [wtInfo, setWtInfo] = useState<GroupWorktreeInfo | null>(null)
+  const [wtCopied, setWtCopied] = useState(false)
   // 文件树折叠态:折叠后只剩窄条(图标列),把空间让给预览。预览全屏看代码时有用。
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   // 文件树宽度:可拖拽分隔条调整,持久化到 localStorage。深目录默认 260,
@@ -343,6 +346,8 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
     setMode('view')
     // refs 加载失败不阻塞主流程,下拉退化为只剩 HEAD 选项
     artifactsApi.listRefs(groupId).then(setRefs).catch(() => setRefs(null))
+    // worktree info:group 配了 repo 才有;没配返回 null(404 静默)
+    reposApi.getGroupWorktree(groupId).then(setWtInfo).catch(() => setWtInfo(null))
   }, [groupId, loadFiles])
 
   const handleSelect = useCallback(async (file: ArtifactFile) => {
@@ -458,6 +463,31 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
           </Button>
         </div>
       </div>
+      {wtInfo && (
+        <div className={styles.worktreeBar} title={wtInfo.primaryPath}>
+          <span className={styles.worktreeIcon}>🌿</span>
+          <span className={styles.worktreeLabel}>worktree</span>
+          <span className={styles.worktreePath} title={wtInfo.primaryPath}>
+            {wtInfo.primaryPath}
+          </span>
+          {wtInfo.branch && <span className={styles.worktreeBranch}>[{wtInfo.branch}]</span>}
+          <span className={wtInfo.primaryExists ? styles.worktreeOk : styles.worktreePending}>
+            {wtInfo.primaryExists ? '✓ 已创建' : '⏳ 未创建(首次执行 issue/chat 时克隆)'}
+          </span>
+          <button
+            type="button"
+            className={styles.worktreeCopyBtn}
+            onClick={() => {
+              navigator.clipboard?.writeText(wtInfo.primaryPath)
+              setWtCopied(true)
+              setTimeout(() => setWtCopied(false), 1200)
+            }}
+            title="复制路径"
+          >
+            {wtCopied ? '已复制' : '复制'}
+          </button>
+        </div>
+      )}
       {root && (
         <div className={styles.pathBar}>
           <span className={styles.pathBarPath} title={selectedFile ? absolutePath : root}>
