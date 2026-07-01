@@ -1,4 +1,4 @@
-# Rotom A2A Gateway
+# Rotom A2A WORKSPACE
 
 数字员工 Mesh —— 一个中心化的 Agent 协作网络。Master 充当中枢，Executor 把任意 CLI 工具（claude / codex / openclaw / hermes 等）封装成可抢单执行任务的数字员工，rotom CLI 让 shell agent 借用已注册身份调用 Mesh。
 

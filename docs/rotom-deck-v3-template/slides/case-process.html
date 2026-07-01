@@ -1,0 +1,55 @@
+<!-- ============ {{N}} 资产排查 过程 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="深讲 · 排查过程">
+  <div class="topbar"><span class="brand">主线 · 深讲</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <div class="title-row">
+  <h2>深讲 · 资产排查 · 群 2fec433e</h2>
+  <a class="live-link" href="http://localhost:3000/dashboard/groups/2fec433e-41e7-4ace-8dd5-d5fa0171d39a" target="_blank" rel="noopener">
+    <span class="ll-tag">实际群</span>
+    <span class="ll-arrow">↗</span>
+    <span class="ll-text">打开养老金资产排查的真实群:<strong>群 2fec433e</strong> · 看 44 条消息怎么把两个任务接力走完</span>
+  </a>
+  </div>
+  <div class="deep" style="margin-top:14px">
+    <div class="deep-left">
+      <h3>任务 A · 链路追溯 (西花 → 江德福)</h3>
+      <div class="step-list">
+      <div class="step-card"><span class="n">1</span><div class="t">西花发问:资产列表第二列 label 由什么决定?给接口 <code class="inline">com.alipay.pensionbff.asset.list</code></div></div>
+      <div class="step-card"><span class="n">2</span><div class="t"><strong>江德福</strong> 梳理 3 项目数据流:<code class="inline">AssetColunm/index.tsx:25-32</code> → <code class="inline">inventoryColumns</code> → <code class="inline">x.label</code> 渲染</div></div>
+      <div class="step-card"><span class="n">3</span><div class="t">对比 label/desc 前后数据:<code class="inline">"至85岁预估累计可领"</code> → <code class="inline">"到期累计可领"</code>,<strong style="color:var(--err)">desc 字段被移除</strong></div></div>
+      <div class="step-card"><span class="n">4</span><div class="t">定位核心代码 <code class="inline">unitedAssetInsure.ts:337 getInventoryColumns</code> + Loki <code class="inline">lifeProductCategory85Desc</code> 配置驱动</div></div>
+      <div class="step-card"><span class="n">5</span><div class="t">西花改方向:不配了改前端去 desc → 江德福重新定位到 <code class="inline">@alipay/pension-components</code> npm 包 <code class="inline">AssetColunm/index.js:59</code></div></div>
+      <div class="step-card"><span class="n">6</span><div class="t">记 memory <code class="inline">2273d7fd-...</code> + 建 issue <code class="inline">0e2f3f6d-...</code> 启动写盘</div></div>
+
+      <h3 style="margin-top:18px">任务 B · PR review (西花 → 瓦力)</h3>
+      <div class="step-card"><span class="n">1</span><div class="t">西花 @瓦力 review <code class="inline">PR S090011757032</code> + 追问「去转入」按钮渲染条件</div></div>
+      <div class="step-card"><span class="n">2</span><div class="t">西花指文件 <code class="inline">AccountAssetV2/index.tsx</code> → <strong style="color:var(--warn)">瓦力 grep 0 命中</strong> —— 该文件没「去转入」按钮</div></div>
+      <div class="step-card"><span class="n">3</span><div class="t">西花追问「会不会有空值挂页」 → 瓦力做空值审计 → 找到 1 中风险:<code class="inline">Guide.setRenderStep</code> destructure 无防御</div></div>
+      <div class="step-card"><span class="n">4</span><div class="t"><strong style="color:var(--ok)">Agent 也会互检</strong> · 西花实测反驳「数字字符串不报错」,瓦力认错重测;再反驳「null/undefined 浏览器不报错」,瓦力用 V8 实测纠错</div></div>
+      <div class="step-card"><span class="n">5</span><div class="t">三方证据汇总(类型契约 + 形态稳定 + V8 实测)→ <strong style="color:var(--ok)">R2 风险彻底关掉</strong>,改动本身不引入新挂页点</div></div>
+      </div>
+    </div>
+    <div class="deep-right">
+      <div class="panel-title">群聊时间线(可回放 · 5.5h)</div>
+      <div class="timeline">
+        <div class="ev"><div class="who">西花</div><div class="what">@江德福 看 baoxian 下三个项目,资产列表第二列 label 由什么决定的</div><div class="when">02:00 · 任务 A 起点</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">梳理三项目数据流:<code class="inline">AssetColunm:25-32</code> → <code class="inline">inventoryColumns</code> → <code class="inline">x.label</code></div><div class="when">02:02 · 链路 ↓</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">追问"是不是配置改了导致"</div><div class="when">02:05</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">对比前后数据 → <strong style="color:var(--err)">desc 字段被移除</strong>,后端下发字段变了</div><div class="when">02:17 · 定位根因</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">找到核心代码 <code class="inline">unitedAssetInsure.ts:337</code> + Loki 配置</div><div class="when">02:19</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">"记到 note" → memory <code class="inline">2273d7fd-...</code></div><div class="when">02:21 · 沉淀 memory</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">改方向:不配了,改前端去 desc 渲染</div><div class="when">02:40 · 方向调整</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">定位 desc 真实渲染在 <code class="inline">@alipay/pension-components</code> npm 包</div><div class="when">02:51 · 接力重定位</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">建 issue <code class="inline">0e2f3f6d-...</code> 启动写盘</div><div class="when">03:00 · 任务 A 收口</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">@瓦力 review <code class="inline">PR S090011757032</code> + 追问「去转入」渲染条件</div><div class="when">06:38 · 任务 B 起点</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">指文件 <code class="inline">AccountAssetV2/index.tsx</code></div><div class="when">07:04</div></div>
+        <div class="ev"><div class="who">瓦力</div><div class="what">grep 验证:<strong style="color:var(--warn)">该文件无「去转入」按钮</strong>(0 命中)</div><div class="when">07:05</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">"空值会不会让页面挂?"</div><div class="when">07:25</div></div>
+        <div class="ev"><div class="who">瓦力</div><div class="what">空值审计 → 1 中风险:<code class="inline">Guide.setRenderStep</code> destructure 无防御</div><div class="when">07:26 · 风险挖掘</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">实测反驳"数字字符串不报错" → 瓦力认错</div><div class="when">07:32 · 互检</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">再反驳"null/undefined 浏览器也不报错"</div><div class="when">07:33</div></div>
+        <div class="ev"><div class="who">瓦力</div><div class="what">V8 实测纠错 + 三方证据汇总 → <strong style="color:var(--ok)">R2 风险关掉</strong></div><div class="when">07:35 · 任务 B 收口</div></div>
+      </div>
+    </div>
+  </div>
+</section>

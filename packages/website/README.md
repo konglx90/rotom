@@ -1,6 +1,6 @@
 # @alipay/rotom-website
 
-Rotom A2A Gateway 官网 —— 纯静态 Astro 站点。
+Rotom A2A WORKSPACE 官网 —— 纯静态 Astro 站点。
 
 **与生产代码完全隔离**:不依赖 `src/master`、`src/executor`、`src/cli`,不参与根 `build:master`,
 不进 npm 发布包 `files[]`。本目录的 `dist/` 由 `astro build` 独立产出,可丢到任意静态托管。

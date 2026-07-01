@@ -1,0 +1,87 @@
+[
+  {
+    "file": "cover.html",
+    "title": "封面",
+    "tag": null
+  },
+  {
+    "file": "agenda.html",
+    "title": "目录",
+    "tag": null
+  },
+  {
+    "file": "rotom-30s.html",
+    "title": "rotom 30 秒",
+    "tag": "背景"
+  },
+  {
+    "file": "dashboard-blocks.html",
+    "title": "Dashboard 组件一览",
+    "tag": "背景"
+  },
+  {
+    "file": "chat-as-workbench.html",
+    "title": "群就是工作台 · 基础交互",
+    "tag": "背景"
+  },
+  {
+    "file": "ref-learning.html",
+    "title": "参照学习 · multica + ClaudeTag + MoA",
+    "tag": "背景"
+  },
+  {
+    "file": "learn-loop.html",
+    "title": "能力 1 · 持续学习",
+    "tag": "主线"
+  },
+  {
+    "file": "learn-loop-landing.html",
+    "title": "能力 1 续 · 我们怎么落地",
+    "tag": "主线"
+  },
+  {
+    "file": "patrol.html",
+    "title": "能力 2 · 主动出击",
+    "tag": "主线"
+  },
+  {
+    "file": "patrol-landing.html",
+    "title": "能力 2 续 · 我们怎么落地",
+    "tag": "主线"
+  },
+  {
+    "file": "governance.html",
+    "title": "治理一页清 · 写盘必挂 Issue",
+    "tag": "背景"
+  },
+  {
+    "file": "cli.html",
+    "title": "rotom CLI 一图流",
+    "tag": "背景"
+  },
+  {
+    "file": "case-open.html",
+    "title": "真实问题 · 资产排查",
+    "tag": "主线"
+  },
+  {
+    "file": "case-process.html",
+    "title": "深讲 · 排查过程",
+    "tag": "主线"
+  },
+  {
+    "file": "case-result.html",
+    "title": "深讲 · 结果 & 方法论",
+    "tag": "主线"
+  },
+  {
+    "file": "iteration.html",
+    "title": "迭代 V3/V4",
+    "tag": "主线"
+  },
+  {
+    "file": "summary.html",
+    "title": "总结 + Q&A",
+    "tag": "主线"
+  }
+]

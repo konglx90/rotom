@@ -529,7 +529,7 @@ export class CodexExecutor implements CliExecutor {
           await request("initialize", {
             clientInfo: {
               name: "open-a2a-gateway",
-              title: "Open A2A Gateway",
+              title: "Open A2A WORKSPACE",
               version: "0.1.0",
             },
             capabilities: { experimentalApi: true },

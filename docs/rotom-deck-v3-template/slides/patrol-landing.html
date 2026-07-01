@@ -1,0 +1,39 @@
+<!-- ============ {{N}} 能力 2 落地 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="能力 2 续 · 落地">
+  <div class="topbar"><span class="brand">主线 · 能力 2 落地</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <div class="title-row">
+    <h2>能力 2 续 · 我们怎么落地的</h2>
+    <a class="live-link" href="http://localhost:3000/dashboard/toolbox/issue-patrol" target="_blank" rel="noopener">
+      <span class="ll-tag">看板</span>
+      <span class="ll-arrow">↗</span>
+      <span class="ll-text">toolbox / issue-patrol · 看实跑状态 + run 历史</span>
+    </a>
+  </div>
+  <p class="lead">不吹概念 —— 看现在实际跑出来的:1 个巡检群 + 1 个巡检员 + 1h 跑一次,每轮扫 5 个候选、命中 0~2 个 ready,error 路径有兜底。</p>
+  <div class="deep" style="margin-top:14px">
+    <div class="deep-left">
+      <h3>实跑数据(近 24h 抽样 · /api/issues-patrol/runs)</h3>
+      <div class="step-card"><span class="n">✓</span><div class="t"><strong>1 巡检群 / 1 巡检员</strong> · <code class="inline">全局issue巡检群</code>(<code class="inline">003ff00a</code>)· 巡检员 阿甘 · 跨所有群扫候选</div></div>
+      <div class="step-card"><span class="n">✓</span><div class="t"><strong>1h 跑一次 · 单次 30s 量级</strong> · interval 3600s · 30s tick 触发 handler · 单次 <code class="inline">candidates_scanned=5</code> · 耗时 ~30s(<code class="inline">started_at</code> → <code class="inline">finished_at</code>)</div></div>
+      <div class="step-card"><span class="n">✓</span><div class="t"><strong>判 ready 平均 0~2 / 轮</strong> · 24h 抽样 20 个 run,completed 中 ready=0 的 8 次 / ready=1 的 8 次 / ready=2 的 4 次 · 大多数不打扰人</div></div>
+      <div class="step-card"><span class="n">✓</span><div class="t"><strong>重叠跳过</strong> · 上一轮 [巡检] issue 还在 in_progress → 当轮 <code class="inline">skipped_overlap</code> · 24h 命中 2 次 · 防止巡检员被压垮</div></div>
+      <div class="step-card warn"><span class="n">!</span><div class="t"><strong>异常路径有兜底</strong> · 6/30 22:48 巡检员 result 输出非 JSON → 解析失败 → run 标 error(不静默)· issue 不被认领 · 下轮照常跑</div></div>
+    </div>
+    <div class="deep-right">
+      <div class="panel-title">24h 巡检 run 抽样(倒序)</div>
+      <div class="timeline">
+        <div class="ev"><div class="who">07-01 22:38</div><div class="what">scanned 5 / ready 1 · ok</div><div class="when">lastStatus: ok</div></div>
+        <div class="ev"><div class="who">07-01 21:38</div><div class="what">派 1 个 [巡检] issue → 阿甘</div><div class="when">dispatched · in_progress</div></div>
+        <div class="ev"><div class="who">07-01 19:18</div><div class="what">scanned 5 / ready 1 · completed</div><div class="when">耗时 3h42m(巡检员干到 22:00)</div></div>
+        <div class="ev"><div class="who">07-01 18:25</div><div class="what"><strong style="color:var(--warn)">skipped_overlap</strong> · 上一轮 patrol issue 还在 in_progress</div><div class="when">重叠保护</div></div>
+        <div class="ev"><div class="who">07-01 17:18</div><div class="what">scanned 5 / ready 1 · completed</div><div class="when">ok</div></div>
+        <div class="ev"><div class="who">07-01 15:41</div><div class="what">派 1 个 [巡检] issue → 阿甘</div><div class="when">dispatched</div></div>
+        <div class="ev"><div class="who">06-30 22:48</div><div class="what"><strong style="color:var(--err)">error: bad result JSON</strong> · 巡检员把结果写到了 <code class="inline">patrol-result.json</code> 而非直接输出 JSON</div><div class="when">解析失败 · issue 不认领</div></div>
+        <div class="ev"><div class="who">06-30 21:47</div><div class="what">scanned 5 / ready 0 · completed</div><div class="when">无 ready(都很成熟)</div></div>
+        <div class="ev"><div class="who">06-30 19:47</div><div class="what">scanned 5 / ready 2 · completed</div><div class="when">一次推 2 个候选给 review</div></div>
+        <div class="ev"><div class="who">06-30 18:48</div><div class="what">scanned 5 / ready 0 · completed</div><div class="when">ok</div></div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,5 +1,5 @@
 /**
- * API Client for A2A Gateway Dashboard
+ * API Client for A2A WORKSPACE Dashboard
  *
  * Dashboard endpoints are open (no auth). Agent-token-authed endpoints
  * (whoami / send-as-me) live on separate fetch paths that inject mesh_*

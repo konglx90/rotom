@@ -1,0 +1,39 @@
+<!-- ============ {{N}} 能力 2 主动出击 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="能力 2 · 主动出击">
+  <div class="topbar"><span class="brand">主线 · 能力 2</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <h2>能力 2 · 主动出击 <span style="font-size:16px;color:var(--fg3);font-weight:400">/ 复用 群 + 定时任务 + Issue</span></h2>
+  <p class="lead">主动出击不是另搞一套 —— 复用 rotom 三个已有的能力(群 / 定时任务 / Issue)拼出来。建 1 个 <code class="inline">type=patrol</code> 群,挂 1 个每小时跑的定时任务,任务就是建 1 个 [巡检] issue 让巡检员自己判。</p>
+  <div class="deep" style="margin-top:14px">
+    <div class="deep-left">
+      <h3>三个已有能力怎么拼(没有新概念)</h3>
+      <div class="step-card"><span class="n">1</span><div class="t"><strong>复用「群」</strong> · 巡检群 = 普通群 + <code class="inline">type=patrol</code> 标记(<code class="inline">groups.type</code> 字段)· 限 1 个未归档 · 限 1 个巡检员 · 走群消息 + issue 完整流程,没有任何专用 UI</div></div>
+      <div class="step-card"><span class="n">2</span><div class="t"><strong>复用「定时任务」</strong> · 建群时 auto-bootstrap 1 个 <code class="inline">scheduled_tasks</code> 行(<code class="inline">handler_key=issue-patrol</code> · interval 3600s)· 共用 30s tick + at-most-once + grace window + dashboard 可见</div></div>
+      <div class="step-card"><span class="n">3</span><div class="t"><strong>复用「Issue」</strong> · handler 跑到点 → 派 1 个 <code class="inline">[巡检] YYYY-MM-DD HH:mm</code> issue 给巡检员(走 issue 抢单 / dispatch / 审批 / 终态全流程)· 巡检员用 LLM 判 ready 后用 result 字段回写</div></div>
+      <div class="step-card"><span class="n">4</span><div class="t"><strong>复用「Skill」</strong> · 巡检规则走 <code class="inline">issue-patrol-rules</code> skill 内容当 prompt 注入(同一个 skill 体系,不是新机制)· 想改规则 → 改 skill 就行</div></div>
+      <div class="step-card ok"><span class="n">+</span><div class="t"><strong>只多了 1 张表 + 1 个 handler</strong> · <code class="inline">issue_patrol_logs</code>(migrations/043)+ <code class="inline">scheduler-handlers.ts</code> 里 ~80 行 handler 代码 · 其他全是复用</div></div>
+    </div>
+    <div class="deep-right">
+      <div class="panel-title">当前实跑状态(看板)</div>
+      <div class="kpi-row" style="grid-template-columns:1fr 1fr;margin:0 0 10px 0">
+        <div class="kpi"><div class="v">1h</div><div class="l">interval · 3600s</div></div>
+        <div class="kpi"><div class="v">3</div><div class="l">throughputCap</div></div>
+      </div>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);line-height:1.7;margin:0 0 12px 0">
+        巡检群:<strong style="color:var(--acc)">全局issue巡检群</strong><br>
+        巡检员:<strong style="color:var(--acc)">阿甘</strong> · task #114 · enabled<br>
+        下次跑:<code class="inline">2026-07-01 23:38</code><br>
+        上次:<code class="inline">ok</code> · 候选 5 / ready 1
+      </p>
+      <div class="panel-title">复用关系图(全是 rotom 已有)</div>
+      <div class="timeline">
+        <div class="ev"><div class="who">群</div><div class="what"><code class="inline">groups.type=patrol</code> · 普通群 + 1 个标记字段</div><div class="when">→ 群消息 / 成员 / 设置 全复用</div></div>
+        <div class="ev"><div class="who">定时</div><div class="what"><code class="inline">scheduled_tasks</code> + <code class="inline">handler_key</code> 走注册表</div><div class="when">→ 30s tick / at-most-once 全复用</div></div>
+        <div class="ev"><div class="who">Issue</div><div class="what">handler 派 1 个 <code class="inline">[巡检]</code> issue · 巡检员接活</div><div class="when">→ 抢单 / dispatch / 审批 全复用</div></div>
+        <div class="ev"><div class="who">Skill</div><div class="what"><code class="inline">issue-patrol-rules</code> 注入 prompt 当规则</div><div class="when">→ 改规则 = 改 skill</div></div>
+        <div class="ev"><div class="who">Memory</div><div class="what">巡检员判完可 <code class="inline">rotom memory add</code> 沉淀</div><div class="when">→ 能力 1 持续学习 自然联动</div></div>
+        <div class="ev" style="border-left:2px solid var(--warn);padding-left:8px;margin-left:-10px"><div class="who">例外</div><div class="what"><code class="inline">issue_patrol_logs</code> 表 + handler ~80 行</div><div class="when">migration 043 · 唯一新增</div></div>
+      </div>
+    </div>
+  </div>
+</section>

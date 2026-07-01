@@ -1,6 +1,6 @@
 # 安装指南
 
-A2A Gateway 部署三类组件——一台 Master，加任意多个客户端组件（Executor / rotom CLI）。本文按这个顺序逐个铺。
+A2A WORKSPACE 部署三类组件——一台 Master，加任意多个客户端组件（Executor / rotom CLI）。本文按这个顺序逐个铺。
 
 ```
 ┌─────────────────────────────────────────────────┐

@@ -1,0 +1,27 @@
+<!-- ============ {{N}} 资产排查 开场 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="真实问题 · 资产排查">
+  <div class="topbar"><span class="brand">主线 · 真实问题</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <h2>真实问题 · 资产列表 label 排查 + PR review</h2>
+  <p class="lead">业务反馈线上资产列表第二列文案突然变了(原本「至 85 岁预估累计可领」变成「到期累计可领」),需要追到根因 —— 同时 review 一个去 desc 渲染的 PR,顺手做空值审计。</p>
+  <a class="live-link" href="http://localhost:3000/dashboard/groups/2fec433e-41e7-4ace-8dd5-d5fa0171d39a" target="_blank" rel="noopener">
+    <span class="ll-tag">实际群</span>
+    <span class="ll-arrow">↗</span>
+    <span class="ll-text">打开养老金资产排查的真实群:<strong>群 2fec433e</strong> · 看 44 条消息怎么把两个任务接力走完</span>
+  </a>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card lg">
+      <h4>任务 A · label 变了的根因追溯</h4>
+      <p>跨 <code class="inline">egg-united-wealth-insure</code> / <code class="inline">pension</code> / <code class="inline">pensionbff</code> 三个项目,定位第二列 label 数据来源 → 对比前后数据 → 找到核心代码 → 沉淀 memory + 建 issue</p>
+      <p class="meta" style="margin-top:6px;color:var(--fg3)">耗时 ~12 min · 6 轮对话 · 沉淀 1 memory + 1 issue</p>
+    </div>
+    <div class="card lg">
+      <h4>任务 B · PR review + 空值审计</h4>
+      <p>review <code class="inline">S090011757032</code> + 排查「去转入」按钮渲染位置 + 审改动会不会引入新的空值挂页点</p>
+      <p class="meta" style="margin-top:6px;color:var(--fg3)">耗时 ~1 h · 接力 7 轮 · 瓦力 ↔ 西花 4 次实测互检</p>
+    </div>
+  </div>
+  <div class="warn-row" style="margin-top:14px">
+    这一节讲三件事:<strong>1</strong> 群里两个任务怎么接力走完(江德福 → 瓦力);<strong>2</strong> Agent 也会犯错 + 怎么自己纠错(瓦力被西花实测反驳两次);<strong>3</strong> 这次真实沉淀的资产(memory / issue / 风险点)。
+  </div>
+</section>
