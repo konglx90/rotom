@@ -85,6 +85,8 @@ export class MeshDb extends MeshDbCore {
   declare updateGroupPinned: typeof groupMethods.updateGroupPinned;
   declare updateGroupArchived: typeof groupMethods.updateGroupArchived;
   declare isGroupArchived: typeof groupMethods.isGroupArchived;
+  declare updateGroupStarred: typeof groupMethods.updateGroupStarred;
+  declare isGroupStarred: typeof groupMethods.isGroupStarred;
   declare backfillGroupDefaultWorkingDir: typeof groupMethods.backfillGroupDefaultWorkingDir;
   declare listGroups: typeof groupMethods.listGroups;
   declare listGroupsWithMembers: typeof groupMethods.listGroupsWithMembers;

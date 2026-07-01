@@ -75,6 +75,7 @@ interface ChatContextValue {
   toggleGroupPinned: (groupId: string, pinned: boolean) => Promise<void>
   deleteGroup: (groupId: string) => Promise<void>
   toggleGroupArchived: (groupId: string, archived: boolean) => Promise<void>
+  toggleGroupStarred: (groupId: string, starred: boolean) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -407,6 +408,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [loadGroups],
   )
 
+  const toggleGroupStarred = useCallback(
+    async (groupId: string, starred: boolean) => {
+      setGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, starred_at: starred ? new Date().toISOString() : null } : g)),
+      )
+      try {
+        await groupsApi.setStarred(groupId, starred)
+        await loadGroups()
+      } catch (error) {
+        console.error("Failed to toggle group star:", error)
+        await loadGroups()
+        const msg = error instanceof Error ? error.message : String(error)
+        window.alert(`标记重要少用失败：${msg}`)
+      }
+    },
+    [loadGroups],
+  )
+
 
 
   const deleteGroup = useCallback(
@@ -521,6 +540,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     clearGroupMemberWorkingDir,
     toggleGroupPinned,
     toggleGroupArchived,
+    toggleGroupStarred,
     deleteGroup,
   }
 

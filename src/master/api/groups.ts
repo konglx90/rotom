@@ -185,12 +185,12 @@ export function registerGroupRoutes(
       res.status(404).json({ error: "Group not found" });
       return;
     }
-    const { name, workingDir, pinned, archived, guidancePrompt } = req.body;
+    const { name, workingDir, pinned, archived, starred, guidancePrompt } = req.body;
     if (name !== undefined && name !== null) {
       db.updateGroupName(req.params.id, String(name));
       log.info(`Group ${req.params.id} name → ${name}`);
     }
-    if (workingDir === undefined && name === undefined && pinned === undefined && archived === undefined && guidancePrompt === undefined) {
+    if (workingDir === undefined && name === undefined && pinned === undefined && archived === undefined && starred === undefined && guidancePrompt === undefined) {
       res.status(400).json({ error: "no updatable fields" });
       return;
     }
@@ -201,6 +201,10 @@ export function registerGroupRoutes(
     if (archived !== undefined) {
       const next = db.updateGroupArchived(req.params.id, Boolean(archived));
       log.info(`Group ${req.params.id} archived_at → ${next ?? "null"}`);
+    }
+    if (starred !== undefined) {
+      const next = db.updateGroupStarred(req.params.id, Boolean(starred));
+      log.info(`Group ${req.params.id} starred_at → ${next ?? "null"}`);
     }
     if (guidancePrompt !== undefined) {
       const v = typeof guidancePrompt === "string" ? guidancePrompt : null;

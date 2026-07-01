@@ -83,6 +83,62 @@ function ArchivedSection({ archivedGroups, selectedGroupId, selectGroup, toggleG
     </div>
   )
 }
+function StarredSection({ starredGroups, selectedGroupId, selectGroup, toggleGroupStarred }: {
+  starredGroups: { id: string; name: string; pinned_at?: string | null; member_count?: number; created_at: string }[]
+  selectedGroupId: string
+  selectGroup: (id: string) => void
+  toggleGroupStarred: (id: string, starred: boolean) => Promise<void>
+}) {
+  const [expanded, setExpanded] = useState(true)
+  return (
+    <div className={styles.starredSection}>
+      <div
+        className={styles.starredSectionHeader}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className={styles.starredSectionArrow}>
+          {expanded ? '▼' : '▶'}
+        </span>
+        <span className={styles.starredSectionTitle}>⭐ 重要少用</span>
+        <span className={styles.starredSectionCount}>{starredGroups.length}</span>
+      </div>
+      {expanded && (
+        <ul className={styles.starredList}>
+          {starredGroups.map((group) => {
+            const isActive = selectedGroupId === group.id
+            return (
+              <li
+                key={group.id}
+                className={`${styles.groupItem} ${styles.starred} ${isActive ? styles.active : ''}`}
+                onClick={() => selectGroup(group.id)}
+              >
+                <div className={styles.groupBody}>
+                  <div className={styles.groupName}>
+                    <span className={styles.starredMark} title="重要少用">⭐</span>
+                    <span className={styles.groupNameText}>{group.name}</span>
+                    <span className={styles.memberCount}>
+                      {`· ${group.member_count || 0} 位`}
+                    </span>
+                  </div>
+                </div>
+                <button type="button"
+                  className={styles.starBtn}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleGroupStarred(group.id, false)
+                  }}
+                  title="取消重要少用"
+                >
+                  取消标记
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
 export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const { zenMode, toggleZenMode } = useZenMode()
   // AppSidebar is rendered above <Routes>, so useParams() can't see the route
@@ -106,6 +162,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     updateGroupWorkingDir,
     toggleGroupPinned,
     toggleGroupArchived,
+    toggleGroupStarred,
     deleteGroup,
   } = useChatContext()
   const [dragging, setDragging] = useState(false)
@@ -169,10 +226,12 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   }
   const selectedGroupId = urlGroupId || ''
   const isZen = zenMode
-  // Pinned groups first (sorted by most recently pinned), then active groups
-  // by created_at DESC, then archived groups at the bottom.
+  // 分层:置顶(在 active 内排首) → 普通活跃 → ⭐重要少用 → 🗄️已归档。
+  // active = 既没归档也没标重要少用;pinned 在 active 内部排序优先。
+  // starred = 标了 starred_at 但没归档(归档优先级高于 starred)。
+  // archived = 已归档,只读。
   const activeGroups = groups
-    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at)
+    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at && !g.starred_at)
     .slice()
     .sort((a, b) => {
       if (a.pinned_at && b.pinned_at) return b.pinned_at.localeCompare(a.pinned_at)
@@ -180,6 +239,10 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
       if (b.pinned_at) return 1
       return 0
     })
+  const starredGroups = groups
+    .filter((g) => !g.name.startsWith('__dm__:') && g.starred_at && !g.archived_at)
+    .slice()
+    .sort((a, b) => (b.starred_at || '').localeCompare(a.starred_at || ''))
   const archivedGroups = groups
     .filter((g) => g.archived_at)
     .slice()
@@ -445,7 +508,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                   + 新建群
                 </button>
               </div>
-              {displayGroups.length === 0 && archivedGroups.length === 0 ? (
+              {displayGroups.length === 0 && starredGroups.length === 0 && archivedGroups.length === 0 ? (
                 <div className={styles.hint}>暂无群组</div>
               ) : (
                 <>
@@ -453,6 +516,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                     <ul className={styles.groupList}>
                       {displayGroups.map((group) => {
                         const isPinned = Boolean(group.pinned_at)
+                        const isStarred = Boolean(group.starred_at)
                         const typeBadge = getGroupTypeBadge(group.type)
                         return (
                           <li
@@ -534,6 +598,18 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                     className={styles.moreItem}
                                     onClick={(e) => {
                                       e.stopPropagation()
+                                      toggleGroupStarred(group.id, !isStarred)
+                                      setMoreMenuGroup(null)
+                                      setMoreMenuPos(null)
+                                    }}
+                                  >
+                                    {isStarred ? '⭐ 取消重要少用' : '⭐ 标记重要少用'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.moreItem}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
                                       toggleGroupArchived(group.id, true)
                                       setMoreMenuGroup(null)
                                       setMoreMenuPos(null)
@@ -574,6 +650,14 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                         )
                       })}
                     </ul>
+                  )}
+                  {starredGroups.length > 0 && (
+                    <StarredSection
+                      starredGroups={starredGroups}
+                      selectedGroupId={selectedGroupId}
+                      selectGroup={selectGroup}
+                      toggleGroupStarred={toggleGroupStarred}
+                    />
                   )}
                   {archivedGroups.length > 0 && (
                     <ArchivedSection

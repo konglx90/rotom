@@ -76,18 +76,70 @@
   color: var(--color-navy, #1a365d);
 }
 
-.badgeDefault {
+/* 三档 tag 体系(与 MemoryPanel 对齐) */
+
+/* 1) catChip:实心圆角小药丸,cat 配色,主视觉锚点 */
+.catChip {
+  display: inline-flex;
+  align-items: center;
   font-size: 10px;
   font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(47, 122, 47, 0.12);
-  color: var(--color-wise-green, #2f7a2f);
+  letter-spacing: 0.2px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #fff;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.badgeSchedule {
-  font-size: 11px;
-  color: rgb(99, 102, 241);
+.catFact       { background: #2563eb; }
+.catDecision   { background: #7c3aed; }
+.catConvention { background: #0891b2; }
+.catPitfall    { background: #dc2626; }
+.catTodo       { background: #ea580c; }
+.catPlaybook   { background: #16a34a; }
+.catNote       { background: #64748b; }
+
+/* 2) scopeChip:描边小标签 */
+.scopeChip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  background: transparent;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.scopeGlobal { color: #b45309; }
+.scopeNote   { color: #475569; }
+
+/* 3) pendingCorner:右上角徽章 */
+.pendingCorner {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #fff;
+  background: #dc2626;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 待审核行:左侧强调边 + 整行染色 */
+.cardPending {
+  background: rgba(220, 53, 69, 0.04);
+  border-left: 3px solid #dc2626;
+  padding-left: 13px;
 }
 
 .cardDesc {
@@ -172,3 +224,69 @@
   border-radius: 6px;
   line-height: 1.5;
 }
+
+/* ── filter tabs(扁平列表)──────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color-light, rgba(0, 0, 0, 0.08));
+}
+
+.tab {
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-slate, #555);
+  padding: 4px 12px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tab:hover {
+  background: rgba(47, 122, 47, 0.08);
+  color: var(--color-ink, #111);
+}
+
+.tabActive {
+  background: rgba(47, 122, 47, 0.12);
+  color: var(--color-wise-green, #2f7a2f);
+  font-weight: 700;
+}
+
+.tabCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-slate, #888);
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  line-height: 1;
+}
+
+.tabActive .tabCount {
+  color: var(--color-wise-green, #2f7a2f);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* ── 行 meta(创建者 / 时间 / 群)─────────────────────────────── */
+.cardMeta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-slate, #888);
+}
+

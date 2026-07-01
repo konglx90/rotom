@@ -123,6 +123,11 @@ export const memoryApi = {
     return api.get(`/groups/${groupId}/memory/pending`)
   },
 
+  /** 全平台待审核(跨群)。对应 backend `GET /memory/pending`(无 groupId 限定)。 */
+  async listAllPending(): Promise<MemoryIndex[]> {
+    return api.get(`/memory/pending`)
+  },
+
   async approve(id: string): Promise<{ ok: boolean }> {
     return api.post(`/memory/${id}/approve`)
   },

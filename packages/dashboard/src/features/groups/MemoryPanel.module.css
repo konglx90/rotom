@@ -137,17 +137,6 @@
   flex-wrap: wrap;
 }
 
-.catBadge {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--color-dark-green);
-  background: var(--color-mint);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-}
-
 .itemKey {
   font-weight: 600;
   font-size: 13px;
@@ -156,34 +145,75 @@
   word-break: break-all;
 }
 
-.scopeBadge {
+/* ── 三档 tag 体系 ─────────────────────────────────────────
+   1) catChip:实心圆角小药丸,cat 配色(每 category 一色),主视觉锚点
+   2) scopeChip:描边小标签,中性色,弱化表达作用域(全局/便签)
+   3) pendingCorner:右上角徽章 + 整行左边框指示,带背景突出待审核
+   ───────────────────────────────────────────────────────────── */
+
+.catChip {
+  display: inline-flex;
+  align-items: center;
   font-size: 10px;
-  font-weight: 600;
-  color: #856404;
-  background: rgba(255, 243, 205, 0.7);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #fff;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.noteBadge {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--color-gray);
-  background: rgba(0, 0, 0, 0.04);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-}
+/* 七个 category 配色 —— 互不撞色的柔和色相 */
+.catFact       { background: #2563eb; } /* 事实-蓝 */
+.catDecision   { background: #7c3aed; } /* 决策-紫 */
+.catConvention { background: #0891b2; } /* 约定-青 */
+.catPitfall    { background: #dc2626; } /* 踩坑-红 */
+.catTodo       { background: #ea580c; } /* 待办-橙 */
+.catPlaybook   { background: #16a34a; } /* 工作流-绿 */
+.catNote       { background: #64748b; } /* 便签-石板灰 */
 
-.pendingBadge {
+.scopeChip {
+  display: inline-flex;
+  align-items: center;
   font-size: 10px;
   font-weight: 600;
-  color: #721c24;
-  background: rgba(248, 215, 218, 0.7);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  background: transparent;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.scopeGlobal { color: #b45309; } /* 全局-琥珀描边 */
+.scopeNote   { color: #475569; } /* 便签-石板描边 */
+
+/* 待审核:整行染色 + 左侧 3px 实色边 + 右上角小标 */
+.itemPending {
+  background: rgba(220, 53, 69, 0.04);
+  border-left-color: #dc2626 !important;
+}
+
+.itemPending:hover {
+  background: rgba(220, 53, 69, 0.08);
+}
+
+.pendingCorner {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #fff;
+  background: #dc2626;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .itemSummary {
@@ -376,4 +406,33 @@
   padding: 10px 14px;
   border-top: 1px solid var(--border-color-light);
   flex-shrink: 0;
+}
+
+/* ── filter button 计数徽标 ───────────────────────────────────── */
+.tabCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-gray);
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  line-height: 1;
+}
+
+.tabActive .tabCount {
+  color: var(--color-dark-green);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* ── editor scope 提示文案 ───────────────────────────────────── */
+.fieldHint {
+  font-size: 11px;
+  color: var(--color-gray);
+  margin-top: 2px;
 }

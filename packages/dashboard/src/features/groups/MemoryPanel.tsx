@@ -4,15 +4,17 @@
  * 风格沿用 NotePanel/IssuePanel:noteItem 列表(mint hover + 绿色 active 左边框)
  * + NoteDetail 式 master-detail(header + meta + body)。
  *
- * 四个 sub-tab:
- *   记忆 (memory, agent_visible=1)  — agent 可见,走 search/注入
- *   便签 (note,   agent_visible=0)  — 纯人看,agent 搜不到
- *   全局 (global, agent_visible=1)  — 跨群共享
- *   待审核 (pending_review=1)       — Issue 提取的候选,需 approve
- *
- * 取代旧 NotePanel:note 是其中"便签"子视图,memory 是升级版 agent 可见记忆。
+ * 设计:统一扁平列表 + 顶部筛选按钮。
+ *   - 默认拉取群内 (memory + note + pending) + 全局共享,客户端按 filter 切片。
+ *   - 顶部 filter 按钮:全部 / 记忆 / 便签 / 全局 / 待审核。
+ *   - 每条用 badge 标识 category(事实/决策/约定/踩坑/待办/工作流/便签)
+ *     + 作用域(全局)。注:backend 设计上 category=note 与 agent_visible=0 是同义的,
+ *     所以「便签」类目只在 catChip 上画一个,不再叠 scopeChip「便签」。
+ *   - 新建表单用下拉选 scope (记忆 / 便签 / 全局),不再依赖当前筛选 tab。
+ *   - 待审核条目保留「通过/拒绝」操作;其它条目可「提升全局 / 编辑 / 删除」。
+ *   - 搜索框保留(走 backend memoryApi.search,agent_visible=1 强制约束)。
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { memoryApi, type MemoryIndex, type MemoryRow, type MemoryCategory } from '../../api/memory'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
@@ -23,7 +25,11 @@ interface Props {
   myAgentName: string
 }
 
-type Tab = 'memory' | 'note' | 'global' | 'pending'
+/** 顶部筛选维度。 */
+type Filter = 'all' | 'memory' | 'note' | 'global' | 'pending'
+
+/** 新建表单用的 scope 选项(对应 backend visibility + agent_visible + scope 组合)。 */
+type CreateScope = 'memory' | 'note' | 'global'
 
 const CATEGORIES: MemoryCategory[] = ['fact', 'decision', 'convention', 'pitfall', 'todo', 'playbook', 'note']
 
@@ -37,11 +43,46 @@ const CATEGORY_LABEL: Record<MemoryCategory, string> = {
   pitfall: '踩坑',
   todo: '待办',
   playbook: '工作流',
+  // backend 设计上 category=note 与 agent_visible=0 是同一个概念(便签),
+  // 所以 row 上 catChip 显示「便签」就够了,不再单独画 scopeChip「便签」。
   note: '便签',
 }
 
+/**
+ * 每个 category 一个独立色相,饱和度/明度调成柔和版,保证 7 个互不撞色。
+ * 形式:CSS class 名后缀 → 配色见 MemoryPanel.module.css `cat-foo` 规则。
+ */
+const CATEGORY_CLASS: Record<MemoryCategory, string> = {
+  fact: 'catFact',
+  decision: 'catDecision',
+  convention: 'catConvention',
+  pitfall: 'catPitfall',
+  todo: 'catTodo',
+  playbook: 'catPlaybook',
+  note: 'catNote',
+}
+
+const FILTER_LABEL: Record<Filter, string> = {
+  all: '全部',
+  memory: '记忆',
+  note: '便签',
+  global: '全局',
+  pending: '待审核',
+}
+
+/** 行 → filter 切片判定。 */
+function rowMatchesFilter(r: ListRow, f: Filter): boolean {
+  const isPending = r.pending_review === 1
+  if (isPending) return f === 'all' || f === 'pending'
+  if (f === 'pending') return false
+  if (f === 'global') return r.scope === 'global'
+  if (f === 'note') return r.agent_visible === 0
+  if (f === 'memory') return r.agent_visible === 1 && r.scope !== 'global'
+  return true // 'all'
+}
+
 export function MemoryPanel({ selectedGroupId, myAgentName }: Props) {
-  const [tab, setTab] = useState<Tab>('memory')
+  const [filter, setFilter] = useState<Filter>('all')
   const [rows, setRows] = useState<ListRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -54,25 +95,31 @@ export function MemoryPanel({ selectedGroupId, myAgentName }: Props) {
     setLoading(true)
     setError(null)
     try {
-      let data: MemoryIndex[]
-      if (tab === 'memory') data = await memoryApi.listGroup(selectedGroupId, { type: 'memory' })
-      else if (tab === 'note') data = await memoryApi.listGroup(selectedGroupId, { type: 'note' })
-      else if (tab === 'global') data = await memoryApi.listGlobal({ type: 'memory' })
-      else data = await memoryApi.listPending(selectedGroupId)
-      setRows(data)
+      // 一次拉全:群内(memory + note)+ 全局共享 + 待审核(单独 endpoint 拉,client 端打 pending_review=1),客户端按 filter 切片
+      const [group, globals, pending] = await Promise.all([
+        memoryApi.listGroup(selectedGroupId, { type: 'all' }),
+        memoryApi.listGlobal({ type: 'all' }),
+        memoryApi.listPending(selectedGroupId).catch(() => [] as MemoryIndex[]),
+      ])
+      const pendingTagged: ListRow[] = pending.map(r => ({ ...r, pending_review: 1 }))
+      // 同 id 优先用 pendingTagged(listPending 返回的就是审核队列,字段最准)。
+      const byId = new Map<string, ListRow>()
+      for (const r of [...group, ...globals]) byId.set(r.id, r)
+      for (const r of pendingTagged) byId.set(r.id, r)
+      setRows(Array.from(byId.values()))
     } catch (e) {
       setError((e as Error).message ?? '加载失败')
     } finally {
       setLoading(false)
     }
-  }, [tab, selectedGroupId])
+  }, [selectedGroupId])
 
   useEffect(() => {
     setSelectedId('')
     setCreating(false)
     reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, selectedGroupId])
+  }, [selectedGroupId])
 
   const doSearch = async () => {
     if (!searchKw.trim()) { setSearchHits(null); return }
@@ -85,23 +132,43 @@ export function MemoryPanel({ selectedGroupId, myAgentName }: Props) {
   }
 
   const isSearching = searchHits !== null
-  const displayRows = isSearching ? searchHits! : rows
+  const sourceRows = isSearching ? searchHits! : rows
+  const displayRows = useMemo(
+    () => sourceRows.filter(r => rowMatchesFilter(r, filter)),
+    [sourceRows, filter],
+  )
 
-  const showCreate = (tab === 'memory' || tab === 'note' || tab === 'global') && !isSearching
+  // 顶部各 filter 计数(用于徽标 / 排序参考)。搜索中隐藏计数。
+  const counts = useMemo(() => {
+    const c: Record<Filter, number> = { all: 0, memory: 0, note: 0, global: 0, pending: 0 }
+    for (const r of sourceRows) {
+      for (const f of Object.keys(c) as Filter[]) {
+        if (rowMatchesFilter(r, f)) c[f] += 1
+      }
+    }
+    return c
+  }, [sourceRows])
+
+  const selectedRow = useMemo(
+    () => sourceRows.find(r => r.id === selectedId),
+    [sourceRows, selectedId],
+  )
+  const selectedIsPending = selectedRow?.pending_review === 1
 
   return (
     <div className={styles.memoryPanel}>
-      {/* ── header:sub-tabs + 搜索 + 新建 ─────────────────────────── */}
+      {/* ── header:filter buttons + 搜索 + 新建 ─────────────────────── */}
       <div className={styles.header}>
         <div className={styles.tabs}>
-          {(['memory', 'note', 'global', 'pending'] as Tab[]).map(t => (
+          {(['all', 'memory', 'note', 'global', 'pending'] as Filter[]).map(f => (
             <button
-              key={t}
+              key={f}
               type="button"
-              className={`${styles.tab} ${tab === t && !isSearching ? styles.tabActive : ''}`}
-              onClick={() => { setTab(t); setSearchHits(null); setSearchKw('') }}
+              className={`${styles.tab} ${filter === f && !isSearching ? styles.tabActive : ''}`}
+              onClick={() => { setFilter(f); setSearchHits(null); setSearchKw('') }}
             >
-              {t === 'memory' ? '记忆' : t === 'note' ? '便签' : t === 'global' ? '全局' : '待审核'}
+              {FILTER_LABEL[f]}
+              {!isSearching && <span className={styles.tabCount}>{counts[f]}</span>}
             </button>
           ))}
         </div>
@@ -118,7 +185,7 @@ export function MemoryPanel({ selectedGroupId, myAgentName }: Props) {
               清除
             </button>
           )}
-          {showCreate && !selectedId && (
+          {!isSearching && !selectedId && (
             <Button variant="ghost" size="sm" onClick={() => setCreating(true)}>+ 新建</Button>
           )}
         </div>
@@ -126,66 +193,92 @@ export function MemoryPanel({ selectedGroupId, myAgentName }: Props) {
 
       {error && <div className={styles.error}>{error}</div>}
 
-      {/* ── body:列表 / 详情 / 新建 ───────────────────────────────── */}
+      {/* ── body:列表 / 详情 / 新建 ─────────────────────────── */}
       <div className={styles.body}>
-        {creating ? (
+        {selectedId ? (
+          <MemoryDetail
+            id={selectedId}
+            isPending={selectedIsPending}
+            onBack={() => setSelectedId('')}
+            onChanged={reload}
+          />
+        ) : creating ? (
           <MemoryEditor
             mode="create"
-            defaultAgentVisible={tab === 'note' ? false : true}
-            defaultScope={tab === 'global' ? 'global' : 'group'}
             onCancel={() => setCreating(false)}
             onSaved={async (data) => {
               try {
-                const input = { ...data, createdBy: myAgentName }
-                if (data.scope === 'global') await memoryApi.createGlobal(input)
-                else await memoryApi.createGroup(selectedGroupId, input)
+                const base = {
+                  key: data.key,
+                  value: data.value,
+                  category: data.category,
+                  summary: data.summary,
+                  tags: data.tags,
+                  createdBy: myAgentName,
+                }
+                if (data.scope === 'global') {
+                  await memoryApi.createGlobal({
+                    ...base,
+                    visibility: 'global',
+                    agentVisible: true,
+                  })
+                } else if (data.scope === 'note') {
+                  await memoryApi.createGroup(selectedGroupId, {
+                    ...base,
+                    visibility: 'group',
+                    agentVisible: false,
+                  })
+                } else {
+                  await memoryApi.createGroup(selectedGroupId, {
+                    ...base,
+                    visibility: 'group',
+                    agentVisible: true,
+                  })
+                }
                 setCreating(false)
-                await reload()
-              } catch (e) {
-                setError((e as Error).message)
-              }
+                reload()
+              } catch (e) { setError((e as Error).message) }
             }}
-          />
-        ) : selectedId ? (
-          <MemoryDetail
-            id={selectedId}
-            isPending={tab === 'pending'}
-            onBack={() => setSelectedId('')}
-            onChanged={reload}
           />
         ) : loading ? (
           <div className={styles.empty}>加载中...</div>
         ) : displayRows.length === 0 ? (
           <div className={styles.empty}>
-            {isSearching ? '没有匹配的记忆' :
-             tab === 'memory' ? '暂无记忆(agent 可见)' :
-             tab === 'note' ? '暂无便签(纯人看)' :
-             tab === 'global' ? '暂无全局记忆' :
-             '暂无待审核候选'}
+            {isSearching ? '没有匹配的记忆' : '暂无记忆条目'}
           </div>
         ) : (
           <ul className={styles.list}>
-            {displayRows.map(r => (
-              <li
-                key={r.id}
-                className={styles.item}
-                onClick={() => setSelectedId(r.id)}
-              >
-                <div className={styles.itemTitleRow}>
-                  <span className={styles.catBadge}>{CATEGORY_LABEL[r.category]}</span>
-                  <span className={styles.itemKey}>{r.key}</span>
-                  {r.scope === 'global' && <span className={styles.scopeBadge}>全局</span>}
-                  {!r.agent_visible && <span className={styles.noteBadge}>便签</span>}
-                  {r.pending_review === 1 && <span className={styles.pendingBadge}>待审核</span>}
-                </div>
-                {r.summary && <div className={styles.itemSummary}>{r.summary}</div>}
-                <div className={styles.itemMeta}>
-                  <span>{r.created_by ?? ''}</span>
-                  <span>·</span>
-                  <span>{r.created_at.slice(0, 16).replace('T', ' ')}</span>
-                </div>
-              </li>
-            ))}
+            {displayRows.map(r => {
+              const isPending = r.pending_review === 1
+              const isGlobal = r.scope === 'global'
+              return (
+                <li
+                  key={r.id}
+                  className={`${styles.item} ${isPending ? styles.itemPending : ''}`}
+                  onClick={() => setSelectedId(r.id)}
+                >
+                  {/* 顶行:分类 chip + 作用域 chip + 标题 + 待审核右上角徽章 */}
+                  <div className={styles.itemTitleRow}>
+                    <span className={`${styles.catChip} ${styles[CATEGORY_CLASS[r.category]]}`}>
+                      {CATEGORY_LABEL[r.category]}
+                    </span>
+                    <span className={styles.itemKey}>{r.key}</span>
+                    {!isPending && isGlobal && (
+                      <span className={`${styles.scopeChip} ${styles.scopeGlobal}`}>全局</span>
+                    )}
+                    {/* category=note 的 item 已被 catChip 表达为「便签」,不再画 scopeChip,避免重复 */}
+                    {isPending && <span className={styles.pendingCorner}>待审核</span>}
+                  </div>
+                  {r.summary && <div className={styles.itemSummary}>{r.summary}</div>}
+                  <div className={styles.itemMeta}>
+                    <span>{r.created_by ?? ''}</span>
+                    <span>·</span>
+                    <span>{r.created_at.slice(0, 16).replace('T', ' ')}</span>
+                    {r.group_id && !isGlobal && <><span>·</span><span>群 {r.group_id.slice(0, 8)}</span></>}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
@@ -316,28 +409,32 @@ interface FormData {
   summary: string
   category: MemoryCategory
   tags: string[]
-  visibility: 'private' | 'group' | 'global'
-  agentVisible: boolean
-  scope: 'group' | 'global'
+  scope: CreateScope
 }
 
-function MemoryEditor({ mode, row, defaultAgentVisible, defaultScope, onCancel, onSaved }: {
+const SCOPE_LABEL: Record<CreateScope, string> = {
+  memory: '记忆(群内,agent 可见)',
+  note: '便签(群内,纯人看)',
+  global: '全局(跨群共享,agent 可见)',
+}
+
+function MemoryEditor({ mode, row, onCancel, onSaved }: {
   mode: 'create' | 'edit'
   row?: MemoryRow
-  defaultAgentVisible?: boolean
-  defaultScope?: 'group' | 'global'
   onCancel: () => void
   onSaved: (data: FormData) => void
 }) {
+  const initialScope: CreateScope = row
+    ? (row.scope === 'global' ? 'global' : row.agent_visible === 0 ? 'note' : 'memory')
+    : 'memory'
+
   const [form, setForm] = useState<FormData>({
     key: row?.key ?? '',
     value: row?.value ?? '',
     summary: row?.summary ?? '',
     category: row?.category ?? 'note',
     tags: row?.tags ? safeParseTags(row.tags) : [],
-    visibility: row?.visibility ?? 'group',
-    agentVisible: row ? row.agent_visible === 1 : (defaultAgentVisible ?? true),
-    scope: row?.scope ?? (defaultScope ?? 'group'),
+    scope: initialScope,
   })
   const [err, setErr] = useState<string | null>(null)
 
@@ -353,6 +450,22 @@ function MemoryEditor({ mode, row, defaultAgentVisible, defaultScope, onCancel, 
       </div>
       {err && <div className={styles.error}>{err}</div>}
       <div className={styles.editorBody}>
+        <label className={styles.field}>
+          <span className={styles.fieldLabel}>作用域(scope)</span>
+          <select
+            className={styles.select}
+            value={form.scope}
+            disabled={mode === 'edit'}
+            onChange={e => setForm({ ...form, scope: e.target.value as CreateScope })}
+          >
+            {(Object.keys(SCOPE_LABEL) as CreateScope[]).map(s => (
+              <option key={s} value={s}>{SCOPE_LABEL[s]}</option>
+            ))}
+          </select>
+          {mode === 'edit' && (
+            <span className={styles.fieldHint}>编辑模式下不可改 scope,如需变更请删除后重建。</span>
+          )}
+        </label>
         <label className={styles.field}>
           <span className={styles.fieldLabel}>key (主题)</span>
           <input className={styles.input} value={form.key} onChange={e => setForm({ ...form, key: e.target.value })} />
@@ -378,22 +491,6 @@ function MemoryEditor({ mode, row, defaultAgentVisible, defaultScope, onCancel, 
             value={form.tags.join(', ')}
             onChange={e => setForm({ ...form, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
           />
-        </label>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>visibility</span>
-          <select className={styles.select} value={form.visibility} onChange={e => setForm({ ...form, visibility: e.target.value as FormData['visibility'] })}>
-            <option value="private">private (仅创建者)</option>
-            <option value="group">group (群内)</option>
-            <option value="global">global (跨群)</option>
-          </select>
-        </label>
-        <label className={styles.fieldRow}>
-          <input
-            type="checkbox"
-            checked={form.agentVisible}
-            onChange={e => setForm({ ...form, agentVisible: e.target.checked })}
-          />
-          <span>agent 可见(memory,走 search/注入);不勾选 = 便签(纯人看,agent 搜不到)</span>
         </label>
       </div>
       <div className={styles.editorActions}>

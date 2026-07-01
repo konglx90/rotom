@@ -56,6 +56,10 @@ export const groupsApi = {
     return api.patch<{ ok: boolean }>(`/groups/${id}`, { archived })
   },
 
+  async setStarred(id: string, starred: boolean): Promise<{ ok: boolean }> {
+    return api.patch<{ ok: boolean }>(`/groups/${id}`, { starred })
+  },
+
   async updateName(id: string, name: string): Promise<{ ok: boolean }> {
     return api.patch<{ ok: boolean }>(`/groups/${id}`, { name })
   },

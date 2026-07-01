@@ -853,6 +853,100 @@
   filter: grayscale(0.7);
 }
 
+/* ── Starred section (collapsible, 重要少用) ───────────── */
+.starredSection {
+  margin-top: 4px;
+}
+
+.starredList {
+  list-style: none;
+  margin: 0;
+  padding: 4px 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.starredSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-base);
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+.starredSectionHeader:hover {
+  background: var(--color-canvas-elevated);
+}
+
+.starredSectionArrow {
+  font-size: 9px;
+  color: var(--color-gray);
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+}
+
+.starredSectionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gray);
+}
+
+.starredSectionCount {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-surface);
+  background: var(--color-warm-dark);
+  border-radius: 10px;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+
+.starredMark {
+  margin-right: 4px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.starBtn {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color-light);
+  background: var(--color-canvas-elevated);
+  color: var(--color-warm-dark);
+  cursor: pointer;
+  opacity: 0;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              opacity var(--duration-base) var(--ease-out);
+}
+
+.groupItem:hover .starBtn {
+  opacity: 1;
+}
+
+.starBtn:hover {
+  background: var(--color-bg-warning);
+  color: var(--color-warning-text);
+  border-color: var(--color-bg-warning);
+}
+
+.starBtnActive {
+  background: var(--color-bg-warning);
+  color: var(--color-warning-text);
+  border-color: var(--color-bg-warning);
+}
+
+.groupItem.starred .groupName {
+  opacity: 0.75;
+}
+
 /* ── DM Horizontal Avatar Row ───────────────────────────── */
 .dmAvatarRow {
   display: flex;

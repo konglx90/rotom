@@ -173,6 +173,8 @@ export interface Group {
   working_dir?: string | null
   pinned_at?: string | null
   archived_at?: string | null
+  /** 重要少用群时间戳;null=普通活跃群。可读可写,仅用于侧栏分层展示。 */
+  starred_at?: string | null
   /** 群级别指导 prompt,全群一份;null/空 = 未设置。 */
   guidance_prompt?: string | null
   /** 群类型: patrol=巡检群 / a2a_direct=单播群 / 未设置或空 = 普通群(chat)。 */

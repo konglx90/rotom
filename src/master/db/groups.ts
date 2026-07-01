@@ -19,6 +19,8 @@ export interface GroupRow {
   working_dir: string | null;
   pinned_at: string | null;
   archived_at: string | null;
+  /** 重要少用群标记时间戳;NULL=普通活跃群。starred 群仍可读可写,仅用于侧栏分层展示。 */
+  starred_at: string | null;
   type: string | null;
   metadata: string;
   /** 群级别指导 prompt,全群一份;NULL 或空串 = 未设置。 */
@@ -141,6 +143,26 @@ export const groupMethods = {
   isGroupArchived(this: MeshDbSelf, id: string): string | null {
     const row = this.db.prepare("SELECT archived_at FROM groups WHERE id = ?").get(id) as { archived_at: string | null } | undefined;
     return row?.archived_at ?? null;
+  },
+
+  /**
+   * Toggle (or set explicitly) the per-group starred_at timestamp.
+   * Starred groups are "重要少用":可读可写,只是侧栏分层展示。
+   * Passing `null` unstars; passing a value stars to "now" (北京时间字符串)。
+   */
+  updateGroupStarred(this: MeshDbSelf, id: string, starred: boolean): string | null {
+    const next = starred ? nowBeijing() : null;
+    this.db.prepare("UPDATE groups SET starred_at = ? WHERE id = ?")
+      .run(next, id);
+    return next;
+  },
+
+  /**
+   * Returns the starred_at value of a group, or null if not starred.
+   */
+  isGroupStarred(this: MeshDbSelf, id: string): string | null {
+    const row = this.db.prepare("SELECT starred_at FROM groups WHERE id = ?").get(id) as { starred_at: string | null } | undefined;
+    return row?.starred_at ?? null;
   },
 
   /**
