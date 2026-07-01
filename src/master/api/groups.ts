@@ -185,12 +185,12 @@ export function registerGroupRoutes(
       res.status(404).json({ error: "Group not found" });
       return;
     }
-    const { name, workingDir, pinned, archived, starred, guidancePrompt } = req.body;
+    const { name, workingDir, pinned, archived, starred, guidancePrompt, repoUrl, repoDefaultBranch, extraRepos, worktreeMode } = req.body;
     if (name !== undefined && name !== null) {
       db.updateGroupName(req.params.id, String(name));
       log.info(`Group ${req.params.id} name → ${name}`);
     }
-    if (workingDir === undefined && name === undefined && pinned === undefined && archived === undefined && starred === undefined && guidancePrompt === undefined) {
+    if (workingDir === undefined && name === undefined && pinned === undefined && archived === undefined && starred === undefined && guidancePrompt === undefined && repoUrl === undefined && repoDefaultBranch === undefined && extraRepos === undefined && worktreeMode === undefined) {
       res.status(400).json({ error: "no updatable fields" });
       return;
     }
@@ -210,6 +210,30 @@ export function registerGroupRoutes(
       const v = typeof guidancePrompt === "string" ? guidancePrompt : null;
       db.updateGroupGuidancePrompt(req.params.id, v);
       log.info(`Group ${req.params.id} guidance_prompt → ${v ? `(${v.length} chars)` : "(cleared)"}`);
+    }
+    // 内置 repo(migration 051):三列独立 patch。任一字段 undefined 时不改动该列;
+    // 显式传 null/空串则清空。extraRepos 接收数组或字符串(JSON),统一规整成 JSON 字符串存库。
+    if (repoUrl !== undefined || repoDefaultBranch !== undefined || extraRepos !== undefined) {
+      const url = typeof repoUrl === "string" ? repoUrl.trim() : null;
+      const branch = typeof repoDefaultBranch === "string" ? repoDefaultBranch.trim() : null;
+      let extraJson: string | null = null;
+      if (extraRepos !== undefined && extraRepos !== null) {
+        let arr: unknown;
+        if (typeof extraRepos === "string") {
+          try { arr = JSON.parse(extraRepos); } catch { res.status(400).json({ error: "extraRepos 不是合法 JSON" }); return; }
+        } else {
+          arr = extraRepos;
+        }
+        if (!Array.isArray(arr)) { res.status(400).json({ error: "extraRepos 必须是数组" }); return; }
+        const cleaned = arr.filter((e): e is { id: string; url: string; branch?: string; mountPath: string } =>
+          !!e && typeof e === "object"
+          && typeof (e as any).id === "string" && (e as any).id
+          && typeof (e as any).url === "string" && (e as any).url
+          && typeof (e as any).mountPath === "string" && (e as any).mountPath);
+        extraJson = cleaned.length > 0 ? JSON.stringify(cleaned) : null;
+      }
+      db.updateGroupRepo(req.params.id, url, branch, extraJson, typeof worktreeMode === "string" ? worktreeMode : null);
+      log.info(`Group ${req.params.id} repo → url=${url || "(cleared)"} branch=${branch || "(default)"} extras=${extraJson ? `(${JSON.parse(extraJson).length})` : "(none)"} mode=${worktreeMode === "issue" ? "issue" : "group"}`);
     }
     if (workingDir !== undefined) {
       let next: string;

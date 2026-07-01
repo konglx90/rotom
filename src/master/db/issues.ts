@@ -21,11 +21,15 @@ export const issueMethods = {
     slashCommand?: string;
     approvalPolicy?: "r_allow" | "rw_allow";
     type?: string; assignedTo?: string;
+    /** issue 级 repo 覆盖(migration 051)。NULL/空 = 沿用 group.repo_url。 */
+    repoUrl?: string;
+    /** issue 级分支覆盖。NULL/空 = 沿用 group.repo_default_branch。 */
+    repoBranch?: string;
   }): void {
     const now = nowBeijing();
     this.db.prepare(`
-      INSERT INTO issues (id, group_id, title, description, priority, created_by, working_dir, type, slash_command, approval_policy, assigned_to, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO issues (id, group_id, title, description, priority, created_by, working_dir, type, slash_command, approval_policy, assigned_to, created_at, repo_url, repo_branch)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       issue.id, issue.groupId, issue.title,
       issue.description || "", issue.priority || "medium",
@@ -35,6 +39,8 @@ export const issueMethods = {
       issue.approvalPolicy || "rw_allow",
       issue.assignedTo || null,
       now,
+      issue.repoUrl || null,
+      issue.repoBranch || null,
     );
     this.db.prepare(`
       INSERT INTO issue_events (issue_id, event_type, agent_name, content, created_at)

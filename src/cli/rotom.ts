@@ -44,6 +44,7 @@ import { cmdMaster, colonExpand } from "./master.js";
 import { cmdExecutor } from "./executor.js";
 import { cmdInit } from "./init.js";
 import { cmdJoin } from "./join.js";
+import { cmdRepo } from "./repo.js";
 
 const HELP = `rotom — Mesh CLI
 
@@ -195,6 +196,12 @@ Process lifecycle (local daemon control — do not require an agent):
   master:start | master:stop | master:status | master:restart   (alias)
   executor [--config <path>]      start executor workers (reads ~/.rotom/executor.config.json by default)
 
+Repo cache (内置 git worktree 缓存,migration 051;本机 FS 操作,不需要 agent):
+  repo list                       列出 ~/.rotom/repos/ 下所有 bare clone + worktree 数 + 磁盘占用
+  repo prune [--remove-orphans]   清理孤儿 worktree 元数据,可选删除无引用且 30 天未 fetch 的 bare clone
+  repo fetch <repo-id>            显式 git fetch --prune 某 bare clone
+  repo remove <repo-id>           删除 bare clone(要求无活跃 worktree)
+
 Global flags:
   --pretty   format output for humans (tables / indented JSON)
 `;
@@ -226,6 +233,9 @@ async function main(): Promise<void> {
   }
   if (cmd === "executor") {
     return cmdExecutor(rest, flags);
+  }
+  if (cmd === "repo") {
+    return cmdRepo(rest, flags);
   }
   if (cmd === "status") {
     return cmdStatus(rest, flags);

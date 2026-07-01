@@ -177,6 +177,14 @@ export interface Group {
   starred_at?: string | null
   /** 群级别指导 prompt,全群一份;null/空 = 未设置。 */
   guidance_prompt?: string | null
+  /** 内置 repo:主仓库 URL(migration 051)。null/空 = 该 group 走现状(无 worktree)。 */
+  repo_url?: string | null
+  /** 主仓库默认分支。null 时 worktree 创建用仓库默认分支。 */
+  repo_default_branch?: string | null
+  /** 额外仓库配置 JSON 数组,形如 [{"id","url","branch","mountPath"}]。null = 无。 */
+  extra_repos?: string | null
+  /** worktree 模式:'group'=群共享一个 worktree(默认,轻量);'issue'=每 issue 独立(多分支并行)。null='group'。 */
+  worktree_mode?: string | null
   /** 群类型: patrol=巡检群 / a2a_direct=单播群 / 未设置或空 = 普通群(chat)。 */
   type?: string | null
   member_count?: number

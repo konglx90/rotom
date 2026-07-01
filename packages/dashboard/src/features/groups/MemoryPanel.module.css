@@ -190,6 +190,8 @@
 
 .scopeGlobal { color: #b45309; } /* 全局-琥珀描边 */
 .scopeNote   { color: #475569; } /* 便签-石板描边 */
+/* 便签 agent 可见性 chip(默认态 = 仅人类,中性色) */
+.noteHumanOnly { color: #64748b; } /* 仅人类-石板灰 */
 
 /* 待审核:整行染色 + 左侧 3px 实色边 + 右上角小标 */
 .itemPending {

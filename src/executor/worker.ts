@@ -26,6 +26,7 @@ import { SessionStore } from "./session-store.js";
 import { WorkerConnection } from "./worker-connection.js";
 import { IssueHandler } from "./worker-issue.js";
 import { ChatHandler } from "./worker-chat.js";
+import { ensureBareCloneAsync, addWorktreeAsync, removeWorktree, checkoutWorktreeAsync, getBarePathForUrl } from "./repo-cache.js";
 
 // ── Config ──────────────────────────────────────────────────────────────
 
@@ -104,6 +105,15 @@ export class ExecutorWorker {
     issueId: string;
     resolve: (decision: import("./cli-executor.js").ApprovalDecision) => void;
   }>();
+  /**
+   * Issue 的内置 repo 上下文缓存(migration 051)。issue_assigned/continue/append
+   * 收到 repoCtx 时记下,issue_cancelled 时查 map 后清理本机 worktree。
+   *
+   * Keyed by issueId。issue 完成/失败时不清(用户可能想保留 worktree 看产物),
+   * 只在 cancelled(用户主动放弃)时清理。issue_delete 走 master DELETE API,
+   * 若 assignee 是本机 agent,master 发 issue_cancelled,本机清。
+   */
+  issueRepoCtxs = new Map<string, { groupId?: string; repoUrl?: string; extraRepos?: { id: string; url: string }[]; worktreeMode?: string }>();
   // 已入队但尚未消费的「追加指令」。user 在 in_progress 期间提交的 prompt
   // 先攒在这里,当前一轮 CLI 收尾时(runIssueExecution 的 finally)合并起一轮新执行。
   pendingAppends = new Map<string, string[]>();
@@ -198,28 +208,191 @@ export class ExecutorWorker {
    * 跨机器部署安全:每台 executor 用自己的 this.workingDir,各机器各自的
    * `<base>/<groupId>` 物理隔离;master 推送的 workingDir 永远不会被用到这里。
    */
-  resolveIssueCwd(groupId: string | undefined, override?: string): string {
-    // 0. master 推送的 cwd(Dashboard 配置的群工作目录)优先 —— 跨机器部署时
+  /**
+   * 解析本 issue 实际使用的 spawn cwd。优先级:
+   *  0. master 推送的 cwd(Dashboard 群工作目录)优先 —— 跨机器部署时
+   *     若本机不存在该路径则静默回落本地派生,保证 worker 永远能 spawn。
+   *  1. repoCtx(内置 repo, migration 051):master 下发 repoUrl 时,在
+   *     `<this.workingDir>/<groupId>/<issueId>/repos/primary/` 起 git worktree
+   *     作为 cwd;extraRepos 各自一个 worktree,通过 symlink 挂到 primary 下。
+   *     单 group 多分支天然隔离,同 URL 跨 group/issue 全局复用 bare clone。
+   *  2. config.workingDirMap[groupId] —— per-group 显式覆盖
+   *  3. <this.workingDir>/<groupId> —— 按 groupId 派生(本机 base 下的子目录)
+   *  4. this.workingDir —— groupId 缺失时的兜底(实际不该发生,master 总会带 groupId)
+   *
+   * 派生后 / override 命中的目录按需 mkdir -p(只读语义下,目录创建一次后
+   * agent 不会再写,后续 issue 直接复用)。
+   *
+   * 跨机器部署安全:每台 executor 用自己的 this.workingDir,各机器各自的
+   * `<base>/<groupId>` 物理隔离;master 推送的 workingDir 永远不会被用到这里。
+   *
+   * @param repoCtx 内置 repo 上下文。repoUrl 非空时启用 worktree 模式;否则走 1-4 老路径。
+   * @returns cwd 字符串。worktree 模式下返回 primary worktree 路径(已存在)。
+   */
+  async resolveIssueCwd(
+    groupId: string | undefined,
+    override?: string,
+    repoCtx?: {
+      issueId?: string;
+      repoUrl?: string;
+      repoBranch?: string;
+      extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[];
+      worktreeMode?: string;
+    },
+  ): Promise<string> {
+    // 0. 内置 repo(migration 051)优先级最高:master 下发 repoUrl 且 groupId 已知时,
+    //    在本机起 worktree 作为 cwd。worktree 路径完全由 executor 本地决定,
+    //    忽略 master 推送的 override cwd(那是 group.working_dir,worktree 模式下
+    //    不再适用——agent 应在 worktree 里跑,不是 group 共享目录)。
+    //    worktree 创建可能抛错(bare clone 失败等),降级到老路径让 issue/chat 至少能跑。
+    //    issueId:issue 模式必须(per-issue worktree 路径);group 模式不需要(chat 可不传)。
+    if (repoCtx?.repoUrl && groupId) {
+      try {
+        return await this.resolveRepoCwd(groupId, repoCtx.issueId ?? "chat", {
+          repoUrl: repoCtx.repoUrl,
+          repoBranch: repoCtx.repoBranch,
+          extraRepos: repoCtx.extraRepos,
+          worktreeMode: repoCtx.worktreeMode,
+        });
+      } catch (err: any) {
+        console.warn(`${this.tag} worktree setup failed for ${repoCtx.issueId ?? "chat"} in group ${groupId}, fallback to derived dir: ${err?.message ?? err}`);
+      }
+    }
+
+    // 1. master 推送的 cwd(Dashboard 配置的群工作目录)—— 跨机器部署时
     //    若本机不存在该路径则静默回落本地派生,保证 worker 永远能 spawn。
+    //    仅在未启 worktree 模式时生效(repoCtx 为空或失败时)。
     if (override && fs.existsSync(override)) {
       fs.mkdirSync(override, { recursive: true });
       return override;
     }
-    // 1. per-group override
+
+    // 2. per-group override
     if (groupId && this.config.workingDirMap?.[groupId]) {
       const mapped = this.config.workingDirMap[groupId];
       fs.mkdirSync(mapped, { recursive: true });
       return mapped;
     }
-    // 2. 按 groupId 派生
+    // 3. 按 groupId 派生
     if (groupId) {
       const derived = path.join(this.workingDir, groupId);
       fs.mkdirSync(derived, { recursive: true });
       return derived;
     }
-    // 3. 兜底
+    // 4. 兜底
     return this.workingDir;
   }
+
+  /**
+   * 内置 repo worktree 模式:为该 (group, issue, repo) 起一个 git worktree。
+   *
+   * 物理布局:
+   *   <workingDir>/<groupId>/<issueId>/
+   *     ├── repos/
+   *     │   ├── primary/         <- primaryRepo worktree (agent cwd)
+   *     │   ├── <repo-B>/        <- extraRepo worktree
+   *     │   └── <repo-C>/
+   *     └── artifacts/          <- 该 issue 的产物目录(空,留给 agent 写)
+   *
+   * extraRepo 通过 primary 下相对 symlink `repos/<id>` -> `../<id>` 让 agent
+   * 在 cwd 内直接访问。symlink 而非直接在 primary 下 clone,是为了让 primary 自己
+   * 的 git 不会把 extraRepo 当成 untracked 文件,两条 worktree 互不干扰。
+   */
+  private async resolveRepoCwd(
+    groupId: string,
+    issueId: string,
+    repoCtx: { repoUrl: string; repoBranch?: string; extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[]; worktreeMode?: string },
+  ): Promise<string> {
+    const mode = repoCtx.worktreeMode === "issue" ? "issue" : "group";
+
+    const worktreeRoot = mode === "group"
+      ? path.join(this.workingDir, groupId)
+      : path.join(this.workingDir, groupId, issueId);
+    const reposDir = path.join(worktreeRoot, "repos");
+    fs.mkdirSync(reposDir, { recursive: true });
+
+    const issueId8 = issueId.slice(0, 8);
+    const primaryBranch = mode === "group" ? repoCtx.repoBranch : undefined;
+    const primaryIssueId8 = mode === "group" ? undefined : issueId8;
+
+    const { barePath: primaryBare } = await ensureBareCloneAsync(repoCtx.repoUrl);
+    const primaryWt = path.join(reposDir, "primary");
+    await addWorktreeAsync(primaryBare, primaryWt, primaryBranch, primaryIssueId8);
+
+    if (mode === "group") {
+      await checkoutWorktreeAsync(primaryWt, repoCtx.repoBranch);
+    }
+
+    for (const extra of repoCtx.extraRepos ?? []) {
+      const { barePath: extraBare } = await ensureBareCloneAsync(extra.url);
+      const extraWt = path.join(reposDir, extra.id);
+      const extraBranch = mode === "group" ? extra.branch : undefined;
+      const extraIssueId8 = mode === "group" ? undefined : issueId8;
+      await addWorktreeAsync(extraBare, extraWt, extraBranch, extraIssueId8);
+      if (mode === "group") {
+        await checkoutWorktreeAsync(extraWt, extra.branch);
+      }
+      if (extra.mountPath) {
+        const linkPath = path.join(primaryWt, extra.mountPath);
+        fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+        try { fs.rmSync(linkPath, { force: true }); } catch { /* 可能不存在 */ }
+        const target = path.relative(path.dirname(linkPath), extraWt);
+        try {
+          fs.symlinkSync(target, linkPath, "dir");
+        } catch (err: any) {
+          console.warn(`${this.tag} symlink create failed for ${linkPath}: ${err?.message ?? err}`);
+        }
+      }
+    }
+
+    return primaryWt;
+  }
+
+  /**
+   * 清理某 issue 的所有 worktree(primary + extras)。issue 完成/取消/删除时调。
+   * bare clone 不删(全局复用)。失败只 warn,不阻塞 issue 流程。
+   *
+   * group 模式:worktree 是共享的(<groupDir>/repos/primary/),不按 issue 清理 ——
+   *   删了别的 issue 也用不了。留给 group 删除 / `rotom repo prune` 手动清。
+   * issue 模式:清 per-issue worktree(<groupDir>/<issueId>/repos/)。
+   *
+   * 跨机器部署时只能清理本机的 worktree;其它机器的 issue 完成时各自清理自己的。
+   */
+  cleanupIssueWorktrees(
+    groupId: string | undefined,
+    issueId: string | undefined,
+    repoCtx?: { repoUrl?: string; extraRepos?: { id: string; url: string }[]; worktreeMode?: string },
+  ): void {
+    if (!groupId || !issueId || !repoCtx?.repoUrl) return;
+    // group 模式共享 worktree,不按 issue 清
+    if (repoCtx.worktreeMode !== "issue") return;
+    const issueRoot = path.join(this.workingDir, groupId, issueId);
+    const reposDir = path.join(issueRoot, "repos");
+    if (!fs.existsSync(reposDir)) return;
+
+    // primary
+    try {
+      const barePath = getBarePathForUrl(repoCtx.repoUrl);
+      const primaryWt = path.join(reposDir, "primary");
+      removeWorktree(barePath, primaryWt);
+    } catch (err: any) {
+      console.warn(`${this.tag} cleanup primary worktree failed for ${issueId}: ${err?.message ?? err}`);
+    }
+    // extras
+    for (const extra of repoCtx.extraRepos ?? []) {
+      try {
+        const barePath = getBarePathForUrl(extra.url);
+        const wt = path.join(reposDir, extra.id);
+        removeWorktree(barePath, wt);
+      } catch (err: any) {
+        console.warn(`${this.tag} cleanup extra worktree ${extra.id} failed for ${issueId}: ${err?.message ?? err}`);
+      }
+    }
+    // 清理 issueRoot 残留(artifacts 目录保留,产物可能要存档)
+    // 不删 issueRoot 整体:artifacts 可能存着 agent 写的产物,留给 artifacts API 走
+    // 原有清理路径(group 删除 / 用户手动清)。
+  }
+
 
   /**
    * 更新本地缓存的 agentProfile —— master 在 dispatch 时通过 WS 消息字段
@@ -252,6 +425,15 @@ export class ExecutorWorker {
   // ── Message router ────────────────────────────────────────────────
 
   handleMessage(msg: Record<string, unknown>): void {
+    // issue_assigned / continue / append 分支异步 resolve worktree(可能耗时几秒到
+    // 几分钟做 bare clone)。用 void IIFE 包住,不阻塞 handleMessage 返回,其他 WS
+    // 消息(心跳、chat 取消、其他 issue 进度)继续能处理。错误在 IIFE 内 catch。
+    if (msg.type === "issue_assigned" || msg.type === "issue_continue" || msg.type === "issue_append") {
+      void this.handleIssueRepoMsg(msg).catch((err) => {
+        console.error(`${this.tag} issue repo msg error:`, err);
+      });
+      return;
+    }
     if (msg.type === "auth_ok") {
       console.log(`${this.tag} Authenticated`);
       // Push initial SessionStore snapshot so master's DB is populated
@@ -285,14 +467,8 @@ export class ExecutorWorker {
     }
 
     // Issue assignment
-    if (msg.type === "issue_assigned") {
-      const { issueId, title, description, groupId, slashCommand, approvalPolicy, agentProfile, cwd: overrideCwd } = msg as any;
-      if (agentProfile) this.setAgentProfile(agentProfile);
-      console.log(`${this.tag} Issue assigned: "${title}" (${issueId}, group=${groupId ?? "(none)"})${slashCommand ? ` [${slashCommand}]` : ""}${approvalPolicy ? ` [${approvalPolicy}]` : ""}`);
-      // cwd 优先用 master 推送(Dashboard 群工作目录);本机不存在则回落派生
-      const cwd = this.resolveIssueCwd(groupId, overrideCwd);
-      this.issues.executeIssue(issueId, title, description || "", cwd, slashCommand, approvalPolicy);
-    }
+    // issue_assigned / continue / append 三分支在 handleIssueRepoMsg(async)里处理,
+    // 此处已被开头 void IIFE 拦截,不会走到。
 
     if (msg.type === "issue_created") {
       console.log(`${this.tag} New issue: "${(msg as any).title}" (awaiting manual assignment)`);
@@ -316,6 +492,12 @@ export class ExecutorWorker {
         try { task.controller.abort(); } catch { /* noop */ }
       } else {
         console.log(`${this.tag} Cancel requested for ${issueId} but no active task here`);
+      }
+      // 清理本机 worktree(若该 issue 走了 repo 模式)。issueRepoCtxs 命中即清。
+      const repoCtx = this.issueRepoCtxs.get(issueId);
+      if (repoCtx) {
+        this.cleanupIssueWorktrees(repoCtx.groupId, issueId, repoCtx);
+        this.issueRepoCtxs.delete(issueId);
       }
     }
 
@@ -362,93 +544,10 @@ export class ExecutorWorker {
       }
     }
 
-    // Issue continuation — user appended a follow-up prompt on a completed
-    // /failed issue; re-spawn the CLI with --resume <sessionId>.
-    if (msg.type === "issue_continue") {
-      const issueId = (msg as any).issueId as string | undefined;
-      const title = (msg as any).title as string | undefined;
-      const prompt = (msg as any).prompt as string | undefined;
-      const sessionId = (msg as any).sessionId as string | undefined;
-      const groupId = (msg as any).groupId as string | undefined;
-      const slashCommand = (msg as any).slashCommand as string | undefined;
-      const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
-      const agentProfile = (msg as any).agentProfile as AgentProfile | undefined;
-      const overrideCwd = (msg as any).cwd as string | undefined;
-      if (agentProfile) this.setAgentProfile(agentProfile);
-      if (!issueId || !prompt) return;
-      console.log(`${this.tag} Issue continue: "${title ?? "(no title)"}" (${issueId}, session=${sessionId ?? "(none)"}${slashCommand ? `, slash=${slashCommand}` : ""}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
-      // cwd 优先用 master 推送;本机不存在则回落派生
-      const cwd = this.resolveIssueCwd(groupId, overrideCwd);
-      const issueHeader =
-        `[当前群活跃 issue]
-` +
-        `- #${issueId.slice(0, 8)}  in_progress  "${title ?? "(unnamed)"}" by ${this.config.name}
-` +
-        `提示：你正在执行此 issue，工作目录 **可写**，直接按任务描述动手即可。` +
-        `**不要为此任务再创建新 issue。**
-`;
-      const body = `${issueHeader}
-${prompt}`;
-      const composed = composePrompt({
-        mode: "issue",
-        agentName: this.config.name,
-        agentProfile: this.agentProfile,
-        group: null,
-        cwd,
-        body,
-        approvalPolicy,
-      });
-      this.issues.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed);
-    }
+    // issue_continue 在 handleIssueRepoMsg(async)里处理。
 
     // Issue append — user typed a follow-up while the issue is still active.
-    // If a task is running we queue; runIssueExecution's finally block will
-    // pick it up after the current CLI call returns and spawn a new run with
-    // --resume. If no task is running (issue idle in open/in_progress for
-    // whatever reason) we start one immediately, mirroring issue_continue.
-    if (msg.type === "issue_append") {
-      const issueId = (msg as any).issueId as string | undefined;
-      const title = (msg as any).title as string | undefined;
-      const prompt = (msg as any).prompt as string | undefined;
-      const sessionId = (msg as any).sessionId as string | undefined;
-      const groupId = (msg as any).groupId as string | undefined;
-      const slashCommand = (msg as any).slashCommand as string | undefined;
-      const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
-      const agentProfile = (msg as any).agentProfile as AgentProfile | undefined;
-      const overrideCwd = (msg as any).cwd as string | undefined;
-      if (agentProfile) this.setAgentProfile(agentProfile);
-      if (!issueId || !prompt) return;
-      const issueHeader =
-        `[当前群活跃 issue]
-` +
-        `- #${issueId.slice(0, 8)}  in_progress  "${title ?? "(unnamed)"}" by ${this.config.name}
-` +
-        `提示：你正在执行此 issue，工作目录 **可写**，直接按任务描述动手即可。` +
-        `**不要为此任务再创建新 issue。**
-`;
-      const body = `${issueHeader}
-${prompt}`;
-      if (this.activeTasks.has(issueId)) {
-        const queue = this.pendingAppends.get(issueId) ?? [];
-        queue.push(body);
-        this.pendingAppends.set(issueId, queue);
-        console.log(`${this.tag} Issue append queued: ${issueId} (queue=${queue.length})`);
-      } else {
-        console.log(`${this.tag} Issue append (idle, run now): ${issueId} (session=${sessionId ?? "(none)"}${approvalPolicy ? `, policy=${approvalPolicy}` : ""})`);
-        // cwd 优先用 master 推送;本机不存在则回落派生
-        const cwd = this.resolveIssueCwd(groupId, overrideCwd);
-        const composed = composePrompt({
-          mode: "issue",
-          agentName: this.config.name,
-          agentProfile: this.agentProfile,
-          group: null,
-          cwd,
-          body,
-          approvalPolicy,
-        });
-        this.issues.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed);
-      }
-    }
+    // (在 handleIssueRepoMsg 里处理)
 
     // User decided an approval — hand the verdict to the parked codex call.
     if (msg.type === "issue_approval_response") {
@@ -473,7 +572,7 @@ ${prompt}`;
 
     // Chat message reply
     if (msg.type === "a2a_message") {
-      const { requestId, from, payload, conversation, agentProfile, cwd: overrideCwd } = msg as any;
+      const { requestId, from, payload, conversation, agentProfile, cwd: overrideCwd, repoUrl, repoBranch, extraRepos, worktreeMode } = msg as any;
       if (agentProfile) this.setAgentProfile(agentProfile as AgentProfile);
       const content = payload?.message || "";
       const fromName = from?.name || "unknown";
@@ -487,7 +586,7 @@ ${prompt}`;
       console.log(`${this.tag} a2a_message from ${fromName} requestId=${requestId} isGroup=${isGroup} isMentioned=${isMentioned} qaMode=${qaMode} contentLen=${content.length} contentHead=${JSON.stringify(content.slice(0, 60))}`);
       if (!isGroup || isMentioned || qaMode) {
         console.log(`${this.tag} Chat from ${fromName}: ${content.slice(0, 80)}...`);
-        this.chat.handleChatReply(requestId, content, fromName, conversation, overrideCwd);
+        this.chat.handleChatReply(requestId, content, fromName, conversation, overrideCwd, { issueId: "chat", repoUrl, repoBranch, extraRepos, worktreeMode });
       } else {
         console.log(`${this.tag} SKIP group message from ${fromName}: not @mentioned (looking for @${this.config.name})`);
       }
@@ -537,6 +636,109 @@ ${prompt}`;
     }
   }
 
+  /**
+   * 异步处理 issue_assigned / continue / append。worktree 创建(ensureBareCloneAsync
+   * + addWorktreeAsync)用 spawn 而非 spawnSync,避免大仓库 clone 阻塞 executor 其他
+   * WS 处理(心跳、chat 取消、其他 issue 进度)。第一次 bare clone 可能几分钟,
+   * 用户可见进度事件("📦 正在准备代码仓库...")。
+   */
+  private async handleIssueRepoMsg(msg: Record<string, unknown>): Promise<void> {
+    if (msg.type === "issue_assigned") {
+      const { issueId, title, description, groupId, slashCommand, approvalPolicy, agentProfile, cwd: overrideCwd, repoUrl, repoBranch, extraRepos, worktreeMode } = msg as any;
+      if (agentProfile) this.setAgentProfile(agentProfile);
+      console.log(`${this.tag} Issue assigned: "${title}" (${issueId}, group=${groupId ?? "(none)"})${slashCommand ? ` [${slashCommand}]` : ""}${approvalPolicy ? ` [${approvalPolicy}]` : ""}${repoUrl ? ` [repo:${worktreeMode || "group"}]` : ""}`);
+      if (repoUrl && groupId && issueId) {
+        this.sendUpdate(issueId, "in_progress", "📦 正在准备代码仓库(worktree)...", undefined, overrideCwd);
+      }
+      const cwd = await this.resolveIssueCwd(groupId, overrideCwd, { issueId, repoUrl, repoBranch, extraRepos, worktreeMode });
+      if (repoUrl && issueId) {
+        this.issueRepoCtxs.set(issueId, { groupId, repoUrl, extraRepos: (extraRepos as { id: string; url: string; branch?: string; mountPath: string }[] | undefined)?.map((e) => ({ id: e.id, url: e.url })), worktreeMode });
+      }
+      this.issues.executeIssue(issueId, title, description || "", cwd, slashCommand, approvalPolicy, { issueId, groupId, repoUrl, repoBranch, extraRepos, worktreeMode });
+      return;
+    }
+
+    if (msg.type === "issue_continue") {
+      const issueId = (msg as any).issueId as string | undefined;
+      const title = (msg as any).title as string | undefined;
+      const prompt = (msg as any).prompt as string | undefined;
+      const sessionId = (msg as any).sessionId as string | undefined;
+      const groupId = (msg as any).groupId as string | undefined;
+      const slashCommand = (msg as any).slashCommand as string | undefined;
+      const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
+      const agentProfile = (msg as any).agentProfile as AgentProfile | undefined;
+      const overrideCwd = (msg as any).cwd as string | undefined;
+      const repoUrl = (msg as any).repoUrl as string | undefined;
+      const repoBranch = (msg as any).repoBranch as string | undefined;
+      const extraRepos = (msg as any).extraRepos as { id: string; url: string; branch?: string; mountPath: string }[] | undefined;
+      const worktreeMode = (msg as any).worktreeMode as string | undefined;
+      if (agentProfile) this.setAgentProfile(agentProfile);
+      if (!issueId || !prompt) return;
+      console.log(`${this.tag} Issue continue: "${title ?? "(no title)"}" (${issueId}, session=${sessionId ?? "(none)"}${slashCommand ? `, slash=${slashCommand}` : ""}${approvalPolicy ? `, policy=${approvalPolicy}` : ""}${repoUrl ? `, repo:${worktreeMode || "group"}` : ""})`);
+      const cwd = await this.resolveIssueCwd(groupId, overrideCwd, { issueId, repoUrl, repoBranch, extraRepos, worktreeMode });
+      const issueHeader =
+        `[当前群活跃 issue]\n` +
+        `- #${issueId.slice(0, 8)}  in_progress  "${title ?? "(unnamed)"}" by ${this.config.name}\n` +
+        `提示：你正在执行此 issue，工作目录 **可写**，直接按任务描述动手即可。` +
+        `**不要为此任务再创建新 issue。**\n`;
+      const body = `${issueHeader}\n${prompt}`;
+      const composed = composePrompt({
+        mode: "issue",
+        agentName: this.config.name,
+        agentProfile: this.agentProfile,
+        group: null,
+        cwd,
+        body,
+        approvalPolicy,
+      });
+      this.issues.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed, { issueId, groupId, repoUrl, repoBranch, extraRepos, worktreeMode });
+      return;
+    }
+
+    if (msg.type === "issue_append") {
+      const issueId = (msg as any).issueId as string | undefined;
+      const title = (msg as any).title as string | undefined;
+      const prompt = (msg as any).prompt as string | undefined;
+      const sessionId = (msg as any).sessionId as string | undefined;
+      const groupId = (msg as any).groupId as string | undefined;
+      const slashCommand = (msg as any).slashCommand as string | undefined;
+      const approvalPolicy = (msg as any).approvalPolicy as "r_allow" | "rw_allow" | undefined;
+      const agentProfile = (msg as any).agentProfile as AgentProfile | undefined;
+      const overrideCwd = (msg as any).cwd as string | undefined;
+      const repoUrl = (msg as any).repoUrl as string | undefined;
+      const repoBranch = (msg as any).repoBranch as string | undefined;
+      const extraRepos = (msg as any).extraRepos as { id: string; url: string; branch?: string; mountPath: string }[] | undefined;
+      const worktreeMode = (msg as any).worktreeMode as string | undefined;
+      if (agentProfile) this.setAgentProfile(agentProfile);
+      if (!issueId || !prompt) return;
+      const issueHeader =
+        `[当前群活跃 issue]\n` +
+        `- #${issueId.slice(0, 8)}  in_progress  "${title ?? "(unnamed)"}" by ${this.config.name}\n` +
+        `提示：你正在执行此 issue，工作目录 **可写**，直接按任务描述动手即可。` +
+        `**不要为此任务再创建新 issue。**\n`;
+      const body = `${issueHeader}\n${prompt}`;
+      if (this.activeTasks.has(issueId)) {
+        const queue = this.pendingAppends.get(issueId) ?? [];
+        queue.push(body);
+        this.pendingAppends.set(issueId, queue);
+        console.log(`${this.tag} Issue append queued: ${issueId} (queue=${queue.length})`);
+      } else {
+        console.log(`${this.tag} Issue append (idle, run now): ${issueId} (session=${sessionId ?? "(none)"}${approvalPolicy ? `, policy=${approvalPolicy}` : ""}${repoUrl ? `, repo:${worktreeMode || "group"}` : ""})`);
+        const cwd = await this.resolveIssueCwd(groupId, overrideCwd, { issueId, repoUrl, repoBranch, extraRepos, worktreeMode });
+        const composed = composePrompt({
+          mode: "issue",
+          agentName: this.config.name,
+          agentProfile: this.agentProfile,
+          group: null,
+          cwd,
+          body,
+          approvalPolicy,
+        });
+        this.issues.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed, { issueId, groupId, repoUrl, repoBranch, extraRepos, worktreeMode });
+      }
+    }
+  }
+
   // ── Session helpers ───────────────────────────────────────────────
 
   /**
@@ -581,7 +783,7 @@ ${prompt}`;
       });
       return;
     }
-    const cwd = this.resolveIssueCwd(groupId);
+    const cwd = await this.resolveIssueCwd(groupId);
     try {
       const result = await this.executor.readSessionContent?.({
         sessionId,

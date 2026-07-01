@@ -11,6 +11,7 @@ import { WebSocket } from "ws";
 import type { ServerMessage } from "../../shared/protocol.js";
 import { normalizeApprovalPolicy, type WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
+import { resolveIssueRepoCtxLocalOnly } from "../group-paths.js";
 
 export const routingMethods = {
   // ─────────────────────────────────────────────────────────────────────────
@@ -134,6 +135,7 @@ export const routingMethods = {
     if (!issue) return false;
     const agent = this.db.getAgentByName(agentName);
     if (!agent) return false;
+    const repo = resolveIssueRepoCtxLocalOnly(this.db, issue);
     return this.sendToAgent(agent.id, enrichWorkerDispatch(this, {
       type: "issue_assigned",
       issueId: issue.id,
@@ -143,6 +145,7 @@ export const routingMethods = {
       workingDir: issue.working_dir || undefined,
       slashCommand: issue.slash_command || undefined,
       approvalPolicy: normalizeApprovalPolicy(issue.approval_policy),
+      ...(repo ? { repoUrl: repo.repoUrl, repoBranch: repo.repoBranch, extraRepos: repo.extraRepos } : {}),
     } as ServerMessage, agentName, issue.group_id));
   },
 
@@ -207,6 +210,7 @@ export const routingMethods = {
     if (!issue?.assigned_to) return false;
     const agent = this.db.getAgentByName(issue.assigned_to);
     if (!agent) return false;
+    const repo = resolveIssueRepoCtxLocalOnly(this.db, issue);
     return this.sendToAgent(agent.id, enrichWorkerDispatch(this, {
       type: "issue_continue",
       issueId,
@@ -217,6 +221,7 @@ export const routingMethods = {
       workingDir: issue.working_dir || undefined,
       slashCommand: issue.slash_command || undefined,
       approvalPolicy: normalizeApprovalPolicy(issue.approval_policy),
+      ...(repo ? { repoUrl: repo.repoUrl, repoBranch: repo.repoBranch, extraRepos: repo.extraRepos } : {}),
     } as ServerMessage, issue.assigned_to, issue.group_id));
   },
 
@@ -232,6 +237,7 @@ export const routingMethods = {
     if (!issue?.assigned_to) return false;
     const agent = this.db.getAgentByName(issue.assigned_to);
     if (!agent) return false;
+    const repo = resolveIssueRepoCtxLocalOnly(this.db, issue);
     return this.sendToAgent(agent.id, enrichWorkerDispatch(this, {
       type: "issue_append",
       issueId,
@@ -242,6 +248,7 @@ export const routingMethods = {
       workingDir: issue.working_dir || undefined,
       slashCommand: issue.slash_command || undefined,
       approvalPolicy: normalizeApprovalPolicy(issue.approval_policy),
+      ...(repo ? { repoUrl: repo.repoUrl, repoBranch: repo.repoBranch, extraRepos: repo.extraRepos } : {}),
     } as ServerMessage, issue.assigned_to, issue.group_id));
   },
 

@@ -97,6 +97,7 @@ export class MeshDb extends MeshDbCore {
   declare listGroupsByType: typeof groupMethods.listGroupsByType;
   declare updateGroupMetadata: typeof groupMethods.updateGroupMetadata;
   declare updateGroupGuidancePrompt: typeof groupMethods.updateGroupGuidancePrompt;
+  declare updateGroupRepo: typeof groupMethods.updateGroupRepo;
   declare addGroupMembers: typeof groupMethods.addGroupMembers;
   declare removeGroupMembers: typeof groupMethods.removeGroupMembers;
   declare getGroupMembers: typeof groupMethods.getGroupMembers;

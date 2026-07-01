@@ -117,6 +117,10 @@ export interface IssueRow {
   // 形如 [{"content":"...","status":"pending|in_progress|completed","activeForm":"..."}]。
   // 由 worker 收到 issue_todos_update 后覆盖式写入,dashboard 常驻面板读它。
   latest_todos_json: string | null;
+  // 内置 repo(migration 051):issue 级覆盖。NULL = 沿用 group 的 repo_url。
+  repo_url: string | null;
+  // issue 级分支覆盖。NULL = 沿用 group 的 repo_default_branch 或临时分支。
+  repo_branch: string | null;
 }
 
 export interface IssueEventRow {

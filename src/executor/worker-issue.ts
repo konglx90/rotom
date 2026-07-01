@@ -14,10 +14,19 @@ import { isReadonlyCommand } from "../shared/readonly-allowlist.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
 import type { ExecutorWorker } from "./worker.js";
 
+export interface IssueRepoCtx {
+  issueId?: string;
+  groupId?: string;
+  repoUrl?: string;
+  repoBranch?: string;
+  extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[];
+  worktreeMode?: string;
+}
+
 export class IssueHandler {
   constructor(private readonly worker: ExecutorWorker) {}
 
-  async executeIssue(issueId: string, title: string, description: string, cwd: string, slashCommand?: string, approvalPolicy?: "r_allow" | "rw_allow"): Promise<void> {
+  async executeIssue(issueId: string, title: string, description: string, cwd: string, slashCommand?: string, approvalPolicy?: "r_allow" | "rw_allow", repoCtx?: IssueRepoCtx): Promise<void> {
     // title 现在是 description 的截断,不再拼进 body——否则会重复用户输入。
     // body 直接用 description,仅在 /plan 模式剥掉前缀。cleanTitle 仅用于 header 展示。
     let cleanTitle = title;
@@ -52,7 +61,7 @@ export class IssueHandler {
       body: bodyWithContext,
       approvalPolicy,
     });
-    this.runIssueExecution(issueId, composed.final, cwd, undefined, slashCommand, approvalPolicy, composed);
+    this.runIssueExecution(issueId, composed.final, cwd, undefined, slashCommand, approvalPolicy, composed, repoCtx);
   }
 
   /**
@@ -60,8 +69,11 @@ export class IssueHandler {
    * continuation (handleIssueContinue). When resumeSessionId is provided the
    * CLI gets --resume / thread/resume so the conversation picks up where it
    * left off.
+   *
+   * repoCtx 用于 issue 完成后可选的 worktree 清理(当前实现不在终态自动清理,
+   * 留给 issue delete/cancel 路径触发;此处仅保存上下文备用)。
    */
-  async runIssueExecution(issueId: string, prompt: string, cwd: string, resumeSessionId?: string, slashCommand?: string, approvalPolicy?: "r_allow" | "rw_allow", composedPrompt?: ComposedPrompt): Promise<void> {
+  async runIssueExecution(issueId: string, prompt: string, cwd: string, resumeSessionId?: string, slashCommand?: string, approvalPolicy?: "r_allow" | "rw_allow", composedPrompt?: ComposedPrompt, repoCtx?: IssueRepoCtx): Promise<void> {
     if (this.worker.activeTasks.size >= this.worker.maxConcurrent) {
       console.log(`${this.worker.tag} At capacity (${this.worker.maxConcurrent}), skip ${issueId}`);
       return;

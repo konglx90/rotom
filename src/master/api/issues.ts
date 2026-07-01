@@ -106,7 +106,7 @@ export function registerIssueRoutes(
       return;
     }
     if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot create issues" }); return; }
-    const { title, description, priority, createdBy, workingDir, approvalPolicy } = req.body;
+    const { title, description, priority, createdBy, workingDir, approvalPolicy, repoUrl, repoBranch } = req.body;
     if (!createdBy) {
       res.status(400).json({ error: "createdBy is required" });
       return;
@@ -131,16 +131,26 @@ export function registerIssueRoutes(
       normalizedApprovalPolicy = approvalPolicy;
     }
     let issueWorkDir: string | undefined;
-    if (typeof workingDir === "string" && workingDir.trim()) {
+    // group 配了 repo_url 时,issue 真正 cwd 由 executor 在本机起 worktree 后产生,
+    // 此时 workingDir 字段不再由用户填(master 不该知道本机 worktree 路径)。
+    // 我们仍写一个派生路径到 issues.working_dir 作为兜底/审计(老路径,executor
+    // 在 worktree 模式下会忽略它,因为 repoCtx 优先级高于 workingDir override)。
+    const groupRepoUrl = group.repo_url?.trim();
+    if (typeof workingDir === "string" && workingDir.trim() && !groupRepoUrl) {
       const v = validateWorkingDir(workingDir);
       if (!v.ok) {
         res.status(400).json({ error: v.error });
         return;
       }
       issueWorkDir = v.path;
-    } else {
-      // No explicit workingDir: resolve from per-(group, createdBy) override →
-      // group.working_dir → default, mirroring PUT /issues/:id assignment logic.
+    } else if (!groupRepoUrl) {
+      // No explicit workingDir 且 group 无 repo:走现状 per-(group, createdBy) override →
+      // group.working_dir → default。
+      issueWorkDir = resolveGroupAgentWorkingDir(db, req.params.groupId, createdBy);
+    }
+    // groupRepoUrl 非空时 issueWorkDir 保持 undefined;worktree 路径由 executor 解析。
+    // 仍写一个占位:用 group 工作目录,让 issues.working_dir 不空(artifacts API 兜底)。
+    if (groupRepoUrl) {
       issueWorkDir = resolveGroupAgentWorkingDir(db, req.params.groupId, createdBy);
     }
     let slashCommand: string | undefined;
@@ -157,6 +167,8 @@ export function registerIssueRoutes(
       id, groupId: req.params.groupId, title: finalTitle, description: desc,
       priority, createdBy, workingDir: issueWorkDir, slashCommand,
       approvalPolicy: normalizedApprovalPolicy,
+      repoUrl: typeof repoUrl === "string" && repoUrl.trim() ? repoUrl.trim() : undefined,
+      repoBranch: typeof repoBranch === "string" && repoBranch.trim() ? repoBranch.trim() : undefined,
     });
     log.info(`Issue created: "${finalTitle}" (${id}) in group ${req.params.groupId}`);
     if (hub) {
@@ -602,6 +614,19 @@ export function registerIssueRoutes(
     if (!issue) {
       res.status(404).json({ error: "Issue not found" });
       return;
+    }
+    // 先通知 assignee 清理本机 worktree(若 repo 模式)。issue_cancelled 路径在
+    // worker 端会 cleanupIssueWorktrees。DELETE 时 issue 还在 DB,能查到 assigned_to。
+    if (hub && issue.assigned_to) {
+      const agent = db.getAgentByName(issue.assigned_to);
+      if (agent) {
+        hub.sendToAgent(agent.id, {
+          type: "issue_cancelled",
+          issueId: req.params.id,
+          groupId: issue.group_id,
+          reason: `deleted`,
+        });
+      }
     }
     db.deleteIssue(req.params.id);
     if (hub) hub.notifyIssueChanged(req.params.id, issue.group_id, "deleted");

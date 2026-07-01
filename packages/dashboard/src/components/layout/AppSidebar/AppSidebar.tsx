@@ -99,7 +99,7 @@ function StarredSection({ starredGroups, selectedGroupId, selectGroup, toggleGro
         <span className={styles.starredSectionArrow}>
           {expanded ? '▼' : '▶'}
         </span>
-        <span className={styles.starredSectionTitle}>⭐ 重要少用</span>
+        <span className={styles.starredSectionTitle}>⭐ 标记</span>
         <span className={styles.starredSectionCount}>{starredGroups.length}</span>
       </div>
       {expanded && (
@@ -159,6 +159,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     openConfigModal,
     updateGroupName,
     updateGroupGuidancePrompt,
+    updateGroupRepo,
     updateGroupWorkingDir,
     toggleGroupPinned,
     toggleGroupArchived,
@@ -586,6 +587,18 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                     className={styles.moreItem}
                                     onClick={(e) => {
                                       e.stopPropagation()
+                                      setMoreMenuGroup(null)
+                                      setMoreMenuPos(null)
+                                      setSettingsGroupId(group.id)
+                                    }}
+                                  >
+                                    ⚙️ 设置
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.moreItem}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
                                       toggleGroupPinned(group.id, !isPinned)
                                       setMoreMenuGroup(null)
                                       setMoreMenuPos(null)
@@ -603,7 +616,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                       setMoreMenuPos(null)
                                     }}
                                   >
-                                    {isStarred ? '⭐ 取消重要少用' : '⭐ 标记重要少用'}
+                                    {isStarred ? '⭐ 取消标记' : '⭐ 标记'}
                                   </button>
                                   <button
                                     type="button"
@@ -616,18 +629,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                     }}
                                   >
                                     🗄️ 归档
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={styles.moreItem}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setMoreMenuGroup(null)
-                                      setMoreMenuPos(null)
-                                      setSettingsGroupId(group.id)
-                                    }}
-                                  >
-                                    ⚙️ 设置
                                   </button>
                                   <div className={styles.moreDivider} />
                                   <button
@@ -702,11 +703,16 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             groupName={g.name}
             groupWorkingDir={g.working_dir}
             groupGuidancePrompt={g.guidance_prompt}
+            groupRepoUrl={g.repo_url}
+            groupRepoDefaultBranch={g.repo_default_branch}
+            groupExtraRepos={g.extra_repos}
+            groupWorktreeMode={g.worktree_mode}
             memberAgentNames={(g.members ?? []).map(m => m.agent_name)}
             onClose={() => setSettingsGroupId(null)}
             onSaveName={(name) => updateGroupName(g.id, name)}
             onSaveWorkingDir={(dir) => updateGroupWorkingDir(g.id, dir)}
             onSaveGuidancePrompt={(prompt) => updateGroupGuidancePrompt(g.id, prompt)}
+            onSaveRepo={(data) => updateGroupRepo(g.id, data)}
           />
         )
       })()}

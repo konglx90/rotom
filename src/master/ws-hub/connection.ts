@@ -30,6 +30,7 @@ import {
 import { isClientMessage, type ClientMessage, type ServerMessage } from "../../shared/protocol.js";
 import { parseProfile, type WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
+import { resolveGroupRepoCtxLocalOnly } from "../group-paths.js";
 
 export const connectionMethods = {
   handleConnection(this: WSHubSelf, ws: WebSocket): void {
@@ -315,6 +316,12 @@ export const connectionMethods = {
 
         if (result.targetAgentId) {
           const enrichedConversation = this.enrichGroupConversation(msg.conversation, result.targetName);
+          // chat 路径也走 worktree:group 配了 repo 且 target agent 同机时,注入 repoCtx。
+          // worker 收到后在 resolveChatCwd 里走 group 模式共享 worktree,可查 repo 代码。
+          const groupIdForRepo = enrichedConversation?.groupId;
+          const repo = groupIdForRepo && result.targetName
+            ? resolveGroupRepoCtxLocalOnly(this.db, groupIdForRepo, result.targetName)
+            : null;
           const outMsg = enrichWorkerDispatch(this, {
             type: "a2a_message" as const,
             requestId: msg.requestId,
@@ -322,6 +329,7 @@ export const connectionMethods = {
             payload: msg.payload,
             routeType,
             conversation: enrichedConversation,
+            ...(repo ? { repoUrl: repo.repoUrl, repoBranch: repo.repoBranch, extraRepos: repo.extraRepos, worktreeMode: repo.worktreeMode } : {}),
           } as ServerMessage, result.targetName, enrichedConversation?.groupId);
           delivered = this.sendToAgent(result.targetAgentId, outMsg);
 

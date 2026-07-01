@@ -72,6 +72,7 @@ interface ChatContextValue {
   clearGroupMemberWorkingDir: (groupId: string, agentName: string) => Promise<void>
   updateGroupName: (groupId: string, name: string) => Promise<void>
   updateGroupGuidancePrompt: (groupId: string, prompt: string | null) => Promise<void>
+  updateGroupRepo: (groupId: string, data: { repoUrl: string | null; repoDefaultBranch: string | null; extraRepos: Array<{ id: string; url: string; branch?: string; mountPath: string }> | null; worktreeMode?: 'group' | 'issue' | null }) => Promise<void>
   toggleGroupPinned: (groupId: string, pinned: boolean) => Promise<void>
   deleteGroup: (groupId: string) => Promise<void>
   toggleGroupArchived: (groupId: string, archived: boolean) => Promise<void>
@@ -390,6 +391,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     },
     [loadGroups],
   )
+  const updateGroupRepo = useCallback(
+    async (groupId: string, data: { repoUrl: string | null; repoDefaultBranch: string | null; extraRepos: Array<{ id: string; url: string; branch?: string; mountPath: string }> | null; worktreeMode?: 'group' | 'issue' | null }) => {
+      try {
+        await groupsApi.updateRepo(groupId, data)
+        await loadGroups()
+      } catch (error) {
+        console.error('Failed to update group repo:', error)
+        const msg = error instanceof Error ? error.message : String(error)
+        window.alert(`更新群 repo 配置失败：${msg}`)
+        throw error
+      }
+    },
+    [loadGroups],
+  )
   const toggleGroupArchived = useCallback(
     async (groupId: string, archived: boolean) => {
       setGroups((prev) =>
@@ -535,6 +550,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     createGroup,
     updateGroupName,
     updateGroupGuidancePrompt,
+    updateGroupRepo,
     updateGroupWorkingDir,
     setGroupMemberWorkingDir,
     clearGroupMemberWorkingDir,

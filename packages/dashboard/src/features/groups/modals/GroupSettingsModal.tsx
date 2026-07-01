@@ -13,11 +13,49 @@ interface GroupSettingsModalProps {
   groupName: string
   groupWorkingDir: string | null | undefined
   groupGuidancePrompt?: string | null
+  groupRepoUrl?: string | null
+  groupRepoDefaultBranch?: string | null
+  groupExtraRepos?: string | null
+  groupWorktreeMode?: string | null
   memberAgentNames?: string[]
   onClose: () => void
   onSaveName: (name: string) => void
   onSaveWorkingDir: (dir: string | null) => void
   onSaveGuidancePrompt: (prompt: string | null) => void
+  onSaveRepo: (data: { repoUrl: string | null; repoDefaultBranch: string | null; extraRepos: Array<{ id: string; url: string; branch?: string; mountPath: string }> | null; worktreeMode: 'group' | 'issue' | null }) => void
+}
+
+interface ExtraRepoEntry { id: string; url: string; branch?: string; mountPath: string }
+
+function parseExtraRepos(json: string | null | undefined): ExtraRepoEntry[] {
+  if (!json) return []
+  try {
+    const parsed = JSON.parse(json)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((e): e is ExtraRepoEntry =>
+      !!e && typeof e === 'object'
+      && typeof e.id === 'string'
+      && typeof e.url === 'string'
+      && typeof e.mountPath === 'string')
+  } catch { return [] }
+}
+
+function formatExtraReposText(entries: ExtraRepoEntry[]): string {
+  return entries.map(e =>
+    [e.id, e.url, e.branch || '', e.mountPath].join('|'),
+  ).join('\n')
+}
+
+function parseExtraReposText(text: string): ExtraRepoEntry[] {
+  const out: ExtraRepoEntry[] = []
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const [id, url, branch, mountPath] = trimmed.split('|').map(s => (s ?? '').trim())
+    if (!id || !url || !mountPath) continue
+    out.push({ id, url, branch: branch || undefined, mountPath })
+  }
+  return out
 }
 
 export function GroupSettingsModal({
@@ -26,15 +64,24 @@ export function GroupSettingsModal({
   groupName,
   groupWorkingDir,
   groupGuidancePrompt,
+  groupRepoUrl,
+  groupRepoDefaultBranch,
+  groupExtraRepos,
+  groupWorktreeMode,
   memberAgentNames,
   onClose,
   onSaveName,
   onSaveWorkingDir,
   onSaveGuidancePrompt,
+  onSaveRepo,
 }: GroupSettingsModalProps) {
   const [nameValue, setNameValue] = useState(groupName)
   const [dirValue, setDirValue] = useState(groupWorkingDir || '')
   const [guidanceValue, setGuidanceValue] = useState(groupGuidancePrompt || '')
+  const [repoUrlValue, setRepoUrlValue] = useState(groupRepoUrl || '')
+  const [repoBranchValue, setRepoBranchValue] = useState(groupRepoDefaultBranch || '')
+  const [extraReposValue, setExtraReposValue] = useState(formatExtraReposText(parseExtraRepos(groupExtraRepos)))
+  const [worktreeModeValue, setWorktreeModeValue] = useState<'group' | 'issue'>(groupWorktreeMode === 'issue' ? 'issue' : 'group')
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
@@ -43,12 +90,16 @@ export function GroupSettingsModal({
       setNameValue(groupName)
       setDirValue(groupWorkingDir || '')
       setGuidanceValue(groupGuidancePrompt || '')
+      setRepoUrlValue(groupRepoUrl || '')
+      setRepoBranchValue(groupRepoDefaultBranch || '')
+      setExtraReposValue(formatExtraReposText(parseExtraRepos(groupExtraRepos)))
+      setWorktreeModeValue(groupWorktreeMode === 'issue' ? 'issue' : 'group')
       requestAnimationFrame(() => {
         nameInputRef.current?.focus()
         nameInputRef.current?.select()
       })
     }
-  }, [open, groupName, groupWorkingDir, groupGuidancePrompt])
+  }, [open, groupName, groupWorkingDir, groupGuidancePrompt, groupRepoUrl, groupRepoDefaultBranch, groupExtraRepos, groupWorktreeMode])
 
   const nameTrimmed = nameValue.trim()
   const nameDirty = nameTrimmed !== groupName.trim()
@@ -56,7 +107,17 @@ export function GroupSettingsModal({
   const dirDirty = dirTrimmed !== (groupWorkingDir || '').trim()
   const guidanceTrimmed = guidanceValue.trim()
   const guidanceDirty = guidanceTrimmed !== (groupGuidancePrompt || '').trim()
-  const canSave = nameDirty || dirDirty || guidanceDirty
+  const repoUrlTrimmed = repoUrlValue.trim()
+  const repoBranchTrimmed = repoBranchValue.trim()
+  const origRepoUrl = (groupRepoUrl || '').trim()
+  const origRepoBranch = (groupRepoDefaultBranch || '').trim()
+  const origExtraText = formatExtraReposText(parseExtraRepos(groupExtraRepos))
+  const origWorktreeMode = groupWorktreeMode === 'issue' ? 'issue' : 'group'
+  const repoDirty = repoUrlTrimmed !== origRepoUrl
+    || repoBranchTrimmed !== origRepoBranch
+    || extraReposValue.trim() !== origExtraText.trim()
+    || worktreeModeValue !== origWorktreeMode
+  const canSave = nameDirty || dirDirty || guidanceDirty || repoDirty
 
   const handleSave = () => {
     if (nameDirty && nameTrimmed) {
@@ -68,7 +129,16 @@ export function GroupSettingsModal({
     if (guidanceDirty) {
       onSaveGuidancePrompt(guidanceTrimmed ? guidanceTrimmed : null)
     }
-    if (nameDirty || dirDirty || guidanceDirty) {
+    if (repoDirty) {
+      const extras = parseExtraReposText(extraReposValue)
+      onSaveRepo({
+        repoUrl: repoUrlTrimmed || null,
+        repoDefaultBranch: repoBranchTrimmed || null,
+        extraRepos: extras.length > 0 ? extras : null,
+        worktreeMode: worktreeModeValue,
+      })
+    }
+    if (nameDirty || dirDirty || guidanceDirty || repoDirty) {
       onClose()
     }
   }
@@ -200,6 +270,60 @@ export function GroupSettingsModal({
           <p className={styles.hint}>
             <span className={styles.hintIcon}>💡</span>
             <span>群级别硬约定,所有成员都会看到。留空保存等同于清除。不支持 per-member 覆盖。</span>
+          </p>
+        </div>
+
+        {/* Repo Config (migration 051) */}
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="group-settings-repo-url">内置 repo(可选)</label>
+          <input
+            id="group-settings-repo-url"
+            type="text"
+            value={repoUrlValue}
+            onChange={e => setRepoUrlValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="如 git@github.com:org/repo.git 或 https://github.com/org/repo.git,留空则关闭 worktree 模式"
+            className={styles.dirInput}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <input
+            type="text"
+            value={repoBranchValue}
+            onChange={e => setRepoBranchValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="默认分支(如 main/master);留空用仓库默认"
+            className={styles.dirInput}
+            style={{ marginTop: 6 }}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ fontSize: 12, color: 'var(--color-slate, #888)', whiteSpace: 'nowrap' }}>worktree 模式</label>
+            <select
+              value={worktreeModeValue}
+              onChange={e => setWorktreeModeValue(e.target.value as 'group' | 'issue')}
+              className={styles.dirInput}
+              style={{ flex: 1 }}
+            >
+              <option value="group">group(群共享一个 worktree,轻量,适合单分支线性开发)</option>
+              <option value="issue">issue(每 issue 独立 worktree,多分支并行)</option>
+            </select>
+          </div>
+          <textarea
+            value={extraReposValue}
+            onChange={e => setExtraReposValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={'额外仓库(可选),每行一条:\nid|url|branch|mountPath\n例:frontend|git@github.com:org/fe.git|main|repos/frontend'}
+            className={styles.guidanceTextarea}
+            rows={3}
+            style={{ marginTop: 6 }}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <p className={styles.hint}>
+            <span className={styles.hintIcon}>💡</span>
+            <span>配 repo 后,该群每个 issue 在 executor 本机起独立 worktree(<code>&lt;groupId&gt;/&lt;issueId&gt;/repos/primary/</code>),多分支天然隔离。同 URL 跨 group/issue 全局复用 bare clone。仅与 master 同机器的 agent 生效。</span>
           </p>
         </div>
 

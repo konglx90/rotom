@@ -541,6 +541,13 @@ export interface ServerA2AMessage {
    *  供 prompt-composer 渲染 agent-role 层。字段缺失时 worker 沿用启动时
    *  从 executor.config.json 读到的兜底值。 */
   agentProfile?: AgentProfile;
+  /** 内置 repo(migration 051):master 从 group.repo_url 解析后下发。worker 收到
+   *  后在 chat 路径也走 group 模式 worktree(共享 worktree,不依赖 issueId),
+   *  让群内对话能查 repo 代码。缺失/空 = 该 group 未启用 repo,chat 走老 cwd。 */
+  repoUrl?: string;
+  repoBranch?: string;
+  extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[];
+  worktreeMode?: string;
 }
 
 export interface ServerRouteResultMessage {
@@ -618,6 +625,16 @@ export interface ServerIssueAssignedMessage {
    *  供 prompt-composer 渲染 agent-role 层。字段缺失时沿用 executor.config.json
    *  的兜底值。 */
   agentProfile?: AgentProfile;
+  /** 内置 repo(migration 051):master 从 group.repo_url + issue.repo_url 解析后下发。
+   *  worker 收到后在 executor 本机 ensureBareClone + git worktree add,
+   *  返回 primary worktree 路径作为 agent cwd(替代 workingDir)。
+   *  缺失/空 = 该 group 未启用 repo,worker 走原 resolveIssueCwd 三层回落。 */
+  repoUrl?: string;
+  /** 主仓库分支。优先 issue.repo_branch → group.repo_default_branch → 仓库默认。 */
+  repoBranch?: string;
+  /** 额外仓库 JSON 数组,形如 [{id,url,branch,mountPath}]。每个在 issue 工作区起独立 worktree,
+   *  并在 primary 的 mountPath 处建 symlink 让 agent 在 cwd 内直接访问。 */
+  extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[];
 }
 
 export interface ServerIssueUpdateAckMessage {
@@ -743,6 +760,12 @@ export interface ServerIssueContinueMessage {
   approvalPolicy?: "r_allow" | "rw_allow";
   /** 见 ServerIssueAssignedMessage.agentProfile。 */
   agentProfile?: AgentProfile;
+  /** 见 ServerIssueAssignedMessage.repoUrl。续跑复用同一 worktree(已存在则幂等)。 */
+  repoUrl?: string;
+  /** 见 ServerIssueAssignedMessage.repoBranch。 */
+  repoBranch?: string;
+  /** 见 ServerIssueAssignedMessage.extraRepos。 */
+  extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[];
 }
 
 /**
@@ -765,6 +788,12 @@ export interface ServerIssueAppendMessage {
   approvalPolicy?: "r_allow" | "rw_allow";
   /** 见 ServerIssueAssignedMessage.agentProfile。 */
   agentProfile?: AgentProfile;
+  /** 见 ServerIssueAssignedMessage.repoUrl。append 续跑同一 issue 的 worktree。 */
+  repoUrl?: string;
+  /** 见 ServerIssueAssignedMessage.repoBranch。 */
+  repoBranch?: string;
+  /** 见 ServerIssueAssignedMessage.extraRepos。 */
+  extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[];
 }
 
 // --- Session management (Master → Agent) ---

@@ -76,8 +76,8 @@ function rowMatchesFilter(r: ListRow, f: Filter): boolean {
   if (isPending) return f === 'all' || f === 'pending'
   if (f === 'pending') return false
   if (f === 'global') return r.scope === 'global'
-  if (f === 'note') return r.agent_visible === 0
-  if (f === 'memory') return r.agent_visible === 1 && r.scope !== 'global'
+  if (f === 'note') return r.category === 'note'
+  if (f === 'memory') return r.category !== 'note' && r.scope !== 'global'
   return true // 'all'
 }
 
@@ -267,6 +267,10 @@ export function MemoryPanel({ selectedGroupId, myAgentName }: Props) {
                       <span className={`${styles.scopeChip} ${styles.scopeGlobal}`}>全局</span>
                     )}
                     {/* category=note 的 item 已被 catChip 表达为「便签」,不再画 scopeChip,避免重复 */}
+                    {/* 便签默认仅人类可见(常见态)显示「📝 仅人类」;少数勾上 agent_visible=1 的不重复打,避免噪音 */}
+                    {!isPending && r.category === 'note' && r.agent_visible === 0 && (
+                      <span className={`${styles.scopeChip} ${styles.noteHumanOnly}`}>📝 仅人类</span>
+                    )}
                     {isPending && <span className={styles.pendingCorner}>待审核</span>}
                   </div>
                   {r.summary && <div className={styles.itemSummary}>{r.summary}</div>}

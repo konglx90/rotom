@@ -68,6 +68,19 @@ export const groupsApi = {
     return api.patch<{ ok: boolean }>(`/groups/${id}`, { guidancePrompt: prompt })
   },
 
+  /**
+   * 更新群内置 repo 配置(migration 051)。三列独立 patch:
+   *  - repoUrl: 留空/null 清空 → group 回退现状(无 worktree)
+   *  - repoDefaultBranch: 留空用仓库默认分支
+   *  - extraRepos: 数组形如 [{id,url,branch?,mountPath}],留 null 清空
+   */
+  async updateRepo(
+    id: string,
+    data: { repoUrl?: string | null; repoDefaultBranch?: string | null; extraRepos?: Array<{ id: string; url: string; branch?: string; mountPath: string }> | null; worktreeMode?: 'group' | 'issue' | null },
+  ): Promise<{ ok: boolean }> {
+    return api.patch<{ ok: boolean }>(`/groups/${id}`, data)
+  },
+
   async delete(id: string): Promise<{ ok: boolean }> {
     return api.delete<{ ok: boolean }>(`/groups/${id}`)
   },

@@ -25,6 +25,14 @@ export interface GroupRow {
   metadata: string;
   /** 群级别指导 prompt,全群一份;NULL 或空串 = 未设置。 */
   guidance_prompt: string | null;
+  /** 内置 repo:主仓库 URL。NULL = 该 group 走现状(无 repo / 无 worktree)。 */
+  repo_url: string | null;
+  /** 主仓库默认分支(如 main)。NULL 时 worktree 创建用仓库默认分支。 */
+  repo_default_branch: string | null;
+  /** 额外仓库配置 JSON 数组,形如 [{"id","url","branch","mountPath"}]。NULL = 无。 */
+  extra_repos: string | null;
+  /** worktree 模式(migration 052):'group'=群共享一个 worktree;'issue'=每 issue 独立。NULL='group'。 */
+  worktree_mode: string | null;
 }
 
 export interface GroupMemberRow {
@@ -269,6 +277,27 @@ export const groupMethods = {
   updateGroupGuidancePrompt(this: MeshDbSelf, id: string, prompt: string | null): void {
     const v = prompt && prompt.trim() ? prompt : null;
     this.db.prepare("UPDATE groups SET guidance_prompt = ? WHERE id = ?").run(v, id);
+  },
+
+  /**
+   * 更新群的内置 repo 配置(migration 051)。
+   *
+   * - repoUrl 为空串/null:清空 repo_url,该 group 回退现状(无 worktree)
+   * - extraReposJson 为空串/null:清空 extra_repos
+   * - 三列独立更新,避免一次只想改 defaultBranch 时把 url 也清掉
+   */
+  updateGroupRepo(
+    this: MeshDbSelf,
+    id: string,
+    repoUrl: string | null,
+    repoDefaultBranch: string | null,
+    extraReposJson: string | null,
+    worktreeMode: string | null,
+  ): void {
+    const mode = worktreeMode === "issue" ? "issue" : "group";
+    this.db.prepare(
+      "UPDATE groups SET repo_url = ?, repo_default_branch = ?, extra_repos = ?, worktree_mode = ? WHERE id = ?",
+    ).run(repoUrl || null, repoDefaultBranch || null, extraReposJson || null, mode, id);
   },
 
   addGroupMembers(this: MeshDbSelf, groupId: string, agentNames: string[]): void {
