@@ -342,6 +342,17 @@
     font-weight:700;font-size:11px;flex-shrink:0;font-family:var(--mono);margin-top:1px}
   .step-card.warn .n{background:var(--warn);color:#000}
   .step-card .t{flex:1}
+  .install-bar{display:flex;flex-direction:column;gap:8px;
+    background:rgba(94,234,212,.06);border:1px solid rgba(94,234,212,.3);border-left:3px solid var(--acc);
+    border-radius:8px;padding:10px 14px;margin-top:8px;font-size:13px}
+  .install-bar .ib-label{font-family:var(--mono);font-size:10px;color:var(--acc);
+    text-transform:uppercase;letter-spacing:.15em;font-weight:700}
+  .install-bar .ib-step{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .install-bar .ib-no{font-family:var(--mono);font-size:11px;color:var(--fg3);flex-shrink:0;min-width:18px}
+  .install-bar .ib-sep{color:var(--fg3);font-family:var(--mono);font-size:14px}
+  .install-bar .ib-hint{font-family:var(--mono);font-size:11px;color:var(--fg3)}
+  .install-bar code.inline{background:transparent;border:none;padding:0;color:var(--acc);font-size:13px;
+    white-space:pre-wrap;word-break:break-all}
   .live-link{display:flex;align-items:center;gap:14px;
     background:linear-gradient(90deg,rgba(94,234,212,.08),rgba(167,139,250,.06));
     border:1px solid rgba(94,234,212,.3);border-left:3px solid var(--acc);
