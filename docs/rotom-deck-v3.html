@@ -16,6 +16,19 @@
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
     overflow:hidden;-webkit-font-smoothing:antialiased}
   .deck{position:relative;width:100vw;height:100vh;overflow:hidden}
+  .img-shot{cursor:zoom-in;transition:transform .2s,box-shadow .2s}
+  .img-shot:hover{transform:scale(1.01);box-shadow:0 4px 30px rgba(94,234,212,.25)}
+  .lightbox{position:fixed;inset:0;z-index:9999;background:rgba(5,8,12,.92);
+    display:none;align-items:center;justify-content:center;padding:40px;
+    animation:lb-fade .2s ease;cursor:zoom-out}
+  .lightbox.open{display:flex}
+  .lightbox img{max-width:96vw;max-height:94vh;object-fit:contain;
+    border-radius:8px;box-shadow:0 10px 60px rgba(0,0,0,.5);cursor:zoom-out}
+  .lightbox .lb-close{position:absolute;top:18px;right:22px;color:var(--fg);
+    font-family:var(--mono);font-size:12px;background:rgba(255,255,255,.06);
+    border:1px solid var(--line);padding:6px 12px;border-radius:6px;cursor:pointer}
+  .lightbox .lb-close:hover{background:rgba(94,234,212,.12);border-color:var(--acc)}
+  @keyframes lb-fade{from{opacity:0}to{opacity:1}}
   .slide{position:absolute;inset:0;padding:60px 80px;display:none;flex-direction:column;
     background:radial-gradient(1200px 600px at 80% -10%, rgba(94,234,212,.06), transparent 60%),
                radial-gradient(800px 500px at -10% 110%, rgba(167,139,250,.05), transparent 60%),
@@ -367,7 +380,7 @@
 <!-- ============ 1 COVER ============ -->
 
 <section class="slide active" data-n="1" data-title="封面">
-  <div class="topbar"><span class="brand">ROTOM · 让专业 CLI Agent 变成数字员工</span><span class="idx">01 / 17</span></div>
+  <div class="topbar"><span class="brand">ROTOM · 让专业 CLI Agent 变成数字员工</span><span class="idx">01 / 18</span></div>
   <div class="hero cover-flex" style="width:100%">
     <div style="flex:1.2">
       <div class="hero eyebrow">数字员工协作网络 · rotom</div>
@@ -391,24 +404,26 @@
 <!-- ============ 2 AGENDA ============ -->
 
 <section class="slide" data-n="2" data-title="目录">
-  <div class="topbar"><span class="brand">AGENDA</span><span class="idx">02 / 17</span></div>
+  <div class="topbar"><span class="brand">AGENDA</span><span class="idx">02 / 18</span></div>
   <h2>今天讲什么</h2>
-  <p class="lead">重点讲透 2 个能力,其他点到为止。</p>
+  <p class="lead">重点讲透 2 个能力 + 1 个真实案例 + 4 条方法论,其他点到为止。</p>
   <div class="toc">
     <a data-goto="3"><span class="n">03</span><span class="tag-bg">背景</span>rotom 30 秒</a>
     <a data-goto="4"><span class="n">04</span><span class="tag-bg">背景</span>Dashboard 组件一览</a>
-    <a data-goto="5"><span class="n">05</span><span class="tag-bg">背景</span>参照学习 · multica + ClaudeTag + MoA</a>
-    <a data-goto="6"><span class="n">06</span><span class="tag-v3">主线</span>能力 1 · 持续学习(记忆 + skill)</a>
-    <a data-goto="7"><span class="n">07</span><span class="tag-v3">主线</span>能力 1 续 · 我们怎么落地</a>
-    <a data-goto="8"><span class="n">08</span><span class="tag-v3">主线</span>能力 2 · 主动出击(issue 巡检)</a>
-    <a data-goto="9"><span class="n">09</span><span class="tag-v3">主线</span>能力 2 续 · 我们怎么落地</a>
-    <a data-goto="10"><span class="n">10</span><span class="tag-bg">背景</span>治理一页清 · 写盘必挂 Issue</a>
-    <a data-goto="11"><span class="n">11</span><span class="tag-bg">背景</span>rotom CLI 一图流</a>
-    <a data-goto="12"><span class="n">12</span><span class="tag-v3">主线</span>真实问题 · 资产排查</a>
-    <a data-goto="13"><span class="n">13</span><span class="tag-v3">主线</span>深讲 · 排查过程</a>
-    <a data-goto="14"><span class="n">14</span><span class="tag-v3">主线</span>深讲 · 结果 & 方法论</a>
-    <a data-goto="15"><span class="n">15</span><span class="tag-v3">主线</span>迭代 V3/V4 + @ 交互 + 并发</a>
-    <a data-goto="16"><span class="n">16</span><span class="tag-v3">主线</span>总结 + Q &amp; A</a>
+    <a data-goto="5"><span class="n">05</span><span class="tag-bg">背景</span>群就是工作台 · 基础交互</a>
+    <a data-goto="6"><span class="n">06</span><span class="tag-v3">主线</span>外部集成 · 嵌入其他工作流</a>
+    <a data-goto="7"><span class="n">07</span><span class="tag-v3">主线</span>迭代 V3/V4</a>
+    <a data-goto="8"><span class="n">08</span><span class="tag-bg">背景</span>参照学习 · multica + ClaudeTag + MoA</a>
+    <a data-goto="9"><span class="n">09</span><span class="tag-v3">主线</span>能力 1 · 持续学习(记忆 + skill)</a>
+    <a data-goto="10"><span class="n">10</span><span class="tag-v3">主线</span>能力 1 续 · 端到端放出去就出活</a>
+    <a data-goto="11"><span class="n">11</span><span class="tag-v3">主线</span>能力 2 · 主动出击(issue 巡检)</a>
+    <a data-goto="12"><span class="n">12</span><span class="tag-v3">主线</span>能力 2 续 · 复用 群 + 定时任务 + Issue</a>
+    <a data-goto="13"><span class="n">13</span><span class="tag-bg">背景</span>治理一页清 · 写盘必挂 Issue</a>
+    <a data-goto="14"><span class="n">14</span><span class="tag-bg">背景</span>rotom CLI 一图流</a>
+    <a data-goto="15"><span class="n">15</span><span class="tag-v3">主线</span>真实问题 · 资产排查</a>
+    <a data-goto="16"><span class="n">16</span><span class="tag-v3">主线</span>深讲 · 排查过程</a>
+    <a data-goto="17"><span class="n">17</span><span class="tag-v3">主线</span>深讲 · 结果 &amp; 4 条设计原则</a>
+    <a data-goto="18"><span class="n">18</span><span class="tag-v3">主线</span>总结 + Q &amp; A</a>
   </div>
   <div class="small" style="margin-top:18px">
     标签说明:<span class="pill">主线</span> = 重点讲透 · <span class="pill x">背景</span> = 翻到这页再讲
@@ -417,7 +432,7 @@
 <!-- ============ 3 rotom 30 秒 ============ -->
 
 <section class="slide" data-n="3" data-title="rotom 30 秒">
-  <div class="topbar"><span class="brand">背景 · rotom 30 秒</span><span class="idx">03 / 17</span></div>
+  <div class="topbar"><span class="brand">背景 · rotom 30 秒</span><span class="idx">03 / 18</span></div>
   <h2>rotom 30 秒 · 架构 + 协议 + 子系统</h2>
   <p class="lead">一页讲清 rotom 是什么 —— 后面所有场景都基于这套底盘。</p>
   <div class="arch30" style="margin-top:14px">
@@ -464,7 +479,7 @@
 </section>
 <!-- ============ 4 Dashboard 组件 ============ -->
 <section class="slide" data-n="4" data-title="Dashboard 组件">
-  <div class="topbar"><span class="brand">背景 · Dashboard 组件</span><span class="idx">04 / 17</span></div>
+  <div class="topbar"><span class="brand">背景 · Dashboard 组件</span><span class="idx">04 / 18</span></div>
   <h2>Dashboard 组件一览 <span style="font-size:16px;color:var(--fg3);font-weight:400">/ 6 大块</span></h2>
   <p class="lead">rotom Dashboard 不止聊天 —— 所有能力都装进同一个群下面。讲清楚这 6 块,后面所有场景都顺。</p>
   <div class="grid g3" style="margin-top:18px;flex:1;align-items:stretch">
@@ -511,7 +526,7 @@
 <!-- ============ 5 群就是工作台 ============ -->
 
 <section class="slide" data-n="5" data-title="群就是工作台 · 基础交互">
-  <div class="topbar"><span class="brand">背景 · 基础交互</span><span class="idx">05 / 17</span></div>
+  <div class="topbar"><span class="brand">背景 · 基础交互</span><span class="idx">05 / 18</span></div>
   <h2>群就是工作台 · @ 交互 + 可以并发</h2>
   <p class="lead">Dashboard 6 块都挂在群下面,那「群本身」就是工作台 —— 人和 Agent 怎么用它?三件事:@ 谁谁接活、#reply 触发桥接、多群并发。</p>
   <div class="grid g2" style="margin-top:14px">
@@ -550,11 +565,102 @@
     <div class="step v acc">瓦力并发 PR review</div>
   </div>
 </section>
-<!-- ============ 6 参照学习 ============ -->
+<!-- ============ 6 外部集成 ============ -->
 
-<section class="slide" data-n="6" data-title="参照学习">
-  <div class="topbar"><span class="brand">背景 · 参照学习</span><span class="idx">06 / 17</span></div>
-  <h2>我们参照学习的三件事</h2>
+<section class="slide" data-n="6" data-title="外部集成 · 嵌入其他工作流 + 与 mesh Agent 沟通">
+  <div class="topbar"><span class="brand">主线 · 外部集成</span><span class="idx">06 / 18</span></div>
+  <h2>外部集成 · 嵌入其他工作流 · 与 mesh Agent 沟通</h2>
+  <p class="lead">上面讲的全是 rotom <strong>内部</strong>协作 —— 还有一类场景:你的 codex / claude / 别的 agent <strong>在外面干别的活</strong>,过程中需要把 mesh 里的 agent 拉进来问一句、协作一把。<code class="inline">skill/rotom-bus-host</code> 就是干这个的。</p>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card lg">
+      <h4>场景 · 谁在外面?怎么拉 mesh?</h4>
+      <p>你的 codex / claude 已经在做别的活(写代码 / 写报告 / 排查问题),中间卡了:这块业务 mesh 里的江德福熟、这步架构 mesh 里的瓦力懂。</p>
+      <p style="margin-top:8px"><strong>3 步搞定:</strong></p>
+      <p><code class="inline">①</code> 调 <code class="inline">rotom group create</code> 建群 · <code class="inline">②</code> 调 <code class="inline">rotom group send --need-reply</code> 提问 · <code class="inline">③</code> 调 <code class="inline">rotom group new-messages --since</code> 等回复</p>
+      <p style="margin-top:6px;font-size:12px;color:var(--fg3);font-family:var(--mono)">身份来自 <code class="inline">~/.rotom/executor.config.json</code> · <code class="inline">--as=&lt;你&gt;</code> 切 · 走 Bash 调 rotom CLI</p>
+    </div>
+    <div class="card lg">
+      <h4>两种群模式(按场景二选一)</h4>
+      <p><span class="pill">普通群</span> · 多 Agent 协作 · <code class="inline">@</code> 触发 worker 自动接话 · 谁都能冒泡</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 8px 0">→ <code class="inline">rotom group create "&lt;需求&gt;" --agents a,b,c --message "@全体 ..."</code></p>
+      <p><span class="pill v">单播群 (--a2a-direct)</span> · 点对点 · 消息只入库<strong>不广播</strong> · worker 不自动醒 · 只在 <code class="inline">--need-reply</code> 显式点名时起一手回复(A 发 → B 回 → 停)</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 0 0">→ <code class="inline">rotom group create "&lt;你和 B 的小窗口&gt;" --agents 你,B --a2a-direct</code></p>
+    </div>
+    <div class="card lg">
+      <h4>沟通循环 · 一问一答</h4>
+      <p><strong>提问</strong>:<code class="inline">rotom group send &lt;gid&gt; &lt;target&gt; "&lt;问题&gt;" --need-reply</code></p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 8px 0">master 自动补 <code class="inline">@target</code>(确保对方 worker 起来)+ 登记 <code class="inline">requestId → asker</code>。对方回复时 master <strong>硬剥</strong>掉 <code class="inline">@&lt;asker&gt;</code> 再入库 —— 你的 worker 不会被回复触发,不会来回聊</p>
+      <p><strong>等回复</strong>:<code class="inline">bash skill/rotom-bus-host/scripts/poll-replies.sh &lt;gid&gt; --as &lt;你&gt;</code></p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 0 0">默认 10 轮 × 30s = 5min(覆盖 ask-bridge 超时窗口)· 找到退出 0 · 超时退出 2</p>
+    </div>
+    <div class="card lg">
+      <h4>关键约束(踩坑就完蛋)</h4>
+      <p>❌ <strong>轮询太快</strong>(每秒)→ 30s 间隔足够</p>
+      <p>❌ <strong>不带 <code class="inline">--need-reply</code></strong> 直接 send → 正文没 <code class="inline">@target</code>,对方 worker SKIP,消息白发</p>
+      <p>❌ <strong>把明确任务塞群消息</strong> → 用 <code class="inline">issue create --run</code> 派单</p>
+      <p>❌ <strong>群消息 5+ 轮没收敛</strong> → 升级为 task issue</p>
+      <p>❌ <strong>编造对方回答</strong>(<code class="inline">group send</code> 异步)→ 等 <code class="inline">new-messages</code> 拉到再说</p>
+      <p>❌ <strong>写盘没挂 issue</strong> → 先 <code class="inline">rotom issue list &lt;gid&gt; --status in_progress</code>,没有就先建</p>
+    </div>
+  </div>
+  <div class="flow" style="margin-top:14px">
+    <div class="step">外面 codex 卡了</div>
+    <div class="arrow-r">→</div>
+    <div class="step"><code class="inline">group create --agents 你,江德福 --a2a-direct</code></div>
+    <div class="arrow-r">→</div>
+    <div class="step"><code class="inline">group send --need-reply</code></div>
+    <div class="arrow-r">→</div>
+    <div class="step acc">江德福醒 + 回</div>
+    <div class="arrow-r">→</div>
+    <div class="step"><code class="inline">poll-replies.sh</code> 拉</div>
+    <div class="arrow-r">→</div>
+    <div class="step v acc">codex 拿到答案继续干</div>
+  </div>
+  <div class="quote" style="margin-top:12px"><code class="inline">rotom-bus-host</code> 只补"建群 + 一问一答"的增量。群消息上下文识别、行动判定、写盘兜底、#reply 超时升级等通用规则见 <code class="inline">rotom-a2a-communicate</code>,不重复。</div>
+</section>
+<!-- ============ 7 V3/V4 迭代 ============ -->
+
+<section class="slide" data-n="7" data-title="迭代 V3/V4">
+  <div class="topbar"><span class="brand">主线 · 迭代</span><span class="idx">07 / 18</span></div>
+  <h2>迭代 V3 / V4 · rotom 优化方向 V3/V4 两个群</h2>
+  <p class="lead">V3/V4 不是新版本号 —— 是两个专门的群,功能就是<strong>在群里面迭代 rotom 本身</strong>:产品方向 / UI 反馈 / rotom 自己的 issue,全部丢这两个群让 Agent 干。</p>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="v3v4">
+      <div class="ver">V3 群 · rotom优化方向V3</div>
+      <a class="live-link" href="http://localhost:3000/dashboard/groups/f080e51e-82bc-4b91-8f73-350c4206bd74" target="_blank" rel="noopener" style="margin:0 0 10px 0">
+        <span class="ll-tag">实际群</span>
+        <span class="ll-arrow">↗</span>
+        <span class="ll-text">打开 rotom优化方向V3:<strong>群 f080e51e</strong></span>
+      </a>
+      <h4>产品方向 + UI 反馈</h4>
+      <div class="feat">Agent 昵称(西花-claude / 西花-codex 太长)· group sessions 位置 · 终端吸底</div>
+      <div class="feat">产物文件预览(head 对比 head 位置突出)· 群聊列表成员数量紧凑</div>
+      <div class="feat">可插拔 skill 管理(不同群不同 agent 加载不同 skill)· 群内角色设计</div>
+      <div class="feat" style="color:var(--fg3)">5 个 open issue 已迁到 V4 群(f080e51e → 54ab4777)</div>
+    </div>
+    <div class="v3v4">
+      <div class="ver">V4 群 · rotom优化V4</div>
+      <a class="live-link" href="http://localhost:3000/dashboard/groups/54ab4777-002f-4e4c-b045-b4892b6533cf" target="_blank" rel="noopener" style="margin:0 0 10px 0">
+        <span class="ll-tag">实际群</span>
+        <span class="ll-arrow">↗</span>
+        <span class="ll-text">打开 rotom优化V4:<strong>群 54ab4777</strong></span>
+      </a>
+      <h4>rotom 自身的 issue 执行</h4>
+      <div class="feat">Agent profile 精简 + 群级别覆盖(position / bio)</div>
+      <div class="feat">apply patch 后自动滚动影响阅读 · issue ESC 修复</div>
+      <div class="feat">多 Agent 协作设计(群内交付 + 超时重试)· MoA 试做</div>
+      <div class="feat">Artifacts 终端展开高度 · 群聊嵌入 codex 工作流(免 executor)</div>
+    </div>
+  </div>
+  <div class="quote" style="margin-top:14px">
+    两个群 7 个 Agent 一起干 rotom 自己的活 —— 西花提需求 / 阿甘建 issue / 西花-claude·codex·hermes 自动接活 / system push 进度。典型的「<strong style="color:var(--ok)">用 rotom 迭代 rotom 自身</strong>」。
+  </div>
+</section>
+<!-- ============ 8 参照学习 ============ -->
+
+<section class="slide" data-n="8" data-title="参照学习">
+  <div class="topbar"><span class="brand">背景 · 参照学习</span><span class="idx">08 / 18</span></div>
+  <h2>群聊之上：我们参照学习的三件事</h2>
   <p class="lead">rotom 自己在做什么 + 我们重点学 ClaudeTag 的 2 个能力 + 借鉴 Hermes 的多 Agent 协作模式。</p>
   <div class="ct-card">
     <div class="ct-row">
@@ -565,7 +671,7 @@
       </div>
       <div class="col">
         <h4>2 · ClaudeTag 持续学习 + 主动出击</h4>
-        <p>ClaudeTag 的两个核心能力:① 干完活自动落 memory / skill(持续学习);② Agent 不等派活,自动巡检 + 写 issue(主动出击)。</p>
+        <p>两个核心能力:① 干完活自动落 memory / skill(持续学习);② Agent 不等派活,自动巡检 + 写 issue(主动出击)。</p>
         <p style="font-size:11px;color:var(--acc);font-family:var(--mono);text-transform:uppercase;letter-spacing:.15em;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">★ 我们重点学 · 见 5-8 页</p>
       </div>
       <div class="col">
@@ -577,13 +683,13 @@
     </div>
   </div>
   <div class="warn-row" style="margin-top:14px">
-    重点:这次讲的是 <strong>2(持续学习 + 主动出击)</strong>。1 是 rotom 自己的底盘贯穿全篇,3 借鉴思路留到 V3/V4 群落地。
+    重点:这次讲的是 <strong>2(持续学习 + 主动出击)</strong>。1 是 rotom 自己的底盘贯穿全篇。
   </div>
 </section>
-<!-- ============ 7 能力 1 持续学习 ============ -->
+<!-- ============ 9 能力 1 持续学习 ============ -->
 
-<section class="slide" data-n="7" data-title="能力 1 · 持续学习">
-  <div class="topbar"><span class="brand">主线 · 能力 1</span><span class="idx">07 / 17</span></div>
+<section class="slide" data-n="9" data-title="能力 1 · 持续学习">
+  <div class="topbar"><span class="brand">主线 · 能力 1</span><span class="idx">09 / 18</span></div>
   <h2>能力 1 · 持续学习 <span style="font-size:16px;color:var(--fg3);font-weight:400">/ 记忆 + skill</span></h2>
   <div class="lr" style="margin-top:14px;flex:1;display:grid;grid-template-columns:1.4fr 1fr;gap:18px;align-items:stretch">
     <div class="lr-left" style="display:flex;flex-direction:column;gap:10px;min-height:0">
@@ -604,19 +710,17 @@
       </a>
     </div>
     <div class="lr-right" style="display:flex;flex-direction:column;min-height:0">
-      <div class="img-placeholder" style="flex:1;margin:0;min-height:0">
-        <div class="lbl">IMG · 待替换</div>
-        Dashboard「记忆管理」+ 「技能」页截图
-        <div class="hint2">建议:截 dashboard 记忆管理页 · docs/infos/memory-page.png(占位)</div>
+      <div class="img-shot" style="flex:1;margin:0;min-height:0;background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+        <img src="https://mdn.alipayobjects.com/huamei_vaei4o/afts/img/o_wiRqm5nj8AAAAASWAAAAgAenEvAQFr/fmt.webp" alt="持续学习示意" style="max-width:100%;max-height:100%;object-fit:contain;display:block">
       </div>
     </div>
   </div>
   <!-- IMG: 记忆管理 / 技能绑定 截图 -->
 </section>
-<!-- ============ 8 能力 1 落地 ============ -->
+<!-- ============ 10 能力 1 落地 ============ -->
 
-<section class="slide" data-n="8" data-title="能力 1 续 · 落地">
-  <div class="topbar"><span class="brand">主线 · 能力 1 落地</span><span class="idx">08 / 17</span></div>
+<section class="slide" data-n="10" data-title="能力 1 续 · 落地">
+  <div class="topbar"><span class="brand">主线 · 能力 1 落地</span><span class="idx">10 / 18</span></div>
   <div class="title-row">
   <h2>能力 1 续 · 端到端交付放出去就出活</h2>
   <a class="live-link" href="http://localhost:3000/dashboard/groups/c211307e-79ae-405a-b69c-b7360f5d375e/issues/635c1c28-9047-4176-80b0-6a423f219904" target="_blank" rel="noopener">
@@ -665,10 +769,10 @@
     </div>
   </div>
 </section>
-<!-- ============ 9 能力 2 主动出击 ============ -->
+<!-- ============ 11 能力 2 主动出击 ============ -->
 
-<section class="slide" data-n="9" data-title="能力 2 · 主动出击">
-  <div class="topbar"><span class="brand">主线 · 能力 2</span><span class="idx">09 / 17</span></div>
+<section class="slide" data-n="11" data-title="能力 2 · 主动出击">
+  <div class="topbar"><span class="brand">主线 · 能力 2</span><span class="idx">11 / 18</span></div>
   <h2>能力 2 · 主动出击 <span style="font-size:16px;color:var(--fg3);font-weight:400">/ 复用 群 + 定时任务 + Issue</span></h2>
   <p class="lead">主动出击不是另搞一套 —— 复用 rotom 三个已有的能力(群 / 定时任务 / Issue)拼出来。建 1 个 <code class="inline">type=patrol</code> 群,挂 1 个每小时跑的定时任务,任务就是建 1 个 [巡检] issue 让巡检员自己判。</p>
   <div class="deep" style="margin-top:14px">
@@ -704,10 +808,10 @@
     </div>
   </div>
 </section>
-<!-- ============ 10 能力 2 落地 ============ -->
+<!-- ============ 12 能力 2 落地 ============ -->
 
-<section class="slide" data-n="10" data-title="能力 2 续 · 落地">
-  <div class="topbar"><span class="brand">主线 · 能力 2 落地</span><span class="idx">10 / 17</span></div>
+<section class="slide" data-n="12" data-title="能力 2 续 · 落地">
+  <div class="topbar"><span class="brand">主线 · 能力 2 落地</span><span class="idx">12 / 18</span></div>
   <div class="title-row">
     <h2>能力 2 续 · 我们怎么落地的</h2>
     <a class="live-link" href="http://localhost:3000/dashboard/toolbox/issue-patrol" target="_blank" rel="noopener">
@@ -743,10 +847,10 @@
     </div>
   </div>
 </section>
-<!-- ============ 11 治理一页清 ============ -->
+<!-- ============ 13 治理一页清 ============ -->
 
-<section class="slide" data-n="11" data-title="治理一页清">
-  <div class="topbar"><span class="brand">背景 · 治理</span><span class="idx">11 / 17</span></div>
+<section class="slide" data-n="13" data-title="治理一页清">
+  <div class="topbar"><span class="brand">背景 · 治理</span><span class="idx">13 / 18</span></div>
   <h2>治理一页清 · 写盘必挂 Issue</h2>
   <div class="quote">"Agent 在群里没 in_progress issue 时,只能 Read / Grep / Glob。遇到改动诉求,先 <code class="inline">rotom issue create</code> 或提示发起方建。"</div>
   <div class="gov-grid">
@@ -777,10 +881,10 @@
   </div>
   <div class="warn-row" style="margin-top:10px">私聊已下线,所有 a2a 走 <code class="inline">rotom group send &lt;groupId&gt; &lt;target&gt; ...</code> + @mention。</div>
 </section>
-<!-- ============ 12 rotom CLI 一图流 ============ -->
+<!-- ============ 14 rotom CLI 一图流 ============ -->
 
-<section class="slide" data-n="12" data-title="rotom CLI 一图流">
-  <div class="topbar"><span class="brand">背景 · CLI</span><span class="idx">12 / 17</span></div>
+<section class="slide" data-n="14" data-title="rotom CLI 一图流">
+  <div class="topbar"><span class="brand">背景 · CLI</span><span class="idx">14 / 18</span></div>
   <h2>rotom CLI 一图流 · 17 个子命令</h2>
   <p class="lead">身份解析:<code class="inline">ROTOM_AGENT</code> env > <code class="inline">--as &lt;name&gt;</code> > <code class="inline">defaultAgent</code> > executor.config 自动发现。<strong style="color:var(--err)">永远不接受 --from</strong>。</p>
   <div class="cli-row">
@@ -799,10 +903,10 @@ rotom issue create &lt;groupId&gt; --title "..." --priority high</pre>
     Agent 在容器内通过 Bash 调 <code class="inline">rotom</code>(加载 <code class="inline">skill/rotom-a2a-communicate</code>),真人 / Claude Code 也能在 shell 手动用 —— <strong>同一套身份、同一个出口</strong>。
   </div>
 </section>
-<!-- ============ 13 资产排查 开场 ============ -->
+<!-- ============ 15 资产排查 开场 ============ -->
 
-<section class="slide" data-n="13" data-title="真实问题 · 资产排查">
-  <div class="topbar"><span class="brand">主线 · 真实问题</span><span class="idx">13 / 17</span></div>
+<section class="slide" data-n="15" data-title="真实问题 · 资产排查">
+  <div class="topbar"><span class="brand">主线 · 真实问题</span><span class="idx">15 / 18</span></div>
   <h2>真实问题 · 资产列表 label 排查 + PR review</h2>
   <p class="lead">业务反馈线上资产列表第二列文案突然变了(原本「至 85 岁预估累计可领」变成「到期累计可领」),需要追到根因 —— 同时 review 一个去 desc 渲染的 PR,顺手做空值审计。</p>
   <a class="live-link" href="http://localhost:3000/dashboard/groups/2fec433e-41e7-4ace-8dd5-d5fa0171d39a" target="_blank" rel="noopener">
@@ -826,10 +930,10 @@ rotom issue create &lt;groupId&gt; --title "..." --priority high</pre>
     这一节讲三件事:<strong>1</strong> 群里两个任务怎么接力走完(江德福 → 瓦力);<strong>2</strong> Agent 也会犯错 + 怎么自己纠错(瓦力被西花实测反驳两次);<strong>3</strong> 这次真实沉淀的资产(memory / issue / 风险点)。
   </div>
 </section>
-<!-- ============ 14 资产排查 过程 ============ -->
+<!-- ============ 16 资产排查 过程 ============ -->
 
-<section class="slide" data-n="14" data-title="深讲 · 排查过程">
-  <div class="topbar"><span class="brand">主线 · 深讲</span><span class="idx">14 / 17</span></div>
+<section class="slide" data-n="16" data-title="深讲 · 排查过程">
+  <div class="topbar"><span class="brand">主线 · 深讲</span><span class="idx">16 / 18</span></div>
   <div class="title-row">
   <h2>深讲 · 资产排查 · 群 2fec433e</h2>
   <a class="live-link" href="http://localhost:3000/dashboard/groups/2fec433e-41e7-4ace-8dd5-d5fa0171d39a" target="_blank" rel="noopener">
@@ -881,18 +985,11 @@ rotom issue create &lt;groupId&gt; --title "..." --priority high</pre>
     </div>
   </div>
 </section>
-<!-- ============ 15 资产排查 结果 ============ -->
+<!-- ============ 17 资产排查 结果 ============ -->
 
-<section class="slide" data-n="15" data-title="深讲 · 结果 & 方法论">
-  <div class="topbar"><span class="brand">主线 · 深讲</span><span class="idx">15 / 17</span></div>
-  <div class="title-row">
-  <h2>深讲 · 结果 & 方法论 · 群 2fec433e</h2>
-  <a class="live-link" href="http://localhost:3000/dashboard/groups/2fec433e-41e7-4ace-8dd5-d5fa0171d39a" target="_blank" rel="noopener">
-    <span class="ll-tag">实际群</span>
-    <span class="ll-arrow">↗</span>
-    <span class="ll-text">打开养老金资产排查的真实群:<strong>群 2fec433e</strong></span>
-  </a>
-  </div>
+<section class="slide" data-n="17" data-title="深讲 · 结果 & 方法论">
+  <div class="topbar"><span class="brand">主线 · 深讲</span><span class="idx">17 / 18</span></div>
+  <h2>深讲 · 结果 & 方法论 · 4 条设计原则</h2>
   <p class="lead">这一节把前面 17 页里的所有事 —— 1 个巡检群(3ff00a)· 1 个工具群(c211307e)· 1 个排查群(2fec433e)· 2 个 rotom 自迭代群(f080e51e / 54ab4777)· 1 个治理 + 1 个 CLI 演示 —— 收成 4 条设计原则。每条都有代码出处。</p>
   <div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">
     <div class="kpi"><div class="v">6 群</div><div class="l">5 业务 + 1 巡检</div></div>
@@ -936,48 +1033,10 @@ rotom issue create &lt;groupId&gt; --title "..." --priority high</pre>
   </div>
   <div class="quote" style="margin-top:12px">这 4 条不是设计文档里写的 —— 是 6 个真实群 / 73 条群消息 / 1 个巡检 / 1 个工具交付 / 1 次 PR review 实际跑出来的。</div>
 </section>
-<!-- ============ 16 V3/V4 迭代 ============ -->
+<!-- ============ 18 总结 + Q&A ============ -->
 
-<section class="slide" data-n="16" data-title="迭代 V3/V4">
-  <div class="topbar"><span class="brand">主线 · 迭代</span><span class="idx">16 / 17</span></div>
-  <h2>迭代 V3 / V4 · rotom 优化方向 V3/V4 两个群</h2>
-  <p class="lead">V3/V4 不是新版本号 —— 是两个专门的群,功能就是<strong>在群里面迭代 rotom 本身</strong>:产品方向 / UI 反馈 / rotom 自己的 issue,全部丢这两个群让 Agent 干。</p>
-  <div class="grid g2" style="margin-top:14px">
-    <div class="v3v4">
-      <div class="ver">V3 群 · rotom优化方向V3</div>
-      <a class="live-link" href="http://localhost:3000/dashboard/groups/f080e51e-82bc-4b91-8f73-350c4206bd74" target="_blank" rel="noopener" style="margin:0 0 10px 0">
-        <span class="ll-tag">实际群</span>
-        <span class="ll-arrow">↗</span>
-        <span class="ll-text">打开 rotom优化方向V3:<strong>群 f080e51e</strong></span>
-      </a>
-      <h4>产品方向 + UI 反馈</h4>
-      <div class="feat">Agent 昵称(西花-claude / 西花-codex 太长)· group sessions 位置 · 终端吸底</div>
-      <div class="feat">产物文件预览(head 对比 head 位置突出)· 群聊列表成员数量紧凑</div>
-      <div class="feat">可插拔 skill 管理(不同群不同 agent 加载不同 skill)· 群内角色设计</div>
-      <div class="feat" style="color:var(--fg3)">5 个 open issue 已迁到 V4 群(f080e51e → 54ab4777)</div>
-    </div>
-    <div class="v3v4">
-      <div class="ver">V4 群 · rotom优化V4</div>
-      <a class="live-link" href="http://localhost:3000/dashboard/groups/54ab4777-002f-4e4c-b045-b4892b6533cf" target="_blank" rel="noopener" style="margin:0 0 10px 0">
-        <span class="ll-tag">实际群</span>
-        <span class="ll-arrow">↗</span>
-        <span class="ll-text">打开 rotom优化V4:<strong>群 54ab4777</strong></span>
-      </a>
-      <h4>rotom 自身的 issue 执行</h4>
-      <div class="feat">Agent profile 精简 + 群级别覆盖(position / bio)</div>
-      <div class="feat">apply patch 后自动滚动影响阅读 · issue ESC 修复</div>
-      <div class="feat">多 Agent 协作设计(群内交付 + 超时重试)· MoA 试做</div>
-      <div class="feat">Artifacts 终端展开高度 · 群聊嵌入 codex 工作流(免 executor)</div>
-    </div>
-  </div>
-  <div class="quote" style="margin-top:14px">
-    两个群 7 个 Agent 一起干 rotom 自己的活 —— 西花提需求 / 阿甘建 issue / 西花-claude·codex·hermes 自动接活 / system push 进度。典型的「<strong style="color:var(--ok)">用 rotom 迭代 rotom 自身</strong>」。
-  </div>
-</section>
-<!-- ============ 17 总结 + Q&A ============ -->
-
-<section class="slide" data-n="17" data-title="总结 + Q&A">
-  <div class="topbar"><span class="brand">主线 · 总结</span><span class="idx">17 / 17</span></div>
+<section class="slide" data-n="18" data-title="总结 + Q&A">
+  <div class="topbar"><span class="brand">主线 · 总结</span><span class="idx">18 / 18</span></div>
   <div class="hero">
     <div class="hero eyebrow">总结 + Q &amp; A</div>
     <p class="closing">
@@ -1006,7 +1065,7 @@ rotom issue create &lt;groupId&gt; --title "..." --priority high</pre>
 <div class="footer">
   <span id="curTitle">封面</span>
   <span class="hint"><kbd>←</kbd><kbd>→</kbd> · 空格 · 数字键 · <kbd>Esc</kbd> 目录</span>
-  <span id="curNum">01 / 17</span>
+  <span id="curNum">01 / 18</span>
 </div>
 
 <script>
@@ -1057,6 +1116,32 @@ rotom issue create &lt;groupId&gt; --title "..." --priority high</pre>
       const saved = parseInt(localStorage.getItem('rotom-deck-v3-cur')||'0',10);
       if(saved>=0&&saved<total) show(saved); else show(0);
     }catch(e){ show(0); }
+  })();
+
+  // ── 图片 lightbox(点击放大) ─────────────────────────────────
+  (function(){
+    const lb = document.createElement('div');
+    lb.className = 'lightbox';
+    lb.innerHTML = '<button class="lb-close">ESC 关闭</button><img alt="">';
+    document.body.appendChild(lb);
+    const img = lb.querySelector('img');
+    function open(src, alt){
+      img.src = src; img.alt = alt || '';
+      lb.classList.add('open');
+    }
+    function close(){ lb.classList.remove('open'); img.src = ''; }
+    lb.addEventListener('click', close);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && lb.classList.contains('open')) close();
+    });
+    // 事件代理:所有 .img-shot 里的 img 点击放大
+    document.addEventListener('click', e => {
+      const t = e.target;
+      if (t && t.tagName === 'IMG' && t.closest('.img-shot')) {
+        e.stopPropagation();
+        open(t.src, t.alt);
+      }
+    });
   })();
 </script>
 </div>

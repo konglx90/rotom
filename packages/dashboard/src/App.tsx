@@ -18,6 +18,7 @@ import { SchedulePatternsTab } from './features/toolbox/SchedulePatternsTab'
 import { MemoryManagementTab } from './features/toolbox/MemoryManagementTab'
 import { SkillsManagementTab } from './features/toolbox/SkillsManagementTab'
 import { IssuePatrolTab } from './features/toolbox/IssuePatrolTab'
+import { ImageGalleryTab } from './features/toolbox/ImageGalleryTab'
 import { ConfigModal } from './features/groups/modals/ConfigModal'
 import { CreateGroupModal } from './features/groups/modals/CreateGroupModal'
 import { NotificationProvider } from './features/notifications/NotificationContext'
@@ -87,6 +88,7 @@ function App() {
                   <Route path="memory" element={<MemoryManagementTab />} />
                   <Route path="skills" element={<SkillsManagementTab />} />
                   <Route path="issue-patrol" element={<IssuePatrolTab />} />
+                  <Route path="gallery" element={<ImageGalleryTab />} />
                 </Route>
                 <Route path="/dashboard/messages" element={<Navigate to="/dashboard/toolbox/messages" replace />} />
                 <Route path="/dashboard/terminal" element={<Navigate to="/dashboard/toolbox/terminal" replace />} />

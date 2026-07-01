@@ -16,6 +16,19 @@
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
     overflow:hidden;-webkit-font-smoothing:antialiased}
   .deck{position:relative;width:100vw;height:100vh;overflow:hidden}
+  .img-shot{cursor:zoom-in;transition:transform .2s,box-shadow .2s}
+  .img-shot:hover{transform:scale(1.01);box-shadow:0 4px 30px rgba(94,234,212,.25)}
+  .lightbox{position:fixed;inset:0;z-index:9999;background:rgba(5,8,12,.92);
+    display:none;align-items:center;justify-content:center;padding:40px;
+    animation:lb-fade .2s ease;cursor:zoom-out}
+  .lightbox.open{display:flex}
+  .lightbox img{max-width:96vw;max-height:94vh;object-fit:contain;
+    border-radius:8px;box-shadow:0 10px 60px rgba(0,0,0,.5);cursor:zoom-out}
+  .lightbox .lb-close{position:absolute;top:18px;right:22px;color:var(--fg);
+    font-family:var(--mono);font-size:12px;background:rgba(255,255,255,.06);
+    border:1px solid var(--line);padding:6px 12px;border-radius:6px;cursor:pointer}
+  .lightbox .lb-close:hover{background:rgba(94,234,212,.12);border-color:var(--acc)}
+  @keyframes lb-fade{from{opacity:0}to{opacity:1}}
   .slide{position:absolute;inset:0;padding:60px 80px;display:none;flex-direction:column;
     background:radial-gradient(1200px 600px at 80% -10%, rgba(94,234,212,.06), transparent 60%),
                radial-gradient(800px 500px at -10% 110%, rgba(167,139,250,.05), transparent 60%),

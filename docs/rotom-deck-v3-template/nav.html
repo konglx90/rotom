@@ -57,6 +57,32 @@
       if(saved>=0&&saved<total) show(saved); else show(0);
     }catch(e){ show(0); }
   })();
+
+  // ── 图片 lightbox(点击放大) ─────────────────────────────────
+  (function(){
+    const lb = document.createElement('div');
+    lb.className = 'lightbox';
+    lb.innerHTML = '<button class="lb-close">ESC 关闭</button><img alt="">';
+    document.body.appendChild(lb);
+    const img = lb.querySelector('img');
+    function open(src, alt){
+      img.src = src; img.alt = alt || '';
+      lb.classList.add('open');
+    }
+    function close(){ lb.classList.remove('open'); img.src = ''; }
+    lb.addEventListener('click', close);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && lb.classList.contains('open')) close();
+    });
+    // 事件代理:所有 .img-shot 里的 img 点击放大
+    document.addEventListener('click', e => {
+      const t = e.target;
+      if (t && t.tagName === 'IMG' && t.closest('.img-shot')) {
+        e.stopPropagation();
+        open(t.src, t.alt);
+      }
+    });
+  })();
 </script>
 </div>
 </body>

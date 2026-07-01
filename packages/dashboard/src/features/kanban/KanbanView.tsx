@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { groupsApi } from '../../api/groups'
 import { issuesApi } from '../../api/issues'
 import type { Agent, Group, Issue } from '../../api/types'
@@ -117,6 +118,8 @@ export function KanbanView() {
   const [openIssue, setOpenIssue] = useState<{ id: string; groupId: string } | null>(null)
   const [drawerGroup, setDrawerGroup] = useState<Group | null>(null)
   const [drawerRefresh, setDrawerRefresh] = useState(0)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlIssueId = searchParams.get('issue')
 
   const groupNameMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -153,6 +156,33 @@ export function KanbanView() {
     if (lastIssueChange.issueId === openIssue.id) setDrawerRefresh(v => v + 1)
   }, [lastIssueChange, openIssue])
 
+  // URL ?issue=<id> → 打开抽屉。issues 加载完后若 URL 带着某个 issue id,
+  // 就把对应抽屉打开(刷新/分享链接都能恢复);卡片点击反向写回 URL。
+  useEffect(() => {
+    if (!urlIssueId) { setOpenIssue(null); return }
+    if (openIssue && openIssue.id === urlIssueId) return
+    const found = issues.find(i => i.id === urlIssueId)
+    if (found) setOpenIssue({ id: found.id, groupId: found.group_id })
+  }, [urlIssueId, issues, openIssue])
+
+  const openIssueById = useCallback((id: string, groupId: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('issue', id)
+      return next
+    }, { replace: true })
+    setOpenIssue({ id, groupId })
+  }, [setSearchParams])
+
+  const closeIssue = useCallback(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('issue')
+      return next
+    }, { replace: true })
+    setOpenIssue(null)
+  }, [setSearchParams])
+
   // 抽屉打开时按群补成员；用户不在该群则按需 fetch
   useEffect(() => {
     if (!openIssue) { setDrawerGroup(null); return }
@@ -168,10 +198,10 @@ export function KanbanView() {
   // ESC 关闭抽屉
   useEffect(() => {
     if (!openIssue) return
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenIssue(null) }
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') closeIssue() }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
-  }, [openIssue])
+  }, [openIssue, closeIssue])
 
   const drawerMembers = useMemo(
     () => drawerGroup?.members?.map(m => m.agent_name) || [],
@@ -223,7 +253,7 @@ export function KanbanView() {
                         issue={issue}
                         groupName={groupName}
                         agents={agents}
-                        onOpen={() => setOpenIssue({ id: issue.id, groupId: issue.group_id })}
+                        onOpen={() => openIssueById(issue.id, issue.group_id)}
                       />
                     )
                   })}
@@ -235,7 +265,7 @@ export function KanbanView() {
       )}
 
       {openIssue && (
-        <div className={styles.drawerBackdrop} onClick={() => setOpenIssue(null)}>
+        <div className={styles.drawerBackdrop} onClick={closeIssue}>
           <aside
             className={styles.drawer}
             onClick={e => e.stopPropagation()}
@@ -245,7 +275,7 @@ export function KanbanView() {
             <button
               type="button"
               className={styles.drawerClose}
-              onClick={() => setOpenIssue(null)}
+              onClick={closeIssue}
               aria-label="关闭"
             >
               ✕
@@ -256,7 +286,7 @@ export function KanbanView() {
                 refreshSignal={drawerRefresh}
                 agents={agents}
                 groupMembers={drawerMembers}
-                onBack={() => setOpenIssue(null)}
+                onBack={closeIssue}
               />
             </div>
           </aside>

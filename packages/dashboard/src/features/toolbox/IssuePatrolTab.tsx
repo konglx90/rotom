@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { issuesPatrolApi, type PatrolLog, type PatrolRun, type PatrolState } from '../../api/issues-patrol'
 import styles from './ManagementTab.module.css'
@@ -35,6 +36,7 @@ function formatTime(ts: string | number | null | undefined): string {
 }
 
 export function IssuePatrolTab() {
+  const navigate = useNavigate()
   const [state, setState] = useState<PatrolState | null>(null)
   const [runs, setRuns] = useState<PatrolRun[]>([])
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -227,81 +229,100 @@ export function IssuePatrolTab() {
         </div>
       </div>
 
-      <div>
-        <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>最近巡检</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.1)' }}>
-                <th style={{ padding: '6px 8px' }}>开始时间</th>
-                <th style={{ padding: '6px 8px' }}>状态</th>
-                <th style={{ padding: '6px 8px' }}>in_progress</th>
-                <th style={{ padding: '6px 8px' }}>扫描</th>
-                <th style={{ padding: '6px 8px' }}>可认领</th>
-                <th style={{ padding: '6px 8px' }}>备注</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center', color: '#888' }}>还没有巡检记录</td></tr>
-              )}
-              {runs.map((r) => (
-                <tr
-                  key={r.run_id}
-                  onClick={() => setSelectedRunId(r.run_id)}
-                  style={{
-                    cursor: 'pointer',
-                    background: r.run_id === selectedRunId ? 'rgba(99,102,241,0.08)' : 'transparent',
-                    borderBottom: '1px solid rgba(0,0,0,0.05)',
-                  }}
-                >
-                  <td style={{ padding: '6px 8px' }}>{formatTime(r.started_at)}</td>
-                  <td style={{ padding: '6px 8px' }}>{RUN_STATUS_LABEL[r.status]}</td>
-                  <td style={{ padding: '6px 8px' }}>{r.in_progress_count}</td>
-                  <td style={{ padding: '6px 8px' }}>{r.candidates_scanned}</td>
-                  <td style={{ padding: '6px 8px' }}>{r.candidates_ready}</td>
-                  <td style={{ padding: '6px 8px', color: '#888', fontSize: 12 }}>{r.note ?? ''}</td>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: 16, alignItems: 'start' }}>
+        <div>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>最近巡检</h3>
+          <div style={{ overflowX: 'auto', maxHeight: '60vh', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.1)' }}>
+                  <th style={{ padding: '6px 8px' }}>开始时间</th>
+                  <th style={{ padding: '6px 8px' }}>状态</th>
+                  <th style={{ padding: '6px 8px' }}>in_progress</th>
+                  <th style={{ padding: '6px 8px' }}>扫描</th>
+                  <th style={{ padding: '6px 8px' }}>可认领</th>
+                  <th style={{ padding: '6px 8px' }}>备注</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {runs.length === 0 && (
+                  <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center', color: '#888' }}>还没有巡检记录</td></tr>
+                )}
+                {runs.map((r) => (
+                  <tr
+                    key={r.run_id}
+                    onClick={() => setSelectedRunId(r.run_id)}
+                    style={{
+                      cursor: 'pointer',
+                      background: r.run_id === selectedRunId ? 'rgba(99,102,241,0.08)' : 'transparent',
+                      borderBottom: '1px solid rgba(0,0,0,0.05)',
+                    }}
+                  >
+                    <td style={{ padding: '6px 8px', whiteSpace: 'pre-line', fontSize: 12 }}>
+                      {formatTime(r.started_at).replace(' ', '\n')}
+                    </td>
+                    <td style={{ padding: '6px 8px' }}>{RUN_STATUS_LABEL[r.status]}</td>
+                    <td style={{ padding: '6px 8px' }}>{r.in_progress_count}</td>
+                    <td style={{ padding: '6px 8px' }}>{r.candidates_scanned}</td>
+                    <td style={{ padding: '6px 8px' }}>{r.candidates_ready}</td>
+                    <td style={{ padding: '6px 8px', color: '#888', fontSize: 12 }}>{r.note ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
 
-      <div>
-        <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>
-          日志 {selectedRunId ? `· 选中 run ${selectedRunId.slice(0, 8)}` : ''}
-        </h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.1)' }}>
-                <th style={{ padding: '6px 8px' }}>时间</th>
-                <th style={{ padding: '6px 8px' }}>verdict</th>
-                <th style={{ padding: '6px 8px' }}>issue</th>
-                <th style={{ padding: '6px 8px' }}>命中规则</th>
-                <th style={{ padding: '6px 8px' }}>理由</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: '#888' }}>
-                  {selectedRunId ? '该轮无日志' : '请选择上方某次巡检'}
-                </td></tr>
-              )}
-              {logs.map((l) => (
-                <tr key={l.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                  <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{formatTime(l.created_at)}</td>
-                  <td style={{ padding: '6px 8px' }}>{VERDICT_LABEL[l.verdict]}</td>
-                  <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontSize: 11 }}>
-                    {l.issue_id ? l.issue_id.slice(0, 8) : '-'}
-                  </td>
-                  <td style={{ padding: '6px 8px' }}>{l.rule_matched ?? '-'}</td>
-                  <td style={{ padding: '6px 8px', color: '#666', maxWidth: 400 }}>{l.rationale ?? '-'}</td>
+        <div>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>
+            日志 {selectedRunId ? `· 选中 run ${selectedRunId.slice(0, 8)}` : ''}
+          </h3>
+          <div style={{ overflowX: 'auto', maxHeight: '60vh', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.1)' }}>
+                  <th style={{ padding: '6px 8px' }}>时间</th>
+                  <th style={{ padding: '6px 8px' }}>verdict</th>
+                  <th style={{ padding: '6px 8px' }}>issue</th>
+                  <th style={{ padding: '6px 8px' }}>命中规则</th>
+                  <th style={{ padding: '6px 8px' }}>理由</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {logs.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: '#888' }}>
+                    {selectedRunId ? '该轮无日志' : '请选择左侧某次巡检'}
+                  </td></tr>
+                )}
+                {logs.map((l) => {
+                  const issueId = l.issue_id
+                  return (
+                  <tr key={l.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                    <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{formatTime(l.created_at)}</td>
+                    <td style={{ padding: '6px 8px' }}>{VERDICT_LABEL[l.verdict]}</td>
+                    <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontSize: 11 }}>
+                      {issueId ? (
+                        <a
+                          style={{ color: '#4f46e5', cursor: 'pointer', textDecoration: 'underline' }}
+                          title="在看板中打开该 Issue"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            navigate(`/dashboard/kanban?issue=${encodeURIComponent(issueId)}`)
+                          }}
+                          href={`/dashboard/kanban?issue=${encodeURIComponent(issueId)}`}
+                        >
+                          {issueId.slice(0, 8)}
+                        </a>
+                      ) : '-'}
+                    </td>
+                    <td style={{ padding: '6px 8px' }}>{l.rule_matched ?? '-'}</td>
+                    <td style={{ padding: '6px 8px', color: '#666', maxWidth: 400 }}>{l.rationale ?? '-'}</td>
+                  </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
