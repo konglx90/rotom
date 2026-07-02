@@ -184,6 +184,18 @@ export function GroupChatView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // --- Derived state (提前到 hook 之前:type='direct' 群没有 directTarget,
+  //     需要从 members 推算出对方再传给 useGroupChatWebSocket,否则入站
+  //     a2a_message / a2a_stream_chunk / a2a_stream_end 全被空 directTarget 短路,
+  //     对方消息只能等刷新拉历史才显示) ---
+  const selectedGroup = groups.find((g) => g.id === selectedGroupId)
+  // 单聊:老 DM 机制(带 directTarget)或新建的 type='direct' 群。
+  // 后者不需要 @,自动把"对方成员"作为 target。
+  const isDirectMode = directTarget !== '' || selectedGroup?.type === 'direct'
+  const groupMembers = selectedGroup?.members?.map((m) => m.agent_name) || []
+  // type='direct' 群没有 directTarget,从 members 里取对方。
+  const directTargetResolved = directTarget || groupMembers.find((n) => n !== myAgentName) || ''
+
   // --- WebSocket hook ---
   const {
     messages,
@@ -192,7 +204,7 @@ export function GroupChatView() {
   } = useGroupChatWebSocket({
     myAgentName,
     selectedGroupId,
-    directTarget,
+    directTarget: directTargetResolved,
   })
 
   // React to global socket pushes.
@@ -206,13 +218,8 @@ export function GroupChatView() {
   }, [lastIssueChange, selectedGroupId, selectedIssueId, loadIssues])
 
   // --- Derived state ---
-  const selectedGroup = groups.find((g) => g.id === selectedGroupId)
-  // 单聊:老 DM 机制(带 directTarget)或新建的 type='direct' 群。
-  // 后者不需要 @,自动把"对方成员"作为 target。
-  const isDirectMode = directTarget !== '' || selectedGroup?.type === 'direct'
-  const groupMembers = selectedGroup?.members?.map((m) => m.agent_name) || []
-  // type='direct' 群没有 directTarget,从 members 里取对方。
-  const directTargetResolved = directTarget || groupMembers.find((n) => n !== myAgentName) || ''
+  // (selectedGroup / isDirectMode / groupMembers / directTargetResolved
+  //  已提到 useGroupChatWebSocket 调用之前,见上方注释。)
 
   // --- Handlers ---
   const handleSendMessage = async (text: string) => {
