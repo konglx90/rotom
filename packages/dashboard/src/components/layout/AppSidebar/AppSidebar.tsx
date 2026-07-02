@@ -693,25 +693,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             </div>
           </>
         )}
-        <div className={styles.footer}>
-          {!isZen && myAgentName && (
-            <button
-              className={styles.userInfo}
-              onClick={openConfigModal}
-              title="切换身份"
-            >
-              <Avatar name={myAgentName} src={onlineAgents.find(a => a.name === myAgentName)?.avatar_url} size={24} />
-              <span className={styles.userName}>{myAgentName}</span>
-            </button>
-          )}
-          <button
-            className={styles.zenBtn}
-            onClick={toggleZenMode}
-            title={isZen ? '展开侧边栏' : '禅模式'}
-          >
-            {isZen ? '▶' : '◀'}
-          </button>
-        </div>
       </aside>
       {settingsGroupId && (() => {
         const g = groups.find(grp => grp.id === settingsGroupId)

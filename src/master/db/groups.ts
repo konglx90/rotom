@@ -200,17 +200,18 @@ export const groupMethods = {
     return filled;
   },
 
-  listGroups(this: MeshDbSelf): (GroupRow & { member_count: number })[] {
+  listGroups(this: MeshDbSelf): (GroupRow & { member_count: number; last_message_at: string | null })[] {
     return this.db.prepare(`
-      SELECT g.*, COUNT(gm.agent_name) as member_count
+      SELECT g.*, COUNT(gm.agent_name) as member_count,
+             (SELECT MAX(m.created_at) FROM group_messages m WHERE m.group_id = g.id) AS last_message_at
       FROM groups g
       LEFT JOIN group_members gm ON g.id = gm.group_id
       GROUP BY g.id
       ORDER BY g.created_at DESC
-    `).all() as (GroupRow & { member_count: number })[];
+    `).all() as (GroupRow & { member_count: number; last_message_at: string | null })[];
   },
 
-  listGroupsWithMembers(this: MeshDbSelf): (GroupRow & { member_count: number; members: GroupMemberRow[] })[] {
+  listGroupsWithMembers(this: MeshDbSelf): (GroupRow & { member_count: number; last_message_at: string | null; members: GroupMemberRow[] })[] {
     const groups = this.listGroups();
     const rows = this.db.prepare(`
       SELECT gm.group_id, gm.agent_name, gm.joined_at, gms.working_dir, gms.profile

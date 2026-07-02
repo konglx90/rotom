@@ -37,22 +37,38 @@
   border-right-color: var(--color-wise-green);
 }
 
-/* ── Logo ────────────────────────────────────────────────── */
-/* padding 收回到与中右两块 panel 顶部 header 等高(~40px):logo 图 32px + 上下各 ~4px。
-   原来 18px 让 Rotom 区明显高出 chatHeader / processTabs,造成三块顶部不齐。 */
-.logo {
+/* ── TopBar (brand + user + zen toggle) ───────────────────── */
+/* 顶部条:把原本在底部的「当前登录人 + 收起侧边栏」按钮挪到这里,
+   未登录时退化为 Rotom brand。padding 与右侧 chatHeader/processTabs 顶部对齐。 */
+.topBar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 20px;
+  gap: 8px;
+  padding: 4px 12px 4px 16px;
   min-height: 40px;
   border-bottom: 1px solid var(--border-color-light);
   flex-shrink: 0;
 }
 
-.sidebarZen .logo {
+.sidebarZen .topBar {
+  flex-direction: column;
+  padding: 10px 0;
+  gap: 10px;
+  align-items: center;
   justify-content: center;
-  padding: 18px 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebarZen .brand {
+  justify-content: center;
+  padding: 0;
 }
 
 .logoImg {
@@ -62,6 +78,11 @@
   object-fit: cover;
   flex-shrink: 0;
   background: var(--color-wise-green);
+}
+
+.sidebarZen .logoImg {
+  width: 36px;
+  height: 36px;
 }
 
 .logoText {
@@ -570,29 +591,13 @@
   font-size: 11px;
 }
 
-/* ── Footer ──────────────────────────────────────────────── */
-.footer {
-  margin-top: auto;
-  padding: 12px 14px;
-  border-top: 1px solid var(--border-color-light);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  background: var(--color-canvas-elevated);
-}
-
-.sidebarZen .footer {
-  flex-direction: column;
-  padding: 12px 4px;
-}
-
+/* ── User info button (topBar) ───────────────────────────── */
 .userInfo {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
+  gap: 8px;
+  padding: 4px 8px;
   border-radius: var(--radius-pill);
   border: none;
   background: transparent;
@@ -608,7 +613,7 @@
 .userName {
   font-size: 13px;
   color: var(--color-ink);
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
