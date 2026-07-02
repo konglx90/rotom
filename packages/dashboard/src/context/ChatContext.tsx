@@ -265,8 +265,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
         setShowCreateGroupModal(false)
         await loadGroups()
-        // 新建的群尚未发消息,不会出现在"对话列表"(按 last_message_at 过滤)。
-        // 直接跳到群详情页,让用户能发首条消息把它"激活"。
         navigate(`/dashboard/groups/${created.id}`)
       } catch (error) {
         console.error('Failed to create group:', error)

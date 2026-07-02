@@ -223,13 +223,11 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const selectedGroupId = urlGroupId || ''
   const isZen = zenMode
   // 分层:置顶(在 active 内排首) → 普通活跃 → ⭐重要少用 → 🗄️已归档。
-  // active = 既没归档也没标重要少用,且"有对话"(last_message_at 非空);
-  //   没发过消息的新建空群不进对话列表,避免噪音。
-  //   单聊(type=direct)例外:创建即视为有意开聊,即使没消息也展示,方便用户随时进入。
+  // active = 既没归档也没标重要少用的所有群(包括还没发过消息的新建空群)。
   // starred = 标了 starred_at 但没归档(归档优先级高于 starred)。
   // archived = 已归档,只读。
   const activeGroups = groups
-    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at && !g.starred_at && (g.last_message_at || g.type === 'direct'))
+    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at && !g.starred_at)
     .slice()
     .sort((a, b) => {
       if (a.pinned_at && b.pinned_at) return b.pinned_at.localeCompare(a.pinned_at)

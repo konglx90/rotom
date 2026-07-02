@@ -6,7 +6,7 @@
  * worker 收到 issue_assigned 后据此向底层 CLI 注入对应执行模式。
  */
 
-export type SlashBackend = "claude" | "codex";
+export type SlashBackend = "claude" | "codex" | "pi";
 
 export interface SlashCommandSpec {
   name: string;
@@ -17,7 +17,7 @@ export interface SlashCommandSpec {
 export const SLASH_COMMAND_REGISTRY: Record<string, SlashCommandSpec> = {
   "/plan": {
     name: "/plan",
-    backends: ["claude", "codex"],
+    backends: ["claude", "codex", "pi"],
     description: "以计划模式执行：先输出方案，等待用户审批后才落盘",
   },
 };

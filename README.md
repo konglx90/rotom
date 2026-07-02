@@ -1,6 +1,6 @@
 # Rotom A2A WORKSPACE
 
-数字员工 Mesh —— 一个中心化的 Agent 协作网络。Master 充当中枢，Executor 把任意 CLI 工具（claude / codex / openclaw / hermes 等）封装成可抢单执行任务的数字员工，rotom CLI 让 shell agent 借用已注册身份调用 Mesh。
+数字员工 Mesh —— 一个中心化的 Agent 协作网络。Master 充当中枢，Executor 把任意 CLI 工具（claude / codex / openclaw / hermes / pi 等）封装成可抢单执行任务的数字员工，rotom CLI 让 shell agent 借用已注册身份调用 Mesh。
 
 ## 架构
 
@@ -11,7 +11,7 @@ flowchart TB
     subgraph EX["⚙️  Executor 进程"]
         direction TB
         W["Worker N · 每个 = 1 Agent<br/>持 mesh token 与 Master 保持 WS"]
-        A["CLI 进程 (claude / codex / openclaw / hermes / ...)<br/>加载 skill: rotom-a2a-communicate<br/>↓<br/>Bash → rotom &lt;subcmd&gt;"]
+        A["CLI 进程 (claude / codex / openclaw / hermes / pi / ...)<br/>加载 skill: rotom-a2a-communicate<br/>↓<br/>Bash → rotom &lt;subcmd&gt;"]
         W -. spawn .-> A
     end
 
@@ -50,7 +50,7 @@ Master 是唯一中枢——所有 agent-to-agent 通讯都经它中转，没有
 ### Executor
 
 - 单进程托管 N 个 worker，每个 worker 自动重连 + 心跳
-- 后端适配层（`src/executor/executors/`）：claude-code / codex / hermes / openclaw / generic-cli
+- 后端适配层（`src/executor/executors/`）：claude-code / codex / hermes-cli / openclaw / pi
 - 任务抢单：按身份分组（如 `Agent` 类参与抢单，`真人` 不参与）
 - 工作目录隔离，支持 `maxConcurrent` 并发上限
 - Issue 进度/输出/产物实时回传 Master
@@ -139,7 +139,7 @@ rotom issue create <groupId> --title "修个 bug" --description "..." --priority
 | `workers[]` | `array` | worker 列表（也支持单 worker 简化形式：顶层放 `name`/`token`/`cliTool`）|
 | `workers[].name` | `string` | agent 名（必须与 Dashboard 注册一致）|
 | `workers[].token` | `string` | `mesh_` 开头的注册 token |
-| `workers[].cliTool` | `string?` | `claude` / `codex` / `openclaw` / `hermes` / `generic`，缺省自动检测 |
+| `workers[].cliTool` | `string?` | `claude` / `codex` / `openclaw` / `hermes` / `pi`，缺省自动检测 |
 | `workers[].workingDir` | `string?` | 任务执行目录，默认 `process.cwd()` |
 | `workers[].maxConcurrent` | `number?` | 并发上限，默认 2 |
 | `workers[].profile` | `object?` | 员工档案，`category: "真人"` 时不参与抢单 |
@@ -303,7 +303,7 @@ src/
 │       ├── codex.ts
 │       ├── hermes-cli.ts
 │       ├── openclaw.ts
-│       └── generic-cli.ts
+│       └── pi.ts
 ├── master/
 │   ├── server.ts               # Master 独立入口（CLI）
 │   ├── embedded.ts             # 可嵌入版本（同进程使用）

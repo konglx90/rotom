@@ -22,6 +22,7 @@ import { ClaudeCodeExecutor } from "./executors/claude-code.js";
 import { CodexExecutor } from "./executors/codex.js";
 import { HermesCliExecutor } from "./executors/hermes-cli.js";
 import { OpenclawExecutor } from "./executors/openclaw.js";
+import { PiExecutor } from "./executors/pi.js";
 import type { CliExecutor } from "./cli-executor.js";
 import { ExecutorWorker, type WorkerConfig } from "./worker.js";
 import { SessionStore } from "./session-store.js";
@@ -86,7 +87,7 @@ function loadConfig(): ExecutorConfig {
 
 // ── CLI tool detection ──────────────────────────────────────────────────
 
-const CLI_PRIORITY = ["claude", "openclaw", "codex"];
+const CLI_PRIORITY = ["claude", "openclaw", "codex", "pi"];
 
 function detectCliTool(): string {
   for (const tool of CLI_PRIORITY) {
@@ -108,9 +109,11 @@ function createExecutor(tool: string): CliExecutor {
       return new OpenclawExecutor();
     case "codex":
       return new CodexExecutor();
+    case "pi":
+      return new PiExecutor();
     default:
       throw new Error(
-        `Unknown cliTool "${tool}". Valid values: claude | codex | hermes | openclaw. ` +
+        `Unknown cliTool "${tool}". Valid values: claude | codex | hermes | openclaw | pi. ` +
           `Configure one of these explicitly in executor.config.json (the previous generic passthrough has been removed — set a known tool to avoid silent misconfiguration).`,
       );
   }
