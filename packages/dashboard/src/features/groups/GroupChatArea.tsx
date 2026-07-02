@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import type { Agent, Group } from '../../api/types'
+import type { Agent, Group, Issue, Note, Schedule } from '../../api/types'
 import { useVisitorMode } from '../../context/VisitorContext'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
@@ -8,6 +8,12 @@ import { MessageRow } from './MessageRow'
 import { MessageContextMenu } from './MessageContextMenu'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import { useImageUpload } from './useImageUpload'
+import {
+  SLASH_COMMANDS,
+  filterSlashCommands,
+  type SlashCommandContext,
+  type SlashListData,
+} from './slashCommands'
 import styles from './ChatArea.module.css'
 
 // 默认只渲染最近 N 条消息,避免长会话下 DOM 节点数失控(参考
@@ -52,6 +58,37 @@ export function GroupChatArea({
   const [mentionFilter, setMentionFilter] = useState('')
   const [mentionStartIndex, setMentionStartIndex] = useState(-1)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
+  // ── Slash 命令下拉 ────────────────────────────────────────────────
+  // 与 @mention 同形态:探测到行首/空白后的 `/` → 弹候选 → 键盘选 → Enter 派发。
+  // slashFilter 是 `/` 后到第一个空格之间的字符,空格后字符作为 args;
+  // 一旦 filterSlashCommands(filter) 命中 0 条,下拉关闭、Enter 走普通发送。
+  const [showSlashDropdown, setShowSlashDropdown] = useState(false)
+  const [slashFilter, setSlashFilter] = useState('')
+  const [slashArgs, setSlashArgs] = useState('')
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0)
+  // 列表浮层(展示 /issue /schedule /note 的查询结果)
+  const [slashListData, setSlashListData] = useState<SlashListData | null>(null)
+  // 浮层内键盘选中项,Enter 把选中项基本信息以 markdown 引用插入输入框
+  const [slashListSelectedIndex, setSlashListSelectedIndex] = useState(0)
+  const slashItemRefs = useRef<(HTMLDivElement | null)[]>([])
+  const slashListItemRefs = useRef<(HTMLDivElement | null)[]>([])
+  useEffect(() => {
+    const el = slashItemRefs.current[slashSelectedIndex]
+    if (el) el.scrollIntoView({ block: 'nearest' })
+  }, [slashSelectedIndex])
+  useEffect(() => {
+    const el = slashListItemRefs.current[slashListSelectedIndex]
+    if (el) el.scrollIntoView({ block: 'nearest' })
+  }, [slashListSelectedIndex])
+  // 轻量 toast:派发完提示成功/失败,3s 自动消失
+  const [toast, setToast] = useState<{ msg: string; kind: 'info' | 'error' } | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flashToast = useCallback((msg: string, kind: 'info' | 'error' = 'info') => {
+    setToast({ msg, kind })
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+  }, [])
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) }, [])
   const [composedPromptFor, setComposedPromptFor] = useState<ChatMessage | null>(null)
   const [isDragActive, setIsDragActive] = useState(false)
   const dragCounterRef = useRef(0)
@@ -154,6 +191,74 @@ export function GroupChatArea({
     setMentionSelectedIndex(0)
   }, [mentionFilter])
 
+  const filteredSlashCommands = useMemo(
+    () => filterSlashCommands(slashFilter),
+    [slashFilter],
+  )
+
+  useEffect(() => {
+    setSlashSelectedIndex(0)
+  }, [slashFilter])
+
+  // 浮层切换 kind / 数据刷新时,选中项重置为 0(顶部)
+  useEffect(() => {
+    setSlashListSelectedIndex(0)
+  }, [slashListData])
+
+  const slashCtx = useMemo<SlashCommandContext>(() => ({
+    groupId: selectedGroup.id,
+    agentName: myAgentName,
+    showList: (data) => setSlashListData(data),
+    flashToast,
+  }), [selectedGroup.id, myAgentName, flashToast])
+
+  const dispatchSlashCommand = useCallback((cmd: typeof SLASH_COMMANDS[number]) => {
+    const result = cmd.run(slashArgs, slashCtx)
+    if (result && typeof result.then === 'function') {
+      result.catch(() => { /* run 内部已 flashToast */ })
+    }
+    setMessage('')
+    setShowSlashDropdown(false)
+    setSlashFilter('')
+    setSlashArgs('')
+    if (inputRef.current) inputRef.current.style.height = 'auto'
+  }, [slashArgs, slashCtx])
+
+  // 把浮层里选中的 issue / schedule / note 转成 markdown 引用块插入输入框。
+  // 引用块对齐 buildQuote 的风格(`> ` 前缀),让 agent 在后续消息里能拿到
+  // 用户正在讨论的对象的基本信息(id / title / status / assigned_to 等)。
+  const insertSlashListQuote = useCallback((data: SlashListData, index: number) => {
+    const item = data.items[index]
+    if (!item) return
+    let quote = ''
+    if (data.kind === 'issue') {
+      const it = item as Issue
+      const status = it.status
+      const assigned = it.assigned_to ?? '未指派'
+      const title = it.title || it.description.slice(0, 80) || '(无标题)'
+      quote = `> 📋 #${it.id} · ${title}\n> 状态: ${status} · 指派: ${assigned}\n\n`
+    } else if (data.kind === 'schedule') {
+      const it = item as Schedule
+      const when = it.schedule_kind === 'once'
+        ? (it.run_at ? new Date(it.run_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '未排期')
+        : `每 ${it.interval_sec}s`
+      quote = `> ⏰ ${it.name} · ${it.mode} · ${when}${it.agent_name ? ` · → ${it.agent_name}` : ''}\n> ${it.prompt.replace(/\n/g, '\n> ')}\n\n`
+    } else {
+      const it = item as Note
+      quote = `> 📝 ${it.title}${it.created_by ? ` · @${it.created_by}` : ''}\n${it.description ? `> ${it.description.replace(/\n/g, '\n> ')}\n` : ''}\n`
+    }
+    setMessage(prev => (prev.trim() ? `${prev}\n\n${quote}` : quote))
+    setSlashListData(null)
+    requestAnimationFrame(() => {
+      const ta = inputRef.current
+      if (!ta) return
+      ta.focus()
+      ta.selectionStart = ta.selectionEnd = ta.value.length
+      ta.style.height = 'auto'
+      ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'
+    })
+  }, [])
+
   // 滚动到底部用 RAF 节流,避免流式高频更新下每次 messages 变都
   // 触发 layout/paint。用 scrollTop = scrollHeight 比 scrollIntoView 更
   // 可控(0 高度锚点 + scrollIntoView 在不同浏览器行为不稳)。每次
@@ -216,8 +321,21 @@ export function GroupChatArea({
       setShowMentionDropdown(true)
       setMentionFilter(atMatch[1])
       setMentionStartIndex(textBeforeCursor.lastIndexOf('@'))
+      setShowSlashDropdown(false)
+      return
+    }
+    // slash: `/` 必须在行首或空白后,中间斜杠不触发。
+    // 分组 1 = 前缀空白(可空), 2 = 命令名(不含 `/`), 3 = 参数(可空)
+    const slashMatch = textBeforeCursor.match(/(^|\s)(\/[\w-]*)(?:\s+([\s\S]*))?$/)
+    if (slashMatch) {
+      setShowMentionDropdown(false)
+      setShowSlashDropdown(true)
+      setSlashFilter(slashMatch[2].slice(1))
+      setSlashArgs(slashMatch[3] ?? '')
+      setSlashListData(null)
     } else {
       setShowMentionDropdown(false)
+      setShowSlashDropdown(false)
     }
   }
 
@@ -234,7 +352,7 @@ export function GroupChatArea({
     value: message,
     setValue: setMessage,
     textareaRef: inputRef,
-    disabled: showMentionDropdown,
+    disabled: showMentionDropdown || showSlashDropdown,
   })
 
   const handleSend = () => {
@@ -428,6 +546,31 @@ export function GroupChatArea({
           onPaste={handlePaste}
           onKeyDown={e => {
             if (isArchived) return;
+            // ── Slash 列表浮层键盘导航(优先级最高)──────────────────
+            // 浮层打开时:ArrowUp/Down 选 row,Enter 把选中项基本信息以 markdown
+            // 引用插入输入框(不发送),Esc 关闭浮层。
+            if (slashListData && slashListData.items.length > 0) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setSlashListSelectedIndex(i => Math.min(i + 1, slashListData.items.length - 1))
+                return
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setSlashListSelectedIndex(i => Math.max(i - 1, 0))
+                return
+              }
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                insertSlashListQuote(slashListData, slashListSelectedIndex)
+                return
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setSlashListData(null)
+                return
+              }
+            }
             if (showMentionDropdown && filteredMentionAgents.length > 0) {
               if (e.key === 'ArrowDown') {
                 e.preventDefault()
@@ -447,6 +590,31 @@ export function GroupChatArea({
               if (e.key === 'Escape') {
                 e.preventDefault()
                 setShowMentionDropdown(false)
+                return
+              }
+            }
+            // ── Slash 命令键盘导航 ──────────────────────────────────
+            // 与 mention 同形态:ArrowUp/Down 选项、Enter 派发、Escape 关闭。
+            // 命中 0 条候选时不拦截键盘,Enter 走普通发送(用户输入 /foo 当文本)。
+            if (showSlashDropdown && filteredSlashCommands.length > 0) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setSlashSelectedIndex(i => (i + 1) % filteredSlashCommands.length)
+                return
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setSlashSelectedIndex(i => (i - 1 + filteredSlashCommands.length) % filteredSlashCommands.length)
+                return
+              }
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                dispatchSlashCommand(filteredSlashCommands[slashSelectedIndex])
+                return
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setShowSlashDropdown(false)
                 return
               }
             }
@@ -491,7 +659,42 @@ export function GroupChatArea({
             ))}
           </div>
         )}
+
+        {showSlashDropdown && filteredSlashCommands.length > 0 && (
+          <div className={styles.mentionDropdown}>
+            {filteredSlashCommands.map((cmd, idx) => (
+              <div key={cmd.name}
+                ref={el => { slashItemRefs.current[idx] = el }}
+                className={`${styles.mentionItem} ${styles.slashItem} ${idx === slashSelectedIndex ? styles.mentionItemActive : ''}`}
+                onMouseEnter={() => setSlashSelectedIndex(idx)}
+                onClick={() => {
+                  dispatchSlashCommand(cmd)
+                }}
+              >
+                <span className={styles.slashName}>/{cmd.name}</span>
+                {cmd.argHint && <span className={styles.slashArgHint}>{cmd.argHint}</span>}
+                <span className={styles.slashDesc}>{cmd.description}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+      )}
+
+      {slashListData && (
+        <SlashListPanel
+          data={slashListData}
+          selectedIndex={slashListSelectedIndex}
+          setSelectedIndex={setSlashListSelectedIndex}
+          onSelect={(idx) => insertSlashListQuote(slashListData, idx)}
+          onClose={() => setSlashListData(null)}
+        />
+      )}
+
+      {toast && (
+        <div className={`${styles.slashToast} ${toast.kind === 'error' ? styles.slashToastError : ''}`}>
+          {toast.msg}
+        </div>
       )}
 
       {contextMenu && (
@@ -506,5 +709,89 @@ export function GroupChatArea({
         />
       )}
     </>
+  )
+}
+
+function formatTime(ms: number): string {
+  const d = new Date(ms)
+  return d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+}
+
+interface SlashListPanelProps {
+  data: SlashListData
+  selectedIndex: number
+  setSelectedIndex: (i: number) => void
+  onSelect: (index: number) => void
+  onClose: () => void
+}
+
+function SlashListPanel({ data, selectedIndex, setSelectedIndex, onSelect, onClose }: SlashListPanelProps) {
+  const title = data.kind === 'issue' ? 'Issues'
+    : data.kind === 'schedule' ? 'Schedules'
+    : 'Notes'
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([])
+  useEffect(() => {
+    const el = itemRefs.current[selectedIndex]
+    if (el) el.scrollIntoView({ block: 'nearest' })
+  }, [selectedIndex])
+  const renderRow = (key: string, idx: number, children: React.ReactNode) => (
+    <div
+      key={key}
+      ref={el => { itemRefs.current[idx] = el }}
+      className={`${styles.slashListRow} ${idx === selectedIndex ? styles.slashListRowActive : ''}`}
+      onMouseEnter={() => setSelectedIndex(idx)}
+      onClick={() => onSelect(idx)}
+    >
+      {children}
+    </div>
+  )
+  return (
+    <div className={styles.slashListPanel}>
+      <div className={styles.slashListHeader}>
+        <span className={styles.slashListTitle}>{title} ({data.items.length}) · Enter 引用 · Esc 关闭</span>
+        <button type="button" className={styles.slashListClose} onClick={onClose} aria-label="关闭">✕</button>
+      </div>
+      <div className={styles.slashListBody}>
+        {data.items.length === 0 ? (
+          <div className={styles.slashListEmpty}>暂无{data.kind === 'issue' ? ' issue' : data.kind === 'schedule' ? '定时任务' : ' note'}</div>
+        ) : data.kind === 'issue' ? (
+          (data.items as Issue[]).map((it, idx) => renderRow(it.id, idx, (
+            <>
+              <div className={styles.slashListRowTitle}>{it.title || it.description.slice(0, 60) || '(无标题)'}</div>
+              <div className={styles.slashListRowMeta}>
+                <span className={styles.slashBadge}>{it.status}</span>
+                {it.assigned_to && <span>→ {it.assigned_to}</span>}
+                <span className={styles.slashListRowTime}>{new Date(it.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</span>
+              </div>
+            </>
+          )))
+        ) : data.kind === 'schedule' ? (
+          (data.items as Schedule[]).map((it, idx) => renderRow(String(it.id), idx, (
+            <>
+              <div className={styles.slashListRowTitle}>{it.name}</div>
+              <div className={styles.slashListRowMeta}>
+                <span className={styles.slashBadge}>{it.mode}</span>
+                <span>{it.schedule_kind === 'once' ? (it.run_at ? formatTime(it.run_at) : '未排期') : `每 ${it.interval_sec}s`}</span>
+                {it.agent_name && <span>→ {it.agent_name}</span>}
+                <span className={styles.slashListRowTime}>{it.enabled ? 'on' : 'off'}</span>
+              </div>
+              <div className={styles.slashListRowDesc}>{it.prompt}</div>
+            </>
+          )))
+        ) : (
+          (data.items as Note[]).map((it, idx) => renderRow(it.id, idx, (
+            <>
+              <div className={styles.slashListRowTitle}>{it.title}</div>
+              {it.description && <div className={styles.slashListRowDesc}>{it.description}</div>}
+              <div className={styles.slashListRowMeta}>
+                <span className={styles.slashBadge}>note</span>
+                <span>{it.created_by}</span>
+                <span className={styles.slashListRowTime}>{new Date(it.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</span>
+              </div>
+            </>
+          )))
+        )}
+      </div>
+    </div>
   )
 }
