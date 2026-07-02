@@ -69,6 +69,28 @@ export const issueMethods = {
     return this.db.prepare(sql).all(...params) as IssueRow[];
   },
 
+  /**
+   * 分页拉取 issue。看板每列独立分页(默认首屏 50 条),避免 completed/cancelled
+   * 累积过多时一次性把全表拉到前端。total 是不带 limit/offset 的全量计数,
+   * 给列头展示真实总数;items 是当前页。排序与 listAllIssues 保持一致。
+   */
+  listIssuesPage(
+    this: MeshDbSelf,
+    opts: { status?: string; limit: number; offset: number },
+  ): { items: IssueRow[]; total: number } {
+    const orderSql =
+      " ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 WHEN 'failed' THEN 2 WHEN 'cancelled' THEN 3 WHEN 'completed' THEN 4 ELSE 5 END, created_at DESC";
+    const where = opts.status ? " WHERE status = ?" : "";
+    const params: unknown[] = opts.status ? [opts.status] : [];
+    const total = (
+      this.db.prepare(`SELECT COUNT(*) as n FROM issues${where}`).get(...params) as { n: number }
+    ).n;
+    const items = this.db
+      .prepare(`SELECT * FROM issues${where}${orderSql} LIMIT ? OFFSET ?`)
+      .all(...params, opts.limit, opts.offset) as IssueRow[];
+    return { items, total };
+  },
+
   updateIssueStatus(this: MeshDbSelf, id: string, status: string, extra?: {
     assignedTo?: string | null;
     result?: string | null;

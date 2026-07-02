@@ -27,6 +27,21 @@ export const issuesApi = {
     return api.get<Issue[]>(`/issues${qs}`)
   },
 
+  /** 分页拉取全量 issue。看板每列独立分页,避免 completed/cancelled 累积过多
+   *  时把整张表拖到前端。total 是不带 limit/offset 的全量计数,给列头展示
+   *  真实总数;items 是当前页。 */
+  async listPage(
+    status: Issue['status'] | undefined,
+    limit: number,
+    offset: number,
+  ): Promise<{ items: Issue[]; total: number }> {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    params.set('limit', String(limit))
+    params.set('offset', String(offset))
+    return api.get<{ items: Issue[]; total: number }>(`/issues?${params.toString()}`)
+  },
+
   async create(groupId: string, data: CreateIssueDto): Promise<{ id: string; title: string; status: string }> {
     return api.post<{ id: string; title: string; status: string }>(`/groups/${groupId}/issues`, data)
   },

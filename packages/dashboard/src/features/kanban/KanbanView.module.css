@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: var(--spacing-lg);
-  gap: var(--spacing-md);
+  padding: 0;
+  gap: var(--spacing-sm);
   min-height: 0;
 }
 
@@ -38,14 +38,16 @@
 .board {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(280px, 1fr);
-  gap: var(--spacing-md);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: var(--spacing-sm);
   overflow-x: auto;
 }
 
+/* 展开列固定 280px;收起列塌缩成窄条,把横向空间让给有内容的列 */
 .column {
+  flex: 0 0 280px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -53,6 +55,42 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   overflow: hidden;
+}
+
+.column[data-collapsed] {
+  flex: 0 0 auto;
+  width: 36px;
+  min-width: 36px;
+}
+
+.column[data-collapsed] .count {
+  display: none;
+}
+
+.column[data-collapsed] .columnHeader {
+  padding: 10px 4px;
+  justify-content: center;
+  border-bottom: none;
+}
+
+.column[data-collapsed] .headerLeft {
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.column[data-collapsed] .collapseIcon {
+  transform: rotate(0deg);
+}
+
+.column[data-collapsed] .headerLeft :global(.badge),
+.column[data-collapsed] .headerLeft > span:not(.collapseIcon) {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 0.12em;
+  padding: 4px 2px;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .column[data-status="open"]        { border-top: 3px solid #3b82f6; }
@@ -65,9 +103,44 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-md);
+  gap: 8px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border-color-light, var(--border-color));
   flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration-fast, 0.12s) ease;
+}
+
+.columnHeader:hover {
+  background: rgba(22, 51, 0, 0.04);
+}
+
+.headerLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.collapseIcon {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--color-slate);
+  transform: rotate(90deg);
+  transition: transform var(--duration-fast, 0.12s) ease;
+}
+
+.collapseIconCollapsed {
+  transform: rotate(0deg);
+}
+
+.column[data-collapsed] .cards {
+  display: none;
+}
+
+.column[data-collapsed] {
+  min-height: 0;
 }
 
 .count {

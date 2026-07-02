@@ -165,7 +165,7 @@
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--spacing-xl);
+  padding: var(--spacing-md);
   background: var(--color-canvas);
 }
 
@@ -173,8 +173,12 @@
   padding: 0;
 }
 
+.mainZen:not(.mainFullBleed) {
+  padding: var(--spacing-md) 0 var(--spacing-md) var(--spacing-md);
+}
+
 .mainFullBleed {
-  padding: 0;
+  padding: 0 !important;
   overflow: hidden;
 }
 

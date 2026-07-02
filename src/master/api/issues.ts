@@ -85,6 +85,18 @@ export function registerIssueRoutes(
 ): void {
   apiRouter.get("/issues", (req, res) => {
     const status = req.query.status as string | undefined;
+    // 分页:看板每列独立拉取首屏 50 条,completed/cancelled 累积过多时避免
+    // 一次性把全表塞进 HTTP 响应。limit/offset 任一存在即返回 { items, total }
+    // 包装;不带则保持旧行为(返回全量数组)以兼容未升级的调用方。
+    const limitRaw = req.query.limit as string | undefined;
+    const offsetRaw = req.query.offset as string | undefined;
+    if (limitRaw !== undefined || offsetRaw !== undefined) {
+      const limit = Math.max(1, Math.min(500, Number(limitRaw) || 50));
+      const offset = Math.max(0, Number(offsetRaw) || 0);
+      const page = db.listIssuesPage({ status, limit, offset });
+      res.json({ items: page.items.map(withLatestTodos), total: page.total });
+      return;
+    }
     res.json(db.listAllIssues(status).map(withLatestTodos));
   });
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { UIEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { groupsApi } from '../../api/groups'
@@ -110,48 +110,112 @@ function KanbanCard({
 
 const PAGE_SIZE = 50
 
+// 每列独立分页:completed/cancelled 累积过多时不再一次性把全表拉到前端。
+// 列自己管 items/total/offset,ws 推送 lastIssueChange 时父级 bump refreshSignal
+// 触发所有列重置到首页。后端 GET /issues?status=&limit=&offset= 返回 { items, total }。
 function KanbanColumn({
   status,
   label,
-  items,
   groupNameMap,
   agents,
   onOpenIssue,
+  refreshSignal,
 }: {
   status: IssueStatus
   label: string
-  items: Issue[]
   groupNameMap: Map<string, string>
   agents: Agent[]
   onOpenIssue: (id: string, groupId: string) => void
+  refreshSignal: number
 }) {
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [items, setItems] = useState<Issue[]>([])
+  const [total, setTotal] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(false)
+  // 空列默认收起:首次加载完成且 total===0 时折叠,之后用户手动切换自由;
+  // 收起态下涌入新 issue 时自动展开,避免新进任务被藏。
+  const [collapsed, setCollapsed] = useState(false)
+  const initedRef = useRef(false)
 
-  // 切换列(数据来源变)时重置分页
-  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [status])
+  // 首屏 / ws 重置:从 offset 0 重新拉一页。status 切换或 refreshSignal bump 都触发。
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    issuesApi
+      .listPage(status, PAGE_SIZE, 0)
+      .then(res => {
+        if (cancelled) return
+        setItems(res.items)
+        setTotal(res.total)
+        setOffset(res.items.length)
+        setHasMore(res.items.length < res.total)
+        // 首屏拉到数据后定折叠默认值:空列收起;之后用户手动切换自由,
+        // 但收起态下涌入新 issue 时自动展开,避免新进任务被藏。
+        if (!initedRef.current) {
+          initedRef.current = true
+          setCollapsed(res.total === 0)
+        } else if (res.total > 0) {
+          setCollapsed(false)
+        }
+      })
+      .catch(() => { if (!cancelled) setError('加载 Issue 失败') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [status, refreshSignal])
+
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore) return
+    setLoading(true)
+    try {
+      const res = await issuesApi.listPage(status, PAGE_SIZE, offset)
+      setItems(prev => [...prev, ...res.items])
+      setOffset(off => off + res.items.length)
+      setHasMore(offset + res.items.length < res.total)
+    } catch {
+      setError('加载 Issue 失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [status, offset, loading, hasMore])
 
   const onCardsScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 64) {
-      setVisibleCount(c => Math.min(c + PAGE_SIZE, items.length))
+      loadMore()
     }
-  }, [items.length])
+  }, [loadMore])
 
-  const shown = items.slice(0, visibleCount)
-  const remaining = items.length - shown.length
+  const remaining = total - items.length
 
   return (
-    <section className={styles.column} data-status={status}>
-      <header className={styles.columnHeader}>
-        <Badge tone="status" value={status}>{label}</Badge>
-        <span className={styles.count}>{items.length}</span>
+    <section className={styles.column} data-status={status} data-collapsed={collapsed || undefined}>
+      <header
+        className={styles.columnHeader}
+        onClick={() => setCollapsed(c => !c)}
+        role="button"
+        aria-expanded={!collapsed}
+        title={collapsed ? '点击展开' : '点击收起'}
+      >
+        <span className={styles.headerLeft}>
+          <span className={`${styles.collapseIcon} ${collapsed ? styles.collapseIconCollapsed : ''}`}>
+            ▸
+          </span>
+          <Badge tone="status" value={status}>{label}</Badge>
+        </span>
+        <span className={styles.count}>{total}</span>
       </header>
-      <div className={styles.cards} onScroll={onCardsScroll}>
-        {items.length === 0 ? (
+      {!collapsed && (
+        <div className={styles.cards} onScroll={onCardsScroll}>
+        {error ? (
+          <div className={styles.empty}>{error}</div>
+        ) : items.length === 0 && !loading ? (
           <div className={styles.empty}>暂无</div>
         ) : (
           <>
-            {shown.map(issue => {
+            {items.map(issue => {
               const groupName = groupNameMap.get(issue.group_id) || issue.group_id.slice(0, 6)
               return (
                 <KanbanCard
@@ -163,14 +227,16 @@ function KanbanColumn({
                 />
               )
             })}
-            {remaining > 0 && (
+            {loading && <div className={styles.loadMoreHint}>加载中…</div>}
+            {!loading && hasMore && (
               <div className={styles.loadMoreHint}>
-                向下滚动加载更多(还剩 {remaining} / {items.length})
+                向下滚动加载更多(还剩 {remaining} / {total})
               </div>
             )}
           </>
         )}
-      </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -179,9 +245,9 @@ export function KanbanView() {
   const { groups, agents } = useChatContext()
   const { lastIssueChange } = useSocket()
 
-  const [issues, setIssues] = useState<Issue[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // 看板级刷新信号:ws 推送 issue 变更时 bump,各列重置到首页。
+  // 列自己负责拉数据(分页),父级不再持有 issues 全量。
+  const [refreshSignal, setRefreshSignal] = useState(0)
 
   const [openIssue, setOpenIssue] = useState<{ id: string; groupId: string } | null>(null)
   const [drawerGroup, setDrawerGroup] = useState<Group | null>(null)
@@ -195,28 +261,11 @@ export function KanbanView() {
     return m
   }, [groups])
 
-  const load = useCallback(async () => {
-    try {
-      const data = await issuesApi.listAll()
-      setIssues(data)
-      setError(null)
-    } catch {
-      setError('加载 Issue 失败')
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    load().finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [load])
-
-  // 任何群的 issue 变更都触发重拉
+  // 任何群的 issue 变更都触发各列重拉首页
   useEffect(() => {
     if (!lastIssueChange) return
-    load()
-  }, [lastIssueChange, load])
+    setRefreshSignal(v => v + 1)
+  }, [lastIssueChange])
 
   // 当前打开的 issue 收到 ws 推送 → bump 给 IssueDetail 内部的 refetch
   useEffect(() => {
@@ -224,14 +273,18 @@ export function KanbanView() {
     if (lastIssueChange.issueId === openIssue.id) setDrawerRefresh(v => v + 1)
   }, [lastIssueChange, openIssue])
 
-  // URL ?issue=<id> → 打开抽屉。issues 加载完后若 URL 带着某个 issue id,
-  // 就把对应抽屉打开(刷新/分享链接都能恢复);卡片点击反向写回 URL。
+  // URL ?issue=<id> → 打开抽屉。卡片点击反向写回 URL。
   useEffect(() => {
     if (!urlIssueId) { setOpenIssue(null); return }
     if (openIssue && openIssue.id === urlIssueId) return
-    const found = issues.find(i => i.id === urlIssueId)
-    if (found) setOpenIssue({ id: found.id, groupId: found.group_id })
-  }, [urlIssueId, issues, openIssue])
+    // URL 直接带 issue id 时(刷新/分享链接),先按 id 拉详情取 groupId,
+    // 再打开抽屉 —— 分页后父级不再持有 issues 全量,没法 find。
+    let cancelled = false
+    issuesApi.getById(urlIssueId)
+      .then(d => { if (!cancelled) setOpenIssue({ id: d.id, groupId: d.group_id }) })
+      .catch(() => { if (!cancelled) setOpenIssue(null) })
+    return () => { cancelled = true }
+  }, [urlIssueId, openIssue])
 
   const openIssueById = useCallback((id: string, groupId: string) => {
     setSearchParams((prev) => {
@@ -276,45 +329,28 @@ export function KanbanView() {
     [drawerGroup],
   )
 
-  const grouped = useMemo(() => {
-    const buckets: Record<IssueStatus, Issue[]> = {
-      open: [], in_progress: [], paused: [], completed: [], failed: [], cancelled: [],
-    }
-    for (const issue of issues) {
-      const bucket = buckets[issue.status]
-      if (bucket) bucket.push(issue)
-    }
-    return buckets
-  }, [issues])
-
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <h2 className={styles.title}>看板</h2>
         <span className={styles.subtitle}>
-          全局 {issues.length} 条 Issue
+          看板视图 · 每列默认加载 50 条,滚动加载更多
         </span>
       </div>
 
-      {loading ? (
-        <div className={styles.placeholder}>加载中…</div>
-      ) : error ? (
-        <div className={styles.placeholder}>{error}</div>
-      ) : (
-        <div className={styles.board}>
-          {COLUMNS.map(({ status, label }) => (
-            <KanbanColumn
-              key={status}
-              status={status}
-              label={label}
-              items={grouped[status]}
-              groupNameMap={groupNameMap}
-              agents={agents}
-              onOpenIssue={openIssueById}
-            />
-          ))}
-        </div>
-      )}
+      <div className={styles.board}>
+        {COLUMNS.map(({ status, label }) => (
+          <KanbanColumn
+            key={status}
+            status={status}
+            label={label}
+            groupNameMap={groupNameMap}
+            agents={agents}
+            onOpenIssue={openIssueById}
+            refreshSignal={refreshSignal}
+          />
+        ))}
+      </div>
 
       {openIssue && (
         <div className={styles.drawerBackdrop} onClick={closeIssue}>
