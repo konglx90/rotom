@@ -147,7 +147,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const groupMatch = useMatch('/dashboard/groups/:groupId/*')
   const urlGroupId = groupMatch?.params.groupId
   const {
-    onlineAgents,
+    agents,
     groups,
     myAgentName,
     selectGroup,
@@ -280,7 +280,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
               onClick={openConfigModal}
               title="切换身份"
             >
-              <Avatar name={myAgentName} src={onlineAgents.find(a => a.name === myAgentName)?.avatar_url} size={28} />
+              <Avatar name={myAgentName} src={agents.find(a => a.name === myAgentName)?.avatar_url ?? undefined} size={28} />
               <span className={styles.userName}>{myAgentName}</span>
             </button>
           ) : (
