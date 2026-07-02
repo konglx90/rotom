@@ -17,6 +17,7 @@ interface Props {
     type?: string,
     guidancePrompt?: string,
     scheduleConfig?: GuidanceScheduleConfig,
+    repoConfig?: { repoUrl: string | null; repoDefaultBranch: string | null; extraRepos: Array<{ id: string; url: string; branch?: string; mountPath: string }> | null; worktreeMode: 'group' | 'issue' | null },
   ) => Promise<void> | void
 }
 
@@ -30,6 +31,11 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
   const [guidancePrompt, setGuidancePrompt] = useState<string | null>(null)
   const [scheduleConfig, setScheduleConfig] = useState<GuidanceScheduleConfig | null>(null)
   const [templateName, setTemplateName] = useState<string | null>(null)
+  // repo 配置(可选):留空 repoUrl 则不启用 worktree 模式
+  const [repoUrl, setRepoUrl] = useState('')
+  const [repoDefaultBranch, setRepoDefaultBranch] = useState('')
+  const [extraRepos, setExtraRepos] = useState<Array<{ id: string; url: string; branch: string }>>([{ id: '', url: '', branch: '' }])
+  const [worktreeMode, setWorktreeMode] = useState<'group' | 'issue'>('group')
 
   const handleClose = () => {
     setGroupName('')
@@ -39,8 +45,18 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
     setGuidancePrompt(null)
     setScheduleConfig(null)
     setTemplateName(null)
+    setRepoUrl('')
+    setRepoDefaultBranch('')
+    setExtraRepos([{ id: '', url: '', branch: '' }])
+    setWorktreeMode('group')
     onClose()
   }
+
+  const updateExtra = (idx: number, field: 'id' | 'url' | 'branch', value: string) => {
+    setExtraRepos(prev => prev.map((e, i) => i === idx ? { ...e, [field]: value } : e))
+  }
+  const addExtra = () => setExtraRepos(prev => [...prev, { id: '', url: '', branch: '' }])
+  const removeExtra = (idx: number) => setExtraRepos(prev => prev.filter((_, i) => i !== idx))
 
   const handleCreate = async () => {
     if (!groupName.trim() || submitting) return
@@ -48,6 +64,25 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
       window.alert('巡检群必须且只能选 1 个 agent 作为巡检员')
       return
     }
+    // 解析 extraRepos:过滤掉空行,mountPath 自动 = repos/<id>
+    let extraParsed: Array<{ id: string; url: string; branch?: string; mountPath: string }> | null = null
+    const filled = extraRepos.filter(e => e.id.trim() && e.url.trim())
+    if (filled.length > 0) {
+      extraParsed = filled.map(e => ({
+        id: e.id.trim(),
+        url: e.url.trim(),
+        branch: e.branch.trim() || undefined,
+        mountPath: `__repos/${e.id.trim()}`,
+      }))
+    }
+    const repoConfig = (repoUrl.trim() || extraParsed)
+      ? {
+          repoUrl: repoUrl.trim() || null,
+          repoDefaultBranch: repoDefaultBranch.trim() || null,
+          extraRepos: extraParsed,
+          worktreeMode,
+        }
+      : undefined
     setSubmitting(true)
     try {
       await onCreate(
@@ -57,6 +92,7 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
         groupType || undefined,
         guidancePrompt ?? undefined,
         scheduleConfig ?? undefined,
+        repoConfig,
       )
       // Success: clear inputs (parent will close the modal on its own).
       setGroupName('')
@@ -66,6 +102,10 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
       setGuidancePrompt(null)
       setScheduleConfig(null)
       setTemplateName(null)
+      setRepoUrl('')
+      setRepoDefaultBranch('')
+      setExtraRepos([{ id: '', url: '', branch: '' }])
+      setWorktreeMode('group')
     } catch {
       // Parent already surfaced the error (e.g. via alert). Keep inputs so the
       // user can fix the working directory and retry.
@@ -102,14 +142,6 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
         <label className={styles.formLabel}>群名称:</label>
         <input type="text" value={groupName} onChange={e => setGroupName(e.target.value)}
           placeholder="输入群名称" className={styles.formInput} />
-      </div>
-      <div className={styles.formField}>
-        <label className={styles.formLabel}>工作目录（可选）:</label>
-        <input type="text" value={workingDir} onChange={e => setWorkingDir(e.target.value)}
-          placeholder="例如: /Users/me/code/my-repo 或 ~/code/my-repo" className={styles.formInput} />
-        <p style={{ fontSize: 11, color: 'var(--color-slate)', margin: '6px 2px 0' }}>
-          支持 ~/ 自动展开。必须是已存在的目录；不填则默认使用 ~/.rotom/artifacts/&lt;群id&gt;（自动创建）。
-        </p>
       </div>
       <div className={styles.formField}>
         <label className={styles.formLabel}>群类型:</label>
@@ -156,6 +188,57 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
             </div>
           )}
         </div>
+      </div>
+      <div className={styles.formField}>
+        <label className={styles.formLabel}>工作目录（可选）:</label>
+        <input type="text" value={workingDir} onChange={e => setWorkingDir(e.target.value)}
+          placeholder="例如: /Users/me/code/my-repo 或 ~/code/my-repo" className={styles.formInput} />
+        <p style={{ fontSize: 11, color: 'var(--color-slate)', margin: '6px 2px 0' }}>
+          支持 ~/ 自动展开。必须是已存在的目录；不填则默认使用 ~/.rotom/artifacts/&lt;群id&gt;（自动创建）。
+        </p>
+      </div>
+      <div className={styles.formField}>
+        <label className={styles.formLabel}>内置 repo(可选):</label>
+        <input type="text" value={repoUrl} onChange={e => setRepoUrl(e.target.value)}
+          placeholder="主仓库 URL,如 git@github.com:org/repo.git;留空则不启用 worktree" className={styles.formInput} />
+        <input type="text" value={repoDefaultBranch} onChange={e => setRepoDefaultBranch(e.target.value)}
+          placeholder="默认分支(如 main);留空用仓库默认" className={styles.formInput}
+          style={{ marginTop: 6 }} />
+        <select value={worktreeMode} onChange={e => setWorktreeMode(e.target.value as 'group' | 'issue')}
+          className={styles.formSelect} style={{ marginTop: 6 }}>
+          <option value="group">worktree 策略:group(群共享一个 worktree,轻量)</option>
+          <option value="issue">worktree 策略:issue(每 issue 独立 worktree,多分支并行)</option>
+        </select>
+        <div style={{ marginTop: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--color-slate)' }}>额外仓库(可选)</span>
+            <button type="button" onClick={addExtra}
+              style={{ border: '1px solid var(--border-color-light, #ddd)', background: 'transparent', color: 'var(--color-navy, #1a365d)', borderRadius: 4, padding: '2px 10px', fontSize: 11, cursor: 'pointer' }}>
+              + 添加
+            </button>
+          </div>
+          {extraRepos.map((e, idx) => (
+            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 28px', gap: 6, marginBottom: 6 }}>
+              <input type="text" value={e.id} onChange={ev => updateExtra(idx, 'id', ev.target.value)}
+                placeholder="id(如 deposit-home)" className={styles.formInput} style={{ fontSize: 11 }} />
+              <input type="text" value={e.url} onChange={ev => updateExtra(idx, 'url', ev.target.value)}
+                placeholder="URL" className={styles.formInput} style={{ fontSize: 11 }} />
+              <input type="text" value={e.branch} onChange={ev => updateExtra(idx, 'branch', ev.target.value)}
+                placeholder="分支(可空)" className={styles.formInput} style={{ fontSize: 11 }} />
+              <button type="button" onClick={() => removeExtra(idx)}
+                style={{ border: '1px solid var(--border-color-light, #ddd)', background: 'transparent', borderRadius: 4, cursor: 'pointer', fontSize: 12, color: '#c00' }}
+                title="删除">
+                ✕
+              </button>
+            </div>
+          ))}
+          <p style={{ fontSize: 11, color: 'var(--color-slate)', margin: '4px 2px 0' }}>
+            mountPath 自动 = <code>repos/&lt;id&gt;</code>;agent 在 primary worktree 里通过该路径访问额外仓库。
+          </p>
+        </div>
+        <p style={{ fontSize: 11, color: 'var(--color-slate)', margin: '6px 2px 0' }}>
+          配 repo 后,群内 issue/chat 在 worktree 里跑(agent cwd = <code>~/.rotom/repos/&lt;repoName&gt;-&lt;id8&gt;-wt/group-&lt;groupId8&gt;/</code>)。bare clone 全局共享,只克隆一次。
+        </p>
       </div>
 
       <div className={styles.formField}>

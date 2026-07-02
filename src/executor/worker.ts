@@ -318,25 +318,23 @@ export class ExecutorWorker {
     // primary worktree
     const { barePath: primaryBare } = await ensureBareCloneAsync(repoCtx.repoUrl);
     const primaryWt = getWorktreePathForUrl(repoCtx.repoUrl, slot);
-    // group 模式:不传 issueId8(不派生分支),用 checkout 切目标分支
-    // issue 模式:传 issueId8,派生 <branch>-rotom-<issueId8>
-    const primaryBranch = mode === "group" ? repoCtx.repoBranch : undefined;
-    const primaryIssueId8 = mode === "group" ? undefined : issueId8;
-    await addWorktreeAsync(primaryBare, primaryWt, primaryBranch, primaryIssueId8);
-    if (mode === "group") {
-      await checkoutWorktreeAsync(primaryWt, repoCtx.repoBranch);
-    }
+    // 派生分支后缀:group 模式用 groupId8(每 group 独立),issue 模式用 issueId8。
+    // 避免 group 模式 issueId8 缺省时退化成 "tmp"(出现 master-rotom-tmp 这种无名分支)。
+    const primarySuffix = mode === "group" ? groupId8 : issueId8;
+    // addWorktreeAsync 创建派生分支 <branch>-rotom-<suffix> 并 checkout 到该分支。
+    // 不再 checkoutWorktreeAsync 切原分支——git worktree 不允许同一分支在多个
+    // worktree 同时 checkout(多 group 同 URL 同分支会冲突)。每个 group/issue 在
+    // 自己的派生分支上工作,互不干扰,agent 可 push 该派生分支或 merge 回原分支。
+    const primaryBranch = repoCtx.repoBranch;
+    await addWorktreeAsync(primaryBare, primaryWt, primaryBranch, primarySuffix);
 
     // extraRepo worktrees + symlink(挂到 primary 的 mountPath)
     for (const extra of repoCtx.extraRepos ?? []) {
       const { barePath: extraBare } = await ensureBareCloneAsync(extra.url);
       const extraWt = getWorktreePathForUrl(extra.url, slot);
-      const extraBranch = mode === "group" ? extra.branch : undefined;
-      const extraIssueId8 = mode === "group" ? undefined : issueId8;
-      await addWorktreeAsync(extraBare, extraWt, extraBranch, extraIssueId8);
-      if (mode === "group") {
-        await checkoutWorktreeAsync(extraWt, extra.branch);
-      }
+      const extraSuffix = primarySuffix;
+      const extraBranch = extra.branch;
+      await addWorktreeAsync(extraBare, extraWt, extraBranch, extraSuffix);
       // mountPath 形如 "repos/<repo-B>";在 primary 下建相对 symlink
       // primary/repos/<repo-B> -> <extraWt绝对路径>(用相对,基于 primary 所在目录)
       if (extra.mountPath) {
@@ -589,6 +587,9 @@ export class ExecutorWorker {
       const isMentioned = content.includes(`@${this.config.name}`);
       const qaMode = (msg as any).qaMode === true;
       console.log(`${this.tag} a2a_message from ${fromName} requestId=${requestId} isGroup=${isGroup} isMentioned=${isMentioned} qaMode=${qaMode} contentLen=${content.length} contentHead=${JSON.stringify(content.slice(0, 60))}`);
+      if (repoUrl) {
+        console.log(`${this.tag} repoCtx: url=${repoUrl} branch=${repoBranch} mode=${worktreeMode} extras=${extraRepos ? JSON.stringify((extraRepos as any[]).map(e => e.id)) : "(none)"}`);
+      }
       if (!isGroup || isMentioned || qaMode) {
         console.log(`${this.tag} Chat from ${fromName}: ${content.slice(0, 80)}...`);
         this.chat.handleChatReply(requestId, content, fromName, conversation, overrideCwd, { issueId: "chat", repoUrl, repoBranch, extraRepos, worktreeMode });

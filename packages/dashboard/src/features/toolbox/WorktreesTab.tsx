@@ -2,19 +2,15 @@
  * 工具箱 - Worktrees 全局视图。
  *
  * 列出本机所有 repo(bare clone)+ 各自 worktree,按 repo 分组。
- * 每个 worktree 显示:所属 group(从 slot 反推)/分支/路径/HEAD。
- * 提供「打开终端」「跳转 group」快捷入口(若 slot 含 groupId)。
- *
- * worktree 物理在 executor 本机,master 与 executor 同机时通过 GET /repos/worktrees
- * 扫描得到。跨机器部署(本机无 repos/)显示空提示。
+ * 顶部统计:repo 数 / worktree 数 / 总磁盘。每个 repo 卡片下 worktree 用 grid 对齐。
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { reposApi, type RepoScanEntry } from '../../api/repos'
 import { groupsApi } from '../../api/groups'
 import { Button } from '../../components/ui/Button'
-import styles from './ManagementTab.module.css'
+import styles from './WorktreesTab.module.css'
 
 function humanBytes(n: number): string {
   if (n < 1024) return `${n}B`
@@ -23,7 +19,7 @@ function humanBytes(n: number): string {
   return `${(n / 1024 / 1024 / 1024).toFixed(2)}G`
 }
 
-/** 从 worktree path 反推 slot。path 形如 .../<repoName>-<repoId8>-wt/<slot> */
+/** path 形如 .../<repoName>-<repoId8>-wt/<slot>,取 slot */
 function slotFromPath(wtPath: string): string | null {
   const parts = wtPath.split('/')
   const wtIdx = parts.findIndex(p => p.endsWith('-wt'))
@@ -31,7 +27,6 @@ function slotFromPath(wtPath: string): string | null {
   return parts[wtIdx + 1]
 }
 
-/** slot = group-<groupId8> → groupId8;否则 null(issue 模式 slot 是 issueId8) */
 function groupId8FromSlot(slot: string | null): string | null {
   if (!slot) return null
   if (slot.startsWith('group-')) return slot.slice('group-'.length)
@@ -51,11 +46,8 @@ export function WorktreesTab() {
     try {
       const [list, groups] = await Promise.all([reposApi.listWorktrees(), groupsApi.list()])
       setRepos(list)
-      // 按 groupId8 建反查表(用于 worktree 关联到 group 名)
       const m: Record<string, { id: string; name: string }> = {}
-      for (const g of groups) {
-        m[g.id.slice(0, 8)] = { id: g.id, name: g.name }
-      }
+      for (const g of groups) m[g.id.slice(0, 8)] = { id: g.id, name: g.name }
       setGroupMap(m)
     } catch (e) {
       setErr((e as Error).message)
@@ -66,16 +58,42 @@ export function WorktreesTab() {
 
   useEffect(() => { reload() }, [])
 
+  const [removing, setRemoving] = useState<string | null>(null)
+  const handleRemove = async (wtPath: string) => {
+    if (!window.confirm(`确认删除 worktree?\n${wtPath}\n\nbare clone 保留,只删这个工作树。`)) return
+    setRemoving(wtPath)
+    try {
+      await reposApi.removeWorktree(wtPath)
+      await reload()
+    } catch (e) {
+      window.alert(`删除失败: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setRemoving(null)
+    }
+  }
+
+  const stats = useMemo(() => {
+    const repoCount = repos.length
+    const wtCount = repos.reduce((s, r) => s + r.worktrees.length, 0)
+    const totalBytes = repos.reduce((s, r) => s + r.sizeBytes, 0)
+    return { repoCount, wtCount, totalBytes }
+  }, [repos])
+
   if (loading) return <div className={styles.page}>加载中...</div>
-  if (err) return <div className={styles.page}><div style={{ color: '#c00' }}>{err}</div><Button variant="secondary" size="sm" onClick={reload} style={{ marginTop: 8 }}>重试</Button></div>
+  if (err) return (
+    <div className={styles.page}>
+      <div className={styles.error}>{err}</div>
+      <Button variant="secondary" size="sm" onClick={reload}>重试</Button>
+    </div>
+  )
 
   if (repos.length === 0) {
     return (
       <div className={styles.page}>
-        <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-slate, #888)' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📦</div>
-          <p>本机还没有任何 repo 缓存</p>
-          <p style={{ fontSize: 12, marginTop: 4 }}>给 group 配置 repo_url 后,首次执行 issue/chat 会自动克隆</p>
+        <div className={styles.empty}>
+          <div className={styles.emptyIcon}>📦</div>
+          <p className={styles.emptyText}>本机还没有任何 repo 缓存</p>
+          <p className={styles.emptyHint}>给 group 配置 repo_url 后,首次执行 issue/chat 会自动克隆</p>
         </div>
       </div>
     )
@@ -83,65 +101,89 @@ export function WorktreesTab() {
 
   return (
     <div className={styles.page}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 16 }}>🌿 Worktrees(全局)</h2>
+      <div className={styles.header}>
+        <h2 className={styles.title}>🌿 Worktrees</h2>
         <Button variant="ghost" size="sm" onClick={reload}>刷新</Button>
       </div>
-      <p style={{ fontSize: 12, color: 'var(--color-slate, #888)', margin: '0 0 16px 0' }}>
-        本机所有 repo 的 bare clone + worktree。bare clone(<code>.git</code> 对象库)全局共享;worktree 各自一份 checkout。
+      <p className={styles.subtitle}>
+        本机所有 repo 的 bare clone + worktree。bare clone(<code>.git</code> 对象库)全局共享;worktree 各自一份 checkout,改的是各自工作树。
       </p>
 
-      {repos.map(repo => (
-        <div key={repo.repoKey} style={{ marginBottom: 16, border: '1px solid var(--border-color-light, #e2e8f0)', borderRadius: 8, overflow: 'hidden' }}>
-          <div style={{ padding: '10px 14px', background: 'var(--color-canvas, #f7fafc)', borderBottom: '1px solid var(--border-color-light, #e2e8f0)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 14 }}>📦</span>
-            <strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{repo.repoName}</strong>
-            <span style={{ fontSize: 11, color: 'var(--color-slate, #888)', fontFamily: 'var(--font-mono, monospace)' }}>-{repo.repoKey.split('-').pop()}</span>
-            <span style={{ fontSize: 11, color: 'var(--color-slate, #888)' }}>· {humanBytes(repo.sizeBytes)} · {repo.worktrees.length} worktree{repo.worktrees.length === 1 ? '' : 's'}</span>
-          </div>
-
-          {repo.worktrees.length === 0 ? (
-            <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--color-slate, #888)' }}>
-              暂无 worktree(首次执行 issue/chat 时创建)
-            </div>
-          ) : (
-            <div style={{ padding: '4px 0' }}>
-              {repo.worktrees.map(wt => {
-                const slot = slotFromPath(wt.path)
-                const gid8 = groupId8FromSlot(slot)
-                const group = gid8 ? groupMap[gid8] : null
-                const isIssue = slot != null && !slot.startsWith('group-')
-                return (
-                  <div key={wt.path} style={{ padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, borderBottom: '1px solid var(--border-color-light, #f0f0f0)' }}>
-                    <span style={{ flexShrink: 0 }}>
-                      {isIssue ? '🔧' : '🌿'}
-                    </span>
-                    <span style={{ flexShrink: 0, fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-navy, #1a365d)', fontWeight: 600 }}>
-                      [{wt.branch || 'detached'}]
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono, monospace)', fontSize: 11, color: 'var(--color-slate, #888)' }} title={wt.path}>
-                      {wt.path}
-                    </span>
-                    <span style={{ flexShrink: 0, fontSize: 11, color: 'var(--color-slate, #888)' }}>
-                      {wt.head}
-                    </span>
-                    {group && (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/dashboard/groups/${group.id}`)}
-                        style={{ flexShrink: 0, border: '1px solid var(--border-color-light, #ddd)', background: 'transparent', color: 'var(--color-navy, #1a365d)', borderRadius: 4, padding: '1px 8px', fontSize: 11, cursor: 'pointer' }}
-                        title={`跳转到群「${group.name}」`}
-                      >
-                        → {group.name}
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+      <div className={styles.stats}>
+        <div className={styles.statCard}>
+          <div className={styles.statValue}>{stats.repoCount}</div>
+          <div className={styles.statLabel}>📦 repos(bare clone)</div>
         </div>
-      ))}
+        <div className={styles.statCard}>
+          <div className={styles.statValue}>{stats.wtCount}</div>
+          <div className={styles.statLabel}>🌿 worktrees</div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statValue}>{humanBytes(stats.totalBytes)}</div>
+          <div className={styles.statLabel}>💾 总磁盘(bare clone)</div>
+        </div>
+      </div>
+
+      {repos.map(repo => {
+        const repoIdShort = repo.repoKey.split('-').pop() || ''
+        return (
+          <div key={repo.repoKey} className={styles.repoCard}>
+            <div className={styles.repoHeader}>
+              <span className={styles.repoIcon}>📦</span>
+              <span className={styles.repoName}>{repo.repoName}</span>
+              <span className={styles.repoIdShort}>{repoIdShort}</span>
+              <span className={styles.repoMeta}>
+                <span className={styles.repoMetaItem}>💾 {humanBytes(repo.sizeBytes)}</span>
+                <span className={styles.repoMetaItem}>🌿 {repo.worktrees.length}</span>
+              </span>
+            </div>
+
+            {repo.worktrees.length === 0 ? (
+              <div className={styles.wtEmpty}>暂无 worktree(首次执行 issue/chat 时创建)</div>
+            ) : (
+              <div className={styles.wtList}>
+                {repo.worktrees.map(wt => {
+                  const slot = slotFromPath(wt.path)
+                  const gid8 = groupId8FromSlot(slot)
+                  const group = gid8 ? groupMap[gid8] : null
+                  const isIssue = slot != null && !slot.startsWith('group-')
+                  const orphan = !isIssue && gid8 != null && !group
+                  return (
+                    <div key={wt.path} className={`${styles.wtRow} ${orphan ? styles.wtRowOrphan : ''}`} title={wt.path}>
+                      <span className={styles.wtType}>{isIssue ? '🔧' : '🌿'}</span>
+                      <span className={styles.wtBranch}>{wt.branch || 'detached'}</span>
+                      <span className={styles.wtPath}>{wt.path}</span>
+                      <span className={styles.wtHead}>{wt.head}</span>
+                      {group ? (
+                        <button
+                          type="button"
+                          className={styles.wtGroupBtn}
+                          onClick={() => navigate(`/dashboard/groups/${group.id}`)}
+                          title={`跳转到群「${group.name}」`}
+                        >
+                          → {group.name}
+                        </button>
+                      ) : orphan ? (
+                        <button
+                          type="button"
+                          className={styles.wtRemoveBtn}
+                          onClick={() => handleRemove(wt.path)}
+                          disabled={removing === wt.path}
+                          title="群已删除,清理孤儿 worktree"
+                        >
+                          {removing === wt.path ? '删除中...' : '🗑 群已删 · 清理'}
+                        </button>
+                      ) : (
+                        <span className={styles.wtNoGroup}>(无群关联)</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -39,6 +39,11 @@ export const reposApi = {
     return api.get<RepoScanEntry[]>('/repos/worktrees')
   },
 
+  /** 删除指定 worktree(孤儿清理)。bare clone 保留。 */
+  async removeWorktree(wtPath: string): Promise<{ ok: boolean }> {
+    return api.delete<{ ok: boolean }>('/repos/worktrees', { path: wtPath })
+  },
+
   /** 某 group 的 worktree 推算信息(ArtifactPanel 顶部显示用)。 */
   async getGroupWorktree(groupId: string): Promise<GroupWorktreeInfo | null> {
     try {

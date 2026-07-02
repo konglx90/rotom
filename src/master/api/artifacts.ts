@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import type { MeshDb } from "../db.js";
 import { resolveGroupArtifactRoot } from "../group-paths.js";
+import { resolveGroupWorktreeInfo } from "../repo-scan.js";
 import { toBeijing } from "../../shared/time.js";
 
 /** Walk up from `startPath` looking for a `.git` directory. Returns the repo
@@ -26,6 +27,72 @@ function findGitRoot(startPath: string): string | null {
   return null;
 }
 
+interface FileEntry {
+  name: string;
+  path: string;
+  absPath: string;
+  size: number;
+  modifiedTime: string;
+  type: "file" | "directory";
+  children?: FileEntry[];
+}
+
+function walkDir(dir: string, base: string): FileEntry[] {
+  const entries: FileEntry[] = [];
+  let items: fs.Dirent[];
+  try {
+    items = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return entries;
+  }
+  for (const item of items) {
+    if (item.name.startsWith(".")) continue;
+    if (item.name === "node_modules") continue;
+    const fullPath = path.join(dir, item.name);
+    const relPath = path.relative(base, fullPath);
+    // 用 statSync(跟随 symlink)判断真实类型,让 extraRepo 的 mountPath symlink
+    // 能被当作目录 walk。Dirent.isDirectory() 对 symlink 返回 false(lstat),
+    // 会漏掉 symlink 指向目录的条目。
+    let stat: fs.Stats;
+    try { stat = fs.statSync(fullPath); } catch { continue; }
+    if (stat.isDirectory()) {
+      entries.push({
+        name: item.name,
+        path: relPath,
+        absPath: fullPath,
+        size: 0,
+        modifiedTime: toBeijing(stat.mtime),
+        type: "directory",
+        children: walkDir(fullPath, base),
+      });
+    } else if (stat.isFile()) {
+      entries.push({
+        name: item.name,
+        path: relPath,
+        absPath: fullPath,
+        size: stat.size,
+        modifiedTime: toBeijing(stat.mtime),
+        type: "file",
+      });
+    }
+  }
+  entries.sort((a, b) => {
+    if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  return entries;
+}
+
+/** 递归给 FileEntry 的 path 加前缀(如 `__repos/`),让注入的虚拟节点的 children
+ *  的 path 带上前缀,前端点击时 content API 能识别并切换 base。 */
+function addPathPrefix(entries: FileEntry[], prefix: string): FileEntry[] {
+  return entries.map(e => ({
+    ...e,
+    path: prefix + e.path,
+    children: e.children ? addPathPrefix(e.children, prefix) : undefined,
+  }));
+}
+
 export function registerArtifactRoutes(
   apiRouter: ExpressRouter,
   db: MeshDb,
@@ -37,61 +104,41 @@ export function registerArtifactRoutes(
       return;
     }
 
-    interface FileEntry {
-      name: string;
-      path: string;
-      absPath: string;
-      size: number;
-      modifiedTime: string;
-      type: "file" | "directory";
-      children?: FileEntry[];
-    }
-
-    function walkDir(dir: string, base: string): FileEntry[] {
-      const entries: FileEntry[] = [];
-      let items: fs.Dirent[];
+    let files = walkDir(groupDir, groupDir);
+    // 配了 repo 的群:注入 `__repos` 虚拟节点(指向 primary worktree),
+    // 让 Dashboard 能浏览 worktree 代码 + group 产物。worktree 在
+    // ~/.rotom/repos/<repoName>-<id8>-wt/group-<groupId8>/,不在 groupDir 下。
+    // 用 `__repos` 避免和仓库里真实的 repos/ 目录冲突,`__` 前缀标记虚拟节点。
+    const wtInfo = resolveGroupWorktreeInfo(db, req.params.groupId);
+    if (wtInfo && wtInfo.primaryExists) {
       try {
-        items = fs.readdirSync(dir, { withFileTypes: true });
+        const wtFiles = walkDir(wtInfo.primaryPath, wtInfo.primaryPath);
+        // 给所有 path 加 `__repos/` 前缀,让 content/original/diff API 能识别
+        // (path 以 `__repos/` 开头时 base 换成 worktree)
+        const prefixed = addPathPrefix(wtFiles, "__repos/");
+        const filtered = files.filter(f => f.name !== "__repos");
+        filtered.push({
+          name: "__repos",
+          path: "__repos",
+          absPath: wtInfo.primaryPath,
+          size: 0,
+          modifiedTime: toBeijing(fs.statSync(wtInfo.primaryPath).mtime),
+          type: "directory" as const,
+          children: prefixed,
+        });
+        filtered.sort((a, b) => {
+          if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+        files = filtered;
       } catch {
-        return entries;
+        // worktree 读取失败,保留原 files
       }
-      for (const item of items) {
-        if (item.name.startsWith(".")) continue;
-        if (item.name === "node_modules") continue;
-        const fullPath = path.join(dir, item.name);
-        const relPath = path.relative(base, fullPath);
-        if (item.isDirectory()) {
-          entries.push({
-            name: item.name,
-            path: relPath,
-            absPath: fullPath,
-            size: 0,
-            modifiedTime: toBeijing(fs.statSync(fullPath).mtime),
-            type: "directory",
-            children: walkDir(fullPath, base),
-          });
-        } else if (item.isFile()) {
-          const stat = fs.statSync(fullPath);
-          entries.push({
-            name: item.name,
-            path: relPath,
-            absPath: fullPath,
-            size: stat.size,
-            modifiedTime: toBeijing(stat.mtime),
-            type: "file",
-          });
-        }
-      }
-      entries.sort((a, b) => {
-        if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-      return entries;
     }
 
     res.json({
       root: groupDir,
-      files: walkDir(groupDir, groupDir),
+      files,
     });
   });
 
@@ -102,8 +149,18 @@ export function registerArtifactRoutes(
       return;
     }
     const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
-    const resolved = path.resolve(groupDir, filePath);
-    if (!resolved.startsWith(path.resolve(groupDir))) {
+    // `__repos/...` 是虚拟注入节点(指向 primary worktree),不在 groupDir 下。
+    // 真实路径在 worktree 里,这里把 base 换成 worktree 路径,并剥掉 `__repos/` 前缀。
+    const wtInfo = resolveGroupWorktreeInfo(db, req.params.groupId);
+    let baseDir = groupDir;
+    let relPath = filePath;
+    if (wtInfo && wtInfo.primaryExists && filePath.startsWith("__repos/")) {
+      baseDir = wtInfo.primaryPath;
+      relPath = filePath.slice("__repos/".length);
+    }
+    const resolved = path.resolve(baseDir, relPath);
+    // 安全检查:resolved 必须在 baseDir 下(或就是 baseDir)
+    if (!resolved.startsWith(path.resolve(baseDir))) {
       res.status(403).json({ error: "Invalid path" });
       return;
     }

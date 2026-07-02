@@ -89,7 +89,7 @@ function StarredSection({ starredGroups, selectedGroupId, selectGroup, toggleGro
   selectGroup: (id: string) => void
   toggleGroupStarred: (id: string, starred: boolean) => Promise<void>
 }) {
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   return (
     <div className={styles.starredSection}>
       <div

@@ -66,6 +66,7 @@ interface ChatContextValue {
     type?: string,
     guidancePrompt?: string,
     scheduleConfig?: GuidanceScheduleConfig,
+    repoConfig?: { repoUrl: string | null; repoDefaultBranch: string | null; extraRepos: Array<{ id: string; url: string; branch?: string; mountPath: string }> | null; worktreeMode: 'group' | 'issue' | null },
   ) => Promise<void>
   updateGroupWorkingDir: (groupId: string, workingDir: string | null) => Promise<void>
   setGroupMemberWorkingDir: (groupId: string, agentName: string, workingDir: string) => Promise<void>
@@ -223,6 +224,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       type?: string,
       guidancePrompt?: string,
       scheduleConfig?: GuidanceScheduleConfig,
+      repoConfig?: { repoUrl: string | null; repoDefaultBranch: string | null; extraRepos: Array<{ id: string; url: string; branch?: string; mountPath: string }> | null; worktreeMode: 'group' | 'issue' | null },
     ) => {
       if (!myAgentName) return
       try {
@@ -236,6 +238,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const followups: Promise<unknown>[] = []
         if (guidancePrompt) {
           followups.push(groupsApi.updateGuidancePrompt(created.id, guidancePrompt))
+        }
+        if (repoConfig && (repoConfig.repoUrl || repoConfig.extraRepos?.length)) {
+          followups.push(groupsApi.updateRepo(created.id, repoConfig))
         }
         if (scheduleConfig) {
           followups.push(schedulesApi.create({

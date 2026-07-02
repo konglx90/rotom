@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import { defaultGroupWorkingDir } from "../group-paths.js";
@@ -581,5 +582,54 @@ export function registerGroupRoutes(
    *  扫描本机 ~/.rotom/repos/,跨机器部署时返回空。 */
   apiRouter.get("/repos/worktrees", (_req, res) => {
     res.json(scanAllRepos());
+  });
+
+  /** DELETE /api/repos/worktrees —— 删除指定 worktree(孤儿清理)。
+   *  body: { path: "<worktree 绝对路径>" }。只删 worktree,bare clone 保留。
+   *  路径必须在 ~/.rotom/repos/ 下,防止误删。 */
+  apiRouter.delete("/repos/worktrees", (req, res) => {
+    const wtPath = typeof req.body?.path === "string" ? req.body.path : "";
+    if (!wtPath) { res.status(400).json({ error: "path required" }); return; }
+    const reposRoot = path.join(os.homedir(), ".rotom", "repos");
+    const resolved = path.resolve(wtPath);
+    if (!resolved.startsWith(reposRoot + path.sep)) {
+      res.status(403).json({ error: "path must be under ~/.rotom/repos/" });
+      return;
+    }
+    if (!fs.existsSync(resolved)) {
+      res.json({ ok: true, note: "already gone" });
+      return;
+    }
+    // 找 bare clone(worktree 的 gitdir 指向它),用 git worktree remove
+    const gitdirFile = path.join(resolved, ".git");
+    let barePath: string | null = null;
+    try {
+      if (fs.existsSync(gitdirFile)) {
+        const content = fs.readFileSync(gitdirFile, "utf-8").trim();
+        const m = content.match(/^gitdir:\s*(.+)$/);
+        if (m) {
+          // m[1] 形如 /Users/.../repos/<repo>.git/worktrees/<slot>
+          // bare 是 .../repos/<repo>.git
+          const wtMeta = path.resolve(resolved, m[1]);
+          barePath = path.resolve(wtMeta, "../.."); // 上两级到 .git
+        }
+      }
+    } catch { /* ignore */ }
+    if (barePath && fs.existsSync(barePath)) {
+      try {
+        const r = spawnSync("git", ["worktree", "remove", "--force", resolved], { cwd: barePath, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] });
+        if (r.status !== 0) {
+          // git 拒绝(可能 worktree 有改动),兜底物理删
+          fs.rmSync(resolved, { recursive: true, force: true });
+          spawnSync("git", ["worktree", "prune"], { cwd: barePath });
+        }
+      } catch {
+        fs.rmSync(resolved, { recursive: true, force: true });
+      }
+    } else {
+      fs.rmSync(resolved, { recursive: true, force: true });
+    }
+    log.info(`Worktree removed: ${resolved}`);
+    res.json({ ok: true });
   });
 }

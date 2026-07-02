@@ -40,24 +40,6 @@ function parseExtraRepos(json: string | null | undefined): ExtraRepoEntry[] {
   } catch { return [] }
 }
 
-function formatExtraReposText(entries: ExtraRepoEntry[]): string {
-  return entries.map(e =>
-    [e.id, e.url, e.branch || '', e.mountPath].join('|'),
-  ).join('\n')
-}
-
-function parseExtraReposText(text: string): ExtraRepoEntry[] {
-  const out: ExtraRepoEntry[] = []
-  for (const line of text.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const [id, url, branch, mountPath] = trimmed.split('|').map(s => (s ?? '').trim())
-    if (!id || !url || !mountPath) continue
-    out.push({ id, url, branch: branch || undefined, mountPath })
-  }
-  return out
-}
-
 export function GroupSettingsModal({
   open,
   groupId,
@@ -80,10 +62,18 @@ export function GroupSettingsModal({
   const [guidanceValue, setGuidanceValue] = useState(groupGuidancePrompt || '')
   const [repoUrlValue, setRepoUrlValue] = useState(groupRepoUrl || '')
   const [repoBranchValue, setRepoBranchValue] = useState(groupRepoDefaultBranch || '')
-  const [extraReposValue, setExtraReposValue] = useState(formatExtraReposText(parseExtraRepos(groupExtraRepos)))
+  const [extraReposValue, setExtraReposValue] = useState<Array<{ id: string; url: string; branch: string }>>(
+    parseExtraRepos(groupExtraRepos).map(e => ({ id: e.id, url: e.url, branch: e.branch || '' })),
+  )
   const [worktreeModeValue, setWorktreeModeValue] = useState<'group' | 'issue'>(groupWorktreeMode === 'issue' ? 'issue' : 'group')
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
+
+  const updateExtra = (idx: number, field: 'id' | 'url' | 'branch', value: string) => {
+    setExtraReposValue(prev => prev.map((e, i) => i === idx ? { ...e, [field]: value } : e))
+  }
+  const addExtra = () => setExtraReposValue(prev => [...prev, { id: '', url: '', branch: '' }])
+  const removeExtra = (idx: number) => setExtraReposValue(prev => prev.filter((_, i) => i !== idx))
 
   useEffect(() => {
     if (open) {
@@ -92,7 +82,7 @@ export function GroupSettingsModal({
       setGuidanceValue(groupGuidancePrompt || '')
       setRepoUrlValue(groupRepoUrl || '')
       setRepoBranchValue(groupRepoDefaultBranch || '')
-      setExtraReposValue(formatExtraReposText(parseExtraRepos(groupExtraRepos)))
+      setExtraReposValue(parseExtraRepos(groupExtraRepos).map(e => ({ id: e.id, url: e.url, branch: e.branch || '' })))
       setWorktreeModeValue(groupWorktreeMode === 'issue' ? 'issue' : 'group')
       requestAnimationFrame(() => {
         nameInputRef.current?.focus()
@@ -111,11 +101,14 @@ export function GroupSettingsModal({
   const repoBranchTrimmed = repoBranchValue.trim()
   const origRepoUrl = (groupRepoUrl || '').trim()
   const origRepoBranch = (groupRepoDefaultBranch || '').trim()
-  const origExtraText = formatExtraReposText(parseExtraRepos(groupExtraRepos))
+  const origExtras = parseExtraRepos(groupExtraRepos)
   const origWorktreeMode = groupWorktreeMode === 'issue' ? 'issue' : 'group'
+  // 比较 extras:JSON 字符串化后对比(忽略 mountPath 差异,因为 mountPath 自动 = repos/<id>)
+  const extrasJson = JSON.stringify(extraReposValue.map(e => ({ id: e.id.trim(), url: e.url.trim(), branch: e.branch.trim() })))
+  const origExtrasJson = JSON.stringify(origExtras.map(e => ({ id: e.id, url: e.url, branch: e.branch || '' })))
   const repoDirty = repoUrlTrimmed !== origRepoUrl
     || repoBranchTrimmed !== origRepoBranch
-    || extraReposValue.trim() !== origExtraText.trim()
+    || extrasJson !== origExtrasJson
     || worktreeModeValue !== origWorktreeMode
   const canSave = nameDirty || dirDirty || guidanceDirty || repoDirty
 
@@ -130,7 +123,13 @@ export function GroupSettingsModal({
       onSaveGuidancePrompt(guidanceTrimmed ? guidanceTrimmed : null)
     }
     if (repoDirty) {
-      const extras = parseExtraReposText(extraReposValue)
+      const filled = extraReposValue.filter(e => e.id.trim() && e.url.trim())
+      const extras = filled.map(e => ({
+        id: e.id.trim(),
+        url: e.url.trim(),
+        branch: e.branch.trim() || undefined,
+        mountPath: `__repos/${e.id.trim()}`,
+      }))
       onSaveRepo({
         repoUrl: repoUrlTrimmed || null,
         repoDefaultBranch: repoBranchTrimmed || null,
@@ -310,17 +309,36 @@ export function GroupSettingsModal({
               <option value="issue">issue(每 issue 独立 worktree,多分支并行)</option>
             </select>
           </div>
-          <textarea
-            value={extraReposValue}
-            onChange={e => setExtraReposValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={'额外仓库(可选),每行一条:\nid|url|branch|mountPath\n例:frontend|git@github.com:org/fe.git|main|repos/frontend'}
-            className={styles.guidanceTextarea}
-            rows={3}
-            style={{ marginTop: 6 }}
-            spellCheck={false}
-            autoComplete="off"
-          />
+          <div style={{ marginTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: 'var(--color-slate, #888)' }}>额外仓库(可选)</span>
+              <button type="button" onClick={addExtra}
+                style={{ border: '1px solid rgba(0,0,0,0.12)', background: 'transparent', color: 'var(--color-navy)', borderRadius: 4, padding: '2px 10px', fontSize: 11, cursor: 'pointer' }}>
+                + 添加
+              </button>
+            </div>
+            {extraReposValue.map((e, idx) => (
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 28px', gap: 6, marginBottom: 6 }}>
+                <input type="text" value={e.id} onChange={ev => updateExtra(idx, 'id', ev.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="id(如 deposit-home)" className={styles.dirInput} style={{ fontSize: 11 }} spellCheck={false} autoComplete="off" />
+                <input type="text" value={e.url} onChange={ev => updateExtra(idx, 'url', ev.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="URL" className={styles.dirInput} style={{ fontSize: 11 }} spellCheck={false} autoComplete="off" />
+                <input type="text" value={e.branch} onChange={ev => updateExtra(idx, 'branch', ev.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="分支(可空)" className={styles.dirInput} style={{ fontSize: 11 }} spellCheck={false} autoComplete="off" />
+                <button type="button" onClick={() => removeExtra(idx)}
+                  style={{ border: '1px solid rgba(0,0,0,0.12)', background: 'transparent', borderRadius: 4, cursor: 'pointer', fontSize: 12, color: '#c00' }}
+                  title="删除">
+                  ✕
+                </button>
+              </div>
+            ))}
+            <p style={{ fontSize: 11, color: 'var(--color-slate, #888)', margin: '4px 2px 0' }}>
+              mountPath 自动 = <code>repos/&lt;id&gt;</code>;agent 在 primary worktree 里通过该路径访问额外仓库。
+            </p>
+          </div>
           <p className={styles.hint}>
             <span className={styles.hintIcon}>💡</span>
             <span>配 repo 后,该群每个 issue 在 executor 本机起独立 worktree(<code>&lt;groupId&gt;/&lt;issueId&gt;/repos/primary/</code>),多分支天然隔离。同 URL 跨 group/issue 全局复用 bare clone。仅与 master 同机器的 agent 生效。</span>
