@@ -279,9 +279,29 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
         className={`${styles.sidebar} ${isZen ? styles.sidebarZen : ''}`}
         style={{ width: `${width}px` }}
       >
-        <div className={styles.logo}>
-          <img src="/dashboard/rotom-avatar.png" alt="Rotom" className={styles.logoImg} />
-          {!isZen && <span className={styles.logoText}>Rotom</span>}
+        <div className={styles.topBar}>
+          {!isZen && myAgentName ? (
+            <button
+              className={styles.userInfo}
+              onClick={openConfigModal}
+              title="切换身份"
+            >
+              <Avatar name={myAgentName} src={onlineAgents.find(a => a.name === myAgentName)?.avatar_url} size={28} />
+              <span className={styles.userName}>{myAgentName}</span>
+            </button>
+          ) : (
+            <div className={styles.brand}>
+              <img src="/dashboard/rotom-avatar.png" alt="Rotom" className={styles.logoImg} />
+              {!isZen && <span className={styles.logoText}>Rotom</span>}
+            </div>
+          )}
+          <button
+            className={styles.zenBtn}
+            onClick={toggleZenMode}
+            title={isZen ? '展开侧边栏' : '禅模式'}
+          >
+            {isZen ? '▶' : '◀'}
+          </button>
         </div>
         <nav
           className={`${styles.nav} ${!isZen && navCompact ? styles.navCompact : ''}`}
