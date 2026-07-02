@@ -13,6 +13,31 @@ import { createLogger } from "../../shared/logger.js";
 
 const log = createLogger("mesh-api");
 
+// avatars 持久化到 ROTOM_HOME 下,避免 /tmp 被清空后 DB 里的 avatar_url 失效。
+const AVATAR_DIR = path.join(process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom"), "avatars");
+const LEGACY_AVATAR_DIR = "/tmp/rotom-avatars";
+
+// 启动时一次性把 /tmp/rotom-avatars/ 里的旧文件迁到 AVATAR_DIR,避免老数据 404。
+(function migrateLegacyAvatars() {
+  try {
+    if (!fs.existsSync(LEGACY_AVATAR_DIR)) return;
+    fs.mkdirSync(AVATAR_DIR, { recursive: true });
+    for (const name of fs.readdirSync(LEGACY_AVATAR_DIR)) {
+      const src = path.join(LEGACY_AVATAR_DIR, name);
+      const dst = path.join(AVATAR_DIR, name);
+      if (fs.existsSync(dst)) continue;
+      try {
+        fs.copyFileSync(src, dst);
+        log.info(`avatar migrated: ${name}`);
+      } catch (e: any) {
+        log.warn(`avatar migration failed for ${name}: ${e?.message ?? "unknown"}`);
+      }
+    }
+  } catch (e: any) {
+    log.warn(`avatar migration scan failed: ${e?.message ?? "unknown"}`);
+  }
+})();
+
 function parseProfile(raw: string | null | undefined): AgentProfile | undefined {
   if (!raw) return undefined;
   try {
@@ -282,11 +307,10 @@ export function registerAgentRoutes(
       : (actualMime as string).includes("webp") ? "webp" : "jpg";
 
     const rand = randomUUID().replace(/-/g, "").slice(0, 6);
-    const avatarDir = "/tmp/rotom-avatars";
-    fs.mkdirSync(avatarDir, { recursive: true });
+    fs.mkdirSync(AVATAR_DIR, { recursive: true });
     const stamp = Date.now();
     const storedName = `${agentId}-${stamp}-${rand}.${ext}`;
-    const absPath = path.join(avatarDir, storedName);
+    const absPath = path.join(AVATAR_DIR, storedName);
     fs.writeFileSync(absPath, buf);
     const url = `/api/avatars/${storedName}`;
     db.updateAgentMeta(agent.id, { avatar_url: url });
@@ -300,21 +324,22 @@ export function registerAgentRoutes(
       res.status(404).json({ error: "not found" });
       return;
     }
-    const avatarDir = "/tmp/rotom-avatars";
-    const abs = path.resolve(avatarDir, filename);
-    if (!abs.startsWith(path.resolve(avatarDir) + path.sep)) {
-      res.status(404).json({ error: "not found" });
-      return;
-    }
-    if (!fs.existsSync(abs)) {
-      res.status(404).json({ error: "not found" });
-      return;
-    }
     const ext = filename.split(".").pop()?.toLowerCase() ?? "";
     const mimeMap: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
-    res.setHeader("Content-Type", mimeMap[ext] ?? "application/octet-stream");
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    fs.createReadStream(abs).pipe(res);
+
+    const tryServe = (dir: string): boolean => {
+      const abs = path.resolve(dir, filename);
+      if (!abs.startsWith(path.resolve(dir) + path.sep)) return false;
+      if (!fs.existsSync(abs)) return false;
+      res.setHeader("Content-Type", mimeMap[ext] ?? "application/octet-stream");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      fs.createReadStream(abs).pipe(res);
+      return true;
+    };
+
+    if (tryServe(AVATAR_DIR)) return;
+    if (tryServe(LEGACY_AVATAR_DIR)) return;
+    res.status(404).json({ error: "not found" });
   });
 
   apiRouter.delete("/agents/:id", (req, res) => {

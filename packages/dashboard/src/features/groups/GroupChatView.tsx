@@ -320,15 +320,16 @@ export function GroupChatView() {
   }
 
   // Reset messages on conversation change.
+  // key 只用 selectedGroupId:directTargetResolved 会因 groups 异步加载从 ''
+  // 派生为非空,若放进 key 会清掉刚拉到的历史(history effect 依赖不含它,不会重拉)。
   const lastConvKeyRef = useRef<string>('')
   useEffect(() => {
-    const key = `${selectedGroupId}::${directTargetResolved}`
-    if (lastConvKeyRef.current && lastConvKeyRef.current !== key) {
+    if (lastConvKeyRef.current && lastConvKeyRef.current !== selectedGroupId) {
       setMessages([])
     }
-    lastConvKeyRef.current = key
+    lastConvKeyRef.current = selectedGroupId
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGroupId, directTargetResolved])
+  }, [selectedGroupId])
 
   const handleAddMembers = async (memberNames: string[]) => {
     if (!selectedGroupId) return
