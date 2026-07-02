@@ -229,7 +229,7 @@ export const groupMethods = {
       }
       list.push({ agent_name: r.agent_name, joined_at: r.joined_at, working_dir: r.working_dir, profile: r.profile });
     }
-    return groups.map((g) => ({ ...g, members: byGroup.get(g.id) ?? [] }));
+    return groups.map((g) => ({ ...g, members: byGroup.get(g.id) ?? [] } as GroupRow & { member_count: number; last_message_at: string | null; members: GroupMemberRow[] }));
   },
 
   getGroupById(this: MeshDbSelf, id: string): GroupRow | undefined {

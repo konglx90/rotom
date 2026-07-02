@@ -207,8 +207,12 @@ export function GroupChatView() {
 
   // --- Derived state ---
   const selectedGroup = groups.find((g) => g.id === selectedGroupId)
-  const isDirectMode = directTarget !== ''
+  // 单聊:老 DM 机制(带 directTarget)或新建的 type='direct' 群。
+  // 后者不需要 @,自动把"对方成员"作为 target。
+  const isDirectMode = directTarget !== '' || selectedGroup?.type === 'direct'
   const groupMembers = selectedGroup?.members?.map((m) => m.agent_name) || []
+  // type='direct' 群没有 directTarget,从 members 里取对方。
+  const directTargetResolved = directTarget || groupMembers.find((n) => n !== myAgentName) || ''
 
   // --- Handlers ---
   const handleSendMessage = async (text: string) => {
@@ -222,7 +226,7 @@ export function GroupChatView() {
       const ok = send({
         type: 'a2a_send',
         requestId,
-        target: directTarget,
+        target: directTargetResolved,
         payload: { message: trimmed },
         conversation: { type: 'single', groupId: selectedGroupId, groupName: selectedGroup?.name },
       })
@@ -239,7 +243,7 @@ export function GroupChatView() {
         },
         {
           id: `${requestId}_loading`,
-          from: directTarget,
+          from: directTargetResolved,
           content: '',
           timestamp: new Date(),
           isIncoming: true,
@@ -311,13 +315,13 @@ export function GroupChatView() {
   // Reset messages on conversation change.
   const lastConvKeyRef = useRef<string>('')
   useEffect(() => {
-    const key = `${selectedGroupId}::${directTarget}`
+    const key = `${selectedGroupId}::${directTargetResolved}`
     if (lastConvKeyRef.current && lastConvKeyRef.current !== key) {
       setMessages([])
     }
     lastConvKeyRef.current = key
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGroupId, directTarget])
+  }, [selectedGroupId, directTargetResolved])
 
   const handleAddMembers = async (memberNames: string[]) => {
     if (!selectedGroupId) return
@@ -345,7 +349,7 @@ export function GroupChatView() {
   const handleDeleteDm = async () => {
     const dmGroupId = localStorage.getItem('dm_active_group')
     if (!dmGroupId) return
-    if (!confirm(`确定删除与 ${directTarget} 的对话吗？该对话的所有消息会被清除。`)) return
+    if (!confirm(`确定删除与 ${directTargetResolved} 的对话吗？该对话的所有消息会被清除。`)) return
     try {
       await groupsApi.delete(dmGroupId)
       localStorage.removeItem('dm_active_group')
@@ -614,7 +618,7 @@ export function GroupChatView() {
                   type="button"
                   className={styles.modeBtn}
                   onClick={handleDeleteDm}
-                  title={`删除与 ${directTarget} 的对话`}
+                  title={`删除与 ${directTargetResolved} 的对话`}
                 >
                   <span className={styles.modeBtnIcons}>🗑️</span>
                 </button>

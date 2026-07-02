@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { UIEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { groupsApi } from '../../api/groups'
 import { issuesApi } from '../../api/issues'
@@ -104,6 +105,73 @@ function KanbanCard({
         </span>
       </div>
     </button>
+  )
+}
+
+const PAGE_SIZE = 50
+
+function KanbanColumn({
+  status,
+  label,
+  items,
+  groupNameMap,
+  agents,
+  onOpenIssue,
+}: {
+  status: IssueStatus
+  label: string
+  items: Issue[]
+  groupNameMap: Map<string, string>
+  agents: Agent[]
+  onOpenIssue: (id: string, groupId: string) => void
+}) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  // 切换列(数据来源变)时重置分页
+  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [status])
+
+  const onCardsScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 64) {
+      setVisibleCount(c => Math.min(c + PAGE_SIZE, items.length))
+    }
+  }, [items.length])
+
+  const shown = items.slice(0, visibleCount)
+  const remaining = items.length - shown.length
+
+  return (
+    <section className={styles.column} data-status={status}>
+      <header className={styles.columnHeader}>
+        <Badge tone="status" value={status}>{label}</Badge>
+        <span className={styles.count}>{items.length}</span>
+      </header>
+      <div className={styles.cards} onScroll={onCardsScroll}>
+        {items.length === 0 ? (
+          <div className={styles.empty}>暂无</div>
+        ) : (
+          <>
+            {shown.map(issue => {
+              const groupName = groupNameMap.get(issue.group_id) || issue.group_id.slice(0, 6)
+              return (
+                <KanbanCard
+                  key={issue.id}
+                  issue={issue}
+                  groupName={groupName}
+                  agents={agents}
+                  onOpen={() => onOpenIssue(issue.id, issue.group_id)}
+                />
+              )
+            })}
+            {remaining > 0 && (
+              <div className={styles.loadMoreHint}>
+                向下滚动加载更多(还剩 {remaining} / {items.length})
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -234,33 +302,17 @@ export function KanbanView() {
         <div className={styles.placeholder}>{error}</div>
       ) : (
         <div className={styles.board}>
-          {COLUMNS.map(({ status, label }) => {
-            const items = grouped[status]
-            return (
-              <section key={status} className={styles.column} data-status={status}>
-                <header className={styles.columnHeader}>
-                  <Badge tone="status" value={status}>{label}</Badge>
-                  <span className={styles.count}>{items.length}</span>
-                </header>
-                <div className={styles.cards}>
-                  {items.length === 0 ? (
-                    <div className={styles.empty}>暂无</div>
-                  ) : items.map(issue => {
-                    const groupName = groupNameMap.get(issue.group_id) || issue.group_id.slice(0, 6)
-                    return (
-                      <KanbanCard
-                        key={issue.id}
-                        issue={issue}
-                        groupName={groupName}
-                        agents={agents}
-                        onOpen={() => openIssueById(issue.id, issue.group_id)}
-                      />
-                    )
-                  })}
-                </div>
-              </section>
-            )
-          })}
+          {COLUMNS.map(({ status, label }) => (
+            <KanbanColumn
+              key={status}
+              status={status}
+              label={label}
+              items={grouped[status]}
+              groupNameMap={groupNameMap}
+              agents={agents}
+              onOpenIssue={openIssueById}
+            />
+          ))}
         </div>
       )}
 

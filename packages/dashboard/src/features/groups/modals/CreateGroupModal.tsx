@@ -25,6 +25,8 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
   const [groupName, setGroupName] = useState('')
   const [workingDir, setWorkingDir] = useState('')
   const [groupType, setGroupType] = useState('')
+  // 聊天形态:'group'=群聊(默认,'normal'/'patrol' 走原逻辑);'direct'=单聊(2 人,type=direct)
+  const [chatKind, setChatKind] = useState<'group' | 'direct'>('group')
   const [selectedMembers, setSelectedMembers] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
@@ -41,6 +43,7 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
     setGroupName('')
     setWorkingDir('')
     setGroupType('')
+    setChatKind('group')
     setSelectedMembers([])
     setGuidancePrompt(null)
     setScheduleConfig(null)
@@ -64,6 +67,10 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
       window.alert('巡检群必须且只能选 1 个 agent 作为巡检员')
       return
     }
+    if (isDirect && selectedMembers.length !== 1) {
+      window.alert('单聊必须且只能选 1 个 agent')
+      return
+    }
     // 解析 extraRepos:过滤掉空行,mountPath 自动 = repos/<id>
     let extraParsed: Array<{ id: string; url: string; branch?: string; mountPath: string }> | null = null
     const filled = extraRepos.filter(e => e.id.trim() && e.url.trim())
@@ -85,11 +92,12 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
       : undefined
     setSubmitting(true)
     try {
+      const submitType = isDirect ? 'direct' : groupType || undefined
       await onCreate(
         groupName.trim(),
         selectedMembers,
         workingDir.trim() || undefined,
-        groupType || undefined,
+        submitType,
         guidancePrompt ?? undefined,
         scheduleConfig ?? undefined,
         repoConfig,
@@ -98,6 +106,7 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
       setGroupName('')
       setWorkingDir('')
       setGroupType('')
+      setChatKind('group')
       setSelectedMembers([])
       setGuidancePrompt(null)
       setScheduleConfig(null)
@@ -115,8 +124,10 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
   }
 
   const otherAgents = agents.filter(a => a.name !== myAgentName)
-  const isPatrol = groupType === 'patrol'
-  const maxMembers = isPatrol ? 1 : Infinity
+  const isPatrol = chatKind === 'group' && groupType === 'patrol'
+  const isDirect = chatKind === 'direct'
+  // 单聊限选 1 人(自己 + 1 = 2 人对话);巡检群也限 1 人;其他不限。
+  const maxMembers = (isDirect || isPatrol) ? 1 : Infinity
 
   const toggleMember = (name: string) => {
     setSelectedMembers(prev => {
@@ -125,56 +136,125 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
     })
   }
 
+  // 切换聊天形态时:清空已选成员 + 调整默认名称。
+  // 单聊默认名称"我和 <agent>";切回群聊若名称是单聊默认值则清空让用户重填。
+  const handleChatKindChange = (kind: 'group' | 'direct') => {
+    if (kind === chatKind) return
+    setSelectedMembers([])
+    if (kind === 'direct') {
+      setGroupName('')
+    } else if (groupName.startsWith('我和 ')) {
+      setGroupName('')
+    }
+    setChatKind(kind)
+  }
+
+  // 单聊模式:点 agent 立即创建并跳转,不走表单提交(类似「一对一」里 + 按钮的体验)。
+  // 群聊模式:正常 toggle checkbox,等用户点 footer 的"创建"。
+  const handleToggleMember = async (name: string) => {
+    if (isDirect) {
+      if (submitting) return
+      setSubmitting(true)
+      try {
+        await onCreate(name, [name], undefined, 'direct', undefined, undefined, undefined)
+        handleClose()
+      } catch {
+        // 父组件已 alert 错误;留在 modal 上让用户重选。
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+    toggleMember(name)
+  }
+
   return (
     <Modal
       open={open}
-      title="创建群"
+      title={isDirect ? '发起单聊' : '创建对话'}
       footer={
         <div className={styles.modalActions}>
           <Button variant="secondary" size="md" onClick={handleClose} disabled={submitting}>取消</Button>
-          <Button variant="primary" size="md" onClick={handleCreate} disabled={!groupName.trim() || submitting}>
-            {submitting ? '创建中...' : '创建'}
-          </Button>
+          {!isDirect && (
+            <Button variant="primary" size="md" onClick={handleCreate} disabled={!groupName.trim() || submitting}>
+              {submitting ? '创建中...' : '创建'}
+            </Button>
+          )}
         </div>
       }
     >
       <div className={styles.formField}>
-        <label className={styles.formLabel}>群名称:</label>
-        <input type="text" value={groupName} onChange={e => setGroupName(e.target.value)}
-          placeholder="输入群名称" className={styles.formInput} />
-      </div>
-      <div className={styles.formField}>
-        <label className={styles.formLabel}>群类型:</label>
-        <select value={groupType} onChange={e => {
-          const t = e.target.value
-          setGroupType(t)
-          if (t === 'patrol' && !groupName.trim()) {
-            setGroupName('全局issue巡检群')
-          }
-        }} className={styles.formSelect}>
-          <option value="">普通群</option>
-          <option value="patrol">巡检群</option>
-        </select>
-        {isPatrol && (
+        <label className={styles.formLabel}>聊天类型:</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={() => handleChatKindChange('group')}
+            style={{
+              flex: 1, padding: '8px 12px', fontSize: 13, cursor: 'pointer',
+              borderRadius: 6, border: `1px solid ${chatKind === 'group' ? 'var(--color-wise-green, #9fe870)' : 'var(--border-color-light, #ddd)'}`,
+              background: chatKind === 'group' ? 'rgba(159, 232, 112, 0.18)' : 'transparent',
+              fontWeight: chatKind === 'group' ? 700 : 500,
+              color: chatKind === 'group' ? 'var(--color-dark-green, #1f4d1a)' : 'inherit',
+            }}>
+            💬 群聊(多人)
+          </button>
+          <button type="button" onClick={() => handleChatKindChange('direct')}
+            style={{
+              flex: 1, padding: '8px 12px', fontSize: 13, cursor: 'pointer',
+              borderRadius: 6, border: `1px solid ${chatKind === 'direct' ? 'var(--color-wise-green, #9fe870)' : 'var(--border-color-light, #ddd)'}`,
+              background: chatKind === 'direct' ? 'rgba(159, 232, 112, 0.18)' : 'transparent',
+              fontWeight: chatKind === 'direct' ? 700 : 500,
+              color: chatKind === 'direct' ? 'var(--color-dark-green, #1f4d1a)' : 'inherit',
+            }}>
+            👤 单聊(1 对 1)
+          </button>
+        </div>
+        {isDirect && (
           <p style={{ fontSize: 11, color: 'var(--color-info)', margin: '6px 2px 0' }}>
-            巡检群全局限 1 个(归档/删除后才能再建),只选 1 个 agent 作为巡检员。
-            建群后自动创建每小时巡检任务,可在工具箱「Issue 巡检」开关。
+            点击下方任意 agent 立即发起 1 对 1 对话,在对话列表里会带 👤 标志。
           </p>
         )}
       </div>
+      {!isDirect && (
+        <div className={styles.formField}>
+          <label className={styles.formLabel}>群名称:</label>
+          <input type="text" value={groupName} onChange={e => setGroupName(e.target.value)}
+            placeholder="输入群名称" className={styles.formInput} />
+        </div>
+      )}
+      {!isDirect && (
+        <div className={styles.formField}>
+          <label className={styles.formLabel}>群类型:</label>
+          <select value={groupType} onChange={e => {
+            const t = e.target.value
+            setGroupType(t)
+            if (t === 'patrol' && !groupName.trim()) {
+              setGroupName('全局issue巡检群')
+            }
+          }} className={styles.formSelect}>
+            <option value="">普通群</option>
+            <option value="patrol">巡检群</option>
+          </select>
+          {isPatrol && (
+            <p style={{ fontSize: 11, color: 'var(--color-info)', margin: '6px 2px 0' }}>
+              巡检群全局限 1 个(归档/删除后才能再建),只选 1 个 agent 作为巡检员。
+              建群后自动创建每小时巡检任务,可在工具箱「Issue 巡检」开关。
+            </p>
+          )}
+        </div>
+      )}
       <div className={styles.formField}>
         <label className={styles.formLabel}>
-          选择成员:
-          {isPatrol && <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 8, color: 'var(--color-info)' }}>巡检群限选 {maxMembers} 人(即巡检员)</span>}
+          {isDirect ? '选择对方(点击立即发起):' : '选择成员:'}
+          {(isDirect || isPatrol) && !isDirect && <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 8, color: 'var(--color-info)' }}>限选 {maxMembers} 人</span>}
         </label>
         <div className={styles.agentCheckList}>
           {otherAgents.map(agent => {
             const checked = selectedMembers.includes(agent.name)
-            const disabled = isPatrol && !checked && selectedMembers.length >= maxMembers
+            const disabled = (isDirect || isPatrol) && !checked && selectedMembers.length >= maxMembers
             return (
-              <label key={agent.id} className={styles.agentCheckItem} style={disabled ? { opacity: 0.4 } : undefined}>
+              <label key={agent.id} className={styles.agentCheckItem}
+                style={disabled ? { opacity: 0.4 } : (isDirect ? { cursor: 'pointer' } : undefined)}>
                 <input type="checkbox" checked={checked} disabled={disabled}
-                  onChange={() => toggleMember(agent.name)} />
+                  onChange={() => handleToggleMember(agent.name)} />
                 {agent.name}
                 <span className={`${styles.agentCheckStatus} ${agent.status === 'online' ? styles.online : styles.offline}`}>
                   {agent.status === 'online' ? '在线' : '离线'}
@@ -188,7 +268,12 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
             </div>
           )}
         </div>
+        {isDirect && submitting && (
+          <p style={{ fontSize: 11, color: 'var(--color-info)', margin: '6px 2px 0' }}>创建中...</p>
+        )}
       </div>
+      {!isDirect && (
+        <>
       <div className={styles.formField}>
         <label className={styles.formLabel}>工作目录（可选）:</label>
         <input type="text" value={workingDir} onChange={e => setWorkingDir(e.target.value)}
@@ -289,6 +374,8 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
           }}
           onClose={() => setShowTemplatePicker(false)}
         />
+      )}
+        </>
       )}
     </Modal>
   )

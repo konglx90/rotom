@@ -23,6 +23,7 @@ function getGroupTypeBadge(type?: string | null): { label: string; title: string
   if (!type) return null
   if (type === 'patrol') return { label: '巡检', title: '巡检群:定时自动派单', cls: 'typePatrol' }
   if (type === 'a2a_direct') return { label: '单播', title: '单播群(unicast):消息只入库不广播,需 --need-reply 点名', cls: 'typeUnicast' }
+  if (type === 'direct') return { label: '单聊', title: '1 对 1 对话', cls: 'typeDirect' }
   return null
 }
 interface AppSidebarProps {
@@ -147,13 +148,8 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const urlGroupId = groupMatch?.params.groupId
   const {
     onlineAgents,
-    dmGroups,
     groups,
-    directTarget,
     myAgentName,
-    handleDirectChat,
-    activateDmGroup,
-    handleNewDmConversation,
     selectGroup,
     openCreateGroupModal,
     openConfigModal,
@@ -179,7 +175,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
       return false
     }
   })
-  const [dmExpanded, setDmExpanded] = useState(false)
   const [moreMenuGroup, setMoreMenuGroup] = useState<string | null>(null)
   // Dropdown 通过 portal 渲染到 body 避开了 .groupList 的 overflow-y:auto,
   // 位置在点击瞬间从按钮的 getBoundingClientRect 算出来,所以滚动/resize 必须关闭。
@@ -228,17 +223,20 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const selectedGroupId = urlGroupId || ''
   const isZen = zenMode
   // 分层:置顶(在 active 内排首) → 普通活跃 → ⭐重要少用 → 🗄️已归档。
-  // active = 既没归档也没标重要少用;pinned 在 active 内部排序优先。
+  // active = 既没归档也没标重要少用,且"有对话"(last_message_at 非空);
+  //   没发过消息的新建空群不进对话列表,避免噪音。
+  //   单聊(type=direct)例外:创建即视为有意开聊,即使没消息也展示,方便用户随时进入。
   // starred = 标了 starred_at 但没归档(归档优先级高于 starred)。
   // archived = 已归档,只读。
   const activeGroups = groups
-    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at && !g.starred_at)
+    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at && !g.starred_at && (g.last_message_at || g.type === 'direct'))
     .slice()
     .sort((a, b) => {
       if (a.pinned_at && b.pinned_at) return b.pinned_at.localeCompare(a.pinned_at)
       if (a.pinned_at) return -1
       if (b.pinned_at) return 1
-      return 0
+      // 有对话的群按最后消息时间倒序(最近的在前),无 last_message_at 的(如新建单聊)兜底用 created_at。
+      return (b.last_message_at || b.created_at).localeCompare(a.last_message_at || a.created_at)
     })
   const starredGroups = groups
     .filter((g) => !g.name.startsWith('__dm__:') && g.starred_at && !g.archived_at)
@@ -249,8 +247,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     .slice()
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
   const displayGroups = activeGroups
-  const getDmGroupsForTarget = (targetName: string) =>
-    dmGroups.filter((g) => g.dmTarget === targetName)
   useEffect(() => {
     if (!dragging) return
     const min = isZen ? ZEN_WIDTH : NORMAL_MIN
@@ -331,26 +327,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
         </nav>
         {isZen ? (
           <div className={styles.zenBody}>
-            {onlineAgents.length > 0 && (
-              <ul className={styles.zenList}>
-                {onlineAgents.map((agent) => (
-                  <li key={agent.id}>
-                      <button type="button"
-                      className={`${styles.zenItem} ${
-                        directTarget === agent.name ? styles.zenItemActive : ''
-                      }`}
-                      onClick={() => handleDirectChat(agent.name)}
-                      title={agent.name}
-                    >
-                      <Avatar name={agent.name} src={agent.avatar_url} size={32} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {(onlineAgents.length > 0 || archivedGroups.length > 0) && displayGroups.length > 0 && (
-              <div className={styles.zenDivider} />
-            )}
             {displayGroups.length > 0 && (
               <ul className={styles.zenList}>
                 {displayGroups.map((group) => (
@@ -373,164 +349,18 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                 ))}
               </ul>
             )}
-            {archivedGroups.length > 0 && displayGroups.length > 0 && onlineAgents.length === 0 && (
-              <div className={styles.zenDivider} />
-            )}
-            {archivedGroups.length > 0 && (
-              <>
-                {displayGroups.length > 0 && onlineAgents.length > 0 && (
-                  <div className={styles.zenDivider} />
-                )}
-                <ul className={styles.zenList}>
-                  {archivedGroups.map((group) => (
-                    <li key={group.id}>
-                        <button type="button"
-                        className={`${styles.zenItem} ${styles.zenItemArchived} ${
-                          selectedGroupId === group.id ? styles.zenItemActive : ''
-                        }`}
-                        onClick={() => selectGroup(group.id)}
-                        title={`${group.name} (已归档)`}
-                      >
-                        <span
-                          className={styles.zenLetterAvatar}
-                          style={{ background: getAvatarColor(group.name) }}
-                        >
-                          {(group.name.charAt(0) || '#').toUpperCase()}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
           </div>
         ) : (
           <>
-            <div className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>一对一</h3>
-                {dmExpanded && (
-                    <button type="button"
-                    className={styles.navToggleBtn}
-                    onClick={() => setDmExpanded((v) => !v)}
-                    title="收起一对一"
-                  >
-                    ⇱
-                  </button>
-                )}
-              </div>
-              {onlineAgents.length === 0 ? (
-                <div className={styles.hint}>暂无在线 Agent</div>
-              ) : dmExpanded ? (
-                <ul className={styles.directList}>
-                  {onlineAgents.map((agent) => {
-                    const conversations = getDmGroupsForTarget(agent.name)
-                    const isExpanded = directTarget === agent.name
-                    return (
-                      <li key={agent.id}>
-                        <div
-                          className={`${styles.directItem} ${
-                            directTarget === agent.name ? styles.active : ''
-                          }`}
-                          onClick={() => handleDirectChat(agent.name)}
-                        >
-                          <Avatar name={agent.name} src={agent.avatar_url} size={28} />
-                          <div className={styles.directInfo}>
-                            <div className={styles.directName}>{agent.name}</div>
-                            {conversations.length > 1 && (
-                              <div className={styles.directSubtext}>
-                                {conversations.length} 个对话
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            className={styles.newConvBtn}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleNewDmConversation(agent.name)
-                            }}
-                            title="新对话"
-                          >
-                            +
-                          </button>
-                          <div className={styles.directStatusDot} />
-                        </div>
-                        {isExpanded && conversations.length > 1 && (
-                          <ul className={styles.convThreadList}>
-                            {conversations.map((conv, idx) => (
-                              <li
-                                key={conv.id}
-                                className={`${styles.convThreadItem} ${
-                                  selectedGroupId === conv.id ? styles.active : ''
-                                }`}
-                                onClick={() => activateDmGroup(conv.id, agent.name)}
-                              >
-                                <span className={styles.convThreadLabel}>对话 {idx + 1}</span>
-                                <span className={styles.convThreadTime}>
-                                  {new Date(
-                                    conv.created_at +
-                                      (conv.created_at.includes('Z') || conv.created_at.includes('+')
-                                        ? ''
-                                        : 'Z'),
-                                  ).toLocaleDateString('zh-CN', {
-                                    month: 'numeric',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    timeZone: 'Asia/Shanghai',
-                                  })}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : (
-                <div className={styles.dmAvatarRow}>
-                  <div className={styles.dmAvatars}>
-                    {onlineAgents.map((agent) => {
-                      const conversations = getDmGroupsForTarget(agent.name)
-                      return (
-                        <div
-                          key={agent.id}
-                          className={`${styles.dmAvatarItem} ${
-                            directTarget === agent.name ? styles.dmAvatarActive : ''
-                          }`}
-                          onClick={() => handleDirectChat(agent.name)}
-                          title={agent.name + (conversations.length > 1 ? ` (${conversations.length} 对话)` : '')}
-                        >
-                          <Avatar name={agent.name} src={agent.avatar_url} size={32} />
-                          <div className={styles.dmAvatarDot} />
-                          {conversations.length > 1 && (
-                            <span className={styles.dmAvatarBadge}>{conversations.length}</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                    <button type="button"
-                    className={styles.navToggleBtn}
-                    onClick={() => setDmExpanded((v) => !v)}
-                    title={dmExpanded ? '收起一对一' : '展开一对一'}
-                  >
-                    {dmExpanded ? '⇱' : '⇲'}
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className={styles.divider} />
             <div className={`${styles.section} ${styles.sectionGroup}`}>
               <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>群聊</h3>
+                <h3 className={styles.sectionTitle}>对话列表</h3>
                 <button onClick={openCreateGroupModal} className={styles.createBtn}>
-                  + 新建群
+                  + 创建对话
                 </button>
               </div>
               {displayGroups.length === 0 && starredGroups.length === 0 && archivedGroups.length === 0 ? (
-                <div className={styles.hint}>暂无群组</div>
+                <div className={styles.hint}>暂无对话,点击「创建对话」开始</div>
               ) : (
                 <>
                   {displayGroups.length > 0 && (
@@ -561,9 +391,11 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                     {typeBadge.label}
                                   </span>
                                 )}
-                                <span className={styles.memberCount}>
-                                  {`· ${group.member_count || 0} 位`}
-                                </span>
+                                {group.type !== 'direct' && (
+                                  <span className={styles.memberCount}>
+                                    {`· ${group.member_count || 0} 位`}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div className={styles.moreWrap}>
@@ -661,7 +493,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                                       deleteGroup(group.id)
                                     }}
                                   >
-                                    🗑️ 删除群
+                                    🗑️ 删除对话
                                   </button>
                                 </div>,
                                 document.body

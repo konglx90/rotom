@@ -185,9 +185,11 @@ export interface Group {
   extra_repos?: string | null
   /** worktree 模式:'group'=群共享一个 worktree(默认,轻量);'issue'=每 issue 独立(多分支并行)。null='group'。 */
   worktree_mode?: string | null
-  /** 群类型: patrol=巡检群 / a2a_direct=单播群 / 未设置或空 = 普通群(chat)。 */
+  /** 群类型: patrol=巡检群 / a2a_direct=单播群 / direct=单聊(2 人对话) / 未设置或空 = 普通群(chat)。 */
   type?: string | null
   member_count?: number
+  /** 最近一条群消息时间;null=尚未发过消息。侧栏"对话列表"只展示有消息的群。 */
+  last_message_at?: string | null
   members?: GroupMember[]
 }
 

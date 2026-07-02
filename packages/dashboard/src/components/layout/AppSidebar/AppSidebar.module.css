@@ -157,21 +157,21 @@
 .navCompact {
   flex-direction: row;
   align-items: center;
-  gap: 4px;
-  padding: 8px 10px;
+  gap: 2px;
+  padding: 4px 8px;
 }
 
 .navCompact .navItem {
   flex: 1;
   justify-content: center;
-  padding: 8px;
+  padding: 4px;
   gap: 0;
   border-radius: var(--radius-md);
   min-width: 0;
 }
 
 .navCompact .navIcon {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .navToggleBtn {
@@ -378,6 +378,12 @@
   color: #1d4ed8;
   background: rgba(59, 130, 246, 0.12);
   border-color: rgba(59, 130, 246, 0.35);
+}
+
+.typeDirect {
+  color: #6b21a8;
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.35);
 }
 
 .pinBtn {
