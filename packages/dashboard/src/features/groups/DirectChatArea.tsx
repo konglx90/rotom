@@ -3,7 +3,6 @@ import { Search, Square } from 'lucide-react'
 import { Avatar } from '../../components/ui/Avatar'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import { StreamingStatus } from '../../components/ui/StreamingStatus'
-import { Textarea } from '../../components/ui/Textarea'
 import type { Agent } from '../../api/types'
 import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
@@ -237,7 +236,7 @@ export function DirectChatArea({
       />
 
       <div className={styles.inputArea}>
-        <Textarea ref={textareaRef} rows={1} value={message}
+        <textarea ref={textareaRef} rows={1} value={message}
           onChange={e => {
             setMessage(e.target.value);
             e.target.style.height = 'auto';
