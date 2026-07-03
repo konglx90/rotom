@@ -8,6 +8,7 @@
  */
 
 import type { DomainRow } from "./types.js";
+import { buildUpdate } from "./build-update.js";
 import type { MeshDbSelf } from "./core.js";
 
 export const domainMethods = {
@@ -30,13 +31,14 @@ export const domainMethods = {
   },
 
   updateDomain(this: MeshDbSelf, id: string, meta: { name?: string; description?: string }): void {
-    const sets: string[] = [];
-    const values: unknown[] = [];
-    if (meta.name !== undefined) { sets.push("name = ?"); values.push(meta.name); }
-    if (meta.description !== undefined) { sets.push("description = ?"); values.push(meta.description); }
-    if (sets.length === 0) return;
-    values.push(id);
-    this.db.prepare(`UPDATE domains SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+    const built = buildUpdate({
+      table: "domains",
+      sets: { name: meta.name, description: meta.description },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: false,
+    });
+    if (built) this.db.prepare(built.sql).run(...built.params);
   },
 
   deleteDomain(this: MeshDbSelf, id: string): void {

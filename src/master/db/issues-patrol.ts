@@ -1,4 +1,5 @@
 import { nowBeijing } from "../../shared/time.js";
+import { buildUpdate } from "./build-update.js";
 /**
  * Issue 巡检 —— runs/logs CRUD。
  *
@@ -83,13 +84,22 @@ export const issuePatrolMethods = {
     status: IssuePatrolRunRow["status"],
     opts?: { scanned?: number; ready?: number; note?: string | null },
   ): void {
-    const sets: string[] = ["finished_at = ?", "status = ?"];
-    const params: unknown[] = [nowBeijing(), status];
-    if (opts?.scanned !== undefined) { sets.push("candidates_scanned = ?"); params.push(opts.scanned); }
-    if (opts?.ready !== undefined) { sets.push("candidates_ready = ?"); params.push(opts.ready); }
-    if (opts?.note !== undefined) { sets.push("note = ?"); params.push(opts.note); }
-    params.push(runId);
-    this.db.prepare(`UPDATE issue_patrol_runs SET ${sets.join(", ")} WHERE run_id = ?`).run(...params);
+    const built = buildUpdate({
+      table: "issue_patrol_runs",
+      sets: {
+        candidates_scanned: opts?.scanned,
+        candidates_ready: opts?.ready,
+        note: opts?.note,
+      },
+      where: "run_id = ?",
+      whereParams: [runId],
+      updatedAt: false,
+      extraSets: [
+        { column: "finished_at", value: nowBeijing() },
+        { column: "status", value: status },
+      ],
+    });
+    if (built) this.db.prepare(built.sql).run(...built.params);
   },
 
   getPatrolRunByIssueId(this: MeshDbSelf, patrolIssueId: string): IssuePatrolRunRow | undefined {

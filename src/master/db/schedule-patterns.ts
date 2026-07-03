@@ -8,6 +8,7 @@
  * 种子模式 is_default=1,deleteSchedulePattern 拒绝删除,API 也兜底返回 400。
  */
 
+import { buildUpdate } from "./build-update.js";
 import type { MeshDbSelf } from "./core.js";
 
 export interface SchedulePatternRow {
@@ -61,17 +62,20 @@ export const schedulePatternMethods = {
     schedule_config?: string | null;
     sort_order?: number;
   }): SchedulePatternRow | undefined {
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (patch.name !== undefined) { sets.push("name = ?"); params.push(patch.name); }
-    if (patch.description !== undefined) { sets.push("description = ?"); params.push(patch.description); }
-    if (patch.schedule_config !== undefined) { sets.push("schedule_config = ?"); params.push(patch.schedule_config); }
-    if (patch.sort_order !== undefined) { sets.push("sort_order = ?"); params.push(patch.sort_order); }
-    if (sets.length === 0) return this.getSchedulePattern(id);
-    sets.push("updated_at = ?");
-    params.push(Date.now());
-    params.push(id);
-    this.db.prepare(`UPDATE schedule_patterns SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+    const built = buildUpdate({
+      table: "schedule_patterns",
+      sets: {
+        name: patch.name,
+        description: patch.description,
+        schedule_config: patch.schedule_config,
+        sort_order: patch.sort_order,
+      },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "epoch",
+    });
+    if (!built) return this.getSchedulePattern(id);
+    this.db.prepare(built.sql).run(...built.params);
     return this.getSchedulePattern(id);
   },
 

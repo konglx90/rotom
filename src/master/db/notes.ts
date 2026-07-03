@@ -1,4 +1,5 @@
 import { nowBeijing } from "../../shared/time.js";
+import { buildUpdate } from "./build-update.js";
 /**
  * Notes — 兼容层。notes 表已升级为 agent_memory(见 migration 040)。
  *
@@ -60,19 +61,19 @@ export const noteMethods = {
   },
 
   updateNote(this: MeshDbSelf, id: string, fields: { title?: string; description?: string }): boolean {
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (fields.title !== undefined) { sets.push("key = ?"); params.push(fields.title); }
-    if (fields.description !== undefined) {
-      sets.push("value = ?"); params.push(fields.description);
-      sets.push("summary = ?"); params.push(fields.description.slice(0, 80));
-    }
-    if (sets.length === 0) return false;
-    sets.push("updated_at = datetime('now')");
-    params.push(id);
-    const result = this.db.prepare(
-      `UPDATE agent_memory SET ${sets.join(", ")} WHERE id = ?`,
-    ).run(...(params as never[]));
+    const built = buildUpdate({
+      table: "agent_memory",
+      sets: {
+        key: fields.title,
+        value: fields.description,
+        summary: fields.description !== undefined ? fields.description.slice(0, 80) : undefined,
+      },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "datetime-now",
+    });
+    if (!built) return false;
+    const result = this.db.prepare(built.sql).run(...(built.params as never[]));
     return result.changes > 0;
   },
 

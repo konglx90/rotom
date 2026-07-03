@@ -1,4 +1,5 @@
 import { nowBeijing } from "../../shared/time.js";
+import { buildUpdate } from "./build-update.js";
 /**
  * Memory — 统一的记忆/便签载体(agent_memory 表)。
  *
@@ -221,27 +222,29 @@ export const memoryMethods = {
       agentVisible?: boolean; expiresAt?: string | null;
     },
   ): boolean {
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (fields.value !== undefined) {
-      sets.push("value = ?"); params.push(fields.value);
-      // value 改了但 summary 没显式给 → 自动重算
-      if (fields.summary === undefined) {
-        sets.push("summary = ?"); params.push(fields.value.slice(0, 80));
-      }
+    const extraSets: Array<{ sql: string; params?: unknown[] } | { column: string; value: unknown }> = [];
+    // value 改了但 summary 没显式给 → 自动重算
+    if (fields.value !== undefined && fields.summary === undefined) {
+      extraSets.push({ column: "summary", value: fields.value.slice(0, 80) });
     }
-    if (fields.summary !== undefined) { sets.push("summary = ?"); params.push(fields.summary); }
-    if (fields.tags !== undefined) { sets.push("tags = ?"); params.push(JSON.stringify(fields.tags)); }
-    if (fields.category !== undefined) { sets.push("category = ?"); params.push(fields.category); }
-    if (fields.visibility !== undefined) { sets.push("visibility = ?"); params.push(fields.visibility); }
-    if (fields.agentVisible !== undefined) { sets.push("agent_visible = ?"); params.push(fields.agentVisible ? 1 : 0); }
-    if (fields.expiresAt !== undefined) { sets.push("expires_at = ?"); params.push(fields.expiresAt); }
-    if (sets.length === 0) return false;
-    sets.push("updated_at = datetime('now')");
-    params.push(id);
-    const result = this.db.prepare(
-      `UPDATE agent_memory SET ${sets.join(", ")} WHERE id = ?`,
-    ).run(...(params as never[]));
+    const built = buildUpdate({
+      table: "agent_memory",
+      sets: {
+        value: fields.value,
+        summary: fields.summary,
+        tags: fields.tags !== undefined ? JSON.stringify(fields.tags) : undefined,
+        category: fields.category,
+        visibility: fields.visibility,
+        agent_visible: fields.agentVisible !== undefined ? (fields.agentVisible ? 1 : 0) : undefined,
+        expires_at: fields.expiresAt,
+      },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "datetime-now",
+      extraSets,
+    });
+    if (!built) return false;
+    const result = this.db.prepare(built.sql).run(...(built.params as never[]));
     return result.changes > 0;
   },
 
@@ -267,16 +270,16 @@ export const memoryMethods = {
     id: string,
     newVisibility: "private" | "group" | "global",
   ): boolean {
-    const sets = ["visibility = ?", "updated_at = datetime('now')"];
-    const params: unknown[] = [newVisibility];
-    if (newVisibility === "global") {
-      sets.push("scope = ?", "group_id = NULL");
-      params.push("global");
-    }
-    params.push(id);
-    const result = this.db.prepare(
-      `UPDATE agent_memory SET ${sets.join(", ")} WHERE id = ?`,
-    ).run(...(params as never[]));
+    const built = buildUpdate({
+      table: "agent_memory",
+      sets: { visibility: newVisibility },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "datetime-now",
+      extraSets: newVisibility === "global" ? [{ column: "scope", value: "global" }, { sql: "group_id = NULL" }] : [],
+    });
+    if (!built) return false;
+    const result = this.db.prepare(built.sql).run(...(built.params as never[]));
     return result.changes > 0;
   },
 

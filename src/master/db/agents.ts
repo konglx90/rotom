@@ -1,4 +1,5 @@
 import { nowBeijing } from "../../shared/time.js";
+import { buildUpdate } from "./build-update.js";
 /**
  * Agents — CRUD + presence lifecycle (online/offline/heartbeat).
  *
@@ -81,16 +82,19 @@ export const agentMethods = {
     id: string,
     meta: { description?: string; domain?: string; profile?: string; avatar_url?: string },
   ): void {
-    const sets: string[] = [];
-    const values: unknown[] = [];
-    if (meta.description !== undefined) { sets.push("description = ?"); values.push(meta.description); }
-    if (meta.domain !== undefined) { sets.push("domain = ?"); values.push(meta.domain); }
-    if (meta.profile !== undefined) { sets.push("profile = ?"); values.push(meta.profile); }
-    if (meta.avatar_url !== undefined) { sets.push("avatar_url = ?"); values.push(meta.avatar_url); }
-    if (sets.length === 0) return;
-    sets.push("updated_at = datetime('now')");
-    values.push(id);
-    this.db.prepare(`UPDATE agents SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+    const built = buildUpdate({
+      table: "agents",
+      sets: {
+        description: meta.description,
+        domain: meta.domain,
+        profile: meta.profile,
+        avatar_url: meta.avatar_url,
+      },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "datetime-now",
+    });
+    if (built) this.db.prepare(built.sql).run(...built.params);
   },
 
   updateAgentEnabled(this: MeshDbSelf, id: string, enabled: boolean): void {

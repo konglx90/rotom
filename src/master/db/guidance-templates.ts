@@ -9,6 +9,7 @@
  * 种子模板 is_default=1,deleteGuidanceTemplate 拒绝删除,API 也兜底返回 400。
  */
 
+import { buildUpdate } from "./build-update.js";
 import type { MeshDbSelf } from "./core.js";
 
 export interface GuidanceTemplateRow {
@@ -66,18 +67,21 @@ export const guidanceTemplateMethods = {
     schedule_config?: string | null;
     sort_order?: number;
   }): GuidanceTemplateRow | undefined {
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (patch.name !== undefined) { sets.push("name = ?"); params.push(patch.name); }
-    if (patch.description !== undefined) { sets.push("description = ?"); params.push(patch.description); }
-    if (patch.prompt_text !== undefined) { sets.push("prompt_text = ?"); params.push(patch.prompt_text); }
-    if (patch.schedule_config !== undefined) { sets.push("schedule_config = ?"); params.push(patch.schedule_config); }
-    if (patch.sort_order !== undefined) { sets.push("sort_order = ?"); params.push(patch.sort_order); }
-    if (sets.length === 0) return this.getGuidanceTemplate(id);
-    sets.push("updated_at = ?");
-    params.push(Date.now());
-    params.push(id);
-    this.db.prepare(`UPDATE guidance_templates SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+    const built = buildUpdate({
+      table: "guidance_templates",
+      sets: {
+        name: patch.name,
+        description: patch.description,
+        prompt_text: patch.prompt_text,
+        schedule_config: patch.schedule_config,
+        sort_order: patch.sort_order,
+      },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "epoch",
+    });
+    if (!built) return this.getGuidanceTemplate(id);
+    this.db.prepare(built.sql).run(...built.params);
     return this.getGuidanceTemplate(id);
   },
 

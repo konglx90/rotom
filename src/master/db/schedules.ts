@@ -10,6 +10,7 @@
  */
 
 import type { ScheduledTaskRow } from "./types.js";
+import { buildUpdate } from "./build-update.js";
 import type { MeshDbSelf } from "./core.js";
 
 export const scheduleMethods = {
@@ -101,22 +102,12 @@ export const scheduleMethods = {
     const task = this.getScheduledTask(id);
     if (!task) return undefined;
 
-    const sets: string[] = [];
-    const values: unknown[] = [];
-    if (patch.name !== undefined) { sets.push("name = ?"); values.push(patch.name); }
-    if (patch.mode !== undefined) { sets.push("mode = ?"); values.push(patch.mode); }
-    if (patch.agentName !== undefined) { sets.push("agent_name = ?"); values.push(patch.agentName); }
-    if (patch.prompt !== undefined) { sets.push("prompt = ?"); values.push(patch.prompt); }
-    if (patch.enabled !== undefined) { sets.push("enabled = ?"); values.push(patch.enabled ? 1 : 0); }
-    if (patch.repeatTimes !== undefined) { sets.push("repeat_times = ?"); values.push(patch.repeatTimes); }
-    if (patch.handlerKey !== undefined) { sets.push("handler_key = ?"); values.push(patch.handlerKey); }
-    if (patch.handlerPayload !== undefined) { sets.push("handler_payload = ?"); values.push(patch.handlerPayload); }
-
     // schedule_kind / interval_sec / run_at 任一变化都重算 next_run_at
     const scheduleChanged =
       patch.scheduleKind !== undefined ||
       patch.intervalSec !== undefined ||
       patch.runAt !== undefined;
+    const extraSets: Array<{ sql: string; params?: unknown[] } | { column: string; value: unknown }> = [];
     if (scheduleChanged) {
       const kind = patch.scheduleKind ?? task.schedule_kind;
       const intervalSec = patch.intervalSec !== undefined ? patch.intervalSec : task.interval_sec;
@@ -125,17 +116,33 @@ export const scheduleMethods = {
       const nextRunAt = kind === "once"
         ? (runAt ?? now)
         : now + (intervalSec ?? 0) * 1000;
-      sets.push("schedule_kind = ?"); values.push(kind);
-      sets.push("interval_sec = ?"); values.push(intervalSec);
-      sets.push("run_at = ?"); values.push(runAt);
-      sets.push("next_run_at = ?"); values.push(nextRunAt);
+      extraSets.push(
+        { column: "schedule_kind", value: kind },
+        { column: "interval_sec", value: intervalSec },
+        { column: "run_at", value: runAt },
+        { column: "next_run_at", value: nextRunAt },
+      );
     }
 
-    if (sets.length === 0) return task;
-
-    sets.push("updated_at = ?"); values.push(Date.now());
-    values.push(id);
-    this.db.prepare(`UPDATE scheduled_tasks SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+    const built = buildUpdate({
+      table: "scheduled_tasks",
+      sets: {
+        name: patch.name,
+        mode: patch.mode,
+        agent_name: patch.agentName,
+        prompt: patch.prompt,
+        enabled: patch.enabled !== undefined ? (patch.enabled ? 1 : 0) : undefined,
+        repeat_times: patch.repeatTimes,
+        handler_key: patch.handlerKey,
+        handler_payload: patch.handlerPayload,
+      },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "epoch",
+      extraSets,
+    });
+    if (!built) return task;
+    this.db.prepare(built.sql).run(...built.params);
     return this.getScheduledTask(id);
   },
 

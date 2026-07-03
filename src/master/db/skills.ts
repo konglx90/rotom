@@ -1,4 +1,5 @@
 import { nowBeijing } from "../../shared/time.js";
+import { buildUpdate } from "./build-update.js";
 /**
  * Skills — 全局 skill 知识库 + (group, agent, skill) 绑定关系。
  *
@@ -124,18 +125,20 @@ export const skillMethods = {
     id: string,
     fields: { name?: string; description?: string; content?: string; category?: string | null },
   ): boolean {
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (fields.name !== undefined) { sets.push("name = ?"); params.push(fields.name); }
-    if (fields.description !== undefined) { sets.push("description = ?"); params.push(fields.description); }
-    if (fields.content !== undefined) { sets.push("content = ?"); params.push(fields.content); }
-    if (fields.category !== undefined) { sets.push("category = ?"); params.push(fields.category); }
-    if (sets.length === 0) return false;
-    sets.push("updated_at = datetime('now')");
-    params.push(id);
-    const result = this.db.prepare(
-      `UPDATE agent_skills SET ${sets.join(", ")} WHERE id = ?`,
-    ).run(...(params as never[]));
+    const built = buildUpdate({
+      table: "agent_skills",
+      sets: {
+        name: fields.name,
+        description: fields.description,
+        content: fields.content,
+        category: fields.category,
+      },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "datetime-now",
+    });
+    if (!built) return false;
+    const result = this.db.prepare(built.sql).run(...(built.params as never[]));
     return result.changes > 0;
   },
 
