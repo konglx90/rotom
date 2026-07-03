@@ -385,6 +385,181 @@ registerSchedulerHandler("issue-patrol", async (payload, ctx) => {
   log.info(`patrol run ${runId}: dispatched issue ${issueId} → ${patrolAgentName} (${openIssues.length} candidates, slots=${slots})`);
   return { status: "ok", issueId };
 });
+
+// ── link-patrol handler ────────────────────────────────────────────────────
+
+/**
+ * 链接智能分类 —— 每小时跑一次,挂在 patrol-link 群的 scheduled_tasks 行上。
+ * task.group_id / task.agent_name 即链接分类巡检群 / 巡检员。
+ * handler_payload: { patrolGroupId, patrolAgentName, scanBatch=20 }
+ *
+ * 流程:
+ *   1. 防 overlap:上轮 link-patrol issue 仍 in_progress → skipped_overlap
+ *   2. 巡检员不在线 → agent_offline
+ *   3. 取 scanBatch 条未分类链接(category IS NULL,按 last_seen_at desc)
+ *   4. 无候选 → completed (scanned=0)
+ *   5. 拉 memory few-shot(tags=link_classification)+ skill 规则全文,拼 description
+ *   6. createIssue + createLinkPatrolRun(patrol_issue_id=issueId) + pushIssueAssignment
+ *   7. fire-and-forget:巡检员完成后由 server.ts 的 _onIssueTerminal hook 分流到
+ *      handleLinkPatrolIssueTerminal 解析 result 落库(UPDATE links + 写 logs + memory)
+ */
+interface LinkPatrolPayload {
+  patrolGroupId?: string;
+  patrolAgentName?: string;
+  scanBatch?: number;
+}
+
+registerSchedulerHandler("link-patrol", async (payload, ctx) => {
+  const p = (payload ?? {}) as LinkPatrolPayload;
+  const scanBatch = p.scanBatch ?? 20;
+
+  const { patrolGroupId, patrolAgentName } = p;
+  if (!patrolGroupId || !patrolAgentName) {
+    return { status: "error", error: "missing patrolGroupId/patrolAgentName in handler_payload" };
+  }
+
+  const runId = randomUUID();
+  const startedAt = nowBeijing();
+
+  // 1. 防 overlap:查该 patrol-link 群最近一次 run,patrol_issue 仍 in_progress 跳过
+  const recentRuns = ctx.db.listLinkPatrolRuns({ patrolGroupId, limit: 1 });
+  const lastRun = recentRuns[0];
+  if (lastRun && lastRun.patrol_issue_id && lastRun.status === "dispatched") {
+    const prevIssue = ctx.db.getIssueById(lastRun.patrol_issue_id);
+    if (prevIssue && prevIssue.status === "in_progress") {
+      ctx.db.createLinkPatrolRun({
+        runId,
+        patrolGroupId,
+        startedAt,
+        status: "skipped",
+      });
+      ctx.db.finishLinkPatrolRun(runId, "skipped", { note: `prev patrol issue ${prevIssue.id} still in_progress` });
+      log.info(`link-patrol run ${runId}: skipped_overlap (prev ${prevIssue.id})`);
+      return { status: "skipped", error: "prev link-patrol issue in_progress" };
+    }
+  }
+
+  // 2. 巡检员在线检查
+  const agent = ctx.db.getAgentByName(patrolAgentName);
+  if (!agent || agent.status !== "online") {
+    ctx.db.createLinkPatrolRun({
+      runId,
+      patrolGroupId,
+      startedAt,
+      status: "agent_offline",
+    });
+    ctx.db.finishLinkPatrolRun(runId, "agent_offline", { note: !agent ? "agent not found" : "agent offline" });
+    log.info(`link-patrol run ${runId}: agent_offline (${patrolAgentName})`);
+    return { status: "skipped", error: "link-patrol agent offline" };
+  }
+
+  // 3. 取候选未分类链接
+  const candidates = ctx.db.listUnclassifiedLinks(scanBatch);
+  if (candidates.length === 0) {
+    ctx.db.createLinkPatrolRun({
+      runId,
+      patrolGroupId,
+      startedAt,
+      status: "completed",
+    });
+    ctx.db.finishLinkPatrolRun(runId, "completed", { classified: 0, note: "no unclassified links" });
+    log.info(`link-patrol run ${runId}: no unclassified links`);
+    return { status: "ok" };
+  }
+
+  // 4. 拉 memory few-shot:agent_visible=1 + tags 含 link_classification,scope=global
+  const rules = ctx.db.listMemory({
+    scope: "global",
+    tags: ["link_classification"],
+    agentVisible: 1,
+    limit: 20,
+  });
+
+  // 5. 拉 skill 全文
+  const skill = ctx.db.getSkillByName("link-patrol-rules");
+  const rulesText = skill?.content ?? "(link-patrol-rules skill not found; fall back to default categories)";
+
+  // 6. 拼 description
+  const candidateList = candidates.map((l, idx) => {
+    return [
+      `### 候选 ${idx + 1}: ${l.host}`,
+      `- link_id: ${l.id}`,
+      `- url_raw: ${l.url_raw}`,
+      `- 首次上下文: ${l.first_context || "(无)"}`,
+      `- 最后见到: ${l.last_seen_at}`,
+    ].join("\n");
+  }).join("\n\n");
+
+  const fewShotBlock = rules.length > 0
+    ? [
+        "## 历史分类经验(few-shot,memory 自动积累)",
+        "复用这些规则;若 host 在下列出现过,优先沿用旧分类:",
+        ...rules.map((r) => `- ${r.key}: ${r.summary ?? "(无 summary)"}`),
+      ].join("\n")
+    : "(暂无历史经验,这是首轮)";
+
+  const title = `[链接分类] ${new Date().toLocaleString("zh-CN", { hour12: false })}`;
+  const description = [
+    "# 链接分类任务",
+    ``,
+    `本轮有 ${candidates.length} 条待分类链接。按规则给出 category + tags + title + rationale。`,
+    ``,
+    "## 分类规则",
+    "",
+    rulesText,
+    "",
+    fewShotBlock,
+    "",
+    "## 候选链接",
+    "",
+    candidateList,
+    "",
+    "## 输出要求",
+    "",
+    "issue `result` 字段必须是 JSON 数组,用 markdown ```json 代码块包裹,每条:",
+    "```json",
+    "{",
+    '  "link_id": "<uuid>",',
+    '  "category": "reference | code | tool | article | paper | discussion | issue-tracker | media | other",',
+    '  "tags": ["keyword1", "keyword2"],',
+    '  "title": "<人类可读标题>",',
+    '  "rationale": "<一句话: host + path 模式 → category 推断理由>"',
+    "}",
+    "```",
+  ].join("\n");
+
+  // 7. 派 issue
+  const issueId = randomUUID();
+  ctx.db.createIssue({
+    id: issueId,
+    groupId: patrolGroupId,
+    title,
+    description,
+    priority: "medium",
+    createdBy: "system:link-patrol",
+    workingDir: resolveGroupAgentWorkingDir(ctx.db, patrolGroupId, patrolAgentName),
+    assignedTo: patrolAgentName,
+  });
+
+  ctx.db.createLinkPatrolRun({
+    runId,
+    patrolGroupId,
+    patrolIssueId: issueId,
+    startedAt,
+    candidatesScanned: candidates.length,
+    status: "dispatched",
+  });
+
+  const pushed = ctx.hub.pushIssueAssignment(issueId, patrolAgentName);
+  if (!pushed) {
+    ctx.db.finishLinkPatrolRun(runId, "error", { note: "pushIssueAssignment failed" });
+    log.warn(`link-patrol run ${runId}: pushIssueAssignment to ${patrolAgentName} failed`);
+    return { status: "error", error: "pushIssueAssignment failed", issueId };
+  }
+
+  log.info(`link-patrol run ${runId}: dispatched issue ${issueId} → ${patrolAgentName} (${candidates.length} candidates)`);
+  return { status: "ok", issueId };
+});
 /** cancel 对应 bridgeId 的 ask-bridge scheduled_task(disable,保留在列表里做审计)。
  *  按 handler_key + handler_payload 查,不依赖 name(name 已改成"星期五 · …"友好文案)。 */
 function cancelBridgeTask(ctx: HandlerContext, bridgeId: string): void {

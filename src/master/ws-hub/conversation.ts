@@ -22,6 +22,7 @@ import { extractMentions } from "../../shared/mention.js";
 import type { WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 import { TIMER_PERSONA_NAME } from "../util/persona.js";
+import { collectLinksFromText } from "../services/link-collector.js";
 
 export const conversationMethods = {
   /**
@@ -285,6 +286,13 @@ export const conversationMethods = {
         messageId = this.db.addGroupMessage(opts.groupId, opts.fromName, messageBody, mentions);
         this.autoCreateBridgeOnMention(opts.groupId, opts.fromName, mentions, messageId);
         this.checkAndCancelBridgesForMessage(opts.groupId, opts.fromName, mentions, messageId);
+        // 链接采集(inline hook,失败不影响主路径)
+        collectLinksFromText(messageBody, {
+          sourceType: "group_message",
+          sourceId: String(messageId),
+          sourceGroupId: opts.groupId,
+          sourceSender: opts.fromName,
+        }, this.db);
       }
 
       if (!opts.noDispatch && !delivered) {

@@ -31,6 +31,7 @@ import { guidanceTemplateMethods } from "./guidance-templates.js";
 import { schedulePatternMethods } from "./schedule-patterns.js";
 import { agentSessionMethods } from "./agent-sessions.js";
 import { issuePatrolMethods } from "./issues-patrol.js";
+import { linkMethods } from "./links.js";
 
 /** Intersection of every domain method bag — merged into `MeshDb` below. */
 type MethodBags =
@@ -47,7 +48,8 @@ type MethodBags =
   & typeof guidanceTemplateMethods
   & typeof schedulePatternMethods
   & typeof agentSessionMethods
-  & typeof issuePatrolMethods;
+  & typeof issuePatrolMethods
+  & typeof linkMethods;
 
 /**
  * Declaration merge: the `MeshDb` class provides the runtime + base shape
@@ -79,6 +81,7 @@ export class MeshDb extends MeshDbCore {
       schedulePatternMethods,
       agentSessionMethods,
       issuePatrolMethods,
+      linkMethods,
     );
   }
 }

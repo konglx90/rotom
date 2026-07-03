@@ -32,6 +32,7 @@ import { isClientMessage, type ClientMessage, type ServerMessage } from "../../s
 import { parseProfile, type WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 import { resolveGroupRepoCtxLocalOnly } from "../group-paths.js";
+import { collectLinksFromText } from "../services/link-collector.js";
 
 interface ReplyContext {
   targetId: string | undefined;
@@ -480,6 +481,13 @@ export const connectionMethods = {
             const mentions = extractMentions(replyContent);
             this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
             this.checkAndCancelBridgesForMessage(conversation.groupId, fromName, mentions, msgId);
+            // 链接采集(inline hook,失败不影响主路径)
+            collectLinksFromText(replyContent, {
+              sourceType: "group_message",
+              sourceId: String(msgId),
+              sourceGroupId: conversation.groupId,
+              sourceSender: fromName,
+            }, this.db);
           }
 
           // Group replies: broadcast to all members so everyone sees it in real-time
@@ -580,6 +588,13 @@ export const connectionMethods = {
             const mentions = extractMentions(endContent);
             this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
             this.checkAndCancelBridgesForMessage(conversation.groupId, fromName, mentions, msgId);
+            // 链接采集(inline hook,失败不影响主路径)
+            collectLinksFromText(endContent, {
+              sourceType: "group_message",
+              sourceId: String(msgId),
+              sourceGroupId: conversation.groupId,
+              sourceSender: fromName,
+            }, this.db);
             // 把 worker 回传的 composedPrompt 持久化,前端点击消息可直接读出来渲染分层。
             // 中断态也保留(用户可能想看 prompt 排查为何中断),只要 worker 带了就存。
             const cp = (msg as any).composedPrompt as

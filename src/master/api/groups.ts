@@ -13,6 +13,8 @@ import { parseAgentProfile, mergeGroupProfile } from "../../shared/agent-profile
 import { extractMentions } from "../../shared/mention.js";
 import { validateWorkingDir } from "../util/paths.js";
 import { bootstrapPatrolGroup } from "../services/patrol-bootstrap.js";
+import { bootstrapLinkPatrolGroup } from "../services/link-patrol-bootstrap.js";
+import { collectLinksFromText } from "../services/link-collector.js";
 
 const log = createLogger("mesh-api");
 
@@ -67,6 +69,22 @@ export function registerGroupRoutes(
       }
     }
 
+    // 链接分类巡检群(type=patrol-link):同 patrol 约束,但独立计数(允许和 patrol 共存)
+    if (type === "patrol-link") {
+      const existing = db.listGroupsByType("patrol-link").filter((g) => g.archived_at == null);
+      if (existing.length > 0) {
+        res.status(400).json({
+          error: `已存在未归档的链接分类巡检群 "${existing[0].name}",需归档或删除后才能再建`,
+        });
+        return;
+      }
+      const picked = Array.isArray(memberNames) ? memberNames.filter((n): n is string => typeof n === "string" && !!n.trim()) : [];
+      if (picked.length !== 1) {
+        res.status(400).json({ error: "链接分类巡检群限选 1 个 agent(该 agent 即巡检员)" });
+        return;
+      }
+    }
+
     // 单播群(unicast):消息不广播、worker 不被消息自动唤醒,只通过 CLI
     // --need-reply 显式点名叫醒对方回话。建群 ≥2 成员,不限上限。
     if (type === "a2a_direct") {
@@ -116,6 +134,16 @@ export function registerGroupRoutes(
       );
       if (patrolAgentName) {
         bootstrapPatrolGroup(db, log, id, patrolAgentName);
+      }
+    }
+
+    // 链接分类巡检群:建群后自动建 link-patrol 定时任务 + 绑定 link-patrol-rules skill
+    if (type === "patrol-link") {
+      const patrolAgentName = (Array.isArray(memberNames) ? memberNames : []).find(
+        (n): n is string => typeof n === "string" && !!n.trim(),
+      );
+      if (patrolAgentName) {
+        bootstrapLinkPatrolGroup(db, log, id, patrolAgentName);
       }
     }
 
@@ -367,6 +395,17 @@ export function registerGroupRoutes(
       ? mentions
       : extractMentions(content);
     const msgId = db.addGroupMessage(req.params.id, sender, content, resolvedMentions);
+    // 链接采集(inline hook,失败不影响主路径)
+    try {
+      collectLinksFromText(content, {
+        sourceType: "group_message",
+        sourceId: String(msgId),
+        sourceGroupId: req.params.id,
+        sourceSender: sender,
+      }, db);
+    } catch (err: any) {
+      log.warn(`POST /groups/:id/messages: collectLinksFromText failed: ${err?.message ?? err}`);
+    }
 
     // ── 真人发群消息:广播给所有群成员 ─────────────────────────────
     // 行为对齐 ws-hub.ts:462-465 (a2a_reply 对群消息做的 broadcastToGroup)。

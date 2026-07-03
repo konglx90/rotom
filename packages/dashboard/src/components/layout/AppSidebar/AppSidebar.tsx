@@ -22,9 +22,16 @@ const MAX_WIDTH = 520
 function getGroupTypeBadge(type?: string | null): { label: string; title: string; cls: string } | null {
   if (!type) return null
   if (type === 'patrol') return { label: '巡检', title: '巡检群:定时自动派单', cls: 'typePatrol' }
+  if (type === 'patrol-link') return { label: '链接', title: '链接分类巡检群:定时自动归类采集到的链接', cls: 'typePatrol' }
   if (type === 'a2a_direct') return { label: '单播', title: '单播群(unicast):消息只入库不广播,需 --need-reply 点名', cls: 'typeUnicast' }
   if (type === 'direct') return { label: '单聊', title: '1 对 1 对话', cls: 'typeDirect' }
   return null
+}
+
+// "功能"分组:系统型群(patrol / patrol-link / a2a_direct)从主列表剥离,折叠到独立分组。
+// 这些群不参与日常对话流,但偶尔需要查看 / 操作,折叠起来避免污染主列表。
+function isFunctionalGroup(g: { type?: string | null }): boolean {
+  return g.type === 'patrol' || g.type === 'patrol-link' || g.type === 'a2a_direct'
 }
 interface AppSidebarProps {
   width: number
@@ -140,6 +147,58 @@ function StarredSection({ starredGroups, selectedGroupId, selectGroup, toggleGro
     </div>
   )
 }
+// "功能"分组:巡检 / 链接分类 / 单播群折叠。复用 starredSection CSS(同样折叠样式)。
+function FunctionalSection({ functionalGroups, selectedGroupId, selectGroup }: {
+  functionalGroups: { id: string; name: string; type?: string | null; pinned_at?: string | null; member_count?: number; created_at: string }[]
+  selectedGroupId: string
+  selectGroup: (id: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className={styles.starredSection}>
+      <div
+        className={styles.starredSectionHeader}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className={styles.starredSectionArrow}>
+          {expanded ? '▼' : '▶'}
+        </span>
+        <span className={styles.starredSectionTitle}>🧰 功能</span>
+        <span className={styles.starredSectionCount}>{functionalGroups.length}</span>
+      </div>
+      {expanded && (
+        <ul className={styles.starredList}>
+          {functionalGroups.map((group) => {
+            const isActive = selectedGroupId === group.id
+            const badge = getGroupTypeBadge(group.type)
+            return (
+              <li
+                key={group.id}
+                className={`${styles.groupItem} ${styles.starred} ${isActive ? styles.active : ''}`}
+                onClick={() => selectGroup(group.id)}
+              >
+                <div className={styles.groupBody}>
+                  <div className={styles.groupName}>
+                    <span className={styles.starredMark} title="功能型群">🧰</span>
+                    <span className={styles.groupNameText}>{group.name}</span>
+                    {badge && (
+                      <span className={`${styles.typeBadge} ${styles[badge.cls as keyof typeof styles] ?? ''}`} title={badge.title}>
+                        {badge.label}
+                      </span>
+                    )}
+                    <span className={styles.memberCount}>
+                      {`· ${group.member_count || 0} 位`}
+                    </span>
+                  </div>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
 export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const { zenMode, toggleZenMode } = useZenMode()
   // AppSidebar is rendered above <Routes>, so useParams() can't see the route
@@ -222,12 +281,13 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   }
   const selectedGroupId = urlGroupId || ''
   const isZen = zenMode
-  // 分层:置顶(在 active 内排首) → 普通活跃 → ⭐重要少用 → 🗄️已归档。
-  // active = 既没归档也没标重要少用的所有群(包括还没发过消息的新建空群)。
-  // starred = 标了 starred_at 但没归档(归档优先级高于 starred)。
+  // 分层:置顶(在 active 内排首) → 普通活跃 → 🧰功能 → ⭐重要少用 → 🗄️已归档。
+  // active = 既没归档也没标重要少用的所有群(包括还没发过消息的新建空群),且非功能型
+  //   (patrol / patrol-link / a2a_direct 折到 FunctionalSection,不进主列表)。
+  // starred = 标了 starred_at 但没归档(归档优先级高于 starred),也排除功能型(功能型固定走功能分组)。
   // archived = 已归档,只读。
   const activeGroups = groups
-    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at && !g.starred_at)
+    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at && !g.starred_at && !isFunctionalGroup(g))
     .slice()
     .sort((a, b) => {
       if (a.pinned_at && b.pinned_at) return b.pinned_at.localeCompare(a.pinned_at)
@@ -236,8 +296,18 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
       // 有对话的群按最后消息时间倒序(最近的在前),无 last_message_at 的(如新建单聊)兜底用 created_at。
       return (b.last_message_at || b.created_at).localeCompare(a.last_message_at || a.created_at)
     })
+  const functionalGroups = groups
+    .filter((g) => !g.name.startsWith('__dm__:') && !g.archived_at && isFunctionalGroup(g))
+    .slice()
+    .sort((a, b) => {
+      // 功能分组内排序:patrol > patrol-link > a2a_direct,同类按 created_at 倒序
+      const rank = (t?: string | null) => t === 'patrol' ? 0 : t === 'patrol-link' ? 1 : t === 'a2a_direct' ? 2 : 9
+      const ra = rank(a.type), rb = rank(b.type)
+      if (ra !== rb) return ra - rb
+      return (b.created_at || '').localeCompare(a.created_at || '')
+    })
   const starredGroups = groups
-    .filter((g) => !g.name.startsWith('__dm__:') && g.starred_at && !g.archived_at)
+    .filter((g) => !g.name.startsWith('__dm__:') && g.starred_at && !g.archived_at && !isFunctionalGroup(g))
     .slice()
     .sort((a, b) => (b.starred_at || '').localeCompare(a.starred_at || ''))
   const archivedGroups = groups
@@ -357,7 +427,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                   + 创建对话
                 </button>
               </div>
-              {displayGroups.length === 0 && starredGroups.length === 0 && archivedGroups.length === 0 ? (
+              {displayGroups.length === 0 && functionalGroups.length === 0 && starredGroups.length === 0 && archivedGroups.length === 0 ? (
                 <div className={styles.hint}>暂无对话,点击「创建对话」开始</div>
               ) : (
                 <>
@@ -501,6 +571,13 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                         )
                       })}
                     </ul>
+                  )}
+                  {functionalGroups.length > 0 && (
+                    <FunctionalSection
+                      functionalGroups={functionalGroups}
+                      selectedGroupId={selectedGroupId}
+                      selectGroup={selectGroup}
+                    />
                   )}
                   {starredGroups.length > 0 && (
                     <StarredSection

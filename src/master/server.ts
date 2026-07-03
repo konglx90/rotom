@@ -23,7 +23,7 @@ import { createApi } from "./api/index.js";
 import { TerminalHub } from "./terminal-hub.js";
 import { Scheduler } from "./scheduler.js";
 import { ShareTokenStore } from "./share-tokens.js";
-import { handlePatrolIssueTerminal } from "./patrol-terminal.js";
+import { handleIssuePatrolTerminal, handleLinkPatrolIssueTerminal } from "./patrol-terminal.js";
 import { DEFAULT_MASTER_PORT, DEFAULT_MASTER_HOST } from "../shared/constants.js";
 import os from "node:os";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
@@ -95,7 +95,11 @@ async function main(): Promise<void> {
     if (!issue) return;
     const group = db.getGroupByIdFull(issue.group_id);
     if (group?.type === "patrol") {
-      handlePatrolIssueTerminal(db, issue);
+      handleIssuePatrolTerminal(db, issue);
+      return;
+    }
+    if (group?.type === "patrol-link") {
+      handleLinkPatrolIssueTerminal(db, issue);
       return;
     }
   };
