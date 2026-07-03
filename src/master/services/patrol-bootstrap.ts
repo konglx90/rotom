@@ -2,7 +2,7 @@
  * Patrol-group bootstrap — extracted from api/groups.ts createGroup handler
  * so the API layer stays thin. Owns the side-effects that fire when a group
  * with `type === "patrol"` is created:
- *   - create the recurring `issue-patrol` scheduled task (interval 3600s)
+ *   - create the recurring `issue-patrol` scheduled task (default interval 7200s = 2h)
  *   - bind the `issue-patrol-rules` skill to the patrol agent (if it exists)
  *
  * Failed skill binding is non-fatal — the schedule still runs, the agent
@@ -11,6 +11,10 @@
 
 import type { Logger } from "../../shared/logger.js";
 import type { MeshDb } from "../db.js";
+
+// 默认 2 小时一次:巡检本质是观察 + 预警,1h 太频反而是噪音;2h 留出足够的处理窗口
+// 又不至于错过新 issue(常见新 issue 在群聊触发,2h 内会被人工认领)。
+const PATROL_DEFAULT_INTERVAL_SEC = 2 * 60 * 60;
 
 export interface PatrolBootstrapPayload {
   patrolGroupId: string;
@@ -55,7 +59,7 @@ export function bootstrapPatrolGroup(
     mode: "agent", // handler 模式下 mode 不被使用,但 schema NOT NULL,保留 agent
     agentName,
     scheduleKind: "interval",
-    intervalSec: 3600,
+    intervalSec: PATROL_DEFAULT_INTERVAL_SEC,
     prompt: "", // handler 模式不用 prompt,但 schema NOT NULL
     enabled: true,
     handlerKey: "issue-patrol",
@@ -74,5 +78,5 @@ export function bootstrapPatrolGroup(
   } else {
     log.warn(`Patrol group ${groupId}: issue-patrol-rules skill not found, skip binding`);
   }
-  log.info(`Patrol group ${groupId}: auto-created issue-patrol schedule (interval 3600s, enabled)`);
+  log.info(`Patrol group ${groupId}: auto-created issue-patrol schedule (interval ${PATROL_DEFAULT_INTERVAL_SEC}s, enabled)`);
 }

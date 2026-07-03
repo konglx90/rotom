@@ -25,6 +25,10 @@ export function buildLinkPatrolPayload(groupId: string, agentName: string): Link
   };
 }
 
+// 默认 5 小时一次:链接分类的 few-shot 增量慢,1h 太频会浪费 token,4h 以上更稳。
+// 改这块要 dashboard 那边的 "Link 分类" tab 也跟着(intervalSec 默认值)。
+const LINK_PATROL_DEFAULT_INTERVAL_SEC = 5 * 60 * 60;
+
 export function bootstrapLinkPatrolGroup(
   db: MeshDb,
   log: Logger,
@@ -40,7 +44,7 @@ export function bootstrapLinkPatrolGroup(
     mode: "agent",
     agentName,
     scheduleKind: "interval",
-    intervalSec: 3600,
+    intervalSec: LINK_PATROL_DEFAULT_INTERVAL_SEC,
     prompt: "",
     enabled: true,
     handlerKey: "link-patrol",

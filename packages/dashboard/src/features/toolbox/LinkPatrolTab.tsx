@@ -43,6 +43,7 @@ export function LinkPatrolTab() {
   const [logs, setLogs] = useState<LinkPatrolLog[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   // 节流参数
@@ -120,6 +121,12 @@ export function LinkPatrolTab() {
     })
   }, [selectedRunId])
 
+  useEffect(() => {
+    if (!success) return
+    const t = setTimeout(() => setSuccess(null), 4000)
+    return () => clearTimeout(t)
+  }, [success])
+
   const handleToggle = async () => {
     if (!state?.taskId) return
     setBusy(true)
@@ -127,6 +134,7 @@ export function LinkPatrolTab() {
       const next = !state.enabled
       await linksPatrolApi.updateConfig({ enabled: next })
       await reload()
+      setSuccess(next ? '已开启分类' : '已关闭分类')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -140,6 +148,7 @@ export function LinkPatrolTab() {
     try {
       await linksPatrolApi.trigger(state.taskId)
       await reload()
+      setSuccess('已触发立即巡检,稍后刷新查看结果')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -152,6 +161,7 @@ export function LinkPatrolTab() {
     try {
       await linksPatrolApi.updateConfig({ scanBatch, intervalSec })
       await reload()
+      setSuccess('参数已保存')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -186,6 +196,7 @@ export function LinkPatrolTab() {
       })
       setEditingLink(null)
       await reloadLinks()
+      setSuccess('链接已更新,host 规则已写入 memory')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -246,6 +257,12 @@ export function LinkPatrolTab() {
       {error && (
         <div style={{ padding: 12, background: 'rgba(255,80,80,0.08)', color: '#c33', borderRadius: 8, fontSize: 13 }}>
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div style={{ padding: 12, background: 'rgba(34,197,94,0.08)', color: '#0a7a32', borderRadius: 8, fontSize: 13 }}>
+          ✓ {success}
         </div>
       )}
 

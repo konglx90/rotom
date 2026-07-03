@@ -191,6 +191,21 @@ export const memoryMethods = {
   },
 
   addMemory(this: MeshDbSelf, input: MemoryInput): void {
+    // 硬约束:visibility=global + agent_visible=1 必须走审核(pending_review=1)。
+    // 全局 memory 不允许直接对 agent 可见,必须先 create(pending) → 人工 approve 才生效。
+    // 唯一合法直接 visible 的全局 memory 路径是 approveMemory(已审核)和 promoteMemoryVisibility(从 group 升 global 时内部强制 agent_visible=0)。
+    // 这个 guard 防止"cli 直接 addMemory(scope=global, visibility=global, agent_visible=true) 绕过审核"。
+    if (
+      (input.scope === "global" || input.visibility === "global") &&
+      input.agentVisible === true &&
+      input.pendingReview !== true
+    ) {
+      throw new Error(
+        `addMemory blocked: scope=global + visibility=global + agent_visible=true must go through pending review. ` +
+        `Use addMemory({ ..., scope: 'global', visibility: 'global', agentVisible: false, pendingReview: true }) ` +
+        `or addMemory({ ..., scope: 'group', visibility: 'group' }) + later promoteMemoryVisibility(id, 'global').`
+      );
+    }
     const now = nowBeijing();
     const summary = input.summary ?? input.value.slice(0, 80);
     const scope = input.scope ?? "group";

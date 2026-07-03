@@ -49,7 +49,7 @@ export function IssuePatrolTab() {
   const [throughputCap, setThroughputCap] = useState(3)
   const [candidateCap, setCandidateCap] = useState(3)
   const [scanBatch, setScanBatch] = useState(10)
-  const [intervalSec, setIntervalSec] = useState(3600)
+  const [intervalSec, setIntervalSec] = useState(7200)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -221,7 +221,7 @@ export function IssuePatrolTab() {
             <label>
               间隔 intervalSec:{' '}
               <input type="number" min={60} value={intervalSec}
-                onChange={(e) => setIntervalSec(Number(e.target.value) || 3600)}
+                onChange={(e) => setIntervalSec(Number(e.target.value) || 7200)}
                 style={{ width: 80, padding: '2px 6px' }} />
             </label>
             <Button variant="secondary" size="sm" onClick={handleSaveConfig} disabled={busy}>保存参数</Button>

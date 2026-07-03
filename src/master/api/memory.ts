@@ -121,13 +121,16 @@ export function registerMemoryRoutes(
   });
 
   apiRouter.post("/memory/global", (req, res) => {
-    const { key, value, summary, tags, category, visibility, agentVisible, createdBy, expiresAt, pendingReview } = req.body;
+    const { key, value, summary, tags, category, visibility, createdBy, expiresAt } = req.body;
     if (!key || !value || !createdBy) {
       res.status(400).json({ error: "key, value, createdBy are required" }); return;
     }
     if (!isCategory(category)) {
       res.status(400).json({ error: `category must be one of: ${CATEGORIES.join(",")}` }); return;
     }
+    // 全局 memory 强制走审核:agent_visible=0 + pending_review=1,等人工 approve。
+    // 已有 memory 想升级到 global,走 PATCH /memory/:id body { visibility: "global" }(走 promoteMemoryVisibility 路径)。
+    // 原因:全局 memory 直接对所有 agent 可见影响面大,必须有真人拍板。
     const id = randomUUID();
     db.addMemory({
       id, scope: "global", groupId: null,
@@ -135,13 +138,13 @@ export function registerMemoryRoutes(
       summary: summary == null ? undefined : String(summary),
       tags: Array.isArray(tags) ? tags.map(String) : [],
       visibility: visibility === "private" || visibility === "group" ? visibility : "global",
-      agentVisible: agentVisible === false ? false : true,
+      agentVisible: false,        // 强制:global memory 创建时对 agent 不可见
       createdBy,
       expiresAt: expiresAt == null ? null : String(expiresAt),
-      pendingReview: pendingReview === true,
+      pendingReview: true,        // 强制:必须等人工 approve
     });
-    log.info(`Global memory created: "${key}" (${id}) cat=${category} pending=${pendingReview === true}`);
-    res.status(201).json({ id });
+    log.info(`Global memory created (pending review): "${key}" (${id}) cat=${category}`);
+    res.status(201).json({ id, pendingReview: true });
   });
 
   // ── 更新(可切换 agent_visible:note↔memory)───────────────────────────

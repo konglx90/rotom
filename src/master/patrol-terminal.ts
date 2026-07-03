@@ -170,7 +170,7 @@ export function handleLinkPatrolIssueTerminal(db: MeshDb, issue: IssueRow): void
 
   // 合并写入 agent_memory(每 host 一条,upsert:同 key 已存在就 update value/tags)
   for (const [host, info] of rulesByHost.entries()) {
-    upsertLinkRuleMemory(db, host, info.category, [...info.tagsSet], info.sampleLink, "system:link-patrol");
+    upsertLinkRuleMemory(db, issue.group_id, host, info.category, [...info.tagsSet], info.sampleLink, "system:link-patrol");
   }
 
   db.finishLinkPatrolRun(run.run_id, "completed", {
@@ -181,12 +181,15 @@ export function handleLinkPatrolIssueTerminal(db: MeshDb, issue: IssueRow): void
 }
 
 /**
- * 把一条 host 级规则写入 agent_memory,scope=global / category=convention / tags=["link_classification"]。
+ * 把一条 host 级规则写入 agent_memory,scope=group / group_id=patrolGroupId / category=convention
+ * / tags=["link_classification"]。注意:link-patrol 自动学到的规则放 patrol-link 群,不放 global
+ * —— global namespace 必须人工 review / promote 才能进。下一轮 link-patrol handler 拼 prompt 时
+ * 仍可被 listMemory({ groupId, tags:["link_classification"] }) 拉出。
  * key = `link_rule:${host}`。同 key 已存在 → 合并 tags,刷新 value;不存在 → INSERT。
- * 注:这条 memory 下一轮 link-patrol handler 拼 prompt 时被 listMemory(tags=["link_classification"]) 拉出。
  */
 function upsertLinkRuleMemory(
   db: MeshDb,
+  groupId: string,
   host: string,
   category: string,
   tags: string[],
@@ -194,17 +197,15 @@ function upsertLinkRuleMemory(
   createdBy: string,
 ): void {
   const key = `link_rule:${host}`;
-  // listMemory 不支持按 key 精确查 + scope=global + tags 多条件,直接 SQL 查
   const existing = db.db.prepare(
-    `SELECT id, tags FROM agent_memory WHERE key = ? AND scope = 'global' AND active = 1 LIMIT 1`,
-  ).get(key) as { id: string; tags: string } | undefined;
+    `SELECT id, tags FROM agent_memory WHERE key = ? AND group_id = ? AND active = 1 LIMIT 1`,
+  ).get(key, groupId) as { id: string; tags: string } | undefined;
 
   const value = `host=${host} 默认分类 ${category}; tags=[${tags.join(", ")}]; 样例=${sampleUrl}`;
   const summary = `${host} → ${category}`;
   const mergedTags = Array.from(new Set(["link_classification", ...tags]));
 
   if (existing) {
-    // 合并旧 tags
     let oldTags: string[] = [];
     try {
       const parsed = JSON.parse(existing.tags);
@@ -216,15 +217,15 @@ function upsertLinkRuleMemory(
     const memId = `mem_link_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     db.addMemory({
       id: memId,
-      scope: "global",
-      groupId: null,
+      scope: "group",
+      groupId,
       category: "convention",
       sourceType: "manual",
       key,
       value,
       summary,
       tags: mergedTags,
-      visibility: "global",
+      visibility: "group",
       agentVisible: true,
       createdBy,
     });

@@ -7,7 +7,8 @@ const log = createLogger("mesh-api-links");
 
 /**
  * PATCH /api/links/:id 时,若改了 category/tags,要顺手在 memory 强化一条
- * link_rule:<host> 规则(source_type=manual,人工 override 优先级高于 agent 写)。
+ * link_rule:<host> 规则(放在 link 出现过的 source_group,不放 global namespace)。
+ * global memory 必须走人工 promote(POST /api/memory/:id/promote),不能由 link override 直接写。
  */
 function overrideMemoryForLink(
   db: MeshDb,
@@ -18,6 +19,14 @@ function overrideMemoryForLink(
   if (!link) return;
   if (fields.category === undefined && fields.tags === undefined) return;
 
+  const sourceGroups = db.listSourceGroupsForLink(linkId);
+  if (sourceGroups.length === 0) {
+    log.info(`Link ${linkId} override: no source_group, skip memory reinforce`);
+    return;
+  }
+  // 多群共享的 host 规则:取最近出现群(按 source_groups 写入顺序等价于发现顺序)
+  const groupId = sourceGroups[0];
+
   const category = fields.category ?? "other";
   const tags = Array.isArray(fields.tags) ? fields.tags : [];
   const key = `link_rule:${link.host}`;
@@ -25,8 +34,8 @@ function overrideMemoryForLink(
   const summary = `${link.host} → ${category} (override)`;
 
   const existing = db.db.prepare(
-    `SELECT id FROM agent_memory WHERE key = ? AND scope = 'global' AND active = 1 LIMIT 1`,
-  ).get(key) as { id: string } | undefined;
+    `SELECT id FROM agent_memory WHERE key = ? AND group_id = ? AND active = 1 LIMIT 1`,
+  ).get(key, groupId) as { id: string } | undefined;
 
   if (existing) {
     db.updateMemory(existing.id, { value, summary, tags: ["link_classification", ...tags, "manual"], category: "convention" });
@@ -34,20 +43,20 @@ function overrideMemoryForLink(
     const memId = `mem_link_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     db.addMemory({
       id: memId,
-      scope: "global",
-      groupId: null,
+      scope: "group",
+      groupId,
       category: "convention",
       sourceType: "manual",
       key,
       value,
       summary,
       tags: ["link_classification", ...tags, "manual"],
-      visibility: "global",
+      visibility: "group",
       agentVisible: true,
       createdBy: "dashboard:link-override",
     });
   }
-  log.info(`Link ${linkId} override → memory ${key} updated`);
+  log.info(`Link ${linkId} override → memory ${key} written in group ${groupId}`);
 }
 
 export function registerLinkRoutes(apiRouter: ExpressRouter, db: MeshDb): void {
