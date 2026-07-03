@@ -20,6 +20,7 @@ import {
   flagStr,
   printJson,
 } from "./common.js";
+import { masterFetch, masterHttpBase, masterWsBase } from "./routes.js";
 
 const DEFAULT_PORT = 28800;
 
@@ -34,7 +35,7 @@ function parseMasterSpec(spec: string): { host: string; port: number; httpUrl: s
     port = parseInt(s.slice(colon + 1), 10);
   }
   if (!host) fail(`invalid master spec: ${spec}`);
-  return { host, port, httpUrl: `http://${host}:${port}`, wsUrl: `ws://${host}:${port}` };
+  return { host, port, httpUrl: masterHttpBase(host, port), wsUrl: masterWsBase(host, port) };
 }
 
 const VALID_CLI_TOOLS = ["claude", "codex", "hermes", "openclaw"] as const;
@@ -111,22 +112,21 @@ export async function cmdJoin(rest: string[], flags: Record<string, string | boo
 
   // 1. POST /api/agents 申请 token
   const registerUrl = `${httpUrl}/api/agents`;
-  let resp: Response;
+  let resp: { status: number; data: unknown };
   try {
-    resp = await fetch(registerUrl, {
+    resp = await masterFetch(registerUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, domain }),
     });
   } catch (e) {
     fail(`failed to reach master at ${httpUrl}: ${(e as Error).message}\n  run \`rotom status\` to verify reachability`);
   }
-  const text = await resp.text();
-  let data: any;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!resp.ok) {
+  const { status, data: rawData } = resp;
+  const text: string = rawData === null ? "" : typeof rawData === "string" ? rawData : JSON.stringify(rawData);
+  const data: any = rawData;
+  if (status < 200 || status >= 300) {
     const detail = typeof data === "object" && data?.error ? data.error : text;
-    fail(`master rejected agent registration (HTTP ${resp.status}): ${detail}`);
+    fail(`master rejected agent registration (HTTP ${status}): ${detail}`);
   }
   const token: string | undefined = data?.token;
   const agentId: string | undefined = data?.id;

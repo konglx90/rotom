@@ -14,6 +14,7 @@ import {
   requireFlag,
   pretty,
 } from "./common.js";
+import { route, qs, usage } from "./routes.js";
 
 function parseDuration(input: string): number | null {
   const s = String(input).trim();
@@ -42,10 +43,9 @@ export async function cmdSchedule(agent: ResolvedAgent, rest: string[], flags: R
   const sub = rest[0];
 
   if (sub === "list") {
-    const qs = new URLSearchParams();
-    const gid = flagStr(flags, "group"); if (gid) qs.set("group_id", gid);
-    const route = `/schedules${qs.toString() ? `?${qs}` : ""}`;
-    const data = await api(agent, "GET", route);
+    const gid = flagStr(flags, "group");
+    const routePath = `${route("/schedules")}${qs({ group_id: gid })}`;
+    const data = await api(agent, "GET", routePath);
     if (pretty) {
       printTable(
         (data as any[]).map((t) => ({
@@ -70,8 +70,8 @@ export async function cmdSchedule(agent: ResolvedAgent, rest: string[], flags: R
   }
 
   if (sub === "show") {
-    const id = rest[1]; if (!id) fail("usage: rotom schedule show <id>");
-    const data = await api(agent, "GET", `/schedules/${encodeURIComponent(id)}`);
+    const id = rest[1]; if (!id) usage("schedule show", "<id>");
+    const data = await api(agent, "GET", route("/schedules/:id", id));
     printJson(data);
     return;
   }
@@ -145,7 +145,7 @@ export async function cmdSchedule(agent: ResolvedAgent, rest: string[], flags: R
 
   if (sub === "update") {
     const id = rest[1];
-    if (!id) fail("usage: rotom schedule update <id> [--every D] [--in D] [--at ISO] [--prompt T] [--name N] [--mode agent|message] [--agent A] [--repeat N] [--enabled true|false]");
+    if (!id) usage("schedule update", "<id> [--every D] [--in D] [--at ISO] [--prompt T] [--name N] [--mode agent|message] [--agent A] [--repeat N] [--enabled true|false]");
     const body: Record<string, unknown> = {};
     const name = flagStr(flags, "name");            if (name !== undefined) body.name = name;
     const prompt = flagStr(flags, "prompt");        if (prompt !== undefined) body.prompt = prompt;
@@ -191,34 +191,35 @@ export async function cmdSchedule(agent: ResolvedAgent, rest: string[], flags: R
     if (Object.keys(body).length === 0) {
       fail("no fields to update — pass at least one of --every / --in / --at / --prompt / --name / --mode / --agent / --repeat / --enabled");
     }
-    const data = await api(agent, "PATCH", `/schedules/${encodeURIComponent(id)}`, body);
+    const data = await api(agent, "PATCH", route("/schedules/:id", id), body);
     printJson(data);
     return;
   }
 
   if (sub === "remove" || sub === "delete") {
-    const id = rest[1]; if (!id) fail("usage: rotom schedule remove <id>");
-    const data = await api(agent, "DELETE", `/schedules/${encodeURIComponent(id)}`);
+    const id = rest[1]; if (!id) usage("schedule remove", "<id>");
+    const data = await api(agent, "DELETE", route("/schedules/:id", id));
     printJson(data);
     return;
   }
 
   if (sub === "enable" || sub === "disable") {
-    const id = rest[1]; if (!id) fail(`usage: rotom schedule ${sub} <id>`);
-    const data = await api(agent, "PATCH", `/schedules/${encodeURIComponent(id)}`, { enabled: sub === "enable" });
+    const id = rest[1]; if (!id) usage(`schedule ${sub}`, "<id>");
+    const data = await api(agent, "PATCH", route("/schedules/:id", id), { enabled: sub === "enable" });
     printJson(data);
     return;
   }
 
   if (sub === "trigger") {
-    const id = rest[1]; if (!id) fail("usage: rotom schedule trigger <id>");
-    const data = await api(agent, "POST", `/schedules/${encodeURIComponent(id)}/trigger`);
+    const id = rest[1]; if (!id) usage("schedule trigger", "<id>");
+    const data = await api(agent, "POST", route("/schedules/:id/trigger", id));
     printJson(data);
     return;
   }
 
-  fail(
-    "usage: rotom schedule <list|show|add|update|remove|enable|disable|trigger> [...]\n" +
+  usage(
+    "schedule",
+    "<list|show|add|update|remove|enable|disable|trigger> [...]\n" +
     "  list                       [--group <id>] [--pretty]\n" +
     "  show <id>\n" +
     "  add    --group <id> --mode <agent|message> [--agent A] --prompt P\n" +

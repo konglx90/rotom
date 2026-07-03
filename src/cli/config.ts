@@ -14,6 +14,7 @@ import {
   printJson,
   fail,
 } from "./common.js";
+import { usage, unknownSubcommand } from "./routes.js";
 
 export async function cmdConfig(rest: string[], _flags: Record<string, string | boolean>): Promise<void> {
   const sub = rest[0];
@@ -31,14 +32,14 @@ export async function cmdConfig(rest: string[], _flags: Record<string, string | 
     return;
   }
   if (sub === "use") {
-    const name = rest[1]; if (!name) fail("usage: rotom config use <name>");
+    const name = rest[1]; if (!name) usage("config use", "<name>");
     if (!cfg.agents?.[name]) fail(`agent "${name}" not registered`);
     cfg.defaultAgent = name; saveRotomConfig(cfg);
     process.stdout.write(`defaultAgent = ${name}\n`); return;
   }
   if (sub === "add-openclaw" || sub === "add-executor") {
     const name = rest[1]; const cfgPath = rest[2];
-    if (!name || !cfgPath) fail(`usage: rotom config ${sub} <name> <path>`);
+    if (!name || !cfgPath) usage(`config ${sub}`, "<name> <path>");
     const abs = path.resolve(expandHome(cfgPath));
     if (!fs.existsSync(abs)) fail(`config file not found: ${abs}`);
     const kind = sub === "add-openclaw" ? "openclaw" : "executor";
@@ -50,12 +51,12 @@ export async function cmdConfig(rest: string[], _flags: Record<string, string | 
     return;
   }
   if (sub === "remove") {
-    const name = rest[1]; if (!name) fail("usage: rotom config remove <name>");
+    const name = rest[1]; if (!name) usage("config remove", "<name>");
     if (!cfg.agents[name]) fail(`agent "${name}" not registered`);
     delete cfg.agents[name];
     if (cfg.defaultAgent === name) delete cfg.defaultAgent;
     saveRotomConfig(cfg);
     process.stdout.write(`Removed ${name}\n`); return;
   }
-  fail(`unknown config subcommand: ${sub || "(none)"}`);
+  unknownSubcommand("config", sub);
 }

@@ -13,6 +13,7 @@ import {
   fail,
   flagStr,
 } from "./common.js";
+import { masterFetch, masterHttpBase, masterWsBase } from "./routes.js";
 
 // ── Bootstrap helpers ─────────────────────────────────────────────────────
 
@@ -86,39 +87,40 @@ function parseMasterSpec(spec: string, defaultPort: number): ParsedMaster {
     }
   }
   if (!host) fail(`invalid master spec: ${spec}`);
-  return { host, port, url: `ws://${host}:${port}` };
-}
-
-async function httpJsonNoAuth(method: string, url: string, body?: unknown): Promise<{ status: number; data: any }> {
-  const init: RequestInit = {
-    method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (body !== undefined) (init as any).body = JSON.stringify(body);
-  let resp: Response;
-  try {
-    resp = await fetch(url, init);
-  } catch (e) {
-    fail(`network error calling ${url}: ${(e as Error).message}`);
-  }
-  const text = await resp.text();
-  let data: any;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  return { status: resp.status, data };
+  return { host, port, url: masterWsBase(host, port) };
 }
 
 interface DomainInfo {
   name: string;
 }
 
+/**
+ * Wrap masterFetch so a network-level failure (DNS, ECONNREFUSED, etc.) fails
+ * with the same message the old httpJsonNoAuth helper emitted, instead of
+ * bubbling as an unhandled rejection. The probe path in cmdInit uses
+ * masterFetch directly with `.catch(() => null)` because it wants the
+ * "master unreachable — start it first" recovery message below.
+ */
+async function masterFetchOrFail(url: string, init?: RequestInit) {
+  try {
+    return await masterFetch(url, init);
+  } catch (e) {
+    fail(`network error calling ${url}: ${(e as Error).message}`);
+  }
+}
+
 async function listMasterDomains(httpBase: string): Promise<DomainInfo[]> {
-  const { status, data } = await httpJsonNoAuth("GET", `${httpBase}/api/domains`);
+  const { status, data } = await masterFetchOrFail(`${httpBase}/api/domains`, { method: "GET" });
   if (status !== 200) fail(`failed to list domains: HTTP ${status}`);
-  return Array.isArray(data) ? data : data?.domains ?? [];
+  const d = data as any;
+  return Array.isArray(d) ? d : d?.domains ?? [];
 }
 
 async function ensureDomain(httpBase: string, name: string): Promise<DomainInfo> {
-  const { status, data } = await httpJsonNoAuth("POST", `${httpBase}/api/domains`, { name });
+  const { status, data } = await masterFetchOrFail(`${httpBase}/api/domains`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
   if (status === 200 || status === 201) return data as DomainInfo;
   if (status === 409) return { name }; // already exists
   fail(`failed to create domain "${name}": HTTP ${status} ${JSON.stringify(data)}`);
@@ -131,8 +133,9 @@ interface RegisteredAgent {
 }
 
 async function registerAgent(httpBase: string, name: string, domain: string, cliTool: string): Promise<RegisteredAgent> {
-  const { status, data } = await httpJsonNoAuth("POST", `${httpBase}/api/agents`, {
-    name, domain, cliTool,
+  const { status, data } = await masterFetchOrFail(`${httpBase}/api/agents`, {
+    method: "POST",
+    body: JSON.stringify({ name, domain, cliTool }),
   });
   if (status !== 200 && status !== 201) {
     fail(`failed to register agent "${name}": HTTP ${status} ${JSON.stringify(data)}`);
@@ -145,7 +148,7 @@ async function registerAgent(httpBase: string, name: string, domain: string, cli
 }
 
 async function pickDomain(master: ParsedMaster, hintFlag?: string, yesMode = false): Promise<string> {
-  const httpBase = `http://${master.host}:${master.port}`;
+  const httpBase = masterHttpBase(master.host, master.port);
   const existing = await listMasterDomains(httpBase);
   if (hintFlag) {
     const match = existing.find((d) => d.name === hintFlag);
@@ -239,13 +242,13 @@ export async function cmdInit(_rest: string[], flags: Record<string, string | bo
           const portStr = await askText("Master port", "28800");
           const port = Number(portStr);
           if (!Number.isInteger(port) || port <= 0) fail("invalid port");
-          return { host: ip, port, url: `ws://${ip}:${port}` };
+          return { host: ip, port, url: masterWsBase(ip, port) };
         })();
 
   process.stdout.write(`\nMaster: ${master.url}\n`);
 
-  const httpBase = `http://${master.host}:${master.port}`;
-  const probe = await httpJsonNoAuth("GET", `${httpBase}/api/domains`).catch(() => null);
+  const httpBase = masterHttpBase(master.host, master.port);
+  const probe = await masterFetch(`${httpBase}/api/domains`, { method: "GET" }).catch(() => null);
   if (!probe || probe.status === 0) {
     fail(`master ${master.url} unreachable. Start it first (e.g. \`mesh-master start --daemon\`) or check the IP.`);
   }

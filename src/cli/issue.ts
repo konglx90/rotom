@@ -13,18 +13,18 @@ import {
   requireFlag,
   pretty,
 } from "./common.js";
+import { route, qs, usage, unknownSubcommand } from "./routes.js";
 import { ISSUE_STATUSES, type IssueStatus } from "../shared/constants.js";
 
 export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Record<string, string | boolean>): Promise<void> {
   const sub = rest[0];
 
   if (sub === "list") {
-    const groupId = rest[1]; if (!groupId) fail("usage: rotom issue list <groupId> [--status S] [--type task]");
-    const qs = new URLSearchParams();
-    const status = flagStr(flags, "status"); if (status) qs.set("status", status);
-    const type = flagStr(flags, "type"); if (type) qs.set("type", type);
-    const route = `/groups/${encodeURIComponent(groupId)}/issues${qs.toString() ? `?${qs}` : ""}`;
-    const data = await api(agent, "GET", route);
+    const groupId = rest[1]; if (!groupId) usage("issue list", "<groupId> [--status S] [--type task]");
+    const status = flagStr(flags, "status");
+    const type = flagStr(flags, "type");
+    const routePath = `${route("/groups/:groupId/issues", groupId)}${qs({ status, type })}`;
+    const data = await api(agent, "GET", routePath);
     printTable(
       data.map((i: any) => ({
         id: i.id,
@@ -39,17 +39,17 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
   }
 
   if (sub === "show") {
-    const id = rest[1]; if (!id) fail("usage: rotom issue show <issueId>");
-    const data = await api(agent, "GET", `/issues/${encodeURIComponent(id)}`);
+    const id = rest[1]; if (!id) usage("issue show", "<issueId>");
+    const data = await api(agent, "GET", route("/issues/:id", id));
     printJson(data);
     return;
   }
 
   if (sub === "events") {
-    const id = rest[1]; if (!id) fail("usage: rotom issue events <issueId> [--content-len N] [--no-clean]");
+    const id = rest[1]; if (!id) usage("issue events", "<issueId> [--content-len N] [--no-clean]");
     const contentLen = flagInt(flags, "content-len") ?? 200;
     const clean = flags["clean"] !== false;
-    const data = await api(agent, "GET", `/issues/${encodeURIComponent(id)}/events`);
+    const data = await api(agent, "GET", route("/issues/:id/events", id));
     printTable(
       data.map((e: any) => {
         let content = (e.content || "").replace(/\s+/g, " ");
@@ -72,8 +72,8 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
   }
 
   if (sub === "messages") {
-    const id = rest[1]; if (!id) fail("usage: rotom issue messages <issueId>");
-    const data = await api(agent, "GET", `/issues/${encodeURIComponent(id)}/messages`);
+    const id = rest[1]; if (!id) usage("issue messages", "<issueId>");
+    const data = await api(agent, "GET", route("/issues/:id/messages", id));
     if (pretty) {
       printTable(
         data.map((m: any) => {
@@ -98,10 +98,10 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
   }
 
   if (sub === "comment") {
-    const id = rest[1]; if (!id) fail("usage: rotom issue comment <issueId> --message M [--reply-to <eventId>]");
+    const id = rest[1]; if (!id) usage("issue comment", "<issueId> --message M [--reply-to <eventId>]");
     const message = requireFlag(flags, "message");
     const replyTo = flagInt(flags, "reply-to");
-    const data = await api(agent, "POST", `/issues/${encodeURIComponent(id)}/comments`, {
+    const data = await api(agent, "POST", route("/issues/:id/comments", id), {
       agentName: agent.name, content: message, replyTo: replyTo ?? undefined,
     });
     printJson(data);
@@ -110,7 +110,7 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
 
   if (sub === "create") {
     const groupId = rest[1];
-    if (!groupId) fail("usage: rotom issue create <groupId> --description D [--title T] [--priority P] [--assignee A] [--approval-policy r_allow|rw_allow] [--run]");
+    if (!groupId) usage("issue create", "<groupId> --description D [--title T] [--priority P] [--assignee A] [--approval-policy r_allow|rw_allow] [--run]");
     const title = flagStr(flags, "title");
     const description = flagStr(flags, "description") || "";
     const priority = flagStr(flags, "priority") || "medium";
@@ -129,7 +129,7 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
     const body: Record<string, unknown> = { description, priority, createdBy: agent.name };
     if (title) body.title = title;
     if (approvalPolicyRaw) body.approvalPolicy = approvalPolicyRaw;
-    const created = await api(agent, "POST", `/groups/${encodeURIComponent(groupId)}/issues`, body);
+    const created = await api(agent, "POST", route("/groups/:groupId/issues", groupId), body);
     const issueId = created?.id as string | undefined;
     if (!issueId) {
       printJson(created);
@@ -138,12 +138,12 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
     let assigned = false;
     let runPushed: unknown = null;
     if (assignee) {
-      await api(agent, "PUT", `/issues/${encodeURIComponent(issueId)}`, { assignedTo: assignee });
+      await api(agent, "PUT", route("/issues/:id", issueId), { assignedTo: assignee });
       assigned = true;
     }
     if (run) {
       const prompt = description.trim() || (title || "").trim();
-      runPushed = await api(agent, "POST", `/issues/${encodeURIComponent(issueId)}/append`, {
+      runPushed = await api(agent, "POST", route("/issues/:id/append", issueId), {
         prompt, appendedBy: agent.name,
       });
     }
@@ -153,7 +153,7 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
 
   if (sub === "update") {
     const id = rest[1];
-    if (!id) fail("usage: rotom issue update <issueId> [--title T] [--description D] [--priority low|medium|high|critical] [--assignee A | --unassign] [--approval-policy r_allow|rw_allow] [--status open|in_progress|completed|failed|cancelled]");
+    if (!id) usage("issue update", "<issueId> [--title T] [--description D] [--priority low|medium|high|critical] [--assignee A | --unassign] [--approval-policy r_allow|rw_allow] [--status open|in_progress|completed|failed|cancelled]");
     const title = flagStr(flags, "title");
     const description = flagStr(flags, "description");
     const priority = flagStr(flags, "priority");
@@ -186,24 +186,24 @@ export async function cmdIssue(agent: ResolvedAgent, rest: string[], flags: Reco
     if (Object.keys(body).length === 0) {
       fail("no fields to update — pass at least one flag");
     }
-    const data = await api(agent, "PUT", `/issues/${encodeURIComponent(id)}`, body);
+    const data = await api(agent, "PUT", route("/issues/:id", id), body);
     printJson(data);
     return;
   }
 
   if (sub === "cancel") {
-    const id = rest[1]; if (!id) fail("usage: rotom issue cancel <issueId>");
-    const data = await api(agent, "PUT", `/issues/${encodeURIComponent(id)}`, { status: "cancelled" });
+    const id = rest[1]; if (!id) usage("issue cancel", "<issueId>");
+    const data = await api(agent, "PUT", route("/issues/:id", id), { status: "cancelled" });
     printJson(data);
     return;
   }
 
   if (sub === "delete") {
-    const id = rest[1]; if (!id) fail("usage: rotom issue delete <issueId>");
-    const data = await api(agent, "DELETE", `/issues/${encodeURIComponent(id)}`);
+    const id = rest[1]; if (!id) usage("issue delete", "<issueId>");
+    const data = await api(agent, "DELETE", route("/issues/:id", id));
     printJson(data);
     return;
   }
 
-  fail(`unknown issue subcommand: ${sub || "(none)"}`);
+  unknownSubcommand("issue", sub);
 }

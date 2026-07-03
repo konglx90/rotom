@@ -15,6 +15,10 @@ import {
   flagInt,
   requireFlag,
 } from "./common.js";
+import { route, qs, usage } from "./routes.js";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-cli-memory", { stream: "stderr" });
 
 const CATEGORIES = ["fact", "decision", "convention", "pitfall", "todo", "playbook", "note"] as const;
 
@@ -44,18 +48,16 @@ export async function cmdMemory(
   // ── search ───────────────────────────────────────────────────────────
   if (sub === "search") {
     const keyword = rest[1];
-    if (!keyword) fail("usage: rotom memory search <keyword> [--scope group|global] [groupId] [--category <c>]");
+    if (!keyword) usage("memory search", "<keyword> [--scope group|global] [groupId] [--category <c>]");
     const category = flagStr(flags, "category");
     const limit = flagInt(flags, "limit") ?? 20;
     let url: string;
     if (scope === "global") {
-      url = `/memory/search?q=${encodeURIComponent(keyword)}&limit=${limit}`;
-      if (category) url += `&category=${category}`;
+      url = `${route("/memory/search")}${qs({ q: keyword, limit, category })}`;
     } else {
       const groupId = rest[2];
-      if (!groupId) fail("usage: rotom memory search <keyword> <groupId> (group scope needs groupId)");
-      url = `/groups/${encodeURIComponent(groupId)}/memory/search?q=${encodeURIComponent(keyword)}&limit=${limit}`;
-      if (category) url += `&category=${category}`;
+      if (!groupId) usage("memory search", "<keyword> <groupId> (group scope needs groupId)");
+      url = `${route("/groups/:groupId/memory/search", groupId)}${qs({ q: keyword, limit, category })}`;
     }
     const data = await api(agent, "GET", url);
     // group search 返回 {group, global}; global search 返回数组
@@ -82,18 +84,18 @@ export async function cmdMemory(
     const includePending = flags["include-pending"] === true || flags["include-pending"] === "true";
     let url: string;
     if (scope === "global") {
-      url = `/memory/global?`;
+      url = route("/memory/global");
     } else {
       const groupId = rest[1];
-      if (!groupId) fail("usage: rotom memory list <groupId> [--scope group|global] [--type note|memory|all]");
-      url = `/groups/${encodeURIComponent(groupId)}/memory?`;
+      if (!groupId) usage("memory list", "<groupId> [--scope group|global] [--type note|memory|all]");
+      url = route("/groups/:groupId/memory", groupId);
     }
-    const qs: string[] = [];
-    if (type && type !== "all") qs.push(`type=${type}`);
-    if (category) qs.push(`category=${category}`);
-    if (tags && tags.length) qs.push(`tags=${encodeURIComponent(tags.join(","))}`);
-    if (includePending) qs.push(`includePending=true`);
-    url += qs.join("&");
+    url += qs({
+      type: type && type !== "all" ? type : undefined,
+      category,
+      tags: tags && tags.length ? tags.join(",") : undefined,
+      includePending: includePending ? "true" : undefined,
+    });
     const data = await api(agent, "GET", url);
     printTable(
       data.map((m: any) => ({
@@ -113,8 +115,8 @@ export async function cmdMemory(
   // ── get ──────────────────────────────────────────────────────────────
   if (sub === "get") {
     const id = rest[1];
-    if (!id) fail("usage: rotom memory get <memoryId>");
-    const data = await api(agent, "GET", `/memory/${encodeURIComponent(id)}`);
+    if (!id) usage("memory get", "<memoryId>");
+    const data = await api(agent, "GET", route("/memory/:id", id));
     printJson(data);
     return;
   }
@@ -148,11 +150,11 @@ export async function cmdMemory(
     if (pendingReview) body.pendingReview = true;
 
     if (scope === "global") {
-      url = `/memory/global`;
+      url = route("/memory/global");
     } else {
       const groupId = rest[1];
-      if (!groupId) fail("usage: rotom memory add <groupId> --key K --value V --category C [--scope global]");
-      url = `/groups/${encodeURIComponent(groupId)}/memory`;
+      if (!groupId) usage("memory add", "<groupId> --key K --value V --category C [--scope global]");
+      url = route("/groups/:groupId/memory", groupId);
     }
     const data = await api(agent, "POST", url, body);
     printJson(data);
@@ -162,7 +164,7 @@ export async function cmdMemory(
   // ── update ────────────────────────────────────────────────────────────
   if (sub === "update") {
     const id = rest[1];
-    if (!id) fail("usage: rotom memory update <memoryId> [--value V] [--summary S] [--tags t1,t2] [--category C] [--visibility V] [--agent-visible|--no-agent-visible]");
+    if (!id) usage("memory update", "<memoryId> [--value V] [--summary S] [--tags t1,t2] [--category C] [--visibility V] [--agent-visible|--no-agent-visible]");
     const body: Record<string, unknown> = {};
     const value = flagStr(flags, "value");
     const summary = flagStr(flags, "summary");
@@ -180,44 +182,44 @@ export async function cmdMemory(
     if (flags["agent-visible"] === true) body.agentVisible = true;
     if (flags["agent-visible"] === false) body.agentVisible = false;
     if (Object.keys(body).length === 0) fail("no fields to update");
-    await api(agent, "PATCH", `/memory/${encodeURIComponent(id)}`, body);
+    await api(agent, "PATCH", route("/memory/:id", id), body);
     printJson({ ok: true });
     return;
   }
 
   // ── remove / expire / promote ────────────────────────────────────────
   if (sub === "remove") {
-    const id = rest[1]; if (!id) fail("usage: rotom memory remove <memoryId>");
-    await api(agent, "DELETE", `/memory/${encodeURIComponent(id)}`);
+    const id = rest[1]; if (!id) usage("memory remove", "<memoryId>");
+    await api(agent, "DELETE", route("/memory/:id", id));
     printJson({ ok: true });
     return;
   }
   if (sub === "expire") {
-    const id = rest[1]; if (!id) fail("usage: rotom memory expire <memoryId>");
-    await api(agent, "POST", `/memory/${encodeURIComponent(id)}/expire`);
+    const id = rest[1]; if (!id) usage("memory expire", "<memoryId>");
+    await api(agent, "POST", route("/memory/:id/expire", id));
     printJson({ ok: true });
     return;
   }
   if (sub === "promote") {
-    const id = rest[1]; if (!id) fail("usage: rotom memory promote <memoryId> --visibility global");
+    const id = rest[1]; if (!id) usage("memory promote", "<memoryId> --visibility global");
     const visibility = flagStr(flags, "visibility");
     if (visibility !== "global" && visibility !== "private" && visibility !== "group") {
       fail("--visibility required: global | private | group");
     }
-    await api(agent, "POST", `/memory/${encodeURIComponent(id)}/promote`, { visibility });
+    await api(agent, "POST", route("/memory/:id/promote", id), { visibility });
     printJson({ ok: true });
     return;
   }
 
   // ── promote-to-skill(playbook memory → 全局 skill)────────────────────
   if (sub === "promote-to-skill") {
-    const id = rest[1]; if (!id) fail("usage: rotom memory promote-to-skill <memoryId> [--name N] [--description D]");
+    const id = rest[1]; if (!id) usage("memory promote-to-skill", "<memoryId> [--name N] [--description D]");
     const name = flagStr(flags, "name");
     const description = flagStr(flags, "description");
     const body: Record<string, unknown> = { createdBy: agent.name };
     if (name) body.name = name;
     if (description) body.description = description;
-    const data = await api(agent, "POST", `/memory/${encodeURIComponent(id)}/promote-to-skill`, body);
+    const data = await api(agent, "POST", route("/memory/:id/promote-to-skill", id), body);
     printJson(data);
     return;
   }
@@ -226,11 +228,11 @@ export async function cmdMemory(
   if (sub === "pending") {
     let url: string;
     if (scope === "global") {
-      url = `/memory/pending?scope=global`;
+      url = `${route("/memory/pending")}${qs({ scope: "global" })}`;
     } else {
       const groupId = rest[1];
-      if (!groupId) fail("usage: rotom memory pending <groupId> [--scope global]");
-      url = `/groups/${encodeURIComponent(groupId)}/memory/pending`;
+      if (!groupId) usage("memory pending", "<groupId> [--scope global]");
+      url = route("/groups/:groupId/memory/pending", groupId);
     }
     const data = await api(agent, "GET", url);
     printTable(
@@ -246,14 +248,14 @@ export async function cmdMemory(
     return;
   }
   if (sub === "approve") {
-    const id = rest[1]; if (!id) fail("usage: rotom memory approve <memoryId>");
-    await api(agent, "POST", `/memory/${encodeURIComponent(id)}/approve`);
+    const id = rest[1]; if (!id) usage("memory approve", "<memoryId>");
+    await api(agent, "POST", route("/memory/:id/approve", id));
     printJson({ ok: true });
     return;
   }
   if (sub === "reject") {
-    const id = rest[1]; if (!id) fail("usage: rotom memory reject <memoryId>");
-    await api(agent, "POST", `/memory/${encodeURIComponent(id)}/reject`);
+    const id = rest[1]; if (!id) usage("memory reject", "<memoryId>");
+    await api(agent, "POST", route("/memory/:id/reject", id));
     printJson({ ok: true });
     return;
   }
@@ -262,11 +264,11 @@ export async function cmdMemory(
   if (sub === "stats") {
     let url: string;
     if (scope === "global") {
-      url = `/memory/stats?scope=global`;
+      url = `${route("/memory/stats")}${qs({ scope: "global" })}`;
     } else {
       const groupId = rest[1];
-      if (!groupId) fail("usage: rotom memory stats <groupId> [--scope global] [--stale]");
-      url = `/groups/${encodeURIComponent(groupId)}/memory/stats`;
+      if (!groupId) usage("memory stats", "<groupId> [--scope global] [--stale]");
+      url = route("/groups/:groupId/memory/stats", groupId);
     }
     const data = await api(agent, "GET", url);
     printJson(data);
@@ -276,7 +278,7 @@ export async function cmdMemory(
       // listMemory 不直接支持 stale,这里复用 stats 拿到的 topViewed 反推不够,
       // 改用 list 接口 + 客户端过滤太重。直接走专用接口更合适,但未实现。
       // 留作 TODO:加 /memory/stale 端点。当前用 stats 的 topViewed 近似。
-      console.error(`(stale 列表需 /memory/stale 端点,当前未实现;min-age=${minAge})`);
+      log.warn(`stale 列表需 /memory/stale 端点,当前未实现;min-age=${minAge}`);
     }
     return;
   }

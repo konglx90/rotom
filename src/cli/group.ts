@@ -16,6 +16,7 @@ import {
   flagStr,
   requireFlag,
 } from "./common.js";
+import { route, qs, usage, unknownSubcommand } from "./routes.js";
 
 // Minimal MIME sniff table — keep it inline; we accept only the 4 formats the
 // uploads endpoint allowlists. Anything else is an error before we hit network.
@@ -36,7 +37,7 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
   const sub = rest[0];
   if (sub === "create") {
     const title = rest[1];
-    if (!title) fail("usage: rotom group create <title> --agents <a,b[,c...]> [--message M] [--note D] [--note-file F] [--cwd PATH] [--no-template] [--a2a-direct]");
+    if (!title) usage("group create", "<title> --agents <a,b[,c...]> [--message M] [--note D] [--note-file F] [--cwd PATH] [--no-template] [--a2a-direct]");
     const agentsFlag = requireFlag(flags, "agents");
     const agents = agentsFlag.split(",").map((s) => s.trim()).filter(Boolean);
     if (agents.length === 0) fail("--agents must list at least one agent name (comma-separated)");
@@ -81,7 +82,7 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
         const templates = await api(agent, "GET", "/guidance-templates") as any[];
         const tpl = templates.find((t) => t.name === "群内讨论方案设计");
         if (tpl?.prompt_text) {
-          await api(agent, "PATCH", `/groups/${encodeURIComponent(groupId)}`, { guidancePrompt: tpl.prompt_text });
+          await api(agent, "PATCH", route("/groups/:groupId", groupId), { guidancePrompt: tpl.prompt_text });
           guidanceTemplate = tpl.name;
         } else {
           process.stderr.write(`[rotom] warn: guidance template "群内讨论方案设计" not found on master, skip (group still created)\n`);
@@ -94,7 +95,7 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     // 可选:建群即发开场消息
     let messagePosted = false;
     if (message) {
-      await api(agent, "POST", `/cli/groups/${encodeURIComponent(groupId)}/send`, { target: "全体", message });
+      await api(agent, "POST", route("/cli/groups/:groupId/send", groupId), { target: "全体", message });
       messagePosted = true;
     }
 
@@ -109,7 +110,7 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
       } else if (noteInline) {
         noteDescription = noteInline;
       }
-      const noteRes = await api(agent, "POST", `/groups/${encodeURIComponent(groupId)}/notes`, {
+      const noteRes = await api(agent, "POST", route("/groups/:groupId/notes", groupId), {
         title, description: noteDescription, createdBy: agent.name,
       }) as { id?: string };
       noteId = noteRes?.id;
@@ -146,8 +147,8 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     return;
   }
   if (sub === "members") {
-    const groupId = rest[1]; if (!groupId) fail("usage: rotom group members <groupId>");
-    const data = await api(agent, "GET", `/groups/${encodeURIComponent(groupId)}`);
+    const groupId = rest[1]; if (!groupId) usage("group members", "<groupId>");
+    const data = await api(agent, "GET", route("/groups/:groupId", groupId));
     const members = (data.members || []) as Array<{
       agent_name: string;
       joined_at: string;
@@ -173,12 +174,12 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     return;
   }
   if (sub === "history") {
-    const groupId = rest[1]; if (!groupId) fail("usage: rotom group history <groupId>");
+    const groupId = rest[1]; if (!groupId) usage("group history", "<groupId>");
     const limit = flagInt(flags, "limit") ?? 50;
     const contentLen = flagInt(flags, "content-len") ?? 200;
     const hideExec = flags["no-exec"] === true;
     const clean = flags["clean"] !== false;
-    const data = await api(agent, "GET", `/groups/${encodeURIComponent(groupId)}/messages?limit=${limit}`);
+    const data = await api(agent, "GET", `${route("/groups/:groupId/messages", groupId)}${qs({ limit })}`);
     // --no-exec 过滤 sender=system 且以「请求执行命令:」开头的 shell 调用通知,
     // 这类消息占行多但很少是用户想看的回复主体。
     const filtered = hideExec
@@ -206,12 +207,12 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     return;
   }
   if (sub === "new-messages") {
-    const groupId = rest[1]; if (!groupId) fail("usage: rotom group new-messages <groupId> --since <ISO> [--content-len N] [--no-clean]");
+    const groupId = rest[1]; if (!groupId) usage("group new-messages", "<groupId> --since <ISO> [--content-len N] [--no-clean]");
     const since = flagStr(flags, "since");
     if (!since) fail("--since is required (北京时间字符串如 \"2026-06-30 18:02:04\" 或 UTC ISO)");
     const contentLen = flagInt(flags, "content-len") ?? 200;
     const clean = flags["clean"] !== false;
-    const data = await api(agent, "GET", `/groups/${encodeURIComponent(groupId)}/messages?since=${encodeURIComponent(since)}`);
+    const data = await api(agent, "GET", `${route("/groups/:groupId/messages", groupId)}${qs({ since })}`);
     printTable(
       data.map((m: any) => {
         let content = (m.content || "").replace(/\s+/g, " ");
@@ -233,17 +234,17 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
   }
   if (sub === "send") {
     const groupId = rest[1]; const target = rest[2]; const message = rest.slice(3).join(" ");
-    if (!groupId || !target || !message) fail("usage: rotom group send <groupId> <target> <message...> [--no-dispatch] [--need-reply]");
+    if (!groupId || !target || !message) usage("group send", "<groupId> <target> <message...> [--no-dispatch] [--need-reply]");
     const body: Record<string, unknown> = { target, message };
     if (flags["no-dispatch"] === true) body.noDispatch = true;
     if (flags["need-reply"] === true) body.needReply = true;
-    const data = await api(agent, "POST", `/cli/groups/${encodeURIComponent(groupId)}/send`, body);
+    const data = await api(agent, "POST", route("/cli/groups/:groupId/send", groupId), body);
     printJson(data);
     return;
   }
   if (sub === "upload") {
     const groupId = rest[1]; const filePath = rest[2];
-    if (!groupId || !filePath) fail("usage: rotom group upload <groupId> <filePath> [--markdown]");
+    if (!groupId || !filePath) usage("group upload", "<groupId> <filePath> [--markdown]");
     const expanded = filePath.startsWith("~/") ? path.join(process.env.HOME || "", filePath.slice(2)) : filePath;
     if (!fs.existsSync(expanded)) fail(`file not found: ${expanded}`);
     const mimeType = guessMime(expanded);
@@ -266,16 +267,16 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     return;
   }
   if (sub === "archive") {
-    const groupId = rest[1]; if (!groupId) fail("usage: rotom group archive <groupId>");
-    const data = await api(agent, "PATCH", `/groups/${encodeURIComponent(groupId)}`, { archived: true });
+    const groupId = rest[1]; if (!groupId) usage("group archive", "<groupId>");
+    const data = await api(agent, "PATCH", route("/groups/:groupId", groupId), { archived: true });
     printJson(data);
     return;
   }
   if (sub === "unarchive") {
-    const groupId = rest[1]; if (!groupId) fail("usage: rotom group unarchive <groupId>");
-    const data = await api(agent, "PATCH", `/groups/${encodeURIComponent(groupId)}`, { archived: false });
+    const groupId = rest[1]; if (!groupId) usage("group unarchive", "<groupId>");
+    const data = await api(agent, "PATCH", route("/groups/:groupId", groupId), { archived: false });
     printJson(data);
     return;
   }
-  fail(`unknown group subcommand: ${sub || "(none)"}`);
+  unknownSubcommand("group", sub);
 }

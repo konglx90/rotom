@@ -14,6 +14,7 @@ import {
   flagStr,
   requireFlag,
 } from "./common.js";
+import { route, qs, usage } from "./routes.js";
 import { readFileSync } from "node:fs";
 
 function fmtPreview(s: string, len = 60): string {
@@ -41,8 +42,7 @@ export async function cmdSkill(
   // ── list(全局 skill 索引)─────────────────────────────────────────────
   if (sub === "list") {
     const category = flagStr(flags, "category");
-    let url = "/skills";
-    if (category) url += `?category=${encodeURIComponent(category)}`;
+    const url = `${route("/skills")}${qs({ category })}`;
     const data = await api(agent, "GET", url);
     printTable(
       data.map((s: any) => ({
@@ -59,8 +59,8 @@ export async function cmdSkill(
   // ── search ───────────────────────────────────────────────────────────
   if (sub === "search") {
     const keyword = rest[1];
-    if (!keyword) fail("usage: rotom skill search <keyword>");
-    const data = await api(agent, "GET", `/skills/search?q=${encodeURIComponent(keyword)}`);
+    if (!keyword) usage("skill search", "<keyword>");
+    const data = await api(agent, "GET", `${route("/skills/search")}${qs({ q: keyword })}`);
     printTable(
       data.map((s: any) => ({
         name: s.name,
@@ -75,8 +75,8 @@ export async function cmdSkill(
   // ── get(看全文,view_count+1)─────────────────────────────────────────
   if (sub === "get") {
     const name = rest[1];
-    if (!name) fail("usage: rotom skill get <name>");
-    const data = await api(agent, "GET", `/skills/${encodeURIComponent(name)}`);
+    if (!name) usage("skill get", "<name>");
+    const data = await api(agent, "GET", route("/skills/:name", name));
     printJson(data);
     return;
   }
@@ -99,7 +99,7 @@ export async function cmdSkill(
   // ── update ───────────────────────────────────────────────────────────
   if (sub === "update") {
     const name = rest[1];
-    if (!name) fail("usage: rotom skill update <name> [--description D] [--content C|@file] [--category C]");
+    if (!name) usage("skill update", "<name> [--description D] [--content C|@file] [--category C]");
     const body: Record<string, unknown> = {};
     const description = flagStr(flags, "description");
     const contentRaw = flagStr(flags, "content");
@@ -108,7 +108,7 @@ export async function cmdSkill(
     if (contentRaw !== undefined) body.content = resolveContent(contentRaw);
     if (category !== undefined) body.category = category;
     if (Object.keys(body).length === 0) fail("至少传一个 --description / --content / --category");
-    await api(agent, "PATCH", `/skills/${encodeURIComponent(name)}`, body);
+    await api(agent, "PATCH", route("/skills/:name", name), body);
     printJson({ ok: true });
     return;
   }
@@ -116,8 +116,8 @@ export async function cmdSkill(
   // ── remove ──────────────────────────────────────────────────────────
   if (sub === "remove") {
     const name = rest[1];
-    if (!name) fail("usage: rotom skill remove <name>");
-    await api(agent, "DELETE", `/skills/${encodeURIComponent(name)}`);
+    if (!name) usage("skill remove", "<name>");
+    await api(agent, "DELETE", route("/skills/:name", name));
     printJson({ ok: true });
     return;
   }
@@ -127,8 +127,8 @@ export async function cmdSkill(
     const groupId = rest[1];
     const agentName = rest[2];
     const skillName = rest[3];
-    if (!groupId || !agentName || !skillName) fail("usage: rotom skill bind <groupId> <agentName> <skillName>");
-    await api(agent, "POST", `/groups/${encodeURIComponent(groupId)}/skills/${encodeURIComponent(agentName)}/bind`, {
+    if (!groupId || !agentName || !skillName) usage("skill bind", "<groupId> <agentName> <skillName>");
+    await api(agent, "POST", route("/groups/:groupId/skills/:agent/bind", groupId, agentName), {
       skillName,
     });
     printJson({ ok: true });
@@ -138,8 +138,8 @@ export async function cmdSkill(
     const groupId = rest[1];
     const agentName = rest[2];
     const skillName = rest[3];
-    if (!groupId || !agentName || !skillName) fail("usage: rotom skill unbind <groupId> <agentName> <skillName>");
-    await api(agent, "DELETE", `/groups/${encodeURIComponent(groupId)}/skills/${encodeURIComponent(agentName)}/bind/${encodeURIComponent(skillName)}`);
+    if (!groupId || !agentName || !skillName) usage("skill unbind", "<groupId> <agentName> <skillName>");
+    await api(agent, "DELETE", route("/groups/:groupId/skills/:agent/bind/:skill", groupId, agentName, skillName));
     printJson({ ok: true });
     return;
   }
@@ -148,9 +148,7 @@ export async function cmdSkill(
   if (sub === "bindings") {
     const groupId = rest[1];
     const agentName = rest[2];
-    let url = "/skills/bindings/all";
-    if (groupId) url += `?groupId=${encodeURIComponent(groupId)}`;
-    if (agentName) url += `&agentName=${encodeURIComponent(agentName)}`;
+    const url = `${route("/skills/bindings/all")}${qs({ groupId, agentName })}`;
     const data = await api(agent, "GET", url);
     printTable(
       data.map((b: any) => ({
@@ -166,8 +164,8 @@ export async function cmdSkill(
   // ── mine(当前 agent 在该群绑定的 skill)────────────────────────────
   if (sub === "mine") {
     const groupId = rest[1];
-    if (!groupId) fail("usage: rotom skill mine <groupId>");
-    const data = await api(agent, "GET", `/groups/${encodeURIComponent(groupId)}/skills/${encodeURIComponent(agent.name)}`);
+    if (!groupId) usage("skill mine", "<groupId>");
+    const data = await api(agent, "GET", route("/groups/:groupId/skills/:agent", groupId, agent.name));
     printTable(
       data.map((s: any) => ({
         name: s.name,

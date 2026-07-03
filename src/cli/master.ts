@@ -3,6 +3,7 @@
  */
 
 import { fail, flagStr, runShellScript } from "./common.js";
+import { usage } from "./routes.js";
 
 /**
  * Accept `master:start` colon alias, expand to [`start`, ...rest].
@@ -25,8 +26,9 @@ export async function cmdMaster(rest: string[], flags: Record<string, string | b
     case "restart":
       args.push(sub); break;
     default:
-      fail(
-        "usage: rotom master <start|stop|status|restart> [--daemon] [--port N] [--host A] [--data D] [--dev]\n" +
+      usage(
+        "master",
+        "<start|stop|status|restart> [--daemon] [--port N] [--host A] [--data D] [--dev]\n" +
         "       (also accepts colon form: rotom master:start | master:stop | master:status | master:restart)",
       );
   }

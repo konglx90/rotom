@@ -17,6 +17,7 @@ import {
   flagStr,
   pretty,
 } from "./common.js";
+import { route, qs, usage } from "./routes.js";
 
 function formatBridgeRow(b: any) {
   return {
@@ -37,13 +38,11 @@ export async function cmdAsk(agent: ResolvedAgent, rest: string[], flags: Record
   const sub = rest[0];
 
   if (sub === "list") {
-    const qs = new URLSearchParams();
-    const gid = flagStr(flags, "group"); if (gid) qs.set("group", gid);
-    const status = flagStr(flags, "status"); if (status) qs.set("status", status);
-    const route = `/groups${qs.toString() ? `?${qs}` : ""}`;
+    const gid = flagStr(flags, "group");
+    const status = flagStr(flags, "status");
     // /groups 列群不列 bridge;bridge 走 /groups/:id/asks
-    if (!gid) fail("usage: rotom ask list --group <id> [--status pending|answered|timed_out|cancelled]");
-    const data = await api(agent, "GET", `/groups/${encodeURIComponent(gid)}/asks${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+    if (!gid) usage("ask list", "--group <id> [--status pending|answered|timed_out|cancelled]");
+    const data = await api(agent, "GET", `${route("/groups/:groupId/asks", gid)}${qs({ status })}`);
     if (pretty) {
       printTable((data as any[]).map(formatBridgeRow), ["id", "group", "asker", "target", "status", "escalate_to", "created", "expires", "reply_msg", "issue"]);
     } else {
@@ -53,15 +52,15 @@ export async function cmdAsk(agent: ResolvedAgent, rest: string[], flags: Record
   }
 
   if (sub === "show") {
-    const id = rest[1]; if (!id) fail("usage: rotom ask show <bridgeId>");
-    const data = await api(agent, "GET", `/asks/${encodeURIComponent(id)}`);
+    const id = rest[1]; if (!id) usage("ask show", "<bridgeId>");
+    const data = await api(agent, "GET", route("/asks/:id", id));
     printJson(data);
     return;
   }
 
   if (sub === "cancel") {
-    const id = rest[1]; if (!id) fail("usage: rotom ask cancel <bridgeId>");
-    const data = await api(agent, "POST", `/asks/${encodeURIComponent(id)}/cancel`);
+    const id = rest[1]; if (!id) usage("ask cancel", "<bridgeId>");
+    const data = await api(agent, "POST", route("/asks/:id/cancel", id));
     printJson(data);
     return;
   }
