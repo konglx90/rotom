@@ -33,6 +33,35 @@ import { parseProfile, type WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 import { resolveGroupRepoCtxLocalOnly } from "../group-paths.js";
 
+interface ReplyContext {
+  targetId: string | undefined;
+  conversation: ReturnType<WSHubSelf["router"]["getConversation"]>;
+  conn: ReturnType<WSHubSelf["connections"]["get"]>;
+  fromName: string;
+  isA2aDirect: boolean;
+}
+
+/**
+ * Shared preamble for a2a_reply / a2a_reply_chunk / a2a_reply_end handlers.
+ * Resolves the routing target + connection metadata + group-type flag that
+ * all three reply branches need before deciding whether to broadcast,
+ * unicast, or skip dispatch.
+ *
+ * Pulled out so the three branches don't repeat the same 5-line lookup.
+ * The branches still own their (different) persistence + dispatch shapes
+ * because chunk/end/reply have meaningfully different semantics.
+ */
+function resolveReplyContext(hub: WSHubSelf, requestId: string, agentId: string): ReplyContext {
+  const targetId = hub.router.resolveReplyTarget(requestId);
+  const conversation = hub.router.getConversation(requestId);
+  const conn = hub.connections.get(agentId);
+  const fromName = conn?.name || "unknown";
+  const isA2aDirect = conversation?.groupId
+    ? hub.db.getGroupById(conversation.groupId)?.type === "a2a_direct"
+    : false;
+  return { targetId, conversation, conn, fromName, isA2aDirect };
+}
+
 export const connectionMethods = {
   handleConnection(this: WSHubSelf, ws: WebSocket): void {
     let authenticated = false;
@@ -422,11 +451,8 @@ export const connectionMethods = {
       // ── Reply ───────────────────────────────────────────────────────────
       if (msg.type === "a2a_reply") {
         this.logger.info(`[mesh] Received a2a_reply (non-streaming) for requestId=${msg.requestId}`);
-        const targetId = this.router.resolveReplyTarget(msg.requestId);
-        const conversation = this.router.getConversation(msg.requestId);
+        const { targetId, conversation, conn, fromName, isA2aDirect } = resolveReplyContext(this, msg.requestId, agentId);
         if (targetId) {
-          const conn = this.connections.get(agentId);
-          const fromName = conn?.name || "unknown";
           const targetAgent = this.db.getAgentById(targetId);
           const enrichedConversation = this.enrichGroupConversation(conversation, targetAgent?.name);
           // qaMode:硬剥 @<asker> 防止 asker worker 被回触发(一问一答,不 chatter)
@@ -461,9 +487,6 @@ export const connectionMethods = {
           // 单播群(unicast):跳过 broadcast(消息已入库,asker 通过 history 拉)。
           //   不调 sendToAgent(target=asker)因为 asker 是 CLI 无 WS 连接,
           //   推也推不到 —— 这正是 unicast 的设计:一对一点对点,免打扰。
-          const isA2aDirect = conversation?.groupId
-            ? this.db.getGroupById(conversation.groupId)?.type === "a2a_direct"
-            : false;
           if (conversation?.type === "group" && conversation.groupId && !isA2aDirect) {
             this.broadcastToGroup(conversation.groupId, replyMsg as unknown as Parameters<typeof this.sendToAgent>[1], [agentId]);
           } else if (conversation?.type !== "group") {
@@ -500,11 +523,8 @@ export const connectionMethods = {
 
       // ── Streaming reply chunk ──────────────────────────────────────────
       if (msg.type === "a2a_reply_chunk") {
-        const targetId = this.router.resolveReplyTarget(msg.requestId);
-        const conversation = this.router.getConversation(msg.requestId);
+        const { targetId, conversation, conn, fromName, isA2aDirect } = resolveReplyContext(this, msg.requestId, agentId);
         if (targetId) {
-          const conn = this.connections.get(agentId);
-          const fromName = conn?.name || "unknown";
           const chunkMsg = {
             type: "a2a_stream_chunk" as const,
             requestId: msg.requestId,
@@ -515,9 +535,6 @@ export const connectionMethods = {
           // Send stream chunk to original sender only (streaming is per-session, no broadcast)
           // 单播群(unicast):跳过广播,asker 通过 history 拉最终内容(中途流式 UI 不可见,
           //   但功能层面不受影响 —— 完整 reply 在 a2a_reply_end 入库)。
-          const isA2aDirect = conversation?.groupId
-            ? this.db.getGroupById(conversation.groupId)?.type === "a2a_direct"
-            : false;
           if (conversation?.type === "group" && conversation.groupId && !isA2aDirect) {
             this.broadcastToGroup(conversation.groupId, chunkMsg, [agentId]);
           } else if (conversation?.type !== "group") {
@@ -529,11 +546,8 @@ export const connectionMethods = {
 
       // ── Streaming reply end ────────────────────────────────────────────
       if (msg.type === "a2a_reply_end") {
-        const targetId = this.router.resolveReplyTarget(msg.requestId);
-        const conversation = this.router.getConversation(msg.requestId);
+        const { targetId, conversation, conn, fromName, isA2aDirect } = resolveReplyContext(this, msg.requestId, agentId);
         if (targetId) {
-          const conn = this.connections.get(agentId);
-          const fromName = conn?.name || "unknown";
           const cancelled = msg.cancelled === true;
           const endMsg: Record<string, unknown> = {
             type: "a2a_stream_end" as const,
@@ -590,9 +604,6 @@ export const connectionMethods = {
           // 让其他 agent 的 worker 能处理(worker 只认 a2a_message,不认 a2a_stream_end)。
           // a2a_stream_end 只发给原始 target,用于 Dashboard 流式 UI 收尾。
           // 单播群(unicast):跳过 broadcast,消息已经入库(本 handler 上方 addGroupMessage)。
-          const isA2aDirect = conversation?.groupId
-            ? this.db.getGroupById(conversation.groupId)?.type === "a2a_direct"
-            : false;
           if (conversation?.type === "group" && conversation.groupId && !isA2aDirect) {
             const groupMsg = enrichWorkerDispatch(this, {
               type: "a2a_message" as const,
