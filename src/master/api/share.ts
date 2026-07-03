@@ -1,4 +1,3 @@
-import { toBeijing } from "../../shared/time.js";
 /**
  * Digital Employee Mesh — Share / Visitor API
  *
@@ -28,12 +27,12 @@ import { toBeijing } from "../../shared/time.js";
  */
 
 import { type Router as ExpressRouter, type Request, type Response } from "express";
-import path from "node:path";
 import fs from "node:fs";
 import type { MeshDb } from "../db.js";
 import type { ShareTokenStore } from "../share-tokens.js";
 import { resolveGroupArtifactRoot } from "../group-paths.js";
 import { createLogger } from "../../shared/logger.js";
+import { readFileSafely, walkDir } from "../util/fs.js";
 
 const log = createLogger("mesh-api");
 
@@ -246,58 +245,6 @@ export function registerShareRoutes(
       return;
     }
 
-    interface FileEntry {
-      name: string;
-      path: string;
-      absPath: string;
-      size: number;
-      modifiedTime: string;
-      type: "file" | "directory";
-      children?: FileEntry[];
-    }
-
-    function walkDir(dir: string, base: string): FileEntry[] {
-      const entries: FileEntry[] = [];
-      let items: fs.Dirent[];
-      try {
-        items = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return entries;
-      }
-      for (const item of items) {
-        if (item.name.startsWith(".")) continue;
-        if (item.name === "node_modules") continue;
-        const fullPath = path.join(dir, item.name);
-        const relPath = path.relative(base, fullPath);
-        if (item.isDirectory()) {
-          entries.push({
-            name: item.name,
-            path: relPath,
-            absPath: fullPath,
-            size: 0,
-            modifiedTime: toBeijing(fs.statSync(fullPath).mtime),
-            type: "directory",
-            children: walkDir(fullPath, base),
-          });
-        } else if (item.isFile()) {
-          const stat = fs.statSync(fullPath);
-          entries.push({
-            name: item.name,
-            path: relPath,
-            absPath: fullPath,
-            size: stat.size,
-            modifiedTime: toBeijing(stat.mtime),
-            type: "file",
-          });
-        }
-      }
-      entries.sort((a, b) => {
-        if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-      return entries;
-    }
-
     res.json({ root: groupDir, files: walkDir(groupDir, groupDir) });
   });
 
@@ -314,29 +261,29 @@ export function registerShareRoutes(
       return;
     }
     const groupDir = resolveGroupArtifactRoot(db, record.groupId);
-    const resolved = path.resolve(groupDir, filePath);
-    if (!resolved.startsWith(path.resolve(groupDir))) {
+    const result = readFileSafely(groupDir, filePath);
+    if (result.kind === "outside-base") {
       res.status(403).json({ error: "Invalid path" });
       return;
     }
-    if (!fs.existsSync(resolved)) {
+    if (result.kind === "missing") {
       res.status(404).json({ error: "File not found" });
       return;
     }
-    const stat = fs.statSync(resolved);
-    const MAX_SIZE = 500 * 1024;
-    if (stat.size > MAX_SIZE) {
-      res.json({ path: filePath, content: `[File too large: ${(stat.size / 1024).toFixed(1)}KB]`, size: stat.size, type: "text" as const });
+    if (result.kind === "too-large") {
+      res.json({
+        path: filePath,
+        content: `[File too large: ${(result.size / 1024).toFixed(1)}KB]`,
+        size: result.size,
+        type: "text" as const,
+      });
       return;
     }
-    const ext = path.extname(resolved).toLowerCase();
-    const binaryExts = new Set([".png", ".jpg", ".jpeg", ".gif", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".pdf", ".zip"]);
-    if (binaryExts.has(ext)) {
-      const buf = fs.readFileSync(resolved);
-      res.json({ path: filePath, content: buf.toString("base64"), size: stat.size, type: "binary" as const });
-    } else {
-      const content = fs.readFileSync(resolved, "utf-8");
-      res.json({ path: filePath, content, size: stat.size, type: "text" as const });
-    }
+    res.json({
+      path: filePath,
+      content: result.content,
+      size: result.size,
+      type: result.type,
+    });
   });
 }
