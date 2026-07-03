@@ -12,6 +12,7 @@ import { createLogger } from "../../shared/logger.js";
 import { parseAgentProfile, mergeGroupProfile } from "../../shared/agent-profile.js";
 import { extractMentions } from "../../shared/mention.js";
 import { validateWorkingDir } from "../util/paths.js";
+import { bootstrapPatrolGroup } from "../services/patrol-bootstrap.js";
 
 const log = createLogger("mesh-api");
 
@@ -114,38 +115,7 @@ export function registerGroupRoutes(
         (n): n is string => typeof n === "string" && !!n.trim(),
       );
       if (patrolAgentName) {
-        const payload = {
-          patrolGroupId: id,
-          patrolAgentName,
-          throughputCap: 3,
-          candidateCap: 3,
-          scanBatch: 10,
-        };
-        db.createScheduledTask({
-          name: "Issue 巡检",
-          groupId: id,
-          mode: "agent", // handler 模式下 mode 不被使用,但 schema NOT NULL,保留 agent
-          agentName: patrolAgentName,
-          scheduleKind: "interval",
-          intervalSec: 3600,
-          prompt: "", // handler 模式不用 prompt,但 schema NOT NULL
-          enabled: true,
-          handlerKey: "issue-patrol",
-          handlerPayload: JSON.stringify(payload),
-        });
-        const skill = db.getSkillByName("issue-patrol-rules");
-        if (skill) {
-          db.bindSkill({
-            groupId: id,
-            agentName: patrolAgentName,
-            skillId: skill.id,
-            createdBy: "system:patrol-bootstrap",
-          });
-          log.info(`Patrol group ${id}: bound issue-patrol-rules to ${patrolAgentName}`);
-        } else {
-          log.warn(`Patrol group ${id}: issue-patrol-rules skill not found, skip binding`);
-        }
-        log.info(`Patrol group ${id}: auto-created issue-patrol schedule (interval 3600s, enabled)`);
+        bootstrapPatrolGroup(db, log, id, patrolAgentName);
       }
     }
 

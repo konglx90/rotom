@@ -7,6 +7,7 @@ import { truncateTitle } from "../../shared/title.js";
 import { ISSUE_STATUSES } from "../../shared/constants.js";
 import { safeJsonParse } from "../../shared/parse.js";
 import { validateWorkingDir } from "../util/paths.js";
+import { buildMemoryExtractPrompt } from "../services/memory-extract-prompt.js";
 import { resolveGroupAgentWorkingDir } from "../group-paths.js";
 import { createLogger } from "../../shared/logger.js";
 import type { IssueRow } from "../db/types.js";
@@ -644,24 +645,7 @@ export function registerIssueRoutes(
 
     const sourceShortId = req.params.id.slice(0, 8);
     const extractIssueId = randomUUID();
-    const extractPrompt = [
-      `[记忆提取任务] 请从 Issue #${sourceShortId} 的产出中提炼值得长期记住的经验。`,
-      ``,
-      `原 Issue 标题:${sourceIssue.title}`,
-      `原 Issue 描述:`,
-      sourceIssue.description || "(无)",
-      ``,
-      `步骤:`,
-      `1. 用 \`rotom issue show ${req.params.id}\` 或读 issue 详情,了解这次任务做了什么、关键决策、踩过的坑、用到的技术栈/约定`,
-      `2. 提炼 0~N 条记忆,每条选定 category(fact/decision/convention/pitfall/todo/playbook)`,
-      `3. 每条用 \`rotom memory add ${sourceIssue.group_id} --key <主题> --value <内容> --category <cat> --summary <一句话> --pending\` 写入`,
-      `   - --pending 必须加,写入后处于待审核状态,由人在 dashboard 审核`,
-      `   - key 用 "decision:xxx" / "pitfall:xxx" / "fact:xxx" 等带前缀的形式`,
-      `   - 只提炼真正值得长期记住的,无关细节不要记。没有值得记的就一条都不写`,
-      `4. 完成后在群里回复"已提取 N 条记忆,待审核"`,
-      ``,
-      `重要:不要记临时性的、任务特定的、下次不会复用的信息。`,
-    ].join("\n");
+    const extractPrompt = buildMemoryExtractPrompt(sourceIssue, sourceShortId);
 
     const workingDir = resolveGroupAgentWorkingDir(db, sourceIssue.group_id, targetAgent);
     db.createIssue({
