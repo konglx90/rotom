@@ -1,4 +1,5 @@
 import { nowBeijing, toBeijing } from "../shared/time.js";
+import { extractMentions } from "../shared/mention.js";
 /**
  * scheduler-handlers —— 定时器到点跑硬编码逻辑的 handler 注册表。
  *
@@ -90,7 +91,7 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
     // mentions 从 content 重抽(不信任 DB 行的 mentions 列:agent a2a_reply 入库写死 [])
     ctx.db.markBridgeAnswered(bridge.id, reply.id);
     cancelBridgeTask(ctx, bridge.id);
-    const replyMentions = (reply.content || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) ?? [];
+    const replyMentions = extractMentions(reply.content);
     if (replyMentions.includes(bridge.asker)) {
       log.info(`bridge #${bridge.id} answered by handler: ${bridge.target} replied (msg ${reply.id}) already @ ${bridge.asker}, skip restatement`);
       return { status: "ok" };

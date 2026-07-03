@@ -8,6 +8,7 @@
 import { WebSocket } from "ws";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
+import { decodeJson } from "../shared/json-codec.js";
 import type { ExecutorWorker } from "./worker.js";
 
 export class WorkerConnection {
@@ -69,8 +70,8 @@ export class WorkerConnection {
     });
 
     this.worker.ws.on("message", (raw) => {
-      let msg: Record<string, unknown>;
-      try { msg = JSON.parse(raw.toString()); } catch { return; }
+      const msg = decodeJson<Record<string, unknown>>(raw);
+      if (!msg) return;
       this.worker.handleMessage(msg);
     });
 

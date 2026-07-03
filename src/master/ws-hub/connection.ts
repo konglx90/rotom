@@ -1,4 +1,5 @@
 import { nowBeijing } from "../../shared/time.js";
+import { extractMentions } from "../../shared/mention.js";
 /**
  * Connection handling — WebSocket lifecycle and message dispatch.
  *
@@ -347,7 +348,7 @@ export const connectionMethods = {
               this.logger.info(`[mesh] a2a_send group: auto-joined sender "${fromName}" as group member`);
             }
 
-            const mentions = msg.payload?.message?.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+            const mentions = extractMentions(msg.payload?.message);
             // Skip db.addGroupMessage for group messages: the Dashboard /
             // CLI REST endpoint already persists via POST /groups/:id/messages.
             // Without this skip, sending one a2a_send per @mentioned agent
@@ -450,7 +451,7 @@ export const connectionMethods = {
           if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
             const msgId = this.db.addGroupMessage(conversation.groupId, fromName, replyContent, []);
             // 提取 mentions 走 bridge 检测(同 sendAsAgent 的 regex)
-            const mentions = replyContent.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+            const mentions = extractMentions(replyContent);
             this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
             this.checkAndCancelBridgesForMessage(conversation.groupId, fromName, mentions, msgId);
           }
@@ -474,7 +475,7 @@ export const connectionMethods = {
           // 没提到 agent 才回落到 reply target(原始发送方)。
           const sendTs = this.sendTimestamps.get(msg.requestId);
           const latencyMs = sendTs ? Date.now() - sendTs : undefined;
-          const replyMentions = (msg.payload?.message || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+          const replyMentions = extractMentions(msg.payload?.message);
           const firstMentionedName = replyMentions.find((n: string) => this.db.getAgentByName(n));
           const logToAgent = firstMentionedName ? this.db.getAgentByName(firstMentionedName) : targetAgent;
           this.db.logMessage({
@@ -562,7 +563,7 @@ export const connectionMethods = {
               [],
               cancelled ? { cancelledAt: nowBeijing() } : undefined,
             );
-            const mentions = endContent.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+            const mentions = extractMentions(endContent);
             this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
             this.checkAndCancelBridgesForMessage(conversation.groupId, fromName, mentions, msgId);
             // 把 worker 回传的 composedPrompt 持久化,前端点击消息可直接读出来渲染分层。
@@ -610,7 +611,7 @@ export const connectionMethods = {
           const sendTs = this.sendTimestamps.get(msg.requestId);
           const latencyMs = sendTs ? Date.now() - sendTs : undefined;
           const targetAgent = this.db.getAgentById(targetId);
-          const endMentions = (msg.payload?.message || "").match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+          const endMentions = extractMentions(msg.payload?.message);
           const firstMentionedName = endMentions.find((n: string) => this.db.getAgentByName(n));
           const logToAgent = firstMentionedName ? this.db.getAgentByName(firstMentionedName) : targetAgent;
           this.db.logMessage({

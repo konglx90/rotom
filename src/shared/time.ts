@@ -17,14 +17,27 @@
 
 const BEIJING_OFFSET_MS = 8 * 3600 * 1000;
 
+/** Internal: decompose a Date (or epoch ms) into Beijing-time calendar parts. */
+function beijingParts(input: Date | number): {
+  Y: string; M: string; D: string; h: string; m: string; s: string; ms: string;
+} {
+  const d = input instanceof Date ? input : new Date(input);
+  const u = new Date(d.getTime() + BEIJING_OFFSET_MS);
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const pad3 = (n: number) => String(n).padStart(3, "0");
+  return {
+    Y: String(u.getUTCFullYear()),
+    M: pad2(u.getUTCMonth() + 1),
+    D: pad2(u.getUTCDate()),
+    h: pad2(u.getUTCHours()),
+    m: pad2(u.getUTCMinutes()),
+    s: pad2(u.getUTCSeconds()),
+    ms: pad3(u.getUTCMilliseconds()),
+  };
+}
+
 export function nowBeijing(): string {
-  // Date.now() 是绝对时间戳,加 8h 后 toISOString() 把它当作 UTC 读出来——
-  // 等于把真实 UTC 时间 + 8 小时,即北京时间。技巧不依赖 process.env.TZ。
-  return new Date(Date.now() + BEIJING_OFFSET_MS)
-    .toISOString()
-    .replace("T", " ")
-    .replace("Z", "");
-  // → "2026-06-30 18:02:04.123"
+  return toBeijing(Date.now());
 }
 
 /**
@@ -36,10 +49,28 @@ export function toBeijing(input: string | number | Date): string {
   if (Number.isNaN(d.getTime())) {
     throw new Error(`toBeijing: invalid time input: ${input}`);
   }
-  return new Date(d.getTime() + BEIJING_OFFSET_MS)
-    .toISOString()
-    .replace("T", " ")
-    .replace("Z", "");
+  const p = beijingParts(d);
+  return `${p.Y}-${p.M}-${p.D} ${p.h}:${p.m}:${p.s}.${p.ms}`;
+}
+
+/** Compact Beijing timestamp "YYYYMMDD-HHmmss" (e.g. for sortable upload filenames). */
+export function toBeijingCompact(input: Date | number = Date.now()): string {
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`toBeijingCompact: invalid time input: ${input}`);
+  }
+  const p = beijingParts(d);
+  return `${p.Y}${p.M}${p.D}-${p.h}${p.m}${p.s}`;
+}
+
+/** Year-month bucket "YYYY-MM" in Beijing time (used for upload directory layout). */
+export function toBeijingYearMonth(input: Date | number = Date.now()): string {
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`toBeijingYearMonth: invalid time input: ${input}`);
+  }
+  const p = beijingParts(d);
+  return `${p.Y}-${p.M}`;
 }
 
 /**

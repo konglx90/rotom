@@ -26,6 +26,7 @@ import type { Socket } from "node:net";
 import { WebSocketServer, WebSocket } from "ws";
 import type { MeshDb } from "./db.js";
 import { resolveGroupArtifactRoot } from "./group-paths.js";
+import { decodeJson } from "../shared/json-codec.js";
 
 interface Logger {
   info: (...args: unknown[]) => void;
@@ -288,14 +289,8 @@ export class TerminalHub {
     });
 
     ws.on("message", (raw) => {
-      let msg: unknown;
-      try {
-        msg = JSON.parse(raw.toString());
-      } catch {
-        return;
-      }
-      if (!msg || typeof msg !== "object") return;
-      const m = msg as { type?: string; data?: string; cols?: number; rows?: number };
+      const m = decodeJson<{ type?: string; data?: string; cols?: number; rows?: number }>(raw);
+      if (!m || typeof m !== "object") return;
       if (m.type === "input" && typeof m.data === "string") {
         try { term.write(m.data); } catch (err) {
           this.logger.warn(`[terminal] write failed for ${sessionId}:`, err);

@@ -17,6 +17,8 @@
 
 import { randomUUID } from "node:crypto";
 import type { ServerMessage } from "../../shared/protocol.js";
+import { safeJsonParse } from "../../shared/parse.js";
+import { extractMentions } from "../../shared/mention.js";
 import type { WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 import { TIMER_PERSONA_NAME } from "../util/persona.js";
@@ -107,8 +109,7 @@ export const conversationMethods = {
       const targetAgent = this.db.getAgentByName(targetName);
       if (!targetAgent) continue;
       // 跳过真人 target
-      let targetProfile: any = {};
-      try { targetProfile = targetAgent.profile ? JSON.parse(targetAgent.profile) : {}; } catch { /* ignore */ }
+      const targetProfile = safeJsonParse<Record<string, unknown>>(targetAgent.profile, {});
       if (targetProfile.category === "真人") continue;
       // 跳过:sender 是某 pending bridge 的 target(在回复,不在提问)
       const asTarget = this.db.findPendingBridge(groupId, targetName, sender);
@@ -264,7 +265,7 @@ export const conversationMethods = {
         // asker 那条连接,其他成员 worker 不会被消息自动唤醒)。
         const group = this.db.getGroupById(opts.groupId);
         const a2aDirect = group?.type === "a2a_direct";
-        const sendAsMentions = messageBody.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m: string) => m.slice(1)) || [];
+        const sendAsMentions = extractMentions(messageBody);
 
         if (!a2aDirect) {
           const sendAsMentionAgentIds = sendAsMentions

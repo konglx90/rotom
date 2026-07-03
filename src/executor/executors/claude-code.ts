@@ -28,6 +28,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ApprovalDecision, ApprovalRequestInput, AskUserQuestionItem, CliExecutor, ExecuteOptions, ExecuteResult, FileEditDiff, TokenUsage } from "../cli-executor.js";
 import type { TodoItem } from "../../shared/protocol.js";
+import { safeJsonParse } from "../../shared/parse.js";
 import { emitStatus } from "../reasoning-status.js";
 
 // Resolve the bundled hook script. After `tsc` the .cjs file is copied next
@@ -504,8 +505,7 @@ function createApprovalGate(
     req.on("data", (c) => { body += c; });
     req.on("end", () => {
       void (async () => {
-        let payload: Record<string, unknown> = {};
-        try { payload = JSON.parse(body || "{}"); } catch { /* keep empty */ }
+        const payload = safeJsonParse<Record<string, unknown>>(body, {});
         const toolName = String(payload.tool_name || "");
         const toolInput = (payload.tool_input || {}) as Record<string, unknown>;
         const input = describeToolCall(toolName, toolInput);

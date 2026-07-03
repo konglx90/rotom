@@ -9,6 +9,7 @@
 
 import { WebSocket } from "ws";
 import type { ServerMessage } from "../../shared/protocol.js";
+import { extractMentions } from "../../shared/mention.js";
 import { normalizeApprovalPolicy, type WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 import { resolveIssueRepoCtxLocalOnly } from "../group-paths.js";
@@ -91,7 +92,7 @@ export const routingMethods = {
     ensureRecipientNames: string[] = [],
   ): void {
     this.logger.info(`[mesh] postSystemToGroup groupId=${groupId} exclude=${JSON.stringify(excludeAgentNames)} ensure=${JSON.stringify(ensureRecipientNames)}`);
-    const mentions = content.match(/@([\w一-鿿][\w.一-鿿-]*)/g)?.map((m) => m.slice(1)) || [];
+    const mentions = extractMentions(content);
     this.db.addGroupMessage(groupId, "system", content, mentions);
 
     const excludeAgentIds = excludeAgentNames

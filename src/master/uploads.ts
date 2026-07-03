@@ -16,6 +16,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
+import { toBeijingCompact, toBeijingYearMonth } from "../shared/time.js";
 
 export const UPLOADS_ROOT = path.join(os.homedir(), ".rotom", "uploads");
 
@@ -85,28 +86,9 @@ export function validateUpload(
   return { ok: true, mimeType: mimeType.toLowerCase(), ext };
 }
 
-/** Format a Date as `YYYYMMDD-HHmmss` in Asia/Shanghai (UTC+8 offset baked in
- *  explicitly — keeps the bucket predictable regardless of host TZ). */
-function formatTimestamp(d: Date): string {
-  const ms = d.getTime() + 8 * 60 * 60 * 1000;
-  const u = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${u.getUTCFullYear()}${pad(u.getUTCMonth() + 1)}${pad(u.getUTCDate())}` +
-    `-${pad(u.getUTCHours())}${pad(u.getUTCMinutes())}${pad(u.getUTCSeconds())}`
-  );
-}
-
-function formatYearMonth(d: Date): string {
-  const ms = d.getTime() + 8 * 60 * 60 * 1000;
-  const u = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${u.getUTCFullYear()}-${pad(u.getUTCMonth() + 1)}`;
-}
-
 /** `<YYYYMMDD-HHmmss>-<rand6hex>.<ext>` — sortable + collision-resistant. */
 export function generateUploadFileName(ext: string): string {
-  const stamp = formatTimestamp(new Date());
+  const stamp = toBeijingCompact();
   const rand = randomBytes(3).toString("hex");
   return `${stamp}-${rand}.${ext}`;
 }
@@ -116,7 +98,7 @@ export function generateUploadFileName(ext: string): string {
  * Returns `{ dir, monthDir }` so callers can build the absolute path.
  */
 export function resolveUploadDir(groupId: string): { dir: string; monthDir: string } {
-  const monthDir = formatYearMonth(new Date());
+  const monthDir = toBeijingYearMonth();
   const dir = path.join(UPLOADS_ROOT, monthDir, groupId);
   fs.mkdirSync(dir, { recursive: true });
   return { dir, monthDir };

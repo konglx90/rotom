@@ -13,6 +13,7 @@
 
 import { createInterface, type Interface as RLInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
+import { encodeJsonLine } from "../shared/json-codec.js";
 
 export interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -88,7 +89,7 @@ export function createJsonRpcTransport(opts: JsonRpcTransportOptions): JsonRpcTr
 
   const send = (msg: object) => {
     if (!opts.stdin || opts.stdin.destroyed) return;
-    opts.stdin.write(JSON.stringify(msg) + "\n");
+    opts.stdin.write(encodeJsonLine(msg));
   };
 
   const notify = (method: string, params?: unknown) => {

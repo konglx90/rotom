@@ -1,4 +1,6 @@
 import { nowBeijing, shiftBeijing } from "../../shared/time.js";
+import { safeJsonParse } from "../../shared/parse.js";
+import { buildUpdate } from "./build-update.js";
 /**
  * Issues — task CRUD, event timeline, comments/quotas, approval lifecycle.
  *
@@ -106,24 +108,35 @@ export const issueMethods = {
     model?: string | null;
   }): void {
     const now = nowBeijing();
-    const sets: string[] = ["status = ?", "updated_at = ?"];
-    const values: unknown[] = [status, now];
-    if (extra?.assignedTo !== undefined) { sets.push("assigned_to = ?"); values.push(extra.assignedTo); }
-    if (extra?.result !== undefined) { sets.push("result = ?"); values.push(extra.result); }
-    if (extra?.errorMessage !== undefined) { sets.push("error_message = ?"); values.push(extra.errorMessage); }
-    if (extra?.artifacts !== undefined) { sets.push("artifacts = ?"); values.push(JSON.stringify(extra.artifacts)); }
-    if (extra?.sessionId !== undefined) { sets.push("session_id = ?"); values.push(extra.sessionId); }
-    if (extra?.cliTool !== undefined) { sets.push("cli_tool = ?"); values.push(extra.cliTool); }
-    if (extra?.usage !== undefined) { sets.push("usage = ?"); values.push(extra.usage); }
-    if (extra?.model !== undefined) { sets.push("model = ?"); values.push(extra.model); }
-    // started_at 只在第一次进 in_progress 时写,后续 progress 事件不覆盖——
-    // 否则最后一次 in_progress(带 result)会把 started_at 推到接近完成时间,
-    // 导致总耗时显示成 0。COALESCE 保留已有值,paused → in_progress 续跑时
-    // 也保留首次开始时间(总耗时含 paused 段,反映"从开始到结束"的真实时长)。
-    if (status === "in_progress") { sets.push("started_at = COALESCE(started_at, ?)"); values.push(now); }
-    if (status === "completed" || status === "failed" || status === "cancelled") { sets.push("completed_at = ?"); values.push(now); }
-    values.push(id);
-    this.db.prepare(`UPDATE issues SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+    const built = buildUpdate({
+      table: "issues",
+      sets: {
+        status,
+        assigned_to: extra?.assignedTo,
+        result: extra?.result,
+        error_message: extra?.errorMessage,
+        artifacts: extra?.artifacts !== undefined ? JSON.stringify(extra.artifacts) : undefined,
+        session_id: extra?.sessionId,
+        cli_tool: extra?.cliTool,
+        usage: extra?.usage,
+        model: extra?.model,
+      },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: false,
+      extraSets: [
+        { sql: "updated_at = ?", params: [now] },
+        // started_at 只在第一次进 in_progress 时写,后续 progress 事件不覆盖——
+        // 否则最后一次 in_progress(带 result)会把 started_at 推到接近完成时间,
+        // 导致总耗时显示成 0。COALESCE 保留已有值,paused → in_progress 续跑时
+        // 也保留首次开始时间(总耗时含 paused 段,反映"从开始到结束"的真实时长)。
+        ...(status === "in_progress" ? [{ sql: "started_at = COALESCE(started_at, ?)", params: [now] }] : []),
+        ...(status === "completed" || status === "failed" || status === "cancelled"
+          ? [{ sql: "completed_at = ?", params: [now] }]
+          : []),
+      ],
+    });
+    if (built) this.db.prepare(built.sql).run(...built.params);
 
     // E2ED auto-sync hook: when an issue reaches terminal state, notify
     // registered listeners so e2ed can advance requirement status.
@@ -420,8 +433,7 @@ export const issueMethods = {
       | { metadata: string }
       | undefined;
     if (!row) return false;
-    let meta: Record<string, unknown> = {};
-    try { meta = JSON.parse(row.metadata || "{}"); } catch { /* fall back to empty */ }
+    const meta = safeJsonParse<Record<string, unknown>>(row.metadata, {});
     meta.status = status;
     meta.resolvedBy = resolvedBy;
     meta.resolvedAt = nowBeijing();
@@ -438,9 +450,14 @@ export const issueMethods = {
   },
 
   updateIssuePriority(this: MeshDbSelf, id: string, priority: string): void {
-    this.db.prepare(
-      "UPDATE issues SET priority = ?, updated_at = datetime('now') WHERE id = ?",
-    ).run(priority, id);
+    const built = buildUpdate({
+      table: "issues",
+      sets: { priority },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "beijing",
+    });
+    if (built) this.db.prepare(built.sql).run(...built.params);
   },
 
   // 同时支持 title / description 的部分更新。两个字段都不传时返回 false。
@@ -450,18 +467,20 @@ export const issueMethods = {
     id: string,
     fields: { title?: string; description?: string; slashCommand?: string | null; approvalPolicy?: "r_allow" | "rw_allow" },
   ): boolean {
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (fields.title !== undefined) { sets.push("title = ?"); params.push(fields.title); }
-    if (fields.description !== undefined) { sets.push("description = ?"); params.push(fields.description); }
-    if (fields.slashCommand !== undefined) { sets.push("slash_command = ?"); params.push(fields.slashCommand); }
-    if (fields.approvalPolicy !== undefined) { sets.push("approval_policy = ?"); params.push(fields.approvalPolicy); }
-    if (sets.length === 0) return false;
-    sets.push("updated_at = datetime('now')");
-    params.push(id);
-    const result = this.db.prepare(
-      `UPDATE issues SET ${sets.join(", ")} WHERE id = ?`,
-    ).run(...(params as never[]));
+    const built = buildUpdate({
+      table: "issues",
+      sets: {
+        title: fields.title,
+        description: fields.description,
+        slash_command: fields.slashCommand,
+        approval_policy: fields.approvalPolicy,
+      },
+      where: "id = ?",
+      whereParams: [id],
+      updatedAt: "beijing",
+    });
+    if (!built) return false;
+    const result = this.db.prepare(built.sql).run(...(built.params as never[]));
     return result.changes > 0;
   },
 };
