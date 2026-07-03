@@ -255,9 +255,11 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
             const disabled = (isDirect || isPatrol) && !checked && selectedMembers.length >= maxMembers
             return (
               <div key={agent.id} className={styles.agentCheckItem}
-                style={disabled ? { opacity: 0.4 } : (isDirect ? { cursor: 'pointer' } : undefined)}>
+                style={disabled ? { opacity: 0.4, cursor: 'not-allowed' } : { cursor: 'pointer' }}
+                onClick={() => { if (!disabled) handleToggleMember(agent.name) }}>
                 <Checkbox checked={checked} disabled={disabled}
-                  onChange={() => handleToggleMember(agent.name)} />
+                  onChange={() => handleToggleMember(agent.name)}
+                  onClick={e => e.stopPropagation()} />
                 {agent.name}
                 <span className={`${styles.agentCheckStatus} ${agent.status === 'online' ? styles.online : styles.offline}`}>
                   {agent.status === 'online' ? '在线' : '离线'}
