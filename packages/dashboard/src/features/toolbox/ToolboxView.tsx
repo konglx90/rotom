@@ -24,6 +24,7 @@ const TAB_GROUPS: TabGroup[] = [
     items: [
       { to: 'messages', label: '消息流', icon: '📜', desc: 'A2A 消息日志' },
       { to: 'issue-patrol', label: 'Issue 巡检', icon: '🔍', desc: '定时巡检任务' },
+      { to: 'link-patrol', label: 'Link 分类', icon: '🔗', desc: '链接智能分类巡检' },
       { to: 'terminal', label: '终端', icon: '⌨️', desc: '执行器终端' },
     ],
   },

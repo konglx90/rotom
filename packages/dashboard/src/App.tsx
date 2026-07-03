@@ -18,6 +18,7 @@ import { SchedulePatternsTab } from './features/toolbox/SchedulePatternsTab'
 import { MemoryManagementTab } from './features/toolbox/MemoryManagementTab'
 import { SkillsManagementTab } from './features/toolbox/SkillsManagementTab'
 import { IssuePatrolTab } from './features/toolbox/IssuePatrolTab'
+import { LinkPatrolTab } from './features/toolbox/LinkPatrolTab'
 import { ImageGalleryTab } from './features/toolbox/ImageGalleryTab'
 import { WorktreesTab } from './features/toolbox/WorktreesTab'
 import { ConfigModal } from './features/groups/modals/ConfigModal'
@@ -89,6 +90,7 @@ function App() {
                   <Route path="memory" element={<MemoryManagementTab />} />
                   <Route path="skills" element={<SkillsManagementTab />} />
                   <Route path="issue-patrol" element={<IssuePatrolTab />} />
+                  <Route path="link-patrol" element={<LinkPatrolTab />} />
                   <Route path="gallery" element={<ImageGalleryTab />} />
                   <Route path="worktrees" element={<WorktreesTab />} />
                 </Route>
