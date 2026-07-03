@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from '../../components/ui/Modal/Modal'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { schedulePatternsApi } from '../../api/schedule-patterns'
 import type { SchedulePattern, GuidanceScheduleConfig } from '../../api/types'
 import { ScheduleConfigEditor } from './ScheduleConfigEditor'
@@ -189,9 +190,8 @@ export function SchedulePatternsTab() {
           <div className={styles.form}>
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>名称</label>
-              <input
+              <Input
                 type="text"
-                className={styles.input}
                 value={edit.name}
                 onChange={e => setEdit({ ...edit, name: e.target.value })}
                 placeholder="模式名称"
@@ -199,9 +199,8 @@ export function SchedulePatternsTab() {
             </div>
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>描述</label>
-              <input
+              <Input
                 type="text"
-                className={styles.input}
                 value={edit.description}
                 onChange={e => setEdit({ ...edit, description: e.target.value })}
                 placeholder="说明这个模式的适用场景"

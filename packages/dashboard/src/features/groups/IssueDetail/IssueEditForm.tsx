@@ -1,4 +1,5 @@
 import { Button } from '../../../components/ui/Button'
+import { Textarea } from '../../../components/ui/Textarea'
 import styles from './IssueEditForm.module.css'
 import type { IssueEditState } from './useIssueEdit'
 
@@ -9,9 +10,8 @@ interface IssueEditFormProps {
 export function IssueEditForm({ edit }: IssueEditFormProps) {
   return (
     <div className={styles.issueEditForm}>
-      <label className={styles.issueEditLabel}>描述 (支持 Markdown)</label>
-      <textarea
-        className={styles.issueEditDescription}
+      <Textarea
+        label="描述 (支持 Markdown)"
         value={edit.editDescription}
         onChange={e => edit.setEditDescription(e.target.value)}
         disabled={edit.savingEdit}

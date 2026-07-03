@@ -351,27 +351,6 @@
   color: var(--color-gray);
 }
 
-.input, .select, .textarea {
-  font-size: 13px;
-  padding: 6px 10px;
-  border: 1px solid var(--border-color-light);
-  border-radius: var(--radius-sm);
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  font-family: inherit;
-}
-
-.input:focus, .select:focus, .textarea:focus {
-  outline: none;
-  border-color: var(--color-wise-green);
-}
-
-.textarea {
-  resize: vertical;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  line-height: 1.5;
-}
-
 .fieldRow {
   display: flex;
   align-items: center;

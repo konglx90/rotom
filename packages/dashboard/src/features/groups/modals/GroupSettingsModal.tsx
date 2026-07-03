@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { Checkbox } from '../../../components/ui/Checkbox'
+import { Input } from '../../../components/ui/Input'
 import { Modal } from '../../../components/ui/Modal'
+import { Select } from '../../../components/ui/Select'
+import { Textarea } from '../../../components/ui/Textarea'
 import { GuidanceTemplatePicker } from './GuidanceTemplatePicker'
 import { skillsApi } from '../../../api/skills'
 import type { SkillIndex, SkillBinding } from '../../../api/skills'
@@ -255,13 +259,11 @@ export function GroupSettingsModal({
               📚 从模板选择
             </button>
           </div>
-          <textarea
-            id="group-settings-guidance"
+          <Textarea
             value={guidanceValue}
             onChange={e => setGuidanceValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="全群一份,群内所有 agent 被唤起时拼到 prompt 上。例:本群讨论 VR 需求,所有回复聚焦用户场景;提问其他 agent 必须用 scripts/rotom-ask-with-timeout.mjs。"
-            className={styles.guidanceTextarea}
             rows={4}
             spellCheck={false}
             autoComplete="off"
@@ -299,15 +301,16 @@ export function GroupSettingsModal({
           />
           <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
             <label style={{ fontSize: 12, color: 'var(--color-slate, #888)', whiteSpace: 'nowrap' }}>worktree 模式</label>
-            <select
+            <Select
               value={worktreeModeValue}
               onChange={e => setWorktreeModeValue(e.target.value as 'group' | 'issue')}
               className={styles.dirInput}
               style={{ flex: 1 }}
-            >
-              <option value="group">group(群共享一个 worktree,轻量,适合单分支线性开发)</option>
-              <option value="issue">issue(每 issue 独立 worktree,多分支并行)</option>
-            </select>
+              options={[
+                { value: 'group', label: 'group(群共享一个 worktree,轻量,适合单分支线性开发)' },
+                { value: 'issue', label: 'issue(每 issue 独立 worktree,多分支并行)' },
+              ]}
+            />
           </div>
           <div style={{ marginTop: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -319,15 +322,15 @@ export function GroupSettingsModal({
             </div>
             {extraReposValue.map((e, idx) => (
               <div key={idx} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 28px', gap: 6, marginBottom: 6 }}>
-                <input type="text" value={e.id} onChange={ev => updateExtra(idx, 'id', ev.target.value)}
+                <Input type="text" size="sm" value={e.id} onChange={ev => updateExtra(idx, 'id', ev.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="id(如 deposit-home)" className={styles.dirInput} style={{ fontSize: 11 }} spellCheck={false} autoComplete="off" />
-                <input type="text" value={e.url} onChange={ev => updateExtra(idx, 'url', ev.target.value)}
+                  placeholder="id(如 deposit-home)" style={{ fontSize: 11 }} spellCheck={false} autoComplete="off" />
+                <Input type="text" size="sm" value={e.url} onChange={ev => updateExtra(idx, 'url', ev.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="URL" className={styles.dirInput} style={{ fontSize: 11 }} spellCheck={false} autoComplete="off" />
-                <input type="text" value={e.branch} onChange={ev => updateExtra(idx, 'branch', ev.target.value)}
+                  placeholder="URL" style={{ fontSize: 11 }} spellCheck={false} autoComplete="off" />
+                <Input type="text" size="sm" value={e.branch} onChange={ev => updateExtra(idx, 'branch', ev.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="分支(可空)" className={styles.dirInput} style={{ fontSize: 11 }} spellCheck={false} autoComplete="off" />
+                  placeholder="分支(可空)" style={{ fontSize: 11 }} spellCheck={false} autoComplete="off" />
                 <button type="button" onClick={() => removeExtra(idx)}
                   style={{ border: '1px solid rgba(0,0,0,0.12)', background: 'transparent', borderRadius: 4, cursor: 'pointer', fontSize: 12, color: '#c00' }}
                   title="删除">
@@ -451,7 +454,7 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
                   const checked = bindings.some(b => b.agent_name === aname && b.skill_id === s.id)
                   const key = `${aname}:${s.id}`
                   return (
-                    <label key={s.id} style={{
+                    <div key={s.id} style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
                       fontSize: 11, padding: '4px 10px',
                       border: `1px solid ${checked ? 'var(--color-wise-green, #2f7a2f)' : 'var(--border-color-light, #ddd)'}`,
@@ -462,15 +465,14 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
                       opacity: busy === key ? 0.5 : 1,
                       transition: 'background 0.15s, border-color 0.15s, color 0.15s',
                     }}>
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={checked}
-                        disabled={busy === key}
                         onChange={() => toggle(aname, s)}
-                        style={{ margin: 0, accentColor: 'var(--color-wise-green, #2f7a2f)', cursor: busy === key ? 'wait' : 'pointer' }}
+                        disabled={busy === key}
+                        name={s.name}
                       />
-                      {s.name}
-                    </label>
+                      <span onClick={() => toggle(aname, s)} style={{ cursor: busy === key ? 'wait' : 'pointer' }}>{s.name}</span>
+                    </div>
                   )
                 })}
               </div>

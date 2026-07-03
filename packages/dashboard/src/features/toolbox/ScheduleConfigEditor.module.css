@@ -41,29 +41,3 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-
-.input,
-.select,
-.textarea {
-  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-  font-size: 12px;
-  padding: 6px 10px;
-  border: 1px solid var(--border-color, #d1d5db);
-  border-radius: 6px;
-  background: var(--color-paper, #fff);
-  color: var(--color-ink, #111);
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.input:focus,
-.select:focus,
-.textarea:focus {
-  border-color: var(--color-accent, #2f7a2f);
-  box-shadow: 0 0 0 2px rgba(47, 122, 47, 0.15);
-}
-
-.textarea {
-  resize: vertical;
-  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-}

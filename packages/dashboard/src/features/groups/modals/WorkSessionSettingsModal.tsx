@@ -1,4 +1,6 @@
 import { Button } from '../../../components/ui/Button'
+import { Checkbox } from '../../../components/ui/Checkbox'
+import { Input } from '../../../components/ui/Input'
 import { Modal } from '../../../components/ui/Modal'
 import { useWorkSession } from '../../../context/WorkSessionContext'
 import styles from '../GroupChatView.module.css'
@@ -40,14 +42,11 @@ export function WorkSessionSettingsModal({ open, onClose }: Props) {
       <div className={styles.formField}>
         <label className={styles.formLabel}>任务完成声音</label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={soundEnabled}
-              onChange={e => setSoundEnabled(e.target.checked)}
-            />
-            启用
-          </label>
+          <Checkbox
+            checked={soundEnabled}
+            onChange={setSoundEnabled}
+            label="启用"
+          />
           <input
             type="range"
             min={0}
@@ -74,35 +73,33 @@ export function WorkSessionSettingsModal({ open, onClose }: Props) {
       </div>
 
       <div className={styles.formField}>
-        <label className={styles.formLabel}>工作节奏(分钟)</label>
-        <input
+        <Input
+          label="工作节奏(分钟)"
           type="number"
           min={1}
           max={180}
+          size="sm"
           value={breakIntervalMin}
           onChange={e => {
             const v = Number(e.target.value)
             if (Number.isFinite(v)) setBreakIntervalMin(v)
           }}
-          className={styles.formInput}
+          helperText="连续工作这么久后弹出休息提醒。"
         />
-        <div style={{ fontSize: 11, color: 'var(--color-slate)', marginTop: 4 }}>
-          连续工作这么久后弹出休息提醒。
-        </div>
       </div>
 
       <div className={styles.formField}>
-        <label className={styles.formLabel}>休息时长(分钟)</label>
-        <input
+        <Input
+          label="休息时长(分钟)"
           type="number"
           min={1}
           max={60}
+          size="sm"
           value={breakLengthMin}
           onChange={e => {
             const v = Number(e.target.value)
             if (Number.isFinite(v)) setBreakLengthMin(v)
           }}
-          className={styles.formInput}
         />
       </div>
 

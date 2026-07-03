@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { rulesApi } from '../../api/domains'
 import type { CrossDomainRule, Domain } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { Checkbox } from '../../components/ui/Checkbox'
+import { Select } from '../../components/ui/Select'
 import styles from './CrossDomainRulesPanel.module.css'
 
 interface CrossDomainRulesPanelProps {
@@ -160,45 +162,40 @@ export function CrossDomainRulesPanel({ domains }: CrossDomainRulesPanelProps) {
             <form onSubmit={createRule} className={styles.modalForm}>
               <div className={styles.fieldGroup}>
                 <div className={styles.field}>
-                  <label>源部门</label>
-                  <select
+                  <Select
+                    label="源部门"
                     value={ruleFrom}
                     onChange={(e) => setRuleFrom(e.target.value)}
                     required
-                  >
-                    <option value="">选择部门</option>
-                    {domains.map((d) => (
-                      <option key={d.id} value={d.name}>{d.name}</option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: '', label: '选择部门' },
+                      ...domains.map((d) => ({ value: d.name, label: d.name })),
+                    ]}
+                  />
                 </div>
 
                 <div className={styles.arrow}>→</div>
 
                 <div className={styles.field}>
-                  <label>目标部门</label>
-                  <select
+                  <Select
+                    label="目标部门"
                     value={ruleTo}
                     onChange={(e) => setRuleTo(e.target.value)}
                     required
-                  >
-                    <option value="">选择部门</option>
-                    {domains.map((d) => (
-                      <option key={d.id} value={d.name}>{d.name}</option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: '', label: '选择部门' },
+                      ...domains.map((d) => ({ value: d.name, label: d.name })),
+                    ]}
+                  />
                 </div>
               </div>
 
               <div className={styles.field}>
-                <label className={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={ruleBidi}
-                    onChange={(e) => setRuleBidi(e.target.checked)}
-                  />
-                  双向（同时创建反向规则）
-                </label>
+                <Checkbox
+                  checked={ruleBidi}
+                  onChange={setRuleBidi}
+                  label="双向（同时创建反向规则）"
+                />
               </div>
 
               <div className={styles.modalActions}>

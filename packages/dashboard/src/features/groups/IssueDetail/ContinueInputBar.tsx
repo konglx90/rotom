@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { issuesApi } from '../../../api/issues'
 import type { Issue } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
+import { Textarea } from '../../../components/ui/Textarea'
 import styles from './ContinueInputBar.module.css'
 import { PendingQueuePreview } from './PendingQueuePreview'
 
@@ -144,7 +145,7 @@ export function ContinueInputBar({
       {isInProgress && pendingQueue && pendingQueue.length > 0 && (
         <PendingQueuePreview items={pendingQueue} onRemove={idx => onRemovePending?.(idx)} />
       )}
-      <textarea
+      <Textarea
         className={styles.continueInputTextarea}
         value={prompt}
         onChange={e => setPrompt(e.target.value)}

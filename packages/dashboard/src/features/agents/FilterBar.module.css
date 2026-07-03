@@ -43,29 +43,6 @@
 }
 
 /* Domain Select */
-.select {
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color);
-  background: var(--color-canvas-elevated);
-  color: var(--color-ink);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color var(--duration-base) var(--ease-out),
-              box-shadow var(--duration-base) var(--ease-out);
-  min-width: 120px;
-}
-
-.select:hover {
-  border-color: var(--border-color-hover);
-}
-
-.select:focus {
-  outline: none;
-  border-color: var(--color-dark-green);
-  box-shadow: var(--shadow-inset);
-}
 
 /* Search Input */
 .search {

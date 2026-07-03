@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from '../../components/ui/Modal/Modal'
 import { Button } from '../../components/ui/Button'
+import { Select } from '../../components/ui/Select'
 import { uploadsApi, type UploadItem } from '../../api/uploads'
 import { groupsApi } from '../../api/groups'
 import type { Group } from '../../api/types'
@@ -110,19 +111,19 @@ export function ImageGalleryTab() {
             上传请在群聊里完成(粘贴/拖拽/选择文件),这里只做查看。
           </p>
         </div>
-        <select
-          className={styles.input}
+        <Select
+          size="sm"
           style={{ width: 220 }}
           value={selectedGroupId}
           onChange={(e) => setSelectedGroupId(e.target.value)}
-        >
-          <option value="">— 全部群 —</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}{g.archived_at ? ' (已归档)' : ''}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: '', label: '— 全部群 —' },
+            ...groups.map((g) => ({
+              value: g.id,
+              label: `${g.name}${g.archived_at ? ' (已归档)' : ''}`,
+            })),
+          ]}
+        />
       </div>
 
       {error && (

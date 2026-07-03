@@ -1,15 +1,18 @@
+import { forwardRef, useId } from 'react'
 import type { ReactNode, SelectHTMLAttributes } from 'react'
+import { Field } from '../Field/Field'
 import styles from './Select.module.css'
 
 export type SelectSize = 'sm' | 'md'
 
-interface SelectOption {
+export interface SelectOption {
   value: string
   label: string
 }
 
 interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
   label?: string
+  required?: boolean
   error?: string
   helperText?: string
   size?: SelectSize
@@ -17,16 +20,13 @@ interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'siz
   children?: ReactNode
 }
 
-export function Select({
-  label,
-  error,
-  helperText,
-  size = 'md',
-  options,
-  children,
-  className = '',
-  ...props
-}: SelectProps) {
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
+  { label, required, error, helperText, size = 'md', options, children, id, className = '', ...props },
+  ref,
+) {
+  const autoId = useId()
+  const selectId = id ?? autoId
+
   const classes = [
     styles.select,
     styles[size],
@@ -35,20 +35,14 @@ export function Select({
   ].filter(Boolean).join(' ')
 
   return (
-    <div className={styles.container}>
-      {label && <label className={styles.label}>{label}</label>}
-      <select className={classes} {...props}>
+    <Field label={label} required={required} error={error} helperText={helperText} htmlFor={selectId}>
+      <select id={selectId} ref={ref} className={classes} {...props}>
         {options
           ? options.map(o => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))
           : children}
       </select>
-      {error ? (
-        <span className={styles.errorText}>{error}</span>
-      ) : helperText ? (
-        <span className={styles.helperText}>{helperText}</span>
-      ) : null}
-    </div>
+    </Field>
   )
-}
+})

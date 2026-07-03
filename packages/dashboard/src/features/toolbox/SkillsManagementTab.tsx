@@ -8,7 +8,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from '../../components/ui/Modal/Modal'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
+import { Select } from '../../components/ui/Select'
+import { Textarea } from '../../components/ui/Textarea'
 import { skillsApi } from '../../api/skills'
 import { memoryApi } from '../../api/memory'
 import type { MemoryIndex } from '../../api/memory'
@@ -177,20 +180,19 @@ export function SkillsManagementTab() {
           <div className={styles.form}>
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>name (小写字母/数字/短横线,禁中文)</label>
-              <input className={styles.input} value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} placeholder="如 release-flow" />
+              <Input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} placeholder="如 release-flow" />
             </div>
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>description (一句话描述)</label>
-              <input className={styles.input} value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} />
+              <Input value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} />
             </div>
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>category (可选)</label>
-              <input className={styles.input} value={editing.category} onChange={e => setEditing({ ...editing, category: e.target.value })} />
+              <Input value={editing.category} onChange={e => setEditing({ ...editing, category: e.target.value })} />
             </div>
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>content (markdown 正文)</label>
-              <textarea
-                className={styles.input}
+              <Textarea
                 style={{ minHeight: 240, fontFamily: 'SF Mono, Menlo, monospace', lineHeight: 1.5 }}
                 value={editing.content}
                 onChange={e => setEditing({ ...editing, content: e.target.value })}
@@ -260,19 +262,19 @@ function PromoteFromMemoryModal({ myAgentName, onClose, onDone }: {
         </div>
         <div className={styles.fieldRow}>
           <label className={styles.fieldLabel}>选择 playbook memory</label>
-          <select className={styles.input} value={selected} onChange={e => setSelected(e.target.value)}>
-            <option value="">— 选择 —</option>
-            {playbooks.map(p => <option key={p.id} value={p.id}>{p.key} — {p.summary ?? ''}</option>)}
-          </select>
+          <Select value={selected} onChange={e => setSelected(e.target.value)} options={[
+            { value: '', label: '— 选择 —' },
+            ...playbooks.map(p => ({ value: p.id, label: `${p.key} — ${p.summary ?? ''}` })),
+          ]} />
           {playbooks.length === 0 && <div className={styles.error}>没有全局 playbook 记忆。先 `rotom memory add --scope global --category playbook` 创建。</div>}
         </div>
         <div className={styles.fieldRow}>
           <label className={styles.fieldLabel}>skill name (留空用 memory.key)</label>
-          <input className={styles.input} value={name} onChange={e => setName(e.target.value)} />
+          <Input value={name} onChange={e => setName(e.target.value)} />
         </div>
         <div className={styles.fieldRow}>
           <label className={styles.fieldLabel}>description (留空用 memory.summary)</label>
-          <input className={styles.input} value={description} onChange={e => setDescription(e.target.value)} />
+          <Input value={description} onChange={e => setDescription(e.target.value)} />
         </div>
         {err && <div className={styles.error}>{err}</div>}
         <div className={styles.modalFooter}>

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Agent, AgentProfile, GroupMember } from '../../../api/types'
 import { Avatar } from '../../../components/ui/Avatar'
+import { Checkbox } from '../../../components/ui/Checkbox'
 import { Modal } from '../../../components/ui/Modal/Modal'
+import { Textarea } from '../../../components/ui/Textarea'
 import { WorkingDirModal } from './WorkingDirModal'
 import { MemberProfileModal } from './MemberProfileModal'
 import { GuidanceTemplatePicker } from './GuidanceTemplatePicker'
@@ -220,29 +222,14 @@ export function MemberListModal({
                 )}
               </div>
             </div>
-            <textarea
+            <Textarea
               value={guidanceValue}
               onChange={(e) => setGuidanceValue(e.target.value)}
               placeholder="全群一份,群内所有 agent 被唤起时拼到 prompt 上。例:本群讨论 VR 需求,回复聚焦用户场景;提问加 #reply。"
-              style={{
-                width: '100%',
-                minHeight: 70,
-                padding: '8px 10px',
-                border: '1px solid rgba(0,0,0,0.12)',
-                borderRadius: 6,
-                fontSize: 12,
-                lineHeight: 1.5,
-                color: 'var(--color-navy)',
-                background: 'var(--color-surface, #fff)',
-                outline: 'none',
-                resize: 'vertical',
-                boxSizing: 'border-box',
-              }}
+              rows={3}
+              helperText="留空保存 = 清除。群级别硬约定,所有成员都会看到。"
               spellCheck={false}
             />
-            <div style={{ fontSize: 11, color: 'var(--color-slate)', marginTop: 4 }}>
-              留空保存 = 清除。群级别硬约定,所有成员都会看到。
-            </div>
           </div>
         )}
 
@@ -363,7 +350,7 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
                   const checked = bindings.some(b => b.agent_name === aname && b.skill_id === s.id)
                   const key = `${aname}:${s.id}`
                   return (
-                    <label key={s.id} style={{
+                    <div key={s.id} style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
                       fontSize: 11, padding: '4px 10px',
                       border: `1px solid ${checked ? 'var(--color-wise-green, #2f7a2f)' : 'var(--border-color-light, #ddd)'}`,
@@ -374,15 +361,14 @@ function SkillBindingsSection({ groupId, memberAgentNames }: { groupId: string; 
                       opacity: busy === key ? 0.5 : 1,
                       transition: 'background 0.15s, border-color 0.15s, color 0.15s',
                     }}>
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={checked}
-                        disabled={busy === key}
                         onChange={() => toggle(aname, s)}
-                        style={{ margin: 0, accentColor: 'var(--color-wise-green, #2f7a2f)', cursor: busy === key ? 'wait' : 'pointer' }}
+                        disabled={busy === key}
+                        name={s.name}
                       />
-                      {s.name}
-                    </label>
+                      <span onClick={() => toggle(aname, s)} style={{ cursor: busy === key ? 'wait' : 'pointer' }}>{s.name}</span>
+                    </div>
                   )
                 })}
               </div>

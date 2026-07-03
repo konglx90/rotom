@@ -11,6 +11,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
 import { linksPatrolApi, type LinkItem, type LinkPatrolLog, type LinkPatrolRun, type LinkPatrolState, type LinkPatrolStats } from '../../api/links-patrol'
 import styles from './ManagementTab.module.css'
 
@@ -304,15 +306,15 @@ export function LinkPatrolTab() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
             <label>
               每轮扫描上限 scanBatch:{' '}
-              <input type="number" min={1} max={100} value={scanBatch}
+              <Input type="number" min={1} max={100} size="sm" value={scanBatch}
                 onChange={(e) => setScanBatch(Number(e.target.value) || 20)}
-                style={{ width: 60, padding: '2px 6px' }} />
+                style={{ width: 60 }} />
             </label>
             <label>
               间隔 intervalSec:{' '}
-              <input type="number" min={60} value={intervalSec}
+              <Input type="number" min={60} size="sm" value={intervalSec}
                 onChange={(e) => setIntervalSec(Number(e.target.value) || 3600)}
-                style={{ width: 80, padding: '2px 6px' }} />
+                style={{ width: 80 }} />
             </label>
             <Button variant="secondary" size="sm" onClick={handleSaveConfig} disabled={busy}>保存参数</Button>
           </div>
@@ -327,27 +329,27 @@ export function LinkPatrolTab() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8, fontSize: 12 }}>
           <label>
             分类:
-            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
-              style={{ marginLeft: 4, padding: '2px 6px' }}>
-              <option value="">全部</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              <option value="__unclassified__">未分类</option>
-            </select>
+            <Select size="sm" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+              style={{ marginLeft: 4, width: 'auto' }} options={[
+                { value: '', label: '全部' },
+                ...CATEGORIES.map((c) => ({ value: c, label: c })),
+                { value: '__unclassified__', label: '未分类' },
+              ]} />
           </label>
           <label>
             tag:
-            <input value={filterTag} onChange={(e) => setFilterTag(e.target.value)}
-              style={{ marginLeft: 4, padding: '2px 6px', width: 80 }} />
+            <Input size="sm" value={filterTag} onChange={(e) => setFilterTag(e.target.value)}
+              style={{ marginLeft: 4, width: 80 }} />
           </label>
           <label>
             host:
-            <input value={filterHost} onChange={(e) => setFilterHost(e.target.value)}
-              style={{ marginLeft: 4, padding: '2px 6px', width: 100 }} />
+            <Input size="sm" value={filterHost} onChange={(e) => setFilterHost(e.target.value)}
+              style={{ marginLeft: 4, width: 100 }} />
           </label>
           <label>
             搜索:
-            <input value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)}
-              style={{ marginLeft: 4, padding: '2px 6px', width: 120 }} placeholder="url / title" />
+            <Input size="sm" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)}
+              style={{ marginLeft: 4, width: 120 }} placeholder="url / title" />
           </label>
           <Button size="sm" variant="secondary" onClick={reloadLinks} disabled={busy}>刷新</Button>
         </div>
@@ -358,21 +360,21 @@ export function LinkPatrolTab() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               <label>
                 category:
-                <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)}
-                  style={{ marginLeft: 4, padding: '2px 6px' }}>
-                  <option value="">未分类</option>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <Select size="sm" value={editCategory} onChange={(e) => setEditCategory(e.target.value)}
+                  style={{ marginLeft: 4, width: 'auto' }} options={[
+                    { value: '', label: '未分类' },
+                    ...CATEGORIES.map((c) => ({ value: c, label: c })),
+                  ]} />
               </label>
               <label>
                 title:
-                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
-                  style={{ marginLeft: 4, padding: '2px 6px', width: 220 }} />
+                <Input size="sm" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                  style={{ marginLeft: 4, width: 220 }} />
               </label>
               <label style={{ flex: 1, minWidth: 220 }}>
                 tags(逗号分隔):
-                <input value={editTagsText} onChange={(e) => setEditTagsText(e.target.value)}
-                  style={{ marginLeft: 4, padding: '2px 6px', width: '70%' }} />
+                <Input size="sm" value={editTagsText} onChange={(e) => setEditTagsText(e.target.value)}
+                  style={{ marginLeft: 4, width: '70%' }} />
               </label>
               <Button size="sm" variant="primary" onClick={handleSaveEdit} disabled={busy}>保存</Button>
               <Button size="sm" variant="secondary" onClick={() => setEditingLink(null)} disabled={busy}>取消</Button>

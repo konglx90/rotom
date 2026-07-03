@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { MarkdownEditor } from '../../components/ui/MarkdownEditor'
 import { Modal } from '../../components/ui/Modal'
 import styles from './GroupChatView.module.css'
@@ -41,13 +42,12 @@ export function CreateNoteDialog({ open, onClose, onCreate }: CreateNoteDialogPr
       }
     >
       <div className={styles.formField}>
-        <label className={styles.formLabel}>标题:</label>
-        <input
+        <Input
+          label="标题:"
           type="text"
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="一句话概括这条记录"
-          className={styles.formInput}
           autoFocus
         />
       </div>

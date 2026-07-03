@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from '../../components/ui/Modal/Modal'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { MarkdownEditor } from '../../components/ui/MarkdownEditor'
 import { guidanceTemplatesApi } from '../../api/guidance-templates'
 import type { GuidanceTemplate, GuidanceScheduleConfig } from '../../api/types'
@@ -188,9 +189,8 @@ export function PromptsManagementTab() {
           <div className={styles.form}>
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>名称</label>
-              <input
+              <Input
                 type="text"
-                className={styles.input}
                 value={edit.name}
                 onChange={e => setEdit({ ...edit, name: e.target.value })}
                 placeholder="模板名称"
@@ -198,9 +198,8 @@ export function PromptsManagementTab() {
             </div>
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>描述</label>
-              <input
+              <Input
                 type="text"
-                className={styles.input}
                 value={edit.description}
                 onChange={e => setEdit({ ...edit, description: e.target.value })}
                 placeholder="一句话说明用途"

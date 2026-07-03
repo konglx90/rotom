@@ -1,26 +1,25 @@
+import { forwardRef, useId } from 'react'
 import type { TextareaHTMLAttributes } from 'react'
+import { Field } from '../Field/Field'
 import styles from './Textarea.module.css'
 
 export type TextareaSize = 'sm' | 'md'
 
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
+  required?: boolean
   error?: string
   helperText?: string
   size?: TextareaSize
-  /** 占位接口：未来实现自动伸高；当前为 noop，textarea 仍可通过 rows / CSS resize 调整 */
-  autoSize?: boolean
 }
 
-export function Textarea({
-  label,
-  error,
-  helperText,
-  size = 'md',
-  autoSize: _autoSize,
-  className = '',
-  ...props
-}: TextareaProps) {
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
+  { label, required, error, helperText, size = 'md', id, className = '', ...props },
+  ref,
+) {
+  const autoId = useId()
+  const textareaId = id ?? autoId
+
   const classes = [
     styles.textarea,
     styles[size],
@@ -29,14 +28,8 @@ export function Textarea({
   ].filter(Boolean).join(' ')
 
   return (
-    <div className={styles.container}>
-      {label && <label className={styles.label}>{label}</label>}
-      <textarea className={classes} {...props} />
-      {error ? (
-        <span className={styles.errorText}>{error}</span>
-      ) : helperText ? (
-        <span className={styles.helperText}>{helperText}</span>
-      ) : null}
-    </div>
+    <Field label={label} required={required} error={error} helperText={helperText} htmlFor={textareaId}>
+      <textarea id={textareaId} ref={ref} className={classes} {...props} />
+    </Field>
   )
-}
+})

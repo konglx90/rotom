@@ -3,6 +3,7 @@ import type { Note } from '../../api/types'
 import { notesApi } from '../../api/notes'
 import { AsyncBoundary } from '../../components/async/AsyncBoundary'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import { MarkdownEditor } from '../../components/ui/MarkdownEditor'
 import styles from './NotePanel.module.css'
@@ -139,7 +140,7 @@ function NoteDetailBody({ note, onBack, onChanged }: NoteDetailBodyProps) {
       <div className={styles.noteDetailHeader}>
         <button className={styles.noteDetailBack} onClick={onBack}>← 返回</button>
         {editing ? (
-          <input
+          <Input
             type="text"
             className={styles.noteDetailTitleInput}
             value={titleDraft}

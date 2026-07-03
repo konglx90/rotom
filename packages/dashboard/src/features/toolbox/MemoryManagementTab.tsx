@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from '../../components/ui/Modal/Modal'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
+import { Select } from '../../components/ui/Select'
 import { memoryApi } from '../../api/memory'
 import { groupsApi } from '../../api/groups'
 import type { MemoryIndex, MemoryRow, MemoryCategory } from '../../api/memory'
@@ -145,10 +146,16 @@ export function MemoryManagementTab() {
             群内新建/编辑请进群的 Memory tab。这里用于跨群审计与审核。
           </p>
         </div>
-        <select className={styles.input} style={{ width: 220 }} value={selectedGroupId} onChange={e => setSel(e.target.value)}>
-          <option value="">— 全部群 —</option>
-          {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
+        <Select
+          size="sm"
+          style={{ width: 220 }}
+          value={selectedGroupId}
+          onChange={e => setSel(e.target.value)}
+          options={[
+            { value: '', label: '— 全部群 —' },
+            ...groups.map(g => ({ value: g.id, label: g.name })),
+          ]}
+        />
       </div>
 
       {error && <div className={styles.error}>{error}</div>}

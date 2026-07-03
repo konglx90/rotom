@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Agent } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
+import { Checkbox } from '../../../components/ui/Checkbox'
 import { Modal } from '../../../components/ui/Modal'
 import styles from '../GroupChatView.module.css'
 
@@ -62,17 +63,19 @@ export function AddMemberModal({ open, groupMemberNames, agents, onClose, onAdd 
         <label className={styles.formLabel}>选择要添加的 Agent:</label>
         <div className={styles.agentCheckList}>
           {availableAgents.map(agent => (
-            <label key={agent.id} className={styles.agentCheckItem}>
-              <input type="checkbox" checked={selectedMembers.includes(agent.name)}
-                onChange={e => {
-                  if (e.target.checked) setSelectedMembers(prev => [...prev, agent.name])
+            <div key={agent.id} className={styles.agentCheckItem}>
+              <Checkbox
+                checked={selectedMembers.includes(agent.name)}
+                onChange={checked => {
+                  if (checked) setSelectedMembers(prev => [...prev, agent.name])
                   else setSelectedMembers(prev => prev.filter(n => n !== agent.name))
-                }} />
-              {agent.name}
+                }}
+                label={agent.name}
+              />
               <span className={`${styles.agentCheckStatus} ${agent.status === 'online' ? styles.online : styles.offline}`}>
                 {agent.status === 'online' ? '在线' : '离线'}
               </span>
-            </label>
+            </div>
           ))}
           {availableAgents.length === 0 && (
             <div style={{ padding: 16, color: 'var(--color-slate)', textAlign: 'center', fontSize: 13 }}>

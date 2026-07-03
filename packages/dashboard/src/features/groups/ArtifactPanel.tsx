@@ -4,7 +4,9 @@ import Editor, { DiffEditor } from '@monaco-editor/react'
 import { artifactsApi, type ArtifactRefs } from '../../api/artifacts'
 import type { ArtifactFile, ArtifactContent, ArtifactOriginal } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
+import { Select } from '../../components/ui/Select'
 import { TerminalPane } from './TerminalPane'
 import { useMonaco } from '../../hooks/useMonaco'
 import styles from './ArtifactPanel.module.css'
@@ -495,7 +497,7 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
         >
           {files.length > 0 && (
             <div className={styles.searchRow}>
-              <input
+              <Input
                 className={styles.searchInput}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -600,8 +602,9 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
                       </button>
                     </div>
                   )}
-                  <select
+                  <Select
                     className={styles.diffBaseSelect}
+                    size="sm"
                     value={refs?.heads.includes(diffBase) || diffBase === '' || diffBase === 'HEAD' ? diffBase : '__custom__'}
                     onChange={e => {
                       const v = e.target.value
@@ -630,9 +633,10 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
                       <option value="" disabled>{refs.note}</option>
                     )}
                     <option value="__custom__">自定义…</option>
-                  </select>
-                  <input
+                  </Select>
+                  <Input
                     className={styles.diffBaseInput}
+                    size="sm"
                     value={diffBase}
                     onChange={e => setDiffBase(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleDiff() }}

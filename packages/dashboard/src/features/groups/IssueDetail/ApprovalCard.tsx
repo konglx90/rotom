@@ -3,7 +3,11 @@ import { DiffEditor } from '@monaco-editor/react'
 import { issuesApi } from '../../../api/issues'
 import type { IssueEvent } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
+import { Checkbox } from '../../../components/ui/Checkbox'
+import { Input } from '../../../components/ui/Input'
+import { Radio } from '../../../components/ui/Radio'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
+import { Textarea } from '../../../components/ui/Textarea'
 import { useMonaco } from '../../../hooks/useMonaco'
 import styles from './ApprovalCard.module.css'
 import { APPROVAL_STATUS_LABEL, detectLanguage, type DiffData } from './utils'
@@ -277,15 +281,25 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
                 <div className={styles.askOptionList}>
                   {optionsWithOther.map((opt, oIdx) => {
                     const checked = ans.choices.includes(opt.label)
+                    const controlName = `ask-${event.id}-${qIdx}`
                     return (
                       <label key={oIdx} className={styles.askOption}>
-                        <input
-                          type={q.multiSelect ? 'checkbox' : 'radio'}
-                          name={`ask-${event.id}-${qIdx}`}
-                          checked={checked}
-                          disabled={!isPending || askSubmitting}
-                          onChange={() => toggleAskChoice(qIdx, q.multiSelect, opt.label)}
-                        />
+                        {q.multiSelect ? (
+                          <Checkbox
+                            name={controlName}
+                            checked={checked}
+                            disabled={!isPending || askSubmitting}
+                            onChange={() => toggleAskChoice(qIdx, q.multiSelect, opt.label)}
+                          />
+                        ) : (
+                          <Radio
+                            name={controlName}
+                            value={opt.label}
+                            checked={checked}
+                            disabled={!isPending || askSubmitting}
+                            onChange={() => toggleAskChoice(qIdx, q.multiSelect, opt.label)}
+                          />
+                        )}
                         <span>
                           <span className={styles.askOptionLabel}>{opt.label}</span>
                           {opt.description && (
@@ -297,7 +311,7 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
                   })}
                 </div>
                 {ans.choices.includes(OTHER_OPTION_LABEL) && (
-                  <input
+                  <Input
                     className={styles.askOtherInput}
                     type="text"
                     placeholder="请输入"
@@ -328,7 +342,7 @@ export function ApprovalCard({ event, issueId, onResolved }: ApprovalCardProps) 
       )}
       {error && <div className={styles.approvalError}>{error}</div>}
       {isPending && kind !== 'ask' && denyStage === 'composing' && (
-        <textarea
+        <Textarea
           className={styles.approvalFeedback}
           placeholder="补充拒绝原因（可选，会回传给 Agent）"
           value={denyFeedback}

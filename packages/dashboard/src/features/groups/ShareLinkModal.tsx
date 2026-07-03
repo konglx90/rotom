@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { shareApi } from '../../api/share'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 
 interface ShareLinkModalProps {
@@ -92,19 +93,14 @@ export function ShareLinkModal({ open, groupId, groupName, onClose }: ShareLinkM
       ) : (
         <>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <input
+            <Input
               readOnly
               value={url ?? ''}
               onFocus={e => e.currentTarget.select()}
+              size="sm"
               style={{
                 flex: 1,
-                padding: '8px 12px',
-                border: '1px solid var(--border-color, #cbd5e1)',
-                borderRadius: 6,
-                fontSize: 12,
                 fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                background: 'var(--color-canvas-subtle, #f8fafc)',
-                color: 'var(--color-ink, #0f172a)',
                 minWidth: 0,
               }}
             />

@@ -1,0 +1,30 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-warm-dark);
+  font-feature-settings: var(--font-feature-calt);
+}
+
+.required {
+  color: var(--color-error);
+  margin-left: 2px;
+}
+
+.helperText {
+  font-size: 11px;
+  color: var(--color-gray);
+  font-weight: 500;
+}
+
+.errorText {
+  font-size: 11px;
+  color: var(--color-error);
+  font-weight: 600;
+}

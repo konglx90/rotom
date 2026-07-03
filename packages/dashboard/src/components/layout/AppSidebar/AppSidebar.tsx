@@ -96,9 +96,31 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   // Dropdown 通过 portal 渲染到 body 避开了 .groupList 的 overflow-y:auto,
   // 位置在点击瞬间从按钮的 getBoundingClientRect 算出来,所以滚动/resize 必须关闭。
   const moreBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const tabBarRef = useRef<HTMLDivElement | null>(null)
+  const [tabBarHasMore, setTabBarHasMore] = useState(false)
   const [moreMenuPos, setMoreMenuPos] = useState<{ top: number; left: number } | null>(null)
   const [settingsGroupId, setSettingsGroupId] = useState<string | null>(null)
   const startStateRef = useRef<{ x: number; w: number } | null>(null)
+  const [activeTab, setActiveTab] = useState<GroupTab>('normal')
+  // 跟踪 tabBar 横向滚动,当右侧还有内容没露出时给容器打 data 属性,CSS 渲染右边阴影。
+  useEffect(() => {
+    const el = tabBarRef.current
+    if (!el) return
+    const update = () => {
+      setTabBarHasMore(el.scrollWidth - el.clientWidth - el.scrollLeft > 1)
+    }
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    // 字体加载 / 群数变化导致 tab 内容宽度变化,延迟一帧再算一次。
+    const id = window.setTimeout(update, 50)
+    return () => {
+      el.removeEventListener('scroll', update)
+      ro.disconnect()
+      window.clearTimeout(id)
+    }
+  }, [activeTab, groups.length])
   // Close more-menu dropdown on outside click
   useEffect(() => {
     if (!moreMenuGroup) return
@@ -174,7 +196,6 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
   const displayGroups = activeGroups
   // 顶部 tab 状态:默认「普通」。已归档不常用,放第 4 位避免视觉权重过高。
-  const [activeTab, setActiveTab] = useState<GroupTab>('normal')
   const tabCounts: Record<GroupTab, number> = {
     normal: activeGroups.length,
     functional: functionalGroups.length,
@@ -268,6 +289,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
             </button>
           )}
         </nav>
+        {!isZen && <hr className={styles.navDivider} />}
         {isZen ? (
           <div className={styles.zenBody}>
             {displayGroups.length > 0 && (
@@ -297,7 +319,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
           <>
             <div className={`${styles.section} ${styles.sectionGroup}`}>
               <div className={styles.sectionHeader}>
-                <div className={styles.tabBar}>
+                <div ref={tabBarRef} className={styles.tabBar} data-has-more={tabBarHasMore || undefined}>
                   {(['normal', 'functional', 'starred', 'archived'] as GroupTab[]).map(tab => (
                     <button
                       key={tab}

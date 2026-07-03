@@ -4,6 +4,8 @@ import { groupsApi } from '../../api/groups'
 import type { Message, Group } from '../../api/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
 import styles from './MessagesView.module.css'
 
 const PAGE_SIZE = 50
@@ -157,66 +159,65 @@ export function MessageStream({ lockGroupId, groups: groupsProp }: MessageStream
     <div className={styles.container}>
       <div className={styles.filters}>
         <div className={styles.filter}>
-          <label className={styles.filterLabel}>发送方</label>
-          <input
+          <Input
             className={styles.filterInput}
+            size="sm"
+            label="发送方"
             value={filters.from}
             onChange={e => handleFilterChange('from', e.target.value)}
             placeholder="agent 名"
           />
         </div>
         <div className={styles.filter}>
-          <label className={styles.filterLabel}>接收方</label>
-          <input
+          <Input
             className={styles.filterInput}
+            size="sm"
+            label="接收方"
             value={filters.to}
             onChange={e => handleFilterChange('to', e.target.value)}
             placeholder="agent 名"
           />
         </div>
         <div className={styles.filter}>
-          <label className={styles.filterLabel}>状态</label>
-          <select
+          <Select
             className={styles.filterSelect}
+            size="sm"
+            label="状态"
             value={filters.status}
             onChange={e => handleFilterChange('status', e.target.value)}
-          >
-            {STATUS_OPTIONS.map(s => (
-              <option key={s} value={s}>{s || '全部'}</option>
-            ))}
-          </select>
+            options={STATUS_OPTIONS.map(s => ({ value: s, label: s || '全部' }))}
+          />
         </div>
         {lockGroupId === undefined && (
           <div className={styles.filter}>
-            <label className={styles.filterLabel}>群</label>
-            <select
+            <Select
               className={styles.filterSelect}
+              size="sm"
+              label="群"
               value={filters.groupId}
               onChange={e => handleFilterChange('groupId', e.target.value)}
-            >
-              <option value="">全部</option>
-              {groups.map(g => (
-                <option key={g.id} value={g.id}>{g.name}</option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: '全部' },
+                ...groups.map(g => ({ value: g.id, label: g.name })),
+              ]}
+            />
           </div>
         )}
         <div className={styles.filter}>
-          <label className={styles.filterLabel}>提及</label>
-          <select
+          <Select
             className={styles.filterSelect}
+            size="sm"
+            label="提及"
             value={filters.mentionFilter}
             onChange={e => handleFilterChange('mentionFilter', e.target.value)}
-          >
-            {MENTION_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+            options={[...MENTION_OPTIONS]}
+          />
         </div>
         <div className={styles.filter}>
-          <label className={styles.filterLabel}>关键字</label>
-          <input
+          <Input
             className={styles.filterInput}
+            size="sm"
+            label="关键字"
             value={filters.keyword}
             onChange={e => handleFilterChange('keyword', e.target.value)}
             placeholder="payload 包含"

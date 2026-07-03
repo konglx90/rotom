@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { issuesPatrolApi, type PatrolLog, type PatrolRun, type PatrolState } from '../../api/issues-patrol'
 import styles from './ManagementTab.module.css'
 
@@ -202,27 +203,27 @@ export function IssuePatrolTab() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
             <label>
               吞吐上限 throughputCap:{' '}
-              <input type="number" min={1} max={20} value={throughputCap}
+              <Input type="number" min={1} max={20} size="sm" value={throughputCap}
                 onChange={(e) => setThroughputCap(Number(e.target.value) || 3)}
-                style={{ width: 60, padding: '2px 6px' }} />
+                style={{ width: 60 }} />
             </label>
             <label>
               候选上限 candidateCap:{' '}
-              <input type="number" min={1} max={20} value={candidateCap}
+              <Input type="number" min={1} max={20} size="sm" value={candidateCap}
                 onChange={(e) => setCandidateCap(Number(e.target.value) || 3)}
-                style={{ width: 60, padding: '2px 6px' }} />
+                style={{ width: 60 }} />
             </label>
             <label>
               扫描批大小 scanBatch:{' '}
-              <input type="number" min={1} max={50} value={scanBatch}
+              <Input type="number" min={1} max={50} size="sm" value={scanBatch}
                 onChange={(e) => setScanBatch(Number(e.target.value) || 10)}
-                style={{ width: 60, padding: '2px 6px' }} />
+                style={{ width: 60 }} />
             </label>
             <label>
               间隔 intervalSec:{' '}
-              <input type="number" min={60} value={intervalSec}
+              <Input type="number" min={60} size="sm" value={intervalSec}
                 onChange={(e) => setIntervalSec(Number(e.target.value) || 7200)}
-                style={{ width: 80, padding: '2px 6px' }} />
+                style={{ width: 80 }} />
             </label>
             <Button variant="secondary" size="sm" onClick={handleSaveConfig} disabled={busy}>保存参数</Button>
           </div>

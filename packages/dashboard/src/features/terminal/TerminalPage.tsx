@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { XTermView, type TerminalStatus } from './XTermView'
 import { cwdTerminalUrl } from './terminalUrl'
 import styles from './TerminalPage.module.css'
@@ -84,8 +85,9 @@ export function TerminalPage() {
     <div className={styles.page}>
       <div className={styles.toolbar}>
         <span className={styles.title}>终端</span>
-        <input
+        <Input
           type="text"
+          size="sm"
           placeholder="/绝对/路径/到/工作目录"
           value={pendingCwd}
           onChange={(e) => setPendingCwd(e.target.value)}

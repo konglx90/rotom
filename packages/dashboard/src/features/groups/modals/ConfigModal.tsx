@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { Input } from '../../../components/ui/Input'
 import { Modal } from '../../../components/ui/Modal'
 import styles from '../GroupChatView.module.css'
 
@@ -85,14 +86,13 @@ export function ConfigModal({ open, onConfigured, onClose }: Props) {
         Dashboard 这边的你是「真人」。粘贴一个员工的 Mesh Token，名字会自动匹配出来。
       </p>
       <div className={styles.formField}>
-        <label className={styles.formLabel}>Mesh Token：</label>
-        <input
+        <Input
+          label="Mesh Token："
           type="password"
           value={token}
           onChange={e => setToken(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave() }}
           placeholder="例如: mesh_xxx"
-          className={styles.formInput}
           autoFocus
         />
       </div>

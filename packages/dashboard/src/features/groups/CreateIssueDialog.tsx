@@ -3,6 +3,7 @@ import type { Agent } from '../../api/types'
 import { Button } from '../../components/ui/Button'
 import { MarkdownEditor } from '../../components/ui/MarkdownEditor'
 import { Modal } from '../../components/ui/Modal'
+import { Select } from '../../components/ui/Select'
 import styles from './GroupChatView.module.css'
 import { truncateTitle } from './createIssueTitle'
 
@@ -85,24 +86,28 @@ export function CreateIssueDialog({
         )}
       </div>
       <div className={styles.formField}>
-        <label className={styles.formLabel}>优先级:</label>
-        <select value={priority} onChange={e => setPriority(e.target.value)}
-          className={styles.formSelect}>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-          <option value="critical">Critical</option>
-        </select>
+        <Select
+          label="优先级"
+          value={priority}
+          onChange={e => setPriority(e.target.value)}
+          options={[
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' },
+            { value: 'critical', label: 'Critical' },
+          ]}
+        />
       </div>
       <div className={styles.formField}>
-        <label className={styles.formLabel}>指派 Agent (可选):</label>
-        <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
-          className={styles.formSelect}>
-          <option value="">-- 暂不分配,稍后指派 --</option>
-          {deliveryAgents.map(a => (
-            <option key={a.id} value={a.name}>{a.name}</option>
-          ))}
-        </select>
+        <Select
+          label="指派 Agent (可选)"
+          value={assignedTo}
+          onChange={e => setAssignedTo(e.target.value)}
+          options={[
+            { value: '', label: '-- 暂不分配,稍后指派 --' },
+            ...deliveryAgents.map(a => ({ value: a.name, label: a.name })),
+          ]}
+        />
       </div>
     </Modal>
   )

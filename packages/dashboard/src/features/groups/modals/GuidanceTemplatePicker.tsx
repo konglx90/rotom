@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Modal } from '../../../components/ui/Modal/Modal'
+import { Input } from '../../../components/ui/Input'
 import { guidanceTemplatesApi } from '../../../api/guidance-templates'
 import { schedulesApi } from '../../../api/schedules'
 import type { GuidanceTemplate, GuidanceScheduleConfig } from '../../../api/types'
@@ -201,18 +202,13 @@ export function GuidanceTemplatePicker({
                 {placeholders.map(key => (
                   <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                     <span style={{ minWidth: 80, color: 'var(--color-navy)' }}>{PLACEHOLDER_LABELS[key] ?? key}</span>
-                    <input
+                    <Input
                       type="text"
+                      size="sm"
                       value={vars[key] ?? ''}
                       onChange={e => setVars(v => ({ ...v, [key]: e.target.value }))}
                       placeholder={`{{${key}}}`}
-                      style={{
-                        flex: 1,
-                        padding: '4px 8px',
-                        border: '1px solid rgba(0,0,0,0.12)',
-                        borderRadius: 4,
-                        fontSize: 12,
-                      }}
+                      style={{ flex: 1, fontSize: 12 }}
                     />
                   </label>
                 ))}

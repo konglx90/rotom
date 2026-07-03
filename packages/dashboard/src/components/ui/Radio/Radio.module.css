@@ -1,0 +1,83 @@
+.wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  font-feature-settings: var(--font-feature-calt);
+  letter-spacing: -0.01em;
+}
+
+.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.outer {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-color-hover);
+  background: var(--color-canvas-elevated);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: border-color var(--duration-base) var(--ease-out),
+              background-color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out),
+              transform var(--duration-base) var(--ease-out);
+  flex-shrink: 0;
+}
+
+.outerChecked {
+  border-color: var(--color-wise-green);
+  border-width: 5px;
+}
+
+.dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-dark-green);
+  display: none;
+}
+
+/* 当选中时 borderWidth 变成 5px,内圈用 box-shadow 模拟 8px 点 */
+.outerChecked::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-dark-green);
+}
+
+.wrapper:hover:not(.disabled) .outer {
+  border-color: var(--color-dark-green);
+  transform: translateY(-0.5px);
+}
+
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.wrapper:has(.input:focus-visible) .outer {
+  box-shadow: var(--shadow-inset);
+}
+
+.label {
+  line-height: 1.4;
+}

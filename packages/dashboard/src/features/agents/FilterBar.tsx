@@ -1,5 +1,7 @@
 import type { Domain } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
 import styles from './FilterBar.module.css'
 
 interface FilterBarProps {
@@ -60,7 +62,7 @@ export function FilterBar({
       {/* Domain Filter — 合并原 DepartmentTree 的部门筛选与跨域规则入口 */}
       <div className={styles.group}>
         <div className={styles.domainSelectWrapper}>
-          <select
+          <Select
             className={styles.domainSelect}
             value={isRulesView ? '__rules__' : selectedDomain}
             onChange={(e) => {
@@ -80,7 +82,7 @@ export function FilterBar({
             ))}
             <option disabled>──────────</option>
             <option value="__rules__">🔗 跨域规则</option>
-          </select>
+          </Select>
 
           {/* 添加部门按钮 */}
           {!isRulesView && onAddDomain && (
@@ -137,8 +139,8 @@ export function FilterBar({
 
       {/* Search */}
       <div className={styles.group}>
-        <input
-          type="text"
+        <Input
+          type="search"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="搜索员工..."

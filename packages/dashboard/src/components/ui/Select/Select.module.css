@@ -1,47 +1,46 @@
-.container {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.084px;
-  color: var(--color-warm-dark);
-  font-feature-settings: var(--font-feature-calt);
-}
-
 .select {
   width: 100%;
-  padding: 9px 14px;
+  padding: 9px 40px 9px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   font-family: inherit;
   font-feature-settings: var(--font-feature-calt);
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
   color: var(--color-ink);
-  background: var(--color-canvas-elevated);
+  background-color: var(--color-canvas-elevated);
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23454745' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
   box-sizing: border-box;
   transition: border-color var(--duration-base) var(--ease-out),
-              box-shadow var(--duration-base) var(--ease-out);
+              box-shadow var(--duration-base) var(--ease-out),
+              transform var(--duration-base) var(--ease-out);
 }
 
 .select:hover:not(:disabled) {
   border-color: var(--border-color-hover);
+  transform: translateY(-0.5px);
 }
 
 .select:focus {
   outline: none;
   border-color: var(--color-dark-green);
   box-shadow: var(--shadow-inset);
+  transform: translateY(-0.5px);
 }
 
 .select:disabled {
-  background: var(--color-canvas);
+  background-color: var(--color-canvas);
   cursor: not-allowed;
   opacity: 0.6;
+  transform: none;
 }
 
 .error {
@@ -55,22 +54,11 @@
 .sm {
   font-size: 12px;
   min-height: 32px;
-  padding: 6px 12px;
+  padding: 6px 36px 6px 12px;
 }
 
 .md {
   font-size: 14px;
   min-height: 40px;
-  padding: 9px 14px;
-}
-
-.helperText {
-  font-size: 11px;
-  color: var(--color-gray);
-}
-
-.errorText {
-  font-size: 11px;
-  color: var(--color-error);
-  font-weight: 600;
+  padding: 9px 40px 9px 14px;
 }

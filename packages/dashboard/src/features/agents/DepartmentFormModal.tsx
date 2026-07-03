@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { domainsApi } from '../../api/domains'
 import type { Domain } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 import styles from './DepartmentFormModal.module.css'
 
@@ -79,22 +80,20 @@ export function DepartmentFormModal({
     <Modal open={open} title={title} onClose={onClose} size="sm">
       <form onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.field}>
-          <label>部门名称 *</label>
-          <input
-            type="text"
+          <Input
+            label="部门名称"
+            required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="如：技术部"
-            required
             autoFocus
             disabled={submitting}
           />
         </div>
 
         <div className={styles.field}>
-          <label>描述（可选）</label>
-          <input
-            type="text"
+          <Input
+            label="描述（可选）"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="简要描述该部门的职责"

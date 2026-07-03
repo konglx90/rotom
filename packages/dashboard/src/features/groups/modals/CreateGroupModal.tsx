@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import type { Agent, GuidanceScheduleConfig } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
+import { Checkbox } from '../../../components/ui/Checkbox'
+import { Input } from '../../../components/ui/Input'
 import { Modal } from '../../../components/ui/Modal'
+import { Select } from '../../../components/ui/Select'
 import { GuidanceTemplatePicker } from './GuidanceTemplatePicker'
 import styles from '../GroupChatView.module.css'
 
@@ -216,23 +219,23 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
       {!isDirect && (
         <div className={styles.formField}>
           <label className={styles.formLabel}>群名称:</label>
-          <input type="text" value={groupName} onChange={e => setGroupName(e.target.value)}
-            placeholder="输入群名称" className={styles.formInput} />
+          <Input type="text" value={groupName} onChange={e => setGroupName(e.target.value)}
+            placeholder="输入群名称" />
         </div>
       )}
       {!isDirect && (
         <div className={styles.formField}>
           <label className={styles.formLabel}>群类型:</label>
-          <select value={groupType} onChange={e => {
+          <Select value={groupType} onChange={e => {
             const t = e.target.value
             setGroupType(t)
             if (t === 'patrol' && !groupName.trim()) {
               setGroupName('全局issue巡检群')
             }
-          }} className={styles.formSelect}>
-            <option value="">普通群</option>
-            <option value="patrol">巡检群</option>
-          </select>
+          }} options={[
+            { value: '', label: '普通群' },
+            { value: 'patrol', label: '巡检群' },
+          ]} />
           {isPatrol && (
             <p style={{ fontSize: 11, color: 'var(--color-info)', margin: '6px 2px 0' }}>
               巡检群全局限 1 个(归档/删除后才能再建),只选 1 个 agent 作为巡检员。
@@ -251,15 +254,15 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
             const checked = selectedMembers.includes(agent.name)
             const disabled = (isDirect || isPatrol) && !checked && selectedMembers.length >= maxMembers
             return (
-              <label key={agent.id} className={styles.agentCheckItem}
+              <div key={agent.id} className={styles.agentCheckItem}
                 style={disabled ? { opacity: 0.4 } : (isDirect ? { cursor: 'pointer' } : undefined)}>
-                <input type="checkbox" checked={checked} disabled={disabled}
+                <Checkbox checked={checked} disabled={disabled}
                   onChange={() => handleToggleMember(agent.name)} />
                 {agent.name}
                 <span className={`${styles.agentCheckStatus} ${agent.status === 'online' ? styles.online : styles.offline}`}>
                   {agent.status === 'online' ? '在线' : '离线'}
                 </span>
-              </label>
+              </div>
             )
           })}
           {otherAgents.length === 0 && (
@@ -276,24 +279,24 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
         <>
       <div className={styles.formField}>
         <label className={styles.formLabel}>工作目录（可选）:</label>
-        <input type="text" value={workingDir} onChange={e => setWorkingDir(e.target.value)}
-          placeholder="例如: /Users/me/code/my-repo 或 ~/code/my-repo" className={styles.formInput} />
+        <Input type="text" value={workingDir} onChange={e => setWorkingDir(e.target.value)}
+          placeholder="例如: /Users/me/code/my-repo 或 ~/code/my-repo" />
         <p style={{ fontSize: 11, color: 'var(--color-slate)', margin: '6px 2px 0' }}>
           支持 ~/ 自动展开。必须是已存在的目录；不填则默认使用 ~/.rotom/artifacts/&lt;群id&gt;（自动创建）。
         </p>
       </div>
       <div className={styles.formField}>
         <label className={styles.formLabel}>内置 repo(可选):</label>
-        <input type="text" value={repoUrl} onChange={e => setRepoUrl(e.target.value)}
-          placeholder="主仓库 URL,如 git@github.com:org/repo.git;留空则不启用 worktree" className={styles.formInput} />
-        <input type="text" value={repoDefaultBranch} onChange={e => setRepoDefaultBranch(e.target.value)}
-          placeholder="默认分支(如 main);留空用仓库默认" className={styles.formInput}
+        <Input type="text" value={repoUrl} onChange={e => setRepoUrl(e.target.value)}
+          placeholder="主仓库 URL,如 git@github.com:org/repo.git;留空则不启用 worktree" />
+        <Input type="text" value={repoDefaultBranch} onChange={e => setRepoDefaultBranch(e.target.value)}
+          placeholder="默认分支(如 main);留空用仓库默认"
           style={{ marginTop: 6 }} />
-        <select value={worktreeMode} onChange={e => setWorktreeMode(e.target.value as 'group' | 'issue')}
-          className={styles.formSelect} style={{ marginTop: 6 }}>
-          <option value="group">worktree 策略:group(群共享一个 worktree,轻量)</option>
-          <option value="issue">worktree 策略:issue(每 issue 独立 worktree,多分支并行)</option>
-        </select>
+        <Select value={worktreeMode} onChange={e => setWorktreeMode(e.target.value as 'group' | 'issue')}
+          style={{ marginTop: 6 }} options={[
+            { value: 'group', label: 'worktree 策略:group(群共享一个 worktree,轻量)' },
+            { value: 'issue', label: 'worktree 策略:issue(每 issue 独立 worktree,多分支并行)' },
+          ]} />
         <div style={{ marginTop: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
             <span style={{ fontSize: 11, color: 'var(--color-slate)' }}>额外仓库(可选)</span>
@@ -304,12 +307,12 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
           </div>
           {extraRepos.map((e, idx) => (
             <div key={idx} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 28px', gap: 6, marginBottom: 6 }}>
-              <input type="text" value={e.id} onChange={ev => updateExtra(idx, 'id', ev.target.value)}
-                placeholder="id(如 deposit-home)" className={styles.formInput} style={{ fontSize: 11 }} />
-              <input type="text" value={e.url} onChange={ev => updateExtra(idx, 'url', ev.target.value)}
-                placeholder="URL" className={styles.formInput} style={{ fontSize: 11 }} />
-              <input type="text" value={e.branch} onChange={ev => updateExtra(idx, 'branch', ev.target.value)}
-                placeholder="分支(可空)" className={styles.formInput} style={{ fontSize: 11 }} />
+              <Input type="text" size="sm" value={e.id} onChange={ev => updateExtra(idx, 'id', ev.target.value)}
+                placeholder="id(如 deposit-home)" style={{ fontSize: 11 }} />
+              <Input type="text" size="sm" value={e.url} onChange={ev => updateExtra(idx, 'url', ev.target.value)}
+                placeholder="URL" style={{ fontSize: 11 }} />
+              <Input type="text" size="sm" value={e.branch} onChange={ev => updateExtra(idx, 'branch', ev.target.value)}
+                placeholder="分支(可空)" style={{ fontSize: 11 }} />
               <button type="button" onClick={() => removeExtra(idx)}
                 style={{ border: '1px solid var(--border-color-light, #ddd)', background: 'transparent', borderRadius: 4, cursor: 'pointer', fontSize: 12, color: '#c00' }}
                 title="删除">

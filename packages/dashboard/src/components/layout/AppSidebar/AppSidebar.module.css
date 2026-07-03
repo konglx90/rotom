@@ -98,13 +98,13 @@
 .nav {
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: 20px 12px 4px;
   gap: 4px;
   flex-shrink: 0;
 }
 
 .sidebarZen .nav {
-  padding: 12px 6px;
+  padding: 20px 6px 4px;
   align-items: center;
 }
 
@@ -206,6 +206,13 @@
 .navCompact .navToggleBtn {
   align-self: center;
   margin: 0 0 0 2px;
+}
+
+.navDivider {
+  border: 0;
+  border-top: 1px solid var(--border-color-light);
+  margin: 0 12px 6px;
+  flex-shrink: 0;
 }
 
 /* ── Sections ─────────────────────────────────────────────── */
@@ -809,6 +816,7 @@
 
 /* ── Tab bar (普通/功能/标记/已归档) ───────────────────── */
 .tabBar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -820,6 +828,22 @@
 
 .tabBar::-webkit-scrollbar {
   display: none;
+}
+
+/* 右侧还能滚动时,用 mask 把 tabBar 右边的 tab 内容渐隐,暗示"还有内容可滑"。 */
+.tabBar[data-has-more] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    black 0,
+    black calc(100% - 28px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    black 0,
+    black calc(100% - 28px),
+    transparent 100%
+  );
 }
 
 .tab {

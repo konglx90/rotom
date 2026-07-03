@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { Domain } from '../../api/types';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
+import { Select } from '../../components/ui/Select';
 import styles from './AddAgentModal.module.css';
 
 interface AddAgentModalProps {
@@ -149,9 +151,9 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
       {!result ? (
         <form onSubmit={handleSubmit}>
           <div className={styles.field}>
-            <label>节点名称 *</label>
-            <input
-              type="text"
+            <Input
+              label="节点名称"
+              required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="如：小七"
@@ -160,37 +162,38 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
           </div>
 
           <div className={styles.field}>
-            <label>所属域 *</label>
-            <select
+            <Select
+              label="所属域"
+              required
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               disabled={loading || domains.length === 0}
-            >
-              <option value="">选择域</option>
-              {domains.map((d) => (
-                <option key={d.id} value={d.name}>
-                  {d.name}{d.description ? ` — ${d.description}` : ''}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: '选择域' },
+                ...domains.map((d) => ({
+                  value: d.name,
+                  label: d.description ? `${d.name} — ${d.description}` : d.name,
+                })),
+              ]}
+            />
           </div>
 
           <div className={styles.field}>
-            <label>员工类型</label>
-            <select
+            <Select
+              label="员工类型"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               disabled={loading}
-            >
-              <option value="">🚀 Agent（默认）</option>
-              <option value="真人">👤 真人 — 真实人类团队成员</option>
-            </select>
+              options={[
+                { value: '', label: '🚀 Agent（默认）' },
+                { value: '真人', label: '👤 真人 — 真实人类团队成员' },
+              ]}
+            />
           </div>
 
           <div className={styles.field}>
-            <label>岗位</label>
-            <input
-              type="text"
+            <Input
+              label="岗位"
               value={position}
               onChange={(e) => setPosition(e.target.value)}
               placeholder="如：前端开发工程师"
@@ -199,9 +202,8 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
           </div>
 
           <div className={styles.field}>
-            <label>简介</label>
-            <input
-              type="text"
+            <Input
+              label="简介"
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               placeholder="如：负责保险业务前端架构和核心模块开发"

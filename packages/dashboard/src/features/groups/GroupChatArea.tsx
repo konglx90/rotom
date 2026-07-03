@@ -8,6 +8,7 @@ import { MessageRow } from './MessageRow'
 import { MessageContextMenu } from './MessageContextMenu'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import { useImageUpload } from './useImageUpload'
+import { Textarea } from '../../components/ui/Textarea'
 import {
   SLASH_COMMANDS,
   filterSlashCommands,
@@ -536,7 +537,7 @@ export function GroupChatArea({
             onChange={handleFileInputChange}
             disabled={isArchived || isUploading || connectionStatus !== 'connected'}
           />
-          <textarea ref={inputRef} rows={1} value={message}
+          <Textarea ref={inputRef} rows={1} value={message}
           onChange={e => {
             if (isArchived) return;
             handleInputChange(e.target.value);

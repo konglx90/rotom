@@ -20,6 +20,8 @@ import { memoryApi, type MemoryIndex, type MemoryRow, type MemoryCategory } from
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import { Select } from '../../components/ui/Select'
+import { Input } from '../../components/ui/Input'
+import { Textarea } from '../../components/ui/Textarea'
 import styles from './MemoryPanel.module.css'
 
 interface Props {
@@ -180,7 +182,8 @@ export function MemoryPanel({ selectedGroupId, myAgentName }: Props) {
           ))}
         </Select>
         <div className={styles.headerRight}>
-          <input
+          <Input
+            size="sm"
             className={styles.searchInput}
             placeholder="搜索记忆"
             value={searchKw}
@@ -461,48 +464,53 @@ function MemoryEditor({ mode, row, onCancel, onSaved }: {
       </div>
       {err && <div className={styles.error}>{err}</div>}
       <div className={styles.editorBody}>
-        <label className={styles.field}>
+        <div className={styles.field}>
           <span className={styles.fieldLabel}>作用域(scope)</span>
-          <select
-            className={styles.select}
+          <Select
+            size="sm"
             value={form.scope}
             disabled={mode === 'edit'}
             onChange={e => setForm({ ...form, scope: e.target.value as CreateScope })}
-          >
-            {(Object.keys(SCOPE_LABEL) as CreateScope[]).map(s => (
-              <option key={s} value={s}>{SCOPE_LABEL[s]}</option>
-            ))}
-          </select>
+            options={(Object.keys(SCOPE_LABEL) as CreateScope[]).map(s => ({ value: s, label: SCOPE_LABEL[s] }))}
+          />
           {mode === 'edit' && (
             <span className={styles.fieldHint}>编辑模式下不可改 scope,如需变更请删除后重建。</span>
           )}
-        </label>
-        <label className={styles.field}>
+        </div>
+        <div className={styles.field}>
           <span className={styles.fieldLabel}>key (主题)</span>
-          <input className={styles.input} value={form.key} onChange={e => setForm({ ...form, key: e.target.value })} />
-        </label>
-        <label className={styles.field}>
+          <Input size="sm" value={form.key} onChange={e => setForm({ ...form, key: e.target.value })} />
+        </div>
+        <div className={styles.field}>
           <span className={styles.fieldLabel}>summary (一句话摘要,留空自动取 value 前 80 字)</span>
-          <input className={styles.input} value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} />
-        </label>
-        <label className={styles.field}>
+          <Input size="sm" value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} />
+        </div>
+        <div className={styles.field}>
           <span className={styles.fieldLabel}>category</span>
-          <select className={styles.select} value={form.category} onChange={e => setForm({ ...form, category: e.target.value as MemoryCategory })}>
-            {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABEL[c]} ({c})</option>)}
-          </select>
-        </label>
-        <label className={styles.field}>
+          <Select
+            size="sm"
+            value={form.category}
+            onChange={e => setForm({ ...form, category: e.target.value as MemoryCategory })}
+            options={CATEGORIES.map(c => ({ value: c, label: `${CATEGORY_LABEL[c]} (${c})` }))}
+          />
+        </div>
+        <div className={styles.field}>
           <span className={styles.fieldLabel}>value (内容,Markdown)</span>
-          <textarea className={styles.textarea} rows={10} value={form.value} onChange={e => setForm({ ...form, value: e.target.value })} />
-        </label>
-        <label className={styles.field}>
+          <Textarea
+            rows={10}
+            value={form.value}
+            onChange={e => setForm({ ...form, value: e.target.value })}
+            spellCheck={false}
+          />
+        </div>
+        <div className={styles.field}>
           <span className={styles.fieldLabel}>tags (逗号分隔)</span>
-          <input
-            className={styles.input}
+          <Input
+            size="sm"
             value={form.tags.join(', ')}
             onChange={e => setForm({ ...form, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
           />
-        </label>
+        </div>
       </div>
       <div className={styles.editorActions}>
         <Button variant="secondary" size="sm" onClick={onCancel}>取消</Button>

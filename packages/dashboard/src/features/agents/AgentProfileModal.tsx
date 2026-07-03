@@ -3,7 +3,9 @@ import { Avatar } from '../../components/ui/Avatar';
 import type { Agent, AgentProfile } from '../../api/types';
 import { agentsApi } from '../../api/agents';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
+import { Textarea } from '../../components/ui/Textarea';
 import styles from './AddAgentModal.module.css';
 
 interface AgentProfileModalProps {
@@ -151,8 +153,9 @@ export function AgentProfileModal({ agent, open, onClose, onSuccess }: AgentProf
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', gap: 8 }}>
-              <input
+              <Input
                 type="text"
+                size="sm"
                 value={tokenDisplay}
                 readOnly
                 onFocus={(e) => e.currentTarget.select()}
@@ -160,9 +163,6 @@ export function AgentProfileModal({ agent, open, onClose, onSuccess }: AgentProf
                   flex: 1,
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                   fontSize: '12px',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #d1d5db',
                   background: '#f9fafb',
                   color: token ? '#111827' : '#9ca3af',
                   cursor: token ? 'text' : 'not-allowed',
@@ -268,9 +268,8 @@ export function AgentProfileModal({ agent, open, onClose, onSuccess }: AgentProf
 
       <form onSubmit={handleSubmit}>
         <div className={styles.field}>
-          <label>岗位</label>
-          <input
-            type="text"
+          <Input
+            label="岗位"
             value={position}
             onChange={(e) => setPosition(e.target.value)}
             placeholder="如：前端开发工程师"
@@ -280,13 +279,13 @@ export function AgentProfileModal({ agent, open, onClose, onSuccess }: AgentProf
 
         <div className={styles.field}>
           <label>简介</label>
-          <textarea
+          <Textarea
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             placeholder="如：负责保险业务前端架构和核心模块开发"
             rows={3}
             disabled={loading || uploading}
-            style={{ width: '100%', resize: 'vertical', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px' }}
+            style={{ width: '100%', resize: 'vertical' }}
           />
         </div>
 

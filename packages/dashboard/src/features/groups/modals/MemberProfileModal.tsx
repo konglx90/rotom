@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { Input } from '../../../components/ui/Input'
 import { Modal } from '../../../components/ui/Modal'
+import { Textarea } from '../../../components/ui/Textarea'
 import type { AgentProfile } from '../../../api/types'
 
 interface MemberProfileModalProps {
@@ -69,26 +71,23 @@ export function MemberProfileModal({
         </div>
 
         <div className="field" style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 13, marginBottom: 4, color: 'var(--color-navy)' }}>岗位</label>
-          <input
-            type="text"
+          <Input
+            label="岗位"
             value={position}
             onChange={(e) => setPosition(e.target.value)}
             placeholder={fallbackHint('position')}
             disabled={saving}
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }}
           />
         </div>
 
         <div className="field" style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 13, marginBottom: 4, color: 'var(--color-navy)' }}>简介</label>
-          <textarea
+          <Textarea
+            label="简介"
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             placeholder={fallbackHint('bio')}
             rows={3}
             disabled={saving}
-            style={{ width: '100%', resize: 'vertical', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }}
           />
         </div>
 
