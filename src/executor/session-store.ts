@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { TokenUsage } from "../shared/protocol.js";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-executor-session-store", { stream: "stderr" });
 
 /** Shape held in memory and surfaced via listAll(). Persisted to master DB
  *  via session_snapshot pushes; no longer written to local JSON file. */
@@ -57,7 +60,7 @@ export class SessionStore {
       added++;
     }
     if (added > 0) {
-      console.log(`[session-store] Hydrated ${added} session(s) from master (of ${entries.length} pushed)`);
+      log.info(`Hydrated ${added} session(s) from master (of ${entries.length} pushed)`);
     }
   }
 
@@ -99,16 +102,16 @@ export class SessionStore {
           count++;
         }
       }
-      console.log(`[session-store] Backfilled ${count} session(s) from legacy ${file}`);
+      log.info(`Backfilled ${count} session(s) from legacy ${file}`);
       // Delete the file so we never re-backfill (would clobber DB state).
       try {
         fs.unlinkSync(file);
-        console.log(`[session-store] Removed legacy ${file}`);
+        log.info(`Removed legacy ${file}`);
       } catch (err: any) {
-        console.warn(`[session-store] Failed to remove legacy ${file}: ${err.message}`);
+        log.warn(`Failed to remove legacy ${file}: ${err.message}`);
       }
     } catch (err: any) {
-      console.warn(`[session-store] Failed to parse legacy ${file}: ${err.message} (leaving file in place)`);
+      log.warn(`Failed to parse legacy ${file}: ${err.message} (leaving file in place)`);
     }
   }
 

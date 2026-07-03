@@ -10,6 +10,9 @@ import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { decodeJson } from "../shared/json-codec.js";
 import type { ExecutorWorker } from "./worker.js";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-executor-worker-connection", { stream: "stderr" });
 
 export class WorkerConnection {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -48,7 +51,7 @@ export class WorkerConnection {
     if (this.worker.stopped) return;
     const url = this.wsUrl();
     const cliName = this.worker.config.cliTool || "auto";
-    console.log(`${this.worker.tag} Connecting to ${url} (cli: ${cliName}, cwd: ${this.worker.workingDir})`);
+    log.info(this.worker.tag, "Connecting to", url, `(cli: ${cliName}, cwd: ${this.worker.workingDir})`);
 
     this.worker.ws = new WebSocket(url);
 
@@ -76,7 +79,7 @@ export class WorkerConnection {
     });
 
     this.worker.ws.on("close", () => {
-      console.log(`${this.worker.tag} Disconnected, reconnecting in 3s...`);
+      log.info(this.worker.tag, "Disconnected, reconnecting in 3s...");
       if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
       if (!this.worker.stopped) {
         this.reconnectTimer = setTimeout(() => this.connect(), 3_000);
@@ -84,7 +87,7 @@ export class WorkerConnection {
     });
 
     this.worker.ws.on("error", (err) => {
-      console.error(`${this.worker.tag} WS error:`, err.message);
+      log.error(this.worker.tag, "WS error:", err.message);
     });
   }
 }

@@ -7,6 +7,9 @@
  */
 import { composePrompt } from "../shared/prompt-composer.js";
 import type { ExecutorWorker } from "./worker.js";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-executor-worker-chat", { stream: "stderr" });
 
 export class ChatHandler {
   /** 同群 chat 队列:groupId → 待处理消息队列。同群串行,保证 session 不丢。 */
@@ -29,7 +32,7 @@ export class ChatHandler {
       const queue = this.groupChatQueues.get(groupId) ?? [];
       queue.push({ requestId, content, fromName, conversation, cwdOverride, repoCtx });
       this.groupChatQueues.set(groupId, queue);
-      console.log(`${this.worker.tag} Chat from ${fromName} queued for group ${groupId} (queue=${queue.length})`);
+      log.info(this.worker.tag, `Chat from ${fromName} queued for group ${groupId} (queue=${queue.length})`);
       return;
     }
 
@@ -100,8 +103,8 @@ export class ChatHandler {
       body,
     });
 
-    console.log(`${this.worker.tag} Session lookup: cliTool=${this.worker.cliTool}, groupId=${groupId}, sessionId=${sessionId ?? "(none)"}, conversation=${JSON.stringify(conversation)}`);
-    console.log(`${this.worker.tag} Replying to ${fromName}: ${composed.final.slice(0, 60)}...`);
+    log.info(this.worker.tag, `Session lookup: cliTool=${this.worker.cliTool}, groupId=${groupId}, sessionId=${sessionId ?? "(none)"}, conversation=${JSON.stringify(conversation)}`);
+    log.info(this.worker.tag, `Replying to ${fromName}: ${composed.final.slice(0, 60)}...`);
 
     // 合并 turn:把合并用的 composedPrompt 挂到 sibling 气泡上,让 dashboard
     // "查看 prompt"在每个被合并的 bubble 都能打开(否则 sibling 只有一条系统
@@ -160,8 +163,9 @@ export class ChatHandler {
         // 失效前抓住 sessionId,通知 master 在 DB 里打 invalidated_at 戳(保留历史)。
         const invalidatedSessionId = sessionId;
         this.worker.sessions.delete(this.worker.cliTool, groupId);
-        console.warn(
-          `${this.worker.tag} Session invalidated: ${this.worker.cliTool}:${groupId}` +
+        log.warn(
+          this.worker.tag,
+          `Session invalidated: ${this.worker.cliTool}:${groupId}` +
           (result.failed ? " (provider error)" : " (poisoned history)"),
         );
         if (invalidatedSessionId) {
@@ -180,7 +184,7 @@ export class ChatHandler {
         // so the Debug view can show this chat session's own token cost.
         if (groupId && result.sessionId) {
           this.worker.sessions.set(this.worker.cliTool, groupId, result.sessionId);
-          console.log(`${this.worker.tag} Session stored: ${this.worker.cliTool}:${groupId} → ${result.sessionId}`);
+          log.info(this.worker.tag, `Session stored: ${this.worker.cliTool}:${groupId} → ${result.sessionId}`);
         }
         if (groupId && (result.usage || result.model)) {
           this.worker.sessions.recordUsage(this.worker.cliTool, groupId, result.usage, result.model);
@@ -198,7 +202,7 @@ export class ChatHandler {
         // bubble 切到「已中断」状态。不暴露 executor 返回的 aborted 错误文案 ——
         // 用户自己点的中断,不需要再看"turn was aborted" 之类的内部噪声。
         this.worker.sendChatEnd(requestId, fullContent, conversation, cwd, undefined, { cancelled: true });
-        console.log(`${this.worker.tag} Reply cancelled mid-stream to ${fromName} (kept ${fullContent.length} chars)`);
+        log.info(this.worker.tag, `Reply cancelled mid-stream to ${fromName} (kept ${fullContent.length} chars)`);
       } else {
         // Provider-error path: executor detected a terminal model failure
         // (e.g. hermes's "API call failed after N retries: …" reply, which
@@ -215,10 +219,10 @@ export class ChatHandler {
             cwd,
             composed,
           );
-          console.error(`${this.worker.tag} Provider error surfaced to ${fromName}: ${reason}`);
+          log.error(this.worker.tag, `Provider error surfaced to ${fromName}: ${reason}`);
         } else {
           this.worker.sendChatEnd(requestId, fullContent, conversation, cwd, composed);
-          console.log(`${this.worker.tag} Reply sent to ${fromName} (${fullContent.length} chars)`);
+          log.info(this.worker.tag, `Reply sent to ${fromName} (${fullContent.length} chars)`);
         }
       }
     } catch (err: any) {
@@ -226,10 +230,10 @@ export class ChatHandler {
         // 子进程被 SIGTERM/SIGKILL 时 executor 可能 throw(SIGNAL error),
         // 这是用户主动取消的预期结果,走 cancelled 终态而不是 error。
         this.worker.sendChatEnd(requestId, fullContent, conversation, cwd, undefined, { cancelled: true });
-        console.log(`${this.worker.tag} Reply cancelled (executor threw on abort) to ${fromName} (kept ${fullContent.length} chars)`);
+        log.info(this.worker.tag, `Reply cancelled (executor threw on abort) to ${fromName} (kept ${fullContent.length} chars)`);
       } else {
         this.worker.sendChatEnd(requestId, `[错误] ${err.message}`, conversation, cwd, composed);
-        console.error(`${this.worker.tag} Reply error:`, err.message);
+        log.error(this.worker.tag, "Reply error:", err.message);
       }
     } finally {
       this.worker.activeTasks.delete(taskKey);
@@ -255,9 +259,9 @@ export class ChatHandler {
 
     if (batch.length === 1) {
       const n = batch[0];
-      console.log(`${this.worker.tag} Dequeue chat from ${n.fromName} for group ${groupId} (remaining=${queue.length})`);
+      log.info(this.worker.tag, `Dequeue chat from ${n.fromName} for group ${groupId} (remaining=${queue.length})`);
       this.runChatReply(n.requestId, n.content, n.fromName, n.conversation, n.cwdOverride, groupId, undefined, n.repoCtx).catch((err) => {
-        console.error(`${this.worker.tag} Dequeued chat error:`, err.message);
+        log.error(this.worker.tag, "Dequeued chat error:", err.message);
       });
       return;
     }
@@ -273,9 +277,9 @@ export class ChatHandler {
     const mergedBody = batch
       .map((b) => `[from=${b.fromName}]\n${b.content.replace(mentionTag, "").trim()}`)
       .join("\n\n---\n\n");
-    console.log(`${this.worker.tag} Dequeue merged chat for group ${groupId} (merged=${batch.length}, from=[${mergedNames}], remaining=${queue.length})`);
+    log.info(this.worker.tag, `Dequeue merged chat for group ${groupId} (merged=${batch.length}, from=[${mergedNames}], remaining=${queue.length})`);
     this.runChatReply(primary.requestId, mergedBody, null, primary.conversation, primary.cwdOverride, groupId, siblings, primary.repoCtx).catch((err) => {
-      console.error(`${this.worker.tag} Dequeued merged chat error:`, err.message);
+      log.error(this.worker.tag, "Dequeued merged chat error:", err.message);
     });
   }
 }

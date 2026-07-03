@@ -7,6 +7,9 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-cli", { stream: "stderr" });
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -152,7 +155,7 @@ export function resolveAgentFromEntry(name: string, entry: RotomAgentEntry): Res
 export function resolveAgent(asFlag?: string): ResolvedAgent {
   const cfg = loadRotomConfig();
   const chosen = process.env.ROTOM_AGENT || asFlag || cfg.defaultAgent;
-  process.stderr.write(`[rotom] Resolving agent with --as=${asFlag} ROTOM_AGENT=${process.env.ROTOM_AGENT} defaultAgent=${cfg.defaultAgent}\n`);
+  log.info(`Resolving agent with --as=${asFlag} ROTOM_AGENT=${process.env.ROTOM_AGENT} defaultAgent=${cfg.defaultAgent}`);
   if (!chosen) {
     const known = cfg.agents ? Object.keys(cfg.agents) : [];
     const executorWorkers = listExecutorWorkers(DEFAULT_EXECUTOR_CONFIG);

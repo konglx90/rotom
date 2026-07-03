@@ -11,6 +11,16 @@ import { nowBeijing } from "./time.js";
  *
  *   enableFileLogging("~/.rotom/logs");        // enable file output
  *   log.info("with file");                        // → stdout + logs/mesh-master-2026-03-23.log
+ *
+ * Stream selection:
+ *   - `createLogger("mesh-master")`             → default: info/log to stdout, warn/error to stderr
+ *   - `createLogger("mesh-executor", { stream: "stderr" })` → all levels to stderr
+ *     (use this in executor so log lines never pollute stdout, which keeps
+ *     stdout free for any machine-parsed output the master might consume)
+ *
+ * The file-name prefix is derived from the module name passed to
+ * createLogger — `createLogger("mesh-executor")` writes to
+ * `mesh-executor-YYYY-MM-DD.log` (not `mesh-master-...`).
  */
 
 import fs from "node:fs";
@@ -22,6 +32,18 @@ export interface Logger {
   info: (...args: unknown[]) => void;
   warn: (...args: unknown[]) => void;
   error: (...args: unknown[]) => void;
+}
+
+export type LoggerStream = "stdout" | "stderr" | "default";
+
+export interface CreateLoggerOptions {
+  /**
+   * Force every level through a single stream. `"default"` (the default)
+   * routes info/log to stdout and warn/error to stderr — preserves the
+   * historical master behaviour. `"stderr"` routes every level to stderr —
+   * used by the executor so stdout stays clean for machine-parsed output.
+   */
+  stream?: LoggerStream;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +87,7 @@ function cleanupOldLogs(): void {
   try {
     const cutoff = Date.now() - LOG_RETAIN_DAYS * 86_400_000;
     for (const name of fs.readdirSync(logDir)) {
-      if (!name.startsWith("mesh-master-") || !name.endsWith(".log")) continue;
+      if (!name.startsWith("mesh-") || !name.endsWith(".log")) continue;
       const filePath = path.join(logDir, name);
       const stat = fs.statSync(filePath);
       if (stat.mtimeMs < cutoff) {
@@ -81,7 +103,7 @@ function cleanupOldLogs(): void {
 
 /**
  * Enable daily-rotated file logging. All loggers created via createLogger()
- * will also write to `{dir}/mesh-master-YYYY-MM-DD.log`.
+ * will also write to `{dir}/{module}-YYYY-MM-DD.log`.
  * Old log files (>30 days) are cleaned up on enable.
  */
 export function enableFileLogging(dir: string): void {
@@ -109,8 +131,9 @@ function ts(): string {
 }
 
 /** Create a logger with a module prefix, e.g. createLogger("mesh-master") */
-export function createLogger(module: string): Logger {
+export function createLogger(module: string, opts?: CreateLoggerOptions): Logger {
   const tag = `[${module}]`;
+  const stream = opts?.stream ?? "default";
 
   function emit(level: string, consoleFn: (...a: unknown[]) => void, args: unknown[]): void {
     const timestamp = ts();
@@ -119,10 +142,17 @@ export function createLogger(module: string): Logger {
     writeToFile(line);
   }
 
+  // For "stderr" mode, every level writes to process.stderr; otherwise
+  // the default mapping is info/log → console.log (stdout), warn → console.warn
+  // (stderr), error → console.error (stderr).
+  const outFn = stream === "stderr" ? console.error : console.log;
+  const warnFn = stream === "stderr" ? console.error : console.warn;
+  const errFn = console.error;
+
   return {
-    log:   (...args) => emit("INFO",  console.log,   args),
-    info:  (...args) => emit("INFO",  console.log,   args),
-    warn:  (...args) => emit("WARN",  console.warn,  args),
-    error: (...args) => emit("ERROR", console.error, args),
+    log:   (...args) => emit("INFO",  outFn,  args),
+    info:  (...args) => emit("INFO",  outFn,  args),
+    warn:  (...args) => emit("WARN",  warnFn, args),
+    error: (...args) => emit("ERROR", errFn,  args),
   };
 }

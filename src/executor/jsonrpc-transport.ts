@@ -14,6 +14,9 @@
 import { createInterface, type Interface as RLInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
 import { encodeJsonLine } from "../shared/json-codec.js";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-executor-jsonrpc", { stream: "stderr" });
 
 export interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -129,9 +132,7 @@ export function createJsonRpcTransport(opts: JsonRpcTransportOptions): JsonRpcTr
     try {
       parsed = JSON.parse(line);
     } catch (err) {
-      console.warn(
-        `[${opts.label}] Discarding malformed JSON-RPC frame: ${(err as Error).message}`,
-      );
+      log.warn(opts.label, "Discarding malformed JSON-RPC frame:", (err as Error).message);
       return;
     }
 
@@ -143,9 +144,7 @@ export function createJsonRpcTransport(opts: JsonRpcTransportOptions): JsonRpcTr
       try {
         opts.onRequest?.(String(parsed.method), parsed.params, parsed.id as number | string);
       } catch (err) {
-        console.error(
-          `[${opts.label}] onRequest handler threw for ${parsed.method}: ${(err as Error).message}`,
-        );
+        log.error(opts.label, "onRequest handler threw for", parsed.method, ":", (err as Error).message);
       }
       return;
     }
@@ -154,9 +153,7 @@ export function createJsonRpcTransport(opts: JsonRpcTransportOptions): JsonRpcTr
       try {
         opts.onNotification?.(String(parsed.method), parsed.params);
       } catch (err) {
-        console.error(
-          `[${opts.label}] onNotification handler threw for ${parsed.method}: ${(err as Error).message}`,
-        );
+        log.error(opts.label, "onNotification handler threw for", parsed.method, ":", (err as Error).message);
       }
       return;
     }
@@ -175,9 +172,7 @@ export function createJsonRpcTransport(opts: JsonRpcTransportOptions): JsonRpcTr
       try {
         opts.onResponse?.(response);
       } catch (err) {
-        console.error(
-          `[${opts.label}] onResponse handler threw: ${(err as Error).message}`,
-        );
+        log.error(opts.label, "onResponse handler threw:", (err as Error).message);
       }
     }
   };

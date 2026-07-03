@@ -16,6 +16,9 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-executor-repo-cache", { stream: "stderr" });
 
 /** Bare clone 缓存根目录。与 ARTIFACTS_ROOT 同源(~/.rotom/)。 */
 export const REPOS_ROOT = path.join(os.homedir(), ".rotom", "repos");
@@ -171,7 +174,7 @@ export function ensureBareClone(url: string): { repoId: string; barePath: string
     // 已存在 → fetch --prune。离线时静默降级。
     const r = runGit(["fetch", "--prune"], { cwd: bp });
     if (!r.ok) {
-      console.warn(`[repo-cache] fetch failed (offline?) for ${repoId}: ${r.stderr || r.stdout || "(no stderr)"} — using local cache`);
+      log.warn(`fetch failed (offline?) for ${repoId}: ${r.stderr || r.stdout || "(no stderr)"} — using local cache`);
     }
   }
   return { repoId, barePath: bp };
@@ -275,12 +278,12 @@ export function checkoutWorktree(worktreePath: string, branch?: string): boolean
     if (fetchR.ok) {
       const r2 = runGit(["checkout", branch], { cwd: worktreePath });
       if (!r2.ok) {
-        console.warn(`[repo-cache] checkout ${branch} failed in ${worktreePath}: ${r2.stderr || r2.stdout}`);
+        log.warn(`checkout ${branch} failed in ${worktreePath}: ${r2.stderr || r2.stdout}`);
         return false;
       }
       return true;
     }
-    console.warn(`[repo-cache] checkout ${branch} failed in ${worktreePath}: ${r.stderr || r.stdout}`);
+    log.warn(`checkout ${branch} failed in ${worktreePath}: ${r.stderr || r.stdout}`);
     return false;
   }
   return true;
@@ -348,12 +351,12 @@ export async function checkoutWorktreeAsync(worktreePath: string, branch?: strin
     if (fetchR.ok) {
       const r2 = await runGitAsync(["checkout", branch], { cwd: worktreePath });
       if (!r2.ok) {
-        console.warn(`[repo-cache] checkout ${branch} failed in ${worktreePath}: ${r2.stderr || r2.stdout}`);
+        log.warn(`checkout ${branch} failed in ${worktreePath}: ${r2.stderr || r2.stdout}`);
         return false;
       }
       return true;
     }
-    console.warn(`[repo-cache] checkout ${branch} failed in ${worktreePath}: ${r.stderr || r.stdout}`);
+    log.warn(`checkout ${branch} failed in ${worktreePath}: ${r.stderr || r.stdout}`);
     return false;
   }
   return true;
@@ -443,7 +446,7 @@ export async function ensureBareCloneAsync(url: string): Promise<{ repoId: strin
   } else {
     const r = await runGitAsync(["fetch", "--prune"], { cwd: bp });
     if (!r.ok) {
-      console.warn(`[repo-cache] fetch failed (offline?) for ${repoId}: ${r.stderr || r.stdout || "(no stderr)"} — using local cache`);
+      log.warn(`fetch failed (offline?) for ${repoId}: ${r.stderr || r.stdout || "(no stderr)"} — using local cache`);
     }
   }
   return { repoId, barePath: bp };

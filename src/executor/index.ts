@@ -27,6 +27,9 @@ import type { CliExecutor } from "./cli-executor.js";
 import { ExecutorWorker, type WorkerConfig } from "./worker.js";
 import { SessionStore } from "./session-store.js";
 import { ensureRotomSkillMd } from "../shared/skill-md.js";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-executor", { stream: "stderr" });
 
 // ── Config ──────────────────────────────────────────────────────────────
 
@@ -59,7 +62,7 @@ function loadConfig(): ExecutorConfig {
   if (configIdx !== -1 && process.argv[configIdx + 1]) {
     const configPath = path.resolve(process.argv[configIdx + 1]);
     if (!fs.existsSync(configPath)) {
-      console.error(`Config not found: ${configPath}`);
+      log.error(`Config not found: ${configPath}`);
       process.exit(1);
     }
     return JSON.parse(fs.readFileSync(configPath, "utf-8")) as ExecutorConfig;
@@ -69,7 +72,7 @@ function loadConfig(): ExecutorConfig {
     return JSON.parse(fs.readFileSync(DEFAULT_CONFIG_PATH, "utf-8")) as ExecutorConfig;
   }
 
-  console.error(
+  log.error(
     `No config found. Create ${DEFAULT_CONFIG_PATH}:\n` +
     JSON.stringify({
       master: "ws://localhost:28800",
@@ -146,34 +149,34 @@ const config = loadConfig();
 const { master, workers } = normalizeWorkers(config);
 
 if (!master) {
-  console.error("Config requires: master");
+  log.error("Config requires: master");
   process.exit(1);
 }
 
 if (workers.length === 0) {
-  console.error("Config requires at least one worker");
+  log.error("Config requires at least one worker");
   process.exit(1);
 }
 
 for (const w of workers) {
   if (!w.name || !w.token) {
-    console.error(`Worker requires: name, token (got: ${JSON.stringify({ name: w.name, token: w.token ? "***" : undefined })})`);
+    log.error(`Worker requires: name, token (got: ${JSON.stringify({ name: w.name, token: w.token ? "***" : undefined })})`);
     process.exit(1);
   }
   // workingDir 必填 + 存在性 + 可读性校验
   // 跨机器部署时该路径必须存在于 executor 本地 FS,与 master 无关
   if (!w.workingDir) {
-    console.error(`[executor] worker "${w.name}" missing required "workingDir" in executor.config.json — agent needs a local project dir to read. Aborting.`);
+    log.error(`worker "${w.name}" missing required "workingDir" in executor.config.json — agent needs a local project dir to read. Aborting.`);
     process.exit(1);
   }
   if (!fs.existsSync(w.workingDir)) {
-    console.error(`[executor] worker "${w.name}" workingDir "${w.workingDir}" does not exist on this machine. Aborting.`);
+    log.error(`worker "${w.name}" workingDir "${w.workingDir}" does not exist on this machine. Aborting.`);
     process.exit(1);
   }
   try {
     fs.accessSync(w.workingDir, fs.constants.R_OK);
   } catch {
-    console.error(`[executor] worker "${w.name}" workingDir "${w.workingDir}" is not readable. Aborting.`);
+    log.error(`worker "${w.name}" workingDir "${w.workingDir}" is not readable. Aborting.`);
     process.exit(1);
   }
 }
@@ -196,10 +199,10 @@ for (const w of workers) {
   const worker = new ExecutorWorker(w, executor, master, cliTool, ROTOM_HOME, sharedSessions);
   workerInstances.push(worker);
   const mapCount = w.workingDirMap ? Object.keys(w.workingDirMap).length : 0;
-  console.log(`[executor] worker "${w.name}" base cwd: ${w.workingDir} (per-group: <base>/<groupId>${mapCount > 0 ? `, ${mapCount} explicit override(s)` : ""})`);
+  log.info(`worker "${w.name}" base cwd: ${w.workingDir} (per-group: <base>/<groupId>${mapCount > 0 ? `, ${mapCount} explicit override(s)` : ""})`);
 }
 
-console.log(`[executor] Starting ${workerInstances.length} worker(s) (fallback cli: ${fallbackCli})`);
+log.info(`Starting ${workerInstances.length} worker(s) (fallback cli: ${fallbackCli})`);
 
 // 启动时把 SKILL.md 落到 ~/.rotom/。幂等(内容相同则跳过),best-effort。
 ensureRotomSkillMd();
@@ -210,7 +213,7 @@ for (const worker of workerInstances) {
 
 // Graceful shutdown
 function shutdown(): void {
-  console.log(`[executor] Shutting down ${workerInstances.length} worker(s)...`);
+  log.info(`Shutting down ${workerInstances.length} worker(s)...`);
   for (const worker of workerInstances) {
     worker.stop();
   }

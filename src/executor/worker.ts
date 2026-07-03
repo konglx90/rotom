@@ -27,6 +27,9 @@ import { WorkerConnection } from "./worker-connection.js";
 import { IssueHandler } from "./worker-issue.js";
 import { ChatHandler } from "./worker-chat.js";
 import { ensureBareCloneAsync, addWorktreeAsync, removeWorktree, checkoutWorktreeAsync, getBarePathForUrl, getWorktreePathForUrl } from "./repo-cache.js";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-executor-worker", { stream: "stderr" });
 
 // ── Config ──────────────────────────────────────────────────────────────
 
@@ -178,7 +181,7 @@ export class ExecutorWorker {
     // workingDir 是 per-group cwd 派生的 base,完全本机解析,与 master 无关。
     // index.ts 启动时已校验存在 / 可读;此处仅做兜底默认值。
     if (!config.workingDir) {
-      console.warn(`${this.tag} WARN: no workingDir configured, falling back to ~/.rotom (likely not a project dir, agent may have nothing to read)`);
+      log.warn(this.tag, "WARN: no workingDir configured, falling back to ~/.rotom (likely not a project dir, agent may have nothing to read)");
     }
     this.workingDir = config.workingDir || path.join(os.homedir(), ".rotom");
     this.maxConcurrent = config.maxConcurrent ?? 2;
@@ -255,7 +258,7 @@ export class ExecutorWorker {
           worktreeMode: repoCtx.worktreeMode,
         });
       } catch (err: any) {
-        console.warn(`${this.tag} worktree setup failed for ${repoCtx.issueId ?? "chat"} in group ${groupId}, fallback to derived dir: ${err?.message ?? err}`);
+        log.warn(this.tag, `worktree setup failed for ${repoCtx.issueId ?? "chat"} in group ${groupId}, fallback to derived dir: ${err?.message ?? err}`);
       }
     }
 
@@ -347,7 +350,7 @@ export class ExecutorWorker {
         try {
           fs.symlinkSync(target, linkPath, "dir");
         } catch (err: any) {
-          console.warn(`${this.tag} symlink create failed for ${linkPath}: ${err?.message ?? err}`);
+          log.warn(this.tag, `symlink create failed for ${linkPath}: ${err?.message ?? err}`);
         }
       }
     }
@@ -382,7 +385,7 @@ export class ExecutorWorker {
       const primaryWt = getWorktreePathForUrl(repoCtx.repoUrl, issueId8);
       removeWorktree(barePath, primaryWt);
     } catch (err: any) {
-      console.warn(`${this.tag} cleanup primary worktree failed for ${issueId}: ${err?.message ?? err}`);
+      log.warn(this.tag, `cleanup primary worktree failed for ${issueId}: ${err?.message ?? err}`);
     }
     // extras
     for (const extra of repoCtx.extraRepos ?? []) {
@@ -391,7 +394,7 @@ export class ExecutorWorker {
         const wt = getWorktreePathForUrl(extra.url, issueId8);
         removeWorktree(barePath, wt);
       } catch (err: any) {
-        console.warn(`${this.tag} cleanup extra worktree ${extra.id} failed for ${issueId}: ${err?.message ?? err}`);
+        log.warn(this.tag, `cleanup extra worktree ${extra.id} failed for ${issueId}: ${err?.message ?? err}`);
       }
     }
   }
@@ -411,7 +414,7 @@ export class ExecutorWorker {
     const sig = p
       ? `position=${p.position ?? "-"}, bio=${p.bio ? "(set)" : "-"}, category=${p.category ?? "-"}`
       : "(null)";
-    console.log(`${this.tag} agentProfile updated (${sig})`);
+    log.info(this.tag, `agentProfile updated (${sig})`);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────
@@ -433,12 +436,12 @@ export class ExecutorWorker {
     // 消息(心跳、chat 取消、其他 issue 进度)继续能处理。错误在 IIFE 内 catch。
     if (msg.type === "issue_assigned" || msg.type === "issue_continue" || msg.type === "issue_append") {
       void this.handleIssueRepoMsg(msg).catch((err) => {
-        console.error(`${this.tag} issue repo msg error:`, err);
+        log.error(this.tag, "issue repo msg error:", err);
       });
       return;
     }
     if (msg.type === "auth_ok") {
-      console.log(`${this.tag} Authenticated`);
+      log.info(this.tag, "Authenticated");
       // Push initial SessionStore snapshot so master's DB is populated
       // (covers the legacy backfill path: entries read from sessions.json
       // get upserted into master DB on first auth). Master will then push
@@ -465,7 +468,7 @@ export class ExecutorWorker {
     }
 
     if (msg.type === "auth_fail") {
-      console.error(`${this.tag} Auth failed: ${msg.reason}`);
+      log.error(this.tag, `Auth failed: ${msg.reason}`);
       return;
     }
 
@@ -474,7 +477,7 @@ export class ExecutorWorker {
     // 此处已被开头 void IIFE 拦截,不会走到。
 
     if (msg.type === "issue_created") {
-      console.log(`${this.tag} New issue: "${(msg as any).title}" (awaiting manual assignment)`);
+      log.info(this.tag, `New issue: "${(msg as any).title}" (awaiting manual assignment)`);
     }
 
     // Issue cancellation — abort the in-flight CLI process if we own the task.
@@ -490,11 +493,11 @@ export class ExecutorWorker {
       }
       const task = this.activeTasks.get(issueId);
       if (task) {
-        console.log(`${this.tag} Cancel requested for ${issueId}, aborting child process`);
+        log.info(this.tag, `Cancel requested for ${issueId}, aborting child process`);
         task.aborted = true;
         try { task.controller.abort(); } catch { /* noop */ }
       } else {
-        console.log(`${this.tag} Cancel requested for ${issueId} but no active task here`);
+        log.info(this.tag, `Cancel requested for ${issueId} but no active task here`);
       }
       // 清理本机 worktree(若该 issue 走了 repo 模式)。issueRepoCtxs 命中即清。
       const repoCtx = this.issueRepoCtxs.get(issueId);
@@ -517,13 +520,13 @@ export class ExecutorWorker {
       if (!issueId) return;
       const task = this.activeTasks.get(issueId);
       if (task) {
-        console.log(`${this.tag} Interrupt requested for ${issueId}, aborting current CLI turn`);
+        log.info(this.tag, `Interrupt requested for ${issueId}, aborting current CLI turn`);
         task.aborted = true;
         // 标记 interrupted 让 finally 块区分 cancel(丢队列)vs interrupt(消费队列续跑)。
         task.interrupted = true;
         try { task.controller.abort(); } catch { /* noop */ }
       } else {
-        console.log(`${this.tag} Interrupt requested for ${issueId} but no active task here`);
+        log.info(this.tag, `Interrupt requested for ${issueId} but no active task here`);
       }
     }
 
@@ -539,11 +542,11 @@ export class ExecutorWorker {
       const taskKey = `chat:${requestId}`;
       const task = this.activeTasks.get(taskKey);
       if (task) {
-        console.log(`${this.tag} Chat cancel requested for ${requestId}, aborting child process`);
+        log.info(this.tag, `Chat cancel requested for ${requestId}, aborting child process`);
         task.aborted = true;
         try { task.controller.abort(); } catch { /* noop */ }
       } else {
-        console.log(`${this.tag} Chat cancel for ${requestId} but no active task (already finished?)`);
+        log.info(this.tag, `Chat cancel for ${requestId} but no active task (already finished?)`);
       }
     }
 
@@ -559,7 +562,7 @@ export class ExecutorWorker {
       if (!approvalId || (decision !== "accept" && decision !== "deny")) return;
       const pending = this.pendingApprovals.get(approvalId);
       if (!pending) {
-        console.warn(`${this.tag} approval response for unknown id ${approvalId}`);
+        log.warn(this.tag, `approval response for unknown id ${approvalId}`);
         return;
       }
       this.pendingApprovals.delete(approvalId);
@@ -586,15 +589,15 @@ export class ExecutorWorker {
       const isGroup = conversation?.type === "group";
       const isMentioned = content.includes(`@${this.config.name}`);
       const qaMode = (msg as any).qaMode === true;
-      console.log(`${this.tag} a2a_message from ${fromName} requestId=${requestId} isGroup=${isGroup} isMentioned=${isMentioned} qaMode=${qaMode} contentLen=${content.length} contentHead=${JSON.stringify(content.slice(0, 60))}`);
+      log.info(this.tag, `a2a_message from ${fromName} requestId=${requestId} isGroup=${isGroup} isMentioned=${isMentioned} qaMode=${qaMode} contentLen=${content.length} contentHead=${JSON.stringify(content.slice(0, 60))}`);
       if (repoUrl) {
-        console.log(`${this.tag} repoCtx: url=${repoUrl} branch=${repoBranch} mode=${worktreeMode} extras=${extraRepos ? JSON.stringify((extraRepos as any[]).map(e => e.id)) : "(none)"}`);
+        log.info(this.tag, `repoCtx: url=${repoUrl} branch=${repoBranch} mode=${worktreeMode} extras=${extraRepos ? JSON.stringify((extraRepos as any[]).map(e => e.id)) : "(none)"}`);
       }
       if (!isGroup || isMentioned || qaMode) {
-        console.log(`${this.tag} Chat from ${fromName}: ${content.slice(0, 80)}...`);
+        log.info(this.tag, `Chat from ${fromName}: ${content.slice(0, 80)}...`);
         this.chat.handleChatReply(requestId, content, fromName, conversation, overrideCwd, { issueId: "chat", repoUrl, repoBranch, extraRepos, worktreeMode });
       } else {
-        console.log(`${this.tag} SKIP group message from ${fromName}: not @mentioned (looking for @${this.config.name})`);
+        log.info(this.tag, `SKIP group message from ${fromName}: not @mentioned (looking for @${this.config.name})`);
       }
     }
 
@@ -620,7 +623,7 @@ export class ExecutorWorker {
       const had = this.sessions.has(this.cliTool, groupId, sessionId);
       if (had) {
         this.sessions.delete(this.cliTool, groupId);
-        console.log(`${this.tag} Session deleted via dashboard: ${this.cliTool}:${groupId} → ${sessionId}`);
+        log.info(this.tag, `Session deleted via dashboard: ${this.cliTool}:${groupId} → ${sessionId}`);
         // 通知 master 标记失效(不删行,保留历史);再推 snapshot 同步 active 列表。
         this.send({
           type: "session_invalidated",
@@ -652,7 +655,7 @@ export class ExecutorWorker {
     if (msg.type === "issue_assigned") {
       const { issueId, title, description, groupId, slashCommand, approvalPolicy, agentProfile, cwd: overrideCwd, repoUrl, repoBranch, extraRepos, worktreeMode } = msg as any;
       if (agentProfile) this.setAgentProfile(agentProfile);
-      console.log(`${this.tag} Issue assigned: "${title}" (${issueId}, group=${groupId ?? "(none)"})${slashCommand ? ` [${slashCommand}]` : ""}${approvalPolicy ? ` [${approvalPolicy}]` : ""}${repoUrl ? ` [repo:${worktreeMode || "group"}]` : ""}`);
+      log.info(this.tag, `Issue assigned: "${title}" (${issueId}, group=${groupId ?? "(none)"})${slashCommand ? ` [${slashCommand}]` : ""}${approvalPolicy ? ` [${approvalPolicy}]` : ""}${repoUrl ? ` [repo:${worktreeMode || "group"}]` : ""}`);
       if (repoUrl && groupId && issueId) {
         this.sendUpdate(issueId, "in_progress", "📦 正在准备代码仓库(worktree)...", undefined, overrideCwd);
       }
@@ -680,7 +683,7 @@ export class ExecutorWorker {
       const worktreeMode = (msg as any).worktreeMode as string | undefined;
       if (agentProfile) this.setAgentProfile(agentProfile);
       if (!issueId || !prompt) return;
-      console.log(`${this.tag} Issue continue: "${title ?? "(no title)"}" (${issueId}, session=${sessionId ?? "(none)"}${slashCommand ? `, slash=${slashCommand}` : ""}${approvalPolicy ? `, policy=${approvalPolicy}` : ""}${repoUrl ? `, repo:${worktreeMode || "group"}` : ""})`);
+      log.info(this.tag, `Issue continue: "${title ?? "(no title)"}" (${issueId}, session=${sessionId ?? "(none)"}${slashCommand ? `, slash=${slashCommand}` : ""}${approvalPolicy ? `, policy=${approvalPolicy}` : ""}${repoUrl ? `, repo:${worktreeMode || "group"}` : ""})`);
       const cwd = await this.resolveIssueCwd(groupId, overrideCwd, { issueId, repoUrl, repoBranch, extraRepos, worktreeMode });
       const issueHeader =
         `[当前群活跃 issue]\n` +
@@ -727,9 +730,9 @@ export class ExecutorWorker {
         const queue = this.pendingAppends.get(issueId) ?? [];
         queue.push(body);
         this.pendingAppends.set(issueId, queue);
-        console.log(`${this.tag} Issue append queued: ${issueId} (queue=${queue.length})`);
+        log.info(this.tag, `Issue append queued: ${issueId} (queue=${queue.length})`);
       } else {
-        console.log(`${this.tag} Issue append (idle, run now): ${issueId} (session=${sessionId ?? "(none)"}${approvalPolicy ? `, policy=${approvalPolicy}` : ""}${repoUrl ? `, repo:${worktreeMode || "group"}` : ""})`);
+        log.info(this.tag, `Issue append (idle, run now): ${issueId} (session=${sessionId ?? "(none)"}${approvalPolicy ? `, policy=${approvalPolicy}` : ""}${repoUrl ? `, repo:${worktreeMode || "group"}` : ""})`);
         const cwd = await this.resolveIssueCwd(groupId, overrideCwd, { issueId, repoUrl, repoBranch, extraRepos, worktreeMode });
         const composed = composePrompt({
           mode: "issue",

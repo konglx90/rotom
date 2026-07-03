@@ -22,6 +22,9 @@
 
 import { spawn, type ChildProcessByStdio, type StdioPipe } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-executor-process-runner", { stream: "stderr" });
 
 export interface ProcessRunnerOptions {
   /** Binary to invoke (PATH-resolved by node:child_process). */
@@ -74,9 +77,7 @@ export function runProcess(opts: ProcessRunnerOptions): ProcessRunnerHandle {
   const graceMs = opts.graceMs ?? 3000;
   const stdio: [StdioPipe, StdioPipe, StdioPipe] = opts.stdio ?? ["pipe", "pipe", "pipe"];
 
-  console.log(
-    `[${opts.label}] Spawning ${opts.bin} (cwd: ${opts.cwd}, args: ${opts.args.join(" ")})`,
-  );
+  log.info(opts.label, "Spawning", opts.bin, `(cwd: ${opts.cwd}, args: ${opts.args.join(" ")})`);
 
   const proc = spawn(opts.bin, opts.args, {
     cwd: opts.cwd,
@@ -107,9 +108,7 @@ export function runProcess(opts: ProcessRunnerOptions): ProcessRunnerHandle {
   const abort = (reason?: string) => {
     if (killedByAbort) return;
     killedByAbort = true;
-    console.log(
-      `[${opts.label}] Aborted${reason ? `: ${reason}` : ""}, killing pid=${proc.pid}`,
-    );
+    log.info(opts.label, `Aborted${reason ? `: ${reason}` : ""}, killing pid=${proc.pid}`);
     killGraceful();
   };
 
@@ -124,7 +123,7 @@ export function runProcess(opts: ProcessRunnerOptions): ProcessRunnerHandle {
   let timeoutTimer: NodeJS.Timeout | undefined;
   if (opts.timeoutMs) {
     timeoutTimer = setTimeout(() => {
-      console.log(`[${opts.label}] Timeout ${opts.timeoutMs}ms exceeded, killing pid=${proc.pid}`);
+      log.info(opts.label, `Timeout ${opts.timeoutMs}ms exceeded, killing pid=${proc.pid}`);
       killHard();
     }, opts.timeoutMs);
     timeoutTimer.unref();
@@ -135,14 +134,12 @@ export function runProcess(opts: ProcessRunnerOptions): ProcessRunnerHandle {
       proc.on("close", (code, signal) => {
         if (timeoutTimer) clearTimeout(timeoutTimer);
         const exitCode = code ?? (killedByAbort ? 1 : 0);
-        console.log(
-          `[${opts.label}] Exited code=${exitCode}${signal ? ` signal=${signal}` : ""}`,
-        );
+        log.info(opts.label, `Exited code=${exitCode}${signal ? ` signal=${signal}` : ""}`);
         resolve({ exitCode, signal });
       });
       proc.on("error", (err) => {
         if (timeoutTimer) clearTimeout(timeoutTimer);
-        console.error(`[${opts.label}] Spawn error: ${err.message}`);
+        log.error(opts.label, "Spawn error:", err.message);
         resolve({ exitCode: 1, signal: null });
       });
     },

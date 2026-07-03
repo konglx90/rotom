@@ -13,6 +13,9 @@ import { composePrompt, type ComposedPrompt } from "../shared/prompt-composer.js
 import { isReadonlyCommand } from "../shared/readonly-allowlist.js";
 import { parseSlashCommand } from "../shared/slash-commands.js";
 import type { ExecutorWorker } from "./worker.js";
+import { createLogger } from "../shared/logger.js";
+
+const log = createLogger("mesh-executor-worker-issue", { stream: "stderr" });
 
 export interface IssueRepoCtx {
   issueId?: string;
@@ -75,7 +78,7 @@ export class IssueHandler {
    */
   async runIssueExecution(issueId: string, prompt: string, cwd: string, resumeSessionId?: string, slashCommand?: string, approvalPolicy?: "r_allow" | "rw_allow", composedPrompt?: ComposedPrompt, repoCtx?: IssueRepoCtx): Promise<void> {
     if (this.worker.activeTasks.size >= this.worker.maxConcurrent) {
-      console.log(`${this.worker.tag} At capacity (${this.worker.maxConcurrent}), skip ${issueId}`);
+      log.info(this.worker.tag, `At capacity (${this.worker.maxConcurrent}), skip ${issueId}`);
       return;
     }
     if (this.worker.activeTasks.has(issueId)) return;
@@ -111,7 +114,7 @@ export class IssueHandler {
       // 赋值一律不命中,详见 src/shared/readonly-allowlist.ts。file_change/plan/
       // ask 不查白名单,继续走 dashboard。
       if (req.kind === "exec" && isReadonlyCommand(req.command)) {
-        console.log(`${this.worker.tag} auto-approve readonly exec: ${req.command}`);
+        log.info(this.worker.tag, `auto-approve readonly exec: ${req.command}`);
         return Promise.resolve({ decision: "accept" } satisfies ApprovalDecision);
       }
       // r_allow:Dashboard 侧能看到请求记录,挂起等待用户 Accept/Deny
@@ -197,19 +200,19 @@ export class IssueHandler {
 
       if (result.exitCode === 0) {
         this.worker.sendUpdate(issueId, "completed", result.fullOutput, sessionMeta, cwd, composedPrompt);
-        console.log(`${this.worker.tag} Issue done: ${issueId} (exit=0, session=${result.sessionId ?? "none"})`);
+        log.info(this.worker.tag, `Issue done: ${issueId} (exit=0, session=${result.sessionId ?? "none"})`);
       } else {
         this.worker.sendUpdate(issueId, "failed", `Exit ${result.exitCode}\n${result.fullOutput}`, sessionMeta, cwd, composedPrompt);
-        console.log(`${this.worker.tag} Issue failed: ${issueId} (exit=${result.exitCode})`);
+        log.info(this.worker.tag, `Issue failed: ${issueId} (exit=${result.exitCode})`);
       }
     } catch (err: any) {
       if (task.aborted) {
         // 走异常路径的中断/取消(理论上 executor 都走 resolve,catch 是兜底)。
         // 同 try 块,事件已由 API 落库,worker 不再二次 sendUpdate。
-        console.log(`${this.worker.tag} Issue aborted via exception: ${issueId} (interrupted=${!!task.interrupted})`);
+        log.info(this.worker.tag, `Issue aborted via exception: ${issueId} (interrupted=${!!task.interrupted})`);
       } else {
         this.worker.sendUpdate(issueId, "failed", err.message, undefined, cwd);
-        console.error(`${this.worker.tag} Issue error: ${issueId}`, err.message);
+        log.error(this.worker.tag, `Issue error: ${issueId}`, err.message);
       }
     } finally {
       // 强制 flush 累积 usage:覆盖所有路径(正常完成/abort/catch)。override
@@ -232,7 +235,7 @@ export class IssueHandler {
       const shouldConsumeQueue = !task.aborted || !!task.interrupted;
       if (queued && queued.length > 0 && shouldConsumeQueue) {
         const merged = queued.join("\n\n");
-        console.log(`${this.worker.tag} Issue append consuming queue: ${issueId} (count=${queued.length}, session=${lastSessionId ?? "(none)"}, interrupted=${!!task.interrupted})`);
+        log.info(this.worker.tag, `Issue append consuming queue: ${issueId} (count=${queued.length}, session=${lastSessionId ?? "(none)"}, interrupted=${!!task.interrupted})`);
         // setImmediate 避免在 finally 同步链上递归调起新一轮。
         // 队列消费继承本轮的 effectivePolicy；append 自己的 ws 消息此时已经在
         // 队列里被吃掉，没机会再传策略，沿用本轮是正确做法（用户切换策略后
@@ -247,7 +250,7 @@ export class IssueHandler {
         // worker 走 idle 分支用 --resume 续跑。
         // 不传 content:避免把状态变更伪装成 agent 对话气泡(参考上面
         // task.aborted 早返回路径的同款注释)。
-        console.log(`${this.worker.tag} Issue interrupted idle → paused: ${issueId} (session=${lastSessionId ?? "(none)"})`);
+        log.info(this.worker.tag, `Issue interrupted idle → paused: ${issueId} (session=${lastSessionId ?? "(none)"})`);
         this.worker.sendUpdate(issueId, "paused", undefined, undefined, cwd);
       }
     }
