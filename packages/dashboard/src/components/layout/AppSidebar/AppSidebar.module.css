@@ -224,7 +224,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 20px 8px;
+  gap: 8px;
+  padding: 10px 12px 6px;
 }
 
 .sectionTitle {
@@ -806,114 +807,67 @@
   border-color: var(--color-bg-warning);
 }
 
-/* ── Archived section (collapsible) ────────────────────── */
-.archivedSection {
-  margin-top: 4px;
-}
-
-.archivedList {
-  list-style: none;
-  margin: 0;
-  padding: 4px 8px;
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.archivedSectionHeader {
+/* ── Tab bar (普通/功能/标记/已归档) ───────────────────── */
+.tabBar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 16px;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabBar::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  background: none;
+  border: none;
   cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-base);
-  transition: background var(--duration-base) var(--ease-out);
-}
-
-.archivedSectionHeader:hover {
-  background: var(--color-canvas-elevated);
-}
-
-.archivedSectionArrow {
-  font-size: 9px;
-  color: var(--color-gray);
-  flex-shrink: 0;
-  width: 10px;
-  text-align: center;
-}
-
-.archivedSectionTitle {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-gray);
-}
-
-.archivedSectionCount {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--color-surface);
-  background: var(--color-gray);
-  border-radius: 10px;
-  padding: 1px 6px;
-  line-height: 1.4;
-}
-
-/* ── Zen mode archived item ────────────────────────────── */
-.zenItemArchived .zenLetterAvatar {
-  opacity: 0.4;
-  filter: grayscale(0.7);
-}
-
-/* ── Starred section (collapsible, 重要少用) ───────────── */
-.starredSection {
-  margin-top: 4px;
-}
-
-.starredList {
-  list-style: none;
-  margin: 0;
-  padding: 4px 8px;
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.starredSectionHeader {
-  display: flex;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 16px;
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-base);
-  transition: background var(--duration-base) var(--ease-out);
-}
-
-.starredSectionHeader:hover {
-  background: var(--color-canvas-elevated);
-}
-
-.starredSectionArrow {
-  font-size: 9px;
-  color: var(--color-gray);
+  gap: 4px;
+  white-space: nowrap;
   flex-shrink: 0;
-  width: 10px;
-  text-align: center;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out);
 }
 
-.starredSectionTitle {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-gray);
+.tab:hover {
+  background: rgba(159, 232, 112, 0.12);
 }
 
-.starredSectionCount {
+.tabActive {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  font-weight: 700;
+}
+
+.tabCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
   font-size: 10px;
   font-weight: 600;
-  color: var(--color-surface);
-  background: var(--color-warm-dark);
-  border-radius: 10px;
-  padding: 1px 6px;
-  line-height: 1.4;
+  color: var(--color-gray);
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  line-height: 1;
+}
+
+.tabActive .tabCount {
+  color: var(--color-dark-green);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .starredMark {

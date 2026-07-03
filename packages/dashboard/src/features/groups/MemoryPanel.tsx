@@ -4,9 +4,10 @@
  * 风格沿用 NotePanel/IssuePanel:noteItem 列表(mint hover + 绿色 active 左边框)
  * + NoteDetail 式 master-detail(header + meta + body)。
  *
- * 设计:统一扁平列表 + 顶部筛选按钮。
+ * 设计:统一扁平列表 + 顶部 filter 下拉。
  *   - 默认拉取群内 (memory + note + pending) + 全局共享,客户端按 filter 切片。
- *   - 顶部 filter 按钮:全部 / 记忆 / 便签 / 全局 / 待审核。
+ *   - 顶部 filter 下拉:全部 / 记忆 / 便签 / 全局 / 待审核,默认「全部」。
+ *     label 末尾拼计数(如「全部 (12)」);搜索中下拉禁用、计数隐藏。
  *   - 每条用 badge 标识 category(事实/决策/约定/踩坑/待办/工作流/便签)
  *     + 作用域(全局)。注:backend 设计上 category=note 与 agent_visible=0 是同义的,
  *     所以「便签」类目只在 catChip 上画一个,不再叠 scopeChip「便签」。
@@ -18,6 +19,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { memoryApi, type MemoryIndex, type MemoryRow, type MemoryCategory } from '../../api/memory'
 import { Button } from '../../components/ui/Button'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
+import { Select } from '../../components/ui/Select'
 import styles from './MemoryPanel.module.css'
 
 interface Props {
@@ -157,21 +159,26 @@ export function MemoryPanel({ selectedGroupId, myAgentName }: Props) {
 
   return (
     <div className={styles.memoryPanel}>
-      {/* ── header:filter buttons + 搜索 + 新建 ─────────────────────── */}
+      {/* ── header:filter dropdown + 搜索 + 新建 ─────────────────────── */}
       <div className={styles.header}>
-        <div className={styles.tabs}>
+        <Select
+          size="sm"
+          className={styles.filterSelect}
+          value={filter}
+          disabled={isSearching}
+          onChange={e => {
+            const next = e.target.value as Filter
+            setFilter(next)
+            setSearchHits(null)
+            setSearchKw('')
+          }}
+        >
           {(['all', 'memory', 'note', 'global', 'pending'] as Filter[]).map(f => (
-            <button
-              key={f}
-              type="button"
-              className={`${styles.tab} ${filter === f && !isSearching ? styles.tabActive : ''}`}
-              onClick={() => { setFilter(f); setSearchHits(null); setSearchKw('') }}
-            >
-              {FILTER_LABEL[f]}
-              {!isSearching && <span className={styles.tabCount}>{counts[f]}</span>}
-            </button>
+            <option key={f} value={f}>
+              {FILTER_LABEL[f]}{isSearching ? '' : ` (${counts[f]})`}
+            </option>
           ))}
-        </div>
+        </Select>
         <div className={styles.headerRight}>
           <input
             className={styles.searchInput}

@@ -37,167 +37,25 @@ interface AppSidebarProps {
   width: number
   onWidthChange: (w: number) => void
 }
-function ArchivedSection({ archivedGroups, selectedGroupId, selectGroup, toggleGroupArchived }: {
-  archivedGroups: { id: string; name: string; pinned_at?: string | null; member_count?: number; created_at: string }[]
-  selectedGroupId: string
-  selectGroup: (id: string) => void
-  toggleGroupArchived: (id: string, archived: boolean) => Promise<void>
-}) {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className={styles.archivedSection}>
-      <div
-        className={styles.archivedSectionHeader}
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <span className={styles.archivedSectionArrow}>
-          {expanded ? '▼' : '▶'}
-        </span>
-        <span className={styles.archivedSectionTitle}>已归档</span>
-        <span className={styles.archivedSectionCount}>{archivedGroups.length}</span>
-      </div>
-      {expanded && (
-        <ul className={styles.archivedList}>
-          {archivedGroups.map((group) => {
-            const isActive = selectedGroupId === group.id
-            return (
-              <li
-                key={group.id}
-                className={`${styles.groupItem} ${styles.archived} ${isActive ? styles.active : ''}`}
-                onClick={() => selectGroup(group.id)}
-              >
-                <div className={styles.groupBody}>
-                  <div className={styles.groupName}>
-                    <span className={styles.archivedMark} title="已归档">🗄️</span>
-                    {group.name}
-                  </div>
-                  <div className={styles.groupMeta}>已归档</div>
-                </div>
-                  <button type="button"
-                  className={`${styles.archiveBtn} ${styles.archiveBtnActive}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleGroupArchived(group.id, false)
-                  }}
-                  title="取消归档"
-                >
-                  取消归档
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
-  )
+// Tab 维度:4 个分类筛选,替代原"普通/功能/标记/已归档"4 段堆叠布局。
+// - 普通:日常对话(排除 functional / starred / archived)
+// - 功能:系统型群(patrol / patrol-link / a2a_direct,来自 isFunctionalGroup)
+// - 标记:starred_at 非空
+// - 已归档:archived_at 非空(只读)
+type GroupTab = 'normal' | 'functional' | 'starred' | 'archived'
+
+const TAB_LABEL: Record<GroupTab, string> = {
+  normal: '普通',
+  functional: '功能',
+  starred: '标记',
+  archived: '已归档',
 }
-function StarredSection({ starredGroups, selectedGroupId, selectGroup, toggleGroupStarred }: {
-  starredGroups: { id: string; name: string; pinned_at?: string | null; member_count?: number; created_at: string }[]
-  selectedGroupId: string
-  selectGroup: (id: string) => void
-  toggleGroupStarred: (id: string, starred: boolean) => Promise<void>
-}) {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className={styles.starredSection}>
-      <div
-        className={styles.starredSectionHeader}
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <span className={styles.starredSectionArrow}>
-          {expanded ? '▼' : '▶'}
-        </span>
-        <span className={styles.starredSectionTitle}>⭐ 标记</span>
-        <span className={styles.starredSectionCount}>{starredGroups.length}</span>
-      </div>
-      {expanded && (
-        <ul className={styles.starredList}>
-          {starredGroups.map((group) => {
-            const isActive = selectedGroupId === group.id
-            return (
-              <li
-                key={group.id}
-                className={`${styles.groupItem} ${styles.starred} ${isActive ? styles.active : ''}`}
-                onClick={() => selectGroup(group.id)}
-              >
-                <div className={styles.groupBody}>
-                  <div className={styles.groupName}>
-                    <span className={styles.starredMark} title="重要少用">⭐</span>
-                    <span className={styles.groupNameText}>{group.name}</span>
-                    <span className={styles.memberCount}>
-                      {`· ${group.member_count || 0} 位`}
-                    </span>
-                  </div>
-                </div>
-                <button type="button"
-                  className={styles.starBtn}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleGroupStarred(group.id, false)
-                  }}
-                  title="取消重要少用"
-                >
-                  取消标记
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
-  )
-}
-// "功能"分组:巡检 / 链接分类 / 单播群折叠。复用 starredSection CSS(同样折叠样式)。
-function FunctionalSection({ functionalGroups, selectedGroupId, selectGroup }: {
-  functionalGroups: { id: string; name: string; type?: string | null; pinned_at?: string | null; member_count?: number; created_at: string }[]
-  selectedGroupId: string
-  selectGroup: (id: string) => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className={styles.starredSection}>
-      <div
-        className={styles.starredSectionHeader}
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <span className={styles.starredSectionArrow}>
-          {expanded ? '▼' : '▶'}
-        </span>
-        <span className={styles.starredSectionTitle}>🧰 功能</span>
-        <span className={styles.starredSectionCount}>{functionalGroups.length}</span>
-      </div>
-      {expanded && (
-        <ul className={styles.starredList}>
-          {functionalGroups.map((group) => {
-            const isActive = selectedGroupId === group.id
-            const badge = getGroupTypeBadge(group.type)
-            return (
-              <li
-                key={group.id}
-                className={`${styles.groupItem} ${styles.starred} ${isActive ? styles.active : ''}`}
-                onClick={() => selectGroup(group.id)}
-              >
-                <div className={styles.groupBody}>
-                  <div className={styles.groupName}>
-                    <span className={styles.starredMark} title="功能型群">🧰</span>
-                    <span className={styles.groupNameText}>{group.name}</span>
-                    {badge && (
-                      <span className={`${styles.typeBadge} ${styles[badge.cls as keyof typeof styles] ?? ''}`} title={badge.title}>
-                        {badge.label}
-                      </span>
-                    )}
-                    <span className={styles.memberCount}>
-                      {`· ${group.member_count || 0} 位`}
-                    </span>
-                  </div>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
-  )
+
+const TAB_EMPTY_HINT: Record<GroupTab, string> = {
+  normal: '暂无对话,点击「创建对话」开始',
+  functional: '暂无功能型群',
+  starred: '暂无标记群',
+  archived: '暂无已归档对话',
 }
 export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const { zenMode, toggleZenMode } = useZenMode()
@@ -315,6 +173,23 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
     .slice()
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
   const displayGroups = activeGroups
+  // 顶部 tab 状态:默认「普通」。已归档不常用,放第 4 位避免视觉权重过高。
+  const [activeTab, setActiveTab] = useState<GroupTab>('normal')
+  const tabCounts: Record<GroupTab, number> = {
+    normal: activeGroups.length,
+    functional: functionalGroups.length,
+    starred: starredGroups.length,
+    archived: archivedGroups.length,
+  }
+  const currentGroups = (() => {
+    switch (activeTab) {
+      case 'normal': return activeGroups
+      case 'functional': return functionalGroups
+      case 'starred': return starredGroups
+      case 'archived': return archivedGroups
+    }
+  })()
+  const isAllEmpty = tabCounts.normal === 0 && tabCounts.functional === 0 && tabCounts.starred === 0 && tabCounts.archived === 0
   useEffect(() => {
     if (!dragging) return
     const min = isZen ? ZEN_WIDTH : NORMAL_MIN
@@ -422,180 +297,207 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
           <>
             <div className={`${styles.section} ${styles.sectionGroup}`}>
               <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>对话列表</h3>
+                <div className={styles.tabBar}>
+                  {(['normal', 'functional', 'starred', 'archived'] as GroupTab[]).map(tab => (
+                    <button
+                      key={tab}
+                      type="button"
+                      className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ''}`}
+                      onClick={() => setActiveTab(tab)}
+                    >
+                      {TAB_LABEL[tab]}
+                      <span className={styles.tabCount}>{tabCounts[tab]}</span>
+                    </button>
+                  ))}
+                </div>
                 <button onClick={openCreateGroupModal} className={styles.createBtn}>
-                  + 创建对话
+                  + 创建
                 </button>
               </div>
-              {displayGroups.length === 0 && functionalGroups.length === 0 && starredGroups.length === 0 && archivedGroups.length === 0 ? (
+              {isAllEmpty ? (
                 <div className={styles.hint}>暂无对话,点击「创建对话」开始</div>
+              ) : currentGroups.length === 0 ? (
+                <div className={styles.hint}>{TAB_EMPTY_HINT[activeTab]}</div>
               ) : (
-                <>
-                  {displayGroups.length > 0 && (
-                    <ul className={styles.groupList}>
-                      {displayGroups.map((group) => {
-                        const isPinned = Boolean(group.pinned_at)
-                        const isStarred = Boolean(group.starred_at)
-                        const typeBadge = getGroupTypeBadge(group.type)
-                        return (
-                          <li
-                            key={group.id}
-                            className={`${styles.groupItem} ${
-                              selectedGroupId === group.id ? styles.active : ''
-                            } ${isPinned ? styles.pinned : ''}`}
-                            onClick={() => selectGroup(group.id)}
+                <ul className={styles.groupList}>
+                  {currentGroups.map((group) => {
+                    const isPinned = Boolean(group.pinned_at)
+                    const isStarred = Boolean(group.starred_at)
+                    const isArchived = Boolean(group.archived_at)
+                    const typeBadge = getGroupTypeBadge(group.type)
+                    // 行图标优先级:已归档 > 标记 > 置顶 > 功能型(走 typeBadge) > 无
+                    const rowIcon = isArchived
+                      ? { emoji: '🗄️', cls: 'archivedMark', title: '已归档' }
+                      : isStarred
+                        ? { emoji: '⭐', cls: 'starredMark', title: '标记' }
+                        : isPinned
+                          ? { emoji: '📌', cls: 'pinnedMark', title: '已置顶' }
+                          : null
+                    return (
+                      <li
+                        key={group.id}
+                        className={`${styles.groupItem} ${
+                          selectedGroupId === group.id ? styles.active : ''
+                        } ${isPinned ? styles.pinned : ''} ${
+                          isStarred ? styles.starred : ''
+                        } ${isArchived ? styles.archived : ''}`}
+                        onClick={() => selectGroup(group.id)}
+                      >
+                        <div className={styles.groupBody}>
+                          <div className={styles.groupName}>
+                            {rowIcon && (
+                              <span className={styles[rowIcon.cls as keyof typeof styles] as string} title={rowIcon.title}>
+                                {rowIcon.emoji}
+                              </span>
+                            )}
+                            <span className={styles.groupNameText}>{group.name}</span>
+                            {typeBadge && (
+                              <span
+                                className={`${styles.typeBadge} ${styles[typeBadge.cls]}`}
+                                title={typeBadge.title}
+                              >
+                                {typeBadge.label}
+                              </span>
+                            )}
+                            {group.type !== 'direct' && (
+                              <span className={styles.memberCount}>
+                                {`· ${group.member_count || 0} 位`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {/* 当前 tab 专属快捷按钮:hover 才显示 */}
+                        {activeTab === 'starred' && (
+                          <button
+                            type="button"
+                            className={styles.starBtn}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleGroupStarred(group.id, false)
+                            }}
+                            title="取消标记"
                           >
-                            <div className={styles.groupBody}>
-                              <div className={styles.groupName}>
-                                {isPinned && (
-                                  <span className={styles.pinnedMark} title="已置顶">📌</span>
-                                )}
-                                <span className={styles.groupNameText}>{group.name}</span>
-                                {typeBadge && (
-                                  <span
-                                    className={`${styles.typeBadge} ${styles[typeBadge.cls]}`}
-                                    title={typeBadge.title}
-                                  >
-                                    {typeBadge.label}
-                                  </span>
-                                )}
-                                {group.type !== 'direct' && (
-                                  <span className={styles.memberCount}>
-                                    {`· ${group.member_count || 0} 位`}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className={styles.moreWrap}>
+                            取消标记
+                          </button>
+                        )}
+                        {activeTab === 'archived' && (
+                          <button
+                            type="button"
+                            className={`${styles.archiveBtn} ${styles.archiveBtnActive}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleGroupArchived(group.id, false)
+                            }}
+                            title="取消归档"
+                          >
+                            取消归档
+                          </button>
+                        )}
+                        <div className={styles.moreWrap}>
+                          <button
+                            ref={(el) => { moreBtnRefs.current[group.id] = el }}
+                            type="button"
+                            className={styles.moreBtn}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (moreMenuGroup === group.id) {
+                                setMoreMenuGroup(null)
+                                setMoreMenuPos(null)
+                                return
+                              }
+                              const btn = moreBtnRefs.current[group.id]
+                              if (btn) {
+                                const rect = btn.getBoundingClientRect()
+                                setMoreMenuPos({
+                                  top: rect.bottom + 4,
+                                  left: Math.max(8, rect.right - 140),
+                                })
+                              }
+                              setMoreMenuGroup(group.id)
+                            }}
+                            title="更多操作"
+                          >
+                            ···
+                          </button>
+                          {moreMenuGroup === group.id && moreMenuPos && createPortal(
+                            <div
+                              className={styles.moreDropdown}
+                              style={{
+                                position: 'fixed',
+                                top: moreMenuPos.top,
+                                left: moreMenuPos.left,
+                              }}
+                              onMouseDown={e => e.stopPropagation()}
+                            >
                               <button
-                                ref={(el) => { moreBtnRefs.current[group.id] = el }}
                                 type="button"
-                                className={styles.moreBtn}
+                                className={styles.moreItem}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  if (moreMenuGroup === group.id) {
-                                    setMoreMenuGroup(null)
-                                    setMoreMenuPos(null)
-                                    return
-                                  }
-                                  const btn = moreBtnRefs.current[group.id]
-                                  if (btn) {
-                                    const rect = btn.getBoundingClientRect()
-                                    setMoreMenuPos({
-                                      top: rect.bottom + 4,
-                                      left: Math.max(8, rect.right - 140),
-                                    })
-                                  }
-                                  setMoreMenuGroup(group.id)
+                                  setMoreMenuGroup(null)
+                                  setMoreMenuPos(null)
+                                  setSettingsGroupId(group.id)
                                 }}
-                                title="更多操作"
                               >
-                                ···
+                                ⚙️ 设置
                               </button>
-                              {moreMenuGroup === group.id && moreMenuPos && createPortal(
-                                <div
-                                  className={styles.moreDropdown}
-                                  style={{
-                                    position: 'fixed',
-                                    top: moreMenuPos.top,
-                                    left: moreMenuPos.left,
-                                  }}
-                                  onMouseDown={e => e.stopPropagation()}
-                                >
-                                  <button
-                                    type="button"
-                                    className={styles.moreItem}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setMoreMenuGroup(null)
-                                      setMoreMenuPos(null)
-                                      setSettingsGroupId(group.id)
-                                    }}
-                                  >
-                                    ⚙️ 设置
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={styles.moreItem}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      toggleGroupPinned(group.id, !isPinned)
-                                      setMoreMenuGroup(null)
-                                      setMoreMenuPos(null)
-                                    }}
-                                  >
-                                    {isPinned ? '📌 取消置顶' : '📌 置顶'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={styles.moreItem}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      toggleGroupStarred(group.id, !isStarred)
-                                      setMoreMenuGroup(null)
-                                      setMoreMenuPos(null)
-                                    }}
-                                  >
-                                    {isStarred ? '⭐ 取消标记' : '⭐ 标记'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={styles.moreItem}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      toggleGroupArchived(group.id, true)
-                                      setMoreMenuGroup(null)
-                                      setMoreMenuPos(null)
-                                    }}
-                                  >
-                                    🗄️ 归档
-                                  </button>
-                                  <div className={styles.moreDivider} />
-                                  <button
-                                    type="button"
-                                    className={`${styles.moreItem} ${styles.moreItemDanger}`}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setMoreMenuGroup(null)
-                                      setMoreMenuPos(null)
-                                      deleteGroup(group.id)
-                                    }}
-                                  >
-                                    🗑️ 删除对话
-                                  </button>
-                                </div>,
-                                document.body
-                              )}
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                  {functionalGroups.length > 0 && (
-                    <FunctionalSection
-                      functionalGroups={functionalGroups}
-                      selectedGroupId={selectedGroupId}
-                      selectGroup={selectGroup}
-                    />
-                  )}
-                  {starredGroups.length > 0 && (
-                    <StarredSection
-                      starredGroups={starredGroups}
-                      selectedGroupId={selectedGroupId}
-                      selectGroup={selectGroup}
-                      toggleGroupStarred={toggleGroupStarred}
-                    />
-                  )}
-                  {archivedGroups.length > 0 && (
-                    <ArchivedSection
-                      archivedGroups={archivedGroups}
-                      selectedGroupId={selectedGroupId}
-                      selectGroup={selectGroup}
-                      toggleGroupArchived={toggleGroupArchived}
-                    />
-                  )}
-                </>
+                              <button
+                                type="button"
+                                className={styles.moreItem}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleGroupPinned(group.id, !isPinned)
+                                  setMoreMenuGroup(null)
+                                  setMoreMenuPos(null)
+                                }}
+                              >
+                                {isPinned ? '📌 取消置顶' : '📌 置顶'}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.moreItem}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleGroupStarred(group.id, !isStarred)
+                                  setMoreMenuGroup(null)
+                                  setMoreMenuPos(null)
+                                }}
+                              >
+                                {isStarred ? '⭐ 取消标记' : '⭐ 标记'}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.moreItem}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleGroupArchived(group.id, !isArchived)
+                                  setMoreMenuGroup(null)
+                                  setMoreMenuPos(null)
+                                }}
+                              >
+                                {isArchived ? '🗄️ 取消归档' : '🗄️ 归档'}
+                              </button>
+                              <div className={styles.moreDivider} />
+                              <button
+                                type="button"
+                                className={`${styles.moreItem} ${styles.moreItemDanger}`}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setMoreMenuGroup(null)
+                                  setMoreMenuPos(null)
+                                  deleteGroup(group.id)
+                                }}
+                              >
+                                🗑️ 删除对话
+                              </button>
+                            </div>,
+                            document.body
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
               )}
             </div>
           </>

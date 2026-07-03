@@ -9,7 +9,7 @@
   background: var(--color-canvas-elevated);
 }
 
-/* ── header:sub-tabs + 搜索 + 新建 ─────────────────────────────── */
+/* ── header:filter 下拉 + 搜索 + 新建 ─────────────────────────────── */
 .header {
   display: flex;
   justify-content: space-between;
@@ -20,32 +20,11 @@
   flex-shrink: 0;
 }
 
-.tabs {
-  display: flex;
-  gap: 2px;
-  align-items: center;
-}
-
-.tab {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-gray);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-base) var(--ease-out);
-}
-
-.tab:hover {
-  background: rgba(159, 232, 112, 0.12);
-}
-
-.tabActive {
-  background: var(--color-mint);
-  color: var(--color-dark-green);
-  font-weight: 700;
+/* filter 下拉:固定最小宽度,占满 header 左侧剩余空间(让搜索/新建不被挤压) */
+.filterSelect {
+  min-width: 110px;
+  max-width: 160px;
+  flex: 0 1 auto;
 }
 
 .headerRight {
@@ -408,28 +387,6 @@
   padding: 10px 14px;
   border-top: 1px solid var(--border-color-light);
   flex-shrink: 0;
-}
-
-/* ── filter button 计数徽标 ───────────────────────────────────── */
-.tabCount {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 16px;
-  margin-left: 4px;
-  padding: 0 5px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--color-gray);
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
-  line-height: 1;
-}
-
-.tabActive .tabCount {
-  color: var(--color-dark-green);
-  background: rgba(255, 255, 255, 0.7);
 }
 
 /* ── editor scope 提示文案 ───────────────────────────────────── */
