@@ -11,6 +11,7 @@ const NAV_TABS = [
   { id: 'agents', label: '员工管理', icon: '👥', path: '/dashboard/agents' },
   { id: 'groups', label: '对话', icon: '💬', path: '/dashboard/groups' },
   { id: 'kanban', label: '看板', icon: '📋', path: '/dashboard/kanban' },
+  { id: 'teams', label: '团队', icon: '🌐', path: '/dashboard/teams' },
   { id: 'toolbox', label: '工具箱', icon: '🧰', path: '/dashboard/toolbox' },
 ] as const
 const ZEN_WIDTH = 56

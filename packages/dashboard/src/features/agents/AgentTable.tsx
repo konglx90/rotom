@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import type { Agent } from '../../api/types'
-import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Avatar } from '../../components/ui/Avatar'
 import styles from './AgentTable.module.css'
@@ -49,15 +48,11 @@ export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps)
               <th onClick={() => handleSort('name')}>
                 名称 {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
               </th>
-              <th onClick={() => handleSort('domain')}>
-                部门 {sortField === 'domain' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </th>
               <th onClick={() => handleSort('status')}>
                 状态 {sortField === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
               </th>
               <th>类型</th>
               <th>详情</th>
-              <th>连接信息</th>
               {(onDelete || onEditProfile) && <th>操作</th>}
             </tr>
           </thead>
@@ -69,17 +64,21 @@ export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps)
                   <span>{agent.name}</span>
                 </td>
                 <td>
-                  {agent.domain && <Badge tone="tag">{agent.domain}</Badge>}
-                </td>
-                <td>
                   <span className={`${styles.status} ${styles[agent.status]}`}>
                     {agent.status === 'online' ? '在线' : '离线'}
                   </span>
                 </td>
                 <td>
-                  {agent.profile?.category
-                    ? (agent.profile.category === '真人' ? '👤 ' : '🚀 ') + agent.profile.category
-                    : '🚀 Agent'}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span>
+                      {agent.profile?.category
+                        ? (agent.profile.category === '真人' ? '👤 ' : '🚀 ') + agent.profile.category
+                        : '🚀 Agent'}
+                    </span>
+                    {agent.cliTool && (
+                      <span style={{ fontSize: 11, color: '#6b7280' }}>🔧 {agent.cliTool}</span>
+                    )}
+                  </div>
                 </td>
                 <td className={styles.detailCell}>
                   <div className={styles.detailRow}>
@@ -91,13 +90,6 @@ export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps)
                     <div className={styles.detailDesc}>{agent.description}</div>
                   )}
                   {!agent.description && !agent.profile?.position && !agent.profile?.bio && <span className={styles.detailDesc}>-</span>}
-                </td>
-                <td className={styles.endpoint}>
-                  {agent.endpoint ? (
-                    <span className={styles.truncate} title={agent.endpoint}>
-                      {agent.endpoint}
-                    </span>
-                  ) : '-'}
                 </td>
                 {(onDelete || onEditProfile) && (
                   <td>

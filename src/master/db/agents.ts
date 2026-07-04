@@ -16,6 +16,31 @@ export const agentMethods = {
     return this.db.prepare("SELECT * FROM agents WHERE name = ?").get(name) as AgentRow | undefined;
   },
 
+  /**
+   * 跨 hostname 维度查询(本机内仍按 hostname 复合键,但本机内 name 已 UNIQUE,
+   * 等价于 getAgentByName;留给 Phase 2 federation 使用)。
+   */
+  getAgentByHostAndName(this: MeshDbSelf, hostname: string, name: string): AgentRow | undefined {
+    return this.db.prepare(
+      "SELECT * FROM agents WHERE hostname = ? AND name = ?",
+    ).get(hostname, name) as AgentRow | undefined;
+  },
+
+  /**
+   * 本机 agent 查询:隐式注入本机 hostname(从 master_node 读)。
+   * Phase 1 的高频路径 —— 本机 executor / dashboard 调用都走这里。
+   * 如果 master_node 还没身份行(早期启动阶段),fallback 按 name 查(向后兼容)。
+   */
+  getLocalAgentByName(this: MeshDbSelf, name: string): AgentRow | undefined {
+    const localHostname = this.getLocalHostname();
+    if (localHostname) {
+      return this.db.prepare(
+        "SELECT * FROM agents WHERE hostname = ? AND name = ?",
+      ).get(localHostname, name) as AgentRow | undefined;
+    }
+    return this.db.prepare("SELECT * FROM agents WHERE name = ?").get(name) as AgentRow | undefined;
+  },
+
   getAgentById(this: MeshDbSelf, id: string): AgentRow | undefined {
     return this.db.prepare("SELECT * FROM agents WHERE id = ?").get(id) as AgentRow | undefined;
   },
@@ -59,18 +84,20 @@ export const agentMethods = {
     name: string;
     description?: string;
     domain?: string;
+    hostname?: string;
     tokenHash: string;
     token: string;
     profile?: string;
   }): void {
     this.db.prepare(`
-      INSERT INTO agents (id, name, description, domain, token_hash, token, profile)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO agents (id, name, description, domain, hostname, token_hash, token, profile)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       agent.id,
       agent.name,
       agent.description || null,
       agent.domain || null,
+      agent.hostname ?? null,
       agent.tokenHash,
       agent.token,
       agent.profile || null,

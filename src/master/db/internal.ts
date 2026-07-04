@@ -32,6 +32,9 @@ import { schedulePatternMethods } from "./schedule-patterns.js";
 import { agentSessionMethods } from "./agent-sessions.js";
 import { issuePatrolMethods } from "./issues-patrol.js";
 import { linkMethods } from "./links.js";
+import { masterNodeMethods } from "./master-node.js";
+import { teamMethods } from "./team.js";
+import { agentVisibilityMethods } from "./agent-visibility.js";
 
 /** Intersection of every domain method bag — merged into `MeshDb` below. */
 type MethodBags =
@@ -49,7 +52,10 @@ type MethodBags =
   & typeof schedulePatternMethods
   & typeof agentSessionMethods
   & typeof issuePatrolMethods
-  & typeof linkMethods;
+  & typeof linkMethods
+  & typeof masterNodeMethods
+  & typeof teamMethods
+  & typeof agentVisibilityMethods;
 
 /**
  * Declaration merge: the `MeshDb` class provides the runtime + base shape
@@ -82,6 +88,9 @@ export class MeshDb extends MeshDbCore {
       agentSessionMethods,
       issuePatrolMethods,
       linkMethods,
+      masterNodeMethods,
+      teamMethods,
+      agentVisibilityMethods,
     );
   }
 }

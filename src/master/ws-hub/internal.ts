@@ -57,6 +57,7 @@ export class WSHub extends WSHubCore {
   declare pushConfigUpdate: typeof directoryMethods.pushConfigUpdate;
   declare broadcastAgentUpdate: typeof directoryMethods.broadcastAgentUpdate;
   declare broadcastDirectory: typeof directoryMethods.broadcastDirectory;
+  declare onlineCliTools: typeof directoryMethods.onlineCliTools;
 
   // ─── sessions ─────────────────────────────────────────────────────────────
   declare listSessionsByGroup: typeof sessionsMethods.listSessionsByGroup;

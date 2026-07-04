@@ -22,6 +22,11 @@ export type {
   NoteRow,
   OfflineMessageRow,
   ScheduledTaskRow,
+  MasterNodeRow,
+  TeamRow,
+  TeamPeerRow,
+  AgentVisibilityRow,
+  HumanMembershipRow,
 } from "./types.js";
 
 export type { GuidanceTemplateRow } from "./guidance-templates.js";

@@ -15,7 +15,10 @@ export function isClientMessage(x: unknown): x is ClientMessage {
   if (typeof msg.type !== "string") return false;
   switch (msg.type) {
     case "auth":
-      return typeof msg.token === "string" && typeof msg.name === "string";
+      // token 在 OPC 本机模式下可空(master 端 isLoopback 信任直通);
+      // 跨机连接远程 master 时由 authenticate() 校验。
+      return typeof msg.name === "string"
+        && (msg.token === undefined || msg.token === null || typeof msg.token === "string");
     case "heartbeat":
       return true;
     case "a2a_send":

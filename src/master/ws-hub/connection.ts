@@ -21,6 +21,7 @@ import { extractMentions } from "../../shared/mention.js";
  */
 
 import { WebSocket } from "ws";
+import type { IncomingMessage } from "node:http";
 import {
   AUTH_TIMEOUT_MS,
   WS_CLOSE,
@@ -29,6 +30,7 @@ import {
   PROTOCOL_VERSION,
 } from "../../shared/constants.js";
 import { isClientMessage, type ClientMessage, type ServerMessage } from "../../shared/protocol.js";
+import { isLoopback } from "../../shared/network.js";
 import { parseProfile, type WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 import { resolveGroupRepoCtxLocalOnly } from "../group-paths.js";
@@ -64,10 +66,11 @@ function resolveReplyContext(hub: WSHubSelf, requestId: string, agentId: string)
 }
 
 export const connectionMethods = {
-  handleConnection(this: WSHubSelf, ws: WebSocket): void {
+  handleConnection(this: WSHubSelf, ws: WebSocket, req: IncomingMessage): void {
     let authenticated = false;
     let agentId = "";
     let connGeneration = 0;
+    const remoteAddr = req.socket.remoteAddress;
 
     // Must auth within timeout
     const authTimeout = setTimeout(() => {
@@ -164,6 +167,17 @@ export const connectionMethods = {
               result.agent.name = msg.name;
               this.logger.info(`[mesh] Agent renamed: "${oldName}" → "${msg.name}"`);
             }
+          }
+        }
+
+        // 本机 loopback 兜底认证:来源 IP 是 127.0.0.1 / ::1 时一律信任本机 agent,
+        // 无视 token / JWT 是否有效。这是 OPC 模式的核心 —— 本机即真人接入,
+        // 不需要 mesh_token 这种"对外认证"机制。每台机器跑 master 后,本机所有
+        // executor / CLI 调用都直通。
+        if (!result && isLoopback(remoteAddr)) {
+          result = this.auth.authenticateLocal(msg.name);
+          if (result) {
+            this.logger.info(`[mesh] Local trust auth: "${msg.name}" from ${remoteAddr}`);
           }
         }
 

@@ -6,9 +6,10 @@
  */
 
 import jwt from "jsonwebtoken";
-import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
+import { randomBytes, createHash, timingSafeEqual, randomUUID } from "node:crypto";
 import type { MeshDb } from "./db.js";
 import { JWT_EXPIRY, JWT_ALGORITHM } from "../shared/constants.js";
+import { REAL_PERSONS } from "../shared/protocol/enums.js";
 
 // ---------------------------------------------------------------------------
 // Token hashing
@@ -53,12 +54,14 @@ export class AuthService {
 
   /**
    * First-time auth: verify registration token, return JWT.
-   * Returns null on failure.
+   * Returns null on failure. token 可能为 undefined(OPC 本机模式),此时一定失败 ——
+   * 本机信任走 `authenticateLocal`。
    */
   authenticate(
-    token: string,
+    token: string | undefined,
     name: string,
   ): { jwt: string; agent: Record<string, unknown> } | null {
+    if (!token) return null;
     const agent = this.db.getAgentByName(name);
     if (!agent?.token_hash) return null;
 
@@ -95,13 +98,58 @@ export class AuthService {
    * Used when agent changed its display name but kept the same token.
    */
   authenticateByToken(
-    token: string,
+    token: string | undefined,
   ): { jwt: string; agent: Record<string, unknown> } | null {
+    if (!token) return null;
     const inputHash = hashToken(token);
     const agent = this.db.getAgentByTokenHash(inputHash);
     if (!agent) return null;
 
     const jwtToken = this.issueJwt(agent.id, agent.name, agent.domain || undefined);
+    return { jwt: jwtToken, agent: agent as unknown as Record<string, unknown> };
+  }
+
+  /**
+   * 免 token 本机信任认证:绕过 token / JWT 校验,直接按 name 查本机 agent 并签发 JWT。
+   *
+   * 仅当调用方能确保来源 IP 是 loopback(`isLoopback(req.socket.remoteAddress)`)时才能调此方法 ——
+   * 这是 OPC(本地 master + 本机 executor)开箱即用的关键路径,免去手写 mesh_token 配置。
+   *
+   * Agent 不存在时**自动注册一个**(本机即真人接入,允许建立任意 name 的 agent):
+   *   - name 来自 executor / CLI / 用户指定 —— 没有限制
+   *   - hostname 用本机 master_node 的 hostname
+   *   - profile.category = "Agent"(区别于真人 agent)
+   *   - token_hash 留空(走 localTrust)
+   *
+   * 仍会拒绝 `enabled = 0` 的禁用 agent(已存在但被禁用)。
+   */
+  authenticateLocal(name: string): { jwt: string; agent: Record<string, unknown> } | null {
+    let agent = this.db.getLocalAgentByName(name) ?? this.db.getAgentByName(name);
+    if (agent) {
+      if ((agent.enabled as number | undefined) === 0) return null;
+    } else {
+      // 本机即信任 —— agent 不存在则自动建一个。
+      const localHostname = this.db.getLocalHostname() ?? undefined;
+      const isRealPerson = (REAL_PERSONS as readonly string[]).includes(name);
+      const profile = JSON.stringify(isRealPerson ? { category: "真人" } : { category: "Agent" });
+      const id = randomUUID();
+      this.db.insertAgent({
+        id,
+        name,
+        hostname: localHostname,
+        tokenHash: "",
+        token: "",
+        profile,
+      });
+      agent = this.db.getAgentById(id);
+      if (!agent) return null;
+    }
+
+    const jwtToken = this.issueJwt(
+      agent.id as string,
+      agent.name as string,
+      (agent.domain as string) || undefined,
+    );
     return { jwt: jwtToken, agent: agent as unknown as Record<string, unknown> };
   }
 

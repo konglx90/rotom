@@ -40,6 +40,8 @@ export interface MeshDbSelf {
   // call sites type-check. Filled in by MeshDb's constructor after Object.assign.
   getAgentById(id: string): unknown;
   listAgents(filter?: unknown): unknown[];
+  /** 本机 hostname(master_node 单行表),agents.getLocalAgentByName 注入用。 */
+  getLocalHostname(): string | undefined;
   getConfig(key: string): string | undefined;
   setConfig(key: string, value: string): void;
   getIssueById(id: string): IssueRow | undefined;

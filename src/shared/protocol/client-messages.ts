@@ -40,7 +40,12 @@ export interface ClientAuthMessage {
   type: "auth";
   /** Protocol version — Master uses this to reject incompatible agents */
   version?: number;
-  token: string;
+  /**
+   * 认证 token。OPC 本机模式下可空 —— master 端 `isLoopback(remoteAddr)`
+   * 命中时走 `authenticateLocal` 直通(详见 src/master/auth.ts),无需 mesh_token。
+   * 跨机连接远程 master 时仍然必填。
+   */
+  token?: string;
   /** JWT from a previous auth_ok — used for fast reconnect without raw token */
   jwt?: string;
   name: string;

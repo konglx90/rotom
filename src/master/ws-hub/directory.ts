@@ -57,4 +57,20 @@ export const directoryMethods = {
       this.send(conn.ws, msg);
     }
   },
+
+  /**
+   * 返回所有 online agent 的 cliTool 映射(name → cliTool)。
+   * 给 API /agents 列表用 —— DB 不存 cliTool(那是 worker 的运行时属性),
+   * 但 dashboard 想展示"这个 agent 用什么 CLI 跑"。
+   * Offline agent 不在 map 里(没有连接)。
+   */
+  onlineCliTools(this: WSHubSelf): Map<string, string> {
+    const out = new Map<string, string>();
+    for (const conn of this.connections.values()) {
+      if (conn.cliTool) {
+        out.set(conn.name, conn.cliTool);
+      }
+    }
+    return out;
+  },
 };

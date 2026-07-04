@@ -26,7 +26,8 @@ EXECUTOR_CONFIG="$ROTOM_HOME/executor.config.json"
 
 PORT="${MESH_MASTER_PORT:-28800}"
 HOST="${MESH_MASTER_HOST:-0.0.0.0}"
-DATA="${MESH_MASTER_DATA:-$HOME/.rotom}"
+# data dir 默认跟 ROTOM_HOME 保持一致 —— 让 ROTOM_HOME 真正起到"切换数据目录"的作用。
+DATA="${MESH_MASTER_DATA:-$ROTOM_HOME}"
 SKIP_BUILD=false
 DEV_MODE=false
 
@@ -277,33 +278,17 @@ do_start() {
     echo "[rotom-up] ✅ master 就绪 (PID $(cat "$MASTER_PID"), http://$HOST:$PORT)"
   fi
 
-  # 4. 首次启动：自动注册「默认公司」+ Claude Code worker
-  if [ ! -f "$EXECUTOR_CONFIG" ]; then
-    echo "[rotom-up] 未检测到 executor 配置，自动注册默认 worker..."
-    if ! bootstrap_default_worker; then
-      stop_pid_file "$MASTER_PID" master || true
-      return 1
-    fi
-  fi
-
-  # 5. 启 Executor
-  if is_pid_alive "$EXECUTOR_PID"; then
-    echo "[rotom-up] executor 已在运行 (PID $(cat "$EXECUTOR_PID"))，跳过"
+  # 4. Executor 由 master 自动 spawn(Phase 1 OPC 行为)。
+  #    master 启动时如果检测到 ~/.rotom/executor.config.json 不存在,
+  #    会自动生成 .auto-executor.json 并 spawn 本机 executor 子进程,
+  #    master 退出时一并 kill。这里不再单独启动 executor。
+  if [ -f "$EXECUTOR_CONFIG" ]; then
+    echo "[rotom-up] 检测到 $EXECUTOR_CONFIG — master 将尊重用户配置,不会自动 spawn"
   else
-    echo "[rotom-up] 启动 executor..."
-    nohup node "$EXECUTOR_JS" --config "$EXECUTOR_CONFIG" \
-      >> "$EXECUTOR_LOG" 2>&1 &
-    echo "$!" > "$EXECUTOR_PID"
-    sleep 1
-    if ! is_pid_alive "$EXECUTOR_PID"; then
-      echo "[rotom-up] ❌ executor 启动失败，查看 $EXECUTOR_LOG"
-      rm -f "$EXECUTOR_PID"
-      return 1
-    fi
-    echo "[rotom-up] ✅ executor 就绪 (PID $(cat "$EXECUTOR_PID"))"
+    echo "[rotom-up] executor 将由 master 自动 spawn(OPC 模式,免 token 配置)"
   fi
 
-  # 6. 让 rotom CLI 全局可用
+  # 5. 让 rotom CLI 全局可用
   ensure_rotom_on_path
 
   if [ "$DEV_MODE" != true ]; then

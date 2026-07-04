@@ -14,18 +14,6 @@ interface AddAgentModalProps {
   defaultDomain?: string;
 }
 
-interface AgentConfig {
-  master: string;
-  name: string;
-  token: string;
-  description?: string;
-  profile?: {
-    position?: string;
-    bio?: string;
-    category?: string;
-  };
-}
-
 export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain }: AddAgentModalProps) {
   const [name, setName] = useState('');
   const [domain, setDomain] = useState(defaultDomain ?? '');
@@ -33,8 +21,7 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
   const [position, setPosition] = useState('');
   const [bio, setBio] = useState('');
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; config?: AgentConfig; error?: string } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; error?: string } | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -71,57 +58,15 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
       if (data.error) {
         setResult({ success: false, error: data.error });
       } else {
-        const baseConfig = data.configTemplate?.channels?.['a2a-gateway'] || {
-          master: window.location.origin.replace('http', 'ws'),
-          name: name.trim(),
-          token: data.token
-        };
-
-        if (Object.keys(profileObj).length > 0) {
-          baseConfig.profile = profileObj;
-        }
-
-        setResult({
-          success: true,
-          config: baseConfig
-        });
+        // OPC 模式下本机连接即信任,无需 token / configTemplate 分发。
+        // 显示简单成功提示即可,agent 已加入 DB,本机所有 executor 立即可见。
+        setResult({ success: true });
         onSuccess();
       }
     } catch (error) {
       setResult({ success: false, error: '网络请求失败' });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const copyConfig = () => {
-    if (result?.config) {
-      const text = JSON.stringify(result.config, null, 2);
-
-      const copyText = () => {
-        navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        }).catch(() => {
-          // Fallback for older browsers
-          const textarea = document.createElement('textarea');
-          textarea.value = text;
-          textarea.style.position = 'fixed';
-          textarea.style.left = '-9999px';
-          document.body.appendChild(textarea);
-          textarea.select();
-          try {
-            document.execCommand('copy');
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-          } catch {
-            alert('复制失败，请手动复制');
-          }
-          document.body.removeChild(textarea);
-        });
-      };
-
-      copyText();
     }
   };
 
@@ -144,7 +89,7 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
     >
       {domains.length === 0 && (
         <div className={styles.warning}>
-          请先在「部门」中创建至少一个域。
+          请先在「分组」中创建至少一个域。
         </div>
       )}
 
@@ -221,7 +166,7 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
               size="md"
               disabled={loading || domains.length === 0}
             >
-              {loading ? '生成中...' : '生成 Token'}
+              {loading ? '添加中...' : '添加员工'}
             </Button>
           </div>
         </form>
@@ -230,29 +175,9 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
           {result.success ? (
             <>
               <div className={styles.successIcon}>✓</div>
-              <h4>注册成功</h4>
-
-              <div className={styles.configSection}>
-                <p className={styles.configLabel}>
-                  将以下配置发给对方，添加到 openclaw.json 的 channels 中：
-                </p>
-                <div className={styles.configContainer}>
-                  <pre className={styles.configJson}>
-                    {JSON.stringify(result.config, null, 2)}
-                  </pre>
-                  <Button
-                    onClick={copyConfig}
-                    variant={copied ? 'success' : 'secondary'}
-                    size="sm"
-                    type="button"
-                  >
-                    {copied ? '已复制' : '复制配置'}
-                  </Button>
-                </div>
-                <div className={styles.info}>
-                  对方粘贴配置后启动 Gateway 即可自动连接。<br />
-                  profile 中的岗位、简介会帮助其他数字员工了解该员工角色。
-                </div>
+              <h4>已添加</h4>
+              <div className={styles.info} style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+                员工已创建。本机所有 executor 走 loopback 信任,自动可见 — 无需 token 配置。
               </div>
 
               <div className={styles.actions}>

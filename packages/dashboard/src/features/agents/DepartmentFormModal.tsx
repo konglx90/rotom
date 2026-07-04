@@ -45,7 +45,7 @@ export function DepartmentFormModal({
     e.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) {
-      setError('请输入部门名称')
+      setError('请输入分组名称')
       return
     }
 
@@ -73,7 +73,7 @@ export function DepartmentFormModal({
     }
   }
 
-  const title = mode === 'create' ? '添加部门' : '重命名部门'
+  const title = mode === 'create' ? '添加分组' : '重命名分组'
   const submitLabel = mode === 'create' ? '创建' : '保存'
 
   return (
@@ -81,7 +81,7 @@ export function DepartmentFormModal({
       <form onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.field}>
           <Input
-            label="部门名称"
+            label="分组名称"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -96,7 +96,7 @@ export function DepartmentFormModal({
             label="描述（可选）"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="简要描述该部门的职责"
+            placeholder="简要描述该分组的职责"
             disabled={submitting}
           />
         </div>

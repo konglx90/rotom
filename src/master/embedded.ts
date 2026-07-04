@@ -21,6 +21,8 @@ import { OfflineQueue } from "./offline-queue.js";
 import { createApi } from "./api/index.js";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
 import { ShareTokenStore } from "./share-tokens.js";
+import { getMasterIdentity } from "./federation/identity.js";
+import { runOpcBootstrap, ensureLocalExecutor, type LocalExecutor } from "./opc-bootstrap.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,6 +34,12 @@ export interface EmbeddedMasterConfig {
   port: number;
   host?: string;
   dataDir: string;
+  /**
+   * 是否由 embedded master 自动 spawn 本机 executor(OPC 行为)。
+   * 默认 false —— 嵌入式场景通常由 host 自己管 executor 生命周期。
+   * 设为 true 时与 `mesh-master` 命令行行为一致(master listen 后 spawn 子进程)。
+   */
+  autoSpawnExecutor?: boolean;
 }
 
 export interface EmbeddedMasterHandle {
@@ -68,6 +76,11 @@ export async function startEmbeddedMaster(
 
   // Database
   const db = new MeshDb(path.join(dataDir, "mesh.db"));
+
+  // OPC bootstrap — 与命令行入口一致:解析 master 身份 + 首次启动建默认 agent/group。
+  // 嵌入式场景失败(hostname 校验等)也直接抛错 —— 身份不能没有。
+  const identity = getMasterIdentity({ rotomHome: dataDir });
+  const opcResult = runOpcBootstrap(db, identity);
 
   // Reset stale online status from previous run
   const resetCount = db.resetAllOnline();
@@ -136,6 +149,16 @@ export async function startEmbeddedMaster(
     });
   });
 
+  // 自动 spawn 本机 executor(可选,默认关闭)。嵌入式场景通常 host 自己管 executor。
+  let localExecutor: LocalExecutor | null = null;
+  if (config.autoSpawnExecutor && opcResult.defaultAgent) {
+    localExecutor = ensureLocalExecutor({
+      rotomHome: dataDir,
+      masterPort: config.port,
+      defaultAgentName: opcResult.defaultAgent.name,
+    });
+  }
+
   // Read or ensure API key for return value
   const apiKey = db.getConfig("api_key") || "";
 
@@ -147,6 +170,7 @@ export async function startEmbeddedMaster(
     apiKey,
     stop: async () => {
       logger.info("[mesh-master] Embedded master stopping...");
+      localExecutor?.stop();
       hub.stop();
       router.stop();
       db.close();

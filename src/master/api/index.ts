@@ -15,6 +15,7 @@ import { ShareTokenStore } from "../share-tokens.js";
 import { createLogger } from "../../shared/logger.js";
 import { registerAgentRoutes } from "./agents.js";
 import { registerDomainRoutes } from "./domains.js";
+import { registerTeamRoutes } from "./teams.js";
 import { registerMessageRoutes } from "./messages.js";
 import { registerGroupRoutes } from "./groups.js";
 import { registerIssueRoutes } from "./issues.js";
@@ -79,6 +80,7 @@ export function createApi(db: MeshDb, sharedAuth?: AuthService, hub?: WSHub, rou
   // ── Register route modules ─────────────────────────────────────────────
   registerAgentRoutes(apiRouter, db, auth, hub, serverPort);
   registerDomainRoutes(apiRouter, db);
+  registerTeamRoutes(apiRouter, db);
   registerMessageRoutes(apiRouter, db, auth, hub, router);
   registerGroupRoutes(apiRouter, db, auth, hub);
   registerIssueRoutes(apiRouter, db, auth, hub);

@@ -1,70 +1,90 @@
 # Rotom A2A WORKSPACE
 
-数字员工 Mesh —— 一个中心化的 Agent 协作网络。Master 充当中枢，Executor 把任意 CLI 工具（claude / codex / openclaw / hermes / pi 等）封装成可抢单执行任务的数字员工，rotom CLI 让 shell agent 借用已注册身份调用 Mesh。
+数字员工 Mesh —— 默认形态是**个人 OPC**(每台机器一个 master + executor,开箱即用、免 token、断网可用),可**联邦成团队**(多台机器协作)。Master 充当中枢,Executor 把任意 CLI 工具(claude / codex / openclaw / hermes / pi 等)封装成可抢单执行任务的数字员工,rotom CLI 让 shell agent 借用已注册身份调用 Mesh。
 
 ## 架构
 
 ```mermaid
 flowchart TB
-    M["<b>Master</b> :28800<br/>HTTP /api · WS /ws · Dashboard · SQLite WAL"]
+    M["<b>Master</b> :28800<br/>HTTP /api · WS /ws · /federation · Dashboard · SQLite WAL<br/>(OPC: 自动 spawn executor + 默认 agent + 默认 group)"]
 
-    subgraph EX["⚙️  Executor 进程"]
+    subgraph EX["⚙️  Executor(由 master 自动 spawn)"]
         direction TB
-        W["Worker N · 每个 = 1 Agent<br/>持 mesh token 与 Master 保持 WS"]
-        A["CLI 进程 (claude / codex / openclaw / hermes / pi / ...)<br/>加载 skill: rotom-a2a-communicate<br/>↓<br/>Bash → rotom &lt;subcmd&gt;"]
+        W["Worker N · 每个 = 1 Agent<br/>本机走 loopback 信任(免 mesh_token)"]
+        A["CLI 进程 (claude / codex / openclaw / hermes / pi)<br/>加载 skill: rotom-a2a-communicate<br/>↓<br/>Bash → rotom &lt;subcmd&gt;"]
         W -. spawn .-> A
     end
 
-    R["💻 <b>rotom CLI</b><br/>借 Agent token 调 REST"]
-    D["🖥️ <b>Dashboard</b> · Web SPA<br/>cookie session"]
+    R["💻 <b>rotom CLI</b><br/>借 Agent 身份调 REST"]
+    D["🖥️ <b>Dashboard</b> · React 18 + Vite SPA"]
     H1(("👤 真人<br/>category=真人"))
     H2(("👤 真人 / Claude Code<br/>shell agent"))
 
-    W  -- ws ----------> M
+    COORD["🌐 协调 Master<br/>(ROTOM_MASTER_ROLE=coordination)"]
+    MEMBER2["💻 其他 member Master"]
+
+    W  -- ws(loopback) --> M
     A  -- Bash --------> R
     H2 -- shell -------> R
-    R  -- HTTP+Bearer --> M
+    R  -- HTTP --------> M
     H1 -- Browser ------> D
     D  ----------------> M
+    M  -- /federation --> COORD
+    COORD -. federation .-> MEMBER2
 ```
 
-三类 Mesh 接入渠道：
+三类 Mesh 接入渠道:
 
-- **Executor → Agent 运行时**：长连接守护进程托管 N 个 Worker，**1 Worker = 1 Agent**。Worker 持 mesh token 与 Master 维持 WS（接 Issue、收推送），并 spawn 对应 CLI 进程作为 Agent。Agent 不直连 Master，通过加载 [`skill/rotom-a2a-communicate`](./skill/rotom-a2a-communicate/SKILL.md) 学会用 Bash 调 `rotom` 收发消息。
-- **rotom CLI**：所有数字员工行为的统一出口。借 Agent token 调 REST；既被 Agent 在容器内使用，也能由真人/Claude Code 在 shell 里手动用。
-- **Dashboard（真人渠道）**：Vue SPA，账号密码登录。真人在浏览器里发群消息、管 Issue、看产物。`category=真人` 的 agent 不参与 Issue 抢单，仅作为人类参与者占位。
+- **Executor → Agent 运行时**:master 自动 spawn 子进程,托管 N 个 Worker(**1 Worker = 1 Agent**)。本机连接走 loopback 信任(**免 mesh_token**),executor 无 config 时扫描本机已装 CLI 自动注册 agent。
+- **rotom CLI**:所有数字员工行为的统一出口。借 Agent 身份调 REST;既被 Agent 在容器内使用,也能由真人/Claude Code 在 shell 里手动用。
+- **Dashboard(真人渠道)**:React 18 + Vite SPA。真人在浏览器里发群消息、管 Issue、看产物、加入/离开团队。`category=真人` 的 agent 不参与 Issue 抢单,仅作为人类参与者占位。
 
-Master 是唯一中枢——所有 agent-to-agent 通讯都经它中转，没有点对点连接。
+Master 是唯一中枢——本机所有 agent-to-agent 通讯经它中转;跨机协作走 federation(协调 master 中转,星型拓扑)。
 
 ## 特性
 
+### OPC 模式(默认,每台机器)
+
+- **一命令开箱即用**:`mesh-master` 启动 = master + 自动 spawn executor + 默认 agent + 默认 group
+- **免 mesh_token**:本机连接走 loopback 信任,agent 不存在自动注册
+- **CLI 自动发现**:executor 扫描本机 claude/codex/hermes/openclaw/pi,每个 CLI 起一个 agent
+- **masterId 持久稳定**:8 字符 base36,机器换网络/改 IP 不影响身份
+- **hostname 校验**:拒绝 IP 字面量(移动电脑 IP 不稳定)
+
+### Federation 团队(可选叠加)
+
+- **星型拓扑**:协调 master(`ROTOM_MASTER_ROLE=coordination`)+ member master,跨机消息经协调中转
+- **数据归属本地**:agent / memory / issue 始终留在本地 master;协调只持有路由元信息
+- **runtime join/leave**:dashboard「团队」页填协调 master 地址即可加入,无需重启
+- **移动电脑友好**:member 是 outbound 主动连接,切网自动重连;协调 master 需稳定地址
+
 ### Master
 
-- WebSocket Hub，token（sha256）+ JWT 双重鉴权
-- Agent / Domain / 跨域规则 CRUD，含离线消息队列（100 条 / 24h TTL）
-- 群组 + 群消息 + Issue（任务型 / 协作型）+ 协作流程编排
-- 工作产物（artifacts）管理与 diff 预览
-- 限流（默认 60 msg/min/agent）、消息去重、审计日志
-- 内置 Vue Dashboard（账号密码登录，首次启动随机生成）
+- WebSocket Hub,本机 loopback 信任 + 跨机 federation 协议
+- Agent / 团队 / 跨团队可见性 CRUD,离线消息队列(100 条 / 24h TTL)
+- 群组 + 群消息 + Issue(任务型 / 协作型)+ 协作流程编排
+- 工作产物(artifacts)管理与 diff 预览
+- 限流(默认 60 msg/min/agent)、消息去重、审计日志
+- 内嵌 React 18 Dashboard
 
 ### Executor
 
-- 单进程托管 N 个 worker，每个 worker 自动重连 + 心跳
-- 后端适配层（`src/executor/executors/`）：claude-code / codex / hermes-cli / openclaw / pi
-- 任务抢单：按身份分组（如 `Agent` 类参与抢单，`真人` 不参与）
-- 工作目录隔离，支持 `maxConcurrent` 并发上限
+- 由 master 自动 spawn 子进程(生命周期与 master 绑定)
+- 后端适配层(`src/executor/executors/`):claude-code / codex / hermes-cli / openclaw / pi
+- 无 config 时 scanClis 自动注册本机 CLI 为 agent
+- 任务抢单:按身份分组(`Agent` 类参与抢单,`真人` 不参与)
 - Issue 进度/输出/产物实时回传 Master
 
 ### rotom CLI
 
-- 自动发现 `~/.rotom/executor.config.json` 里的所有 worker，免二次注册
-- 多身份切换：`ROTOM_AGENT` env / `--as <name>` / 默认 agent
-- 全套子命令：`directory` / `group` / `issue` / `whoami` / `config`
-- 输出默认 JSON，`--pretty` 切换人类可读
+- 自动发现 `~/.rotom/executor.config.json` 里的所有 worker,免二次注册
+- 多身份切换:`ROTOM_AGENT` env / `--as <name>` / 默认 agent
+- 全套子命令:`directory` / `group` / `issue` / `whoami` / `config` / `memory` / `skill` / `schedule`
+- 输出默认 JSON,`--pretty` 切换人类可读
 
 ### 协议
 
-- WebSocket 文本帧 + JSON，协议版本 2
+- WebSocket 文本帧 + JSON,协议版本 2(agent ↔ master);Federation 协议版本 1(master ↔ master)
 - 心跳 10s 间隔 / 90s 超时
 - 重连自动下发离线消息
 - `requestId` 关联请求与回复
@@ -73,45 +93,49 @@ Master 是唯一中枢——所有 agent-to-agent 通讯都经它中转，没有
 
 完整安装文档见 [`docs/INSTALL.md`](./docs/INSTALL.md)。下面是最短路径。
 
-### 1. 启动 Master
+### 1. 一命令启动 OPC(默认 standalone)
 
 ```bash
 pnpm install
 pnpm build:master            # tsc + 打包 dashboard
-pnpm master:start            # 守护进程方式启动（默认端口 28800）
+pnpm start                   # = mesh-master,自动起 master + executor + 默认 agent
 ```
 
-浏览器打开 `http://localhost:28800/dashboard`，日志里会打印首次随机密码。
+浏览器打开 `http://localhost:28800/dashboard`。master 自动:
+- 生成 masterId(8 字符 base36,持久化在 `~/.rotom/master.json`)
+- 建默认 agent(用 `os.userInfo().username`)+ 默认 group "Local"
+- spawn 本机 executor 子进程
+- executor 扫描本机 CLI,每个注册一个 agent(claude/codex/hermes/openclaw/pi)
 
-### 2. 在 Dashboard 注册 Agent
+**无需配 mesh_token** — 本机连接走 loopback 信任。
 
-员工管理 → 新建：填名字、域、岗位、技能 → 拿到 `mesh_xxxxxxxx` token（只展示一次）。
+### 2. (可选)联邦成团队
 
-### 3. 启动 Executor 让 Agent 上线
+**协调 master**(在某台稳定地址的机器上):
 
-写 `~/.rotom/executor.config.json`：
+```bash
+ROTOM_MASTER_ROLE=coordination ROTOM_TEAM_NAME="西花团队" pnpm start
+```
+
+**member master**(接入协调,移动电脑也行):
+
+在 dashboard「团队」页填协调 master 地址(`ws://coord-host:28800`)+ 团队名,点「加入」即可(runtime 切换,无需重启)。或手动写 `~/.rotom/team.json`:
 
 ```json
 {
-  "master": "ws://localhost:28800",
-  "workers": [
-    {
-      "name": "Claude·Agent",
-      "token": "mesh_xxxxxxxx",
-      "cliTool": "claude",
-      "workingDir": "/Users/me/work/projectA",
-      "maxConcurrent": 2,
-      "profile": { "position": "前端工程师", "bio": "负责前端架构" }
-    }
-  ]
+  "id": "<协调 master 的 masterId>",
+  "name": "阿甘团队",
+  "coord_endpoints": ["ws://coord-host:28800"]
 }
 ```
 
 ```bash
-pnpm executor                # 前台运行，Dashboard 上对应 agent 变 online
+ROTOM_MASTER_ROLE=member ROTOM_TEAM_NAME="阿甘团队" pnpm start
 ```
 
-### 4. 安装 rotom CLI
+加入后:本机 agent 自动发布到协调 master,其他 member 可见;跨机消息经协调中转。数据归属本地(协调只持有路由元信息)。
+
+### 3. 安装 rotom CLI
 
 ```bash
 pnpm build                   # 产出 dist/cli/rotom.js
@@ -121,62 +145,97 @@ rotom whoami                 # 验证身份解析
 rotom directory --pretty     # 列出在线员工
 ```
 
-### 5. 发个协作消息
+### 4. 发个协作消息
 
 ```bash
 rotom group list --pretty
-rotom group send <groupId> Claude·Agent "@Claude·Agent hi"
+rotom group send <groupId> <agent> "@<agent> hi"
 rotom issue create <groupId> --title "修个 bug" --description "..." --priority high
 ```
 
 ## 配置
 
-### Executor 配置（`~/.rotom/executor.config.json`）
+### Master 启动参数 / 环境变量
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `MESH_MASTER_PORT` | `28800` | Master 监听端口 |
+| `MESH_MASTER_HOST` | `0.0.0.0` | Master 监听地址 |
+| `ROTOM_HOME` | `~/.rotom` | 数据目录(SQLite + 日志 + PID) |
+| `ROTOM_HOSTNAME` | `os.hostname()` | 本机 hostname(联邦用,**禁止填 IP**) |
+| `ROTOM_MASTER_ROLE` | `standalone` | `standalone` / `coordination` / `member` |
+| `ROTOM_TEAM_NAME` | 从真人 agent 派生 | 团队展示名(如"西花团队") |
+| `ROTOM_COORD_ENDPOINTS` | — | member 模式:逗号分隔协调 master ws 地址 |
+| `ROTOM_FEDERATION_DISABLED` | — | `=1` 强制关闭联邦 |
+
+日志:`{ROTOM_HOME}/logs/mesh-master-YYYY-MM-DD.log`(按日轮转)。
+
+### Executor 配置(`~/.rotom/executor.config.json`,可选)
+
+OPC 模式下 master 自动生成 `.auto-executor.json`(scanClis 模式),无需手写。若要给 agent 起中文名或指定 workingDir,写 `executor.config.json`(优先级高于 auto):
+
+```json
+{
+  "master": "ws://localhost:28800",
+  "workers": [
+    {
+      "name": "江德福",
+      "cliTool": "claude",
+      "workingDir": "/Users/me/work/projectA",
+      "maxConcurrent": 2,
+      "profile": { "position": "全栈工程师", "bio": "主力绝对主力" }
+    }
+  ]
+}
+```
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `master` | `string` | Master WebSocket URL |
-| `workers[]` | `array` | worker 列表（也支持单 worker 简化形式：顶层放 `name`/`token`/`cliTool`）|
-| `workers[].name` | `string` | agent 名（必须与 Dashboard 注册一致）|
-| `workers[].token` | `string` | `mesh_` 开头的注册 token |
-| `workers[].cliTool` | `string?` | `claude` / `codex` / `openclaw` / `hermes` / `pi`，缺省自动检测 |
-| `workers[].workingDir` | `string?` | 任务执行目录，默认 `process.cwd()` |
-| `workers[].maxConcurrent` | `number?` | 并发上限，默认 2 |
-| `workers[].profile` | `object?` | 员工档案，`category: "真人"` 时不参与抢单 |
+| `workers[]` | `array` | worker 列表(也支持单 worker 简化形式) |
+| `workers[].name` | `string` | agent 名(OPC 模式下本机信任,无需与 DB 预注册) |
+| `workers[].token` | `string?` | **OPC 模式可空**(本机信任);跨机连接远程 master 时必填 |
+| `workers[].cliTool` | `string?` | `claude` / `codex` / `openclaw` / `hermes` / `pi`,缺省自动检测 |
+| `workers[].workingDir` | `string?` | 任务执行目录,默认 `~/.rotom/workspace` |
+| `workers[].maxConcurrent` | `number?` | 并发上限,默认 2 |
+| `workers[].profile` | `object?` | 员工档案,`category: "真人"` 时不参与抢单 |
 
-### Master 启动参数 / 环境变量
+### 团队配置(`~/.rotom/team.json`,member 模式)
 
+```json
+{
+  "id": "<协调 master 的 masterId,8 字符 base36>",
+  "name": "阿甘团队",
+  "coord_endpoints": ["ws://coord-host:28800"]
+}
 ```
-MESH_MASTER_PORT=28800           # 默认 28800
-MESH_MASTER_HOST=0.0.0.0         # 默认 0.0.0.0
-MESH_MASTER_DATA=./mesh-data     # SQLite 数据目录
-```
 
-PID 文件：`~/.openclaw/mesh-master.pid`。日志：`{dataDir}/logs/mesh-master-YYYY-MM-DD.log`（JS logger，按日轮转）。
+也可通过 dashboard「团队」页的「加入上级团队」表单 runtime 生成(无需重启)。
 
 ### rotom CLI 身份解析
 
-优先级：`ROTOM_AGENT` env > `--as <name>` > `~/.rotom/config.json#defaultAgent`。
+优先级:`ROTOM_AGENT` env > `--as <name>` > `~/.rotom/config.json#defaultAgent`。
 
 ```bash
 rotom config show
-rotom config use Claude·Agent           # 设默认
-rotom --as Codex·Agent directory        # 单次切换
+rotom config use 江德福           # 设默认
+rotom --as 阿甘 directory        # 单次切换
 ```
 
 ## REST API
 
-所有端点挂在 `/api` 下。Dashboard 用 cookie session，CLI 用 `Authorization: Bearer <mesh_token>`。
+所有端点挂在 `/api` 下。本机调用走 loopback 信任(免 token);远程用 `Authorization: Bearer <mesh_token>`(向后兼容)。
 
-### Agents / Domains
+### Identity / Teams(federation)
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/agents` | 列出全部 agent |
-| GET | `/api/agents/online` | 在线 agent（精简字段）|
-| POST | `/api/agents` | 注册 agent，返回 token + 配置模板 |
-| GET / PUT / DELETE | `/api/agents/:id` | 单 agent CRUD |
-| GET | `/api/agents/:id/token` | 查看 token（脱敏）|
+| GET | `/api/identity` | 本机 master 身份(masterId / hostname / role / teamName) |
+| GET | `/api/teams` | 已加入的团队列表 |
+| GET | `/api/teams/:id/members` | 团队内可见 agent(agent_visibility) |
+| GET | `/api/teams/:id/peers` | 团队内 peer master 列表 |
+| POST | `/api/teams/join` | runtime 加入上级团队(body: `{ coordEndpoint, teamName? }`) |
+| POST | `/api/teams/leave` | runtime 离开团队,切回 standalone |
 | POST | `/api/agents/:id/refresh-token` | 刷新 token |
 | GET / POST | `/api/domains` | 域列表 / 新建 |
 | PUT / DELETE | `/api/domains/:id` | 域更新（级联改名）/ 删除 |
@@ -278,7 +337,7 @@ interface MessagePayload {
 pnpm install
 pnpm build                 # tsc（含 executor / cli / shared / master）
 pnpm build:master          # 同上 + 打包 dashboard SPA
-pnpm dashboard:dev         # Vue dashboard 本地开发模式
+pnpm dashboard:dev         # React dashboard 本地开发模式
 ```
 
 ### 测试
@@ -305,16 +364,19 @@ src/
 │       ├── openclaw.ts
 │       └── pi.ts
 ├── master/
-│   ├── server.ts               # Master 独立入口（CLI）
+│   ├── server.ts               # Master 独立入口（CLI）— OPC bootstrap + federation 启动
 │   ├── embedded.ts             # 可嵌入版本（同进程使用）
-│   ├── api.ts                  # 全部 REST 端点
-│   ├── ws-hub.ts               # WS Hub（连接 + 中转）
-│   ├── router.ts               # 路由决策
-│   ├── db.ts                   # SQLite 数据层（WAL）
-│   ├── auth.ts                 # token + JWT 校验
+│   ├── opc-bootstrap.ts        # OPC bootstrap:身份 + 默认 agent/group + spawn executor
+│   ├── federation/             # 联邦子系统（identity / manager / server / client / publisher）
+│   ├── api/                    # REST 端点（agents / teams / groups / issues / memory / ...）
+│   ├── ws-hub/                 # WS Hub（连接 + 中转 + 路由 + directory）
+│   ├── router.ts               # 路由决策（含 routeFederated 跨机分支）
+│   ├── db/                     # SQLite 数据层（WAL,master-node / team / agent-visibility / ...）
+│   ├── auth.ts                 # token + JWT + authenticateLocal（本机信任）
 │   └── offline-queue.ts        # 离线消息队列
 └── shared/
-    ├── protocol.ts             # 消息类型定义
+    ├── protocol/               # 消息类型（client/server/federation + guards）
+    ├── network.ts              # isLoopback（本机信任判定）
     ├── constants.ts            # 全局常量
     ├── dedup.ts                # 消息去重
     ├── group-context.ts        # 群上下文工具
@@ -322,9 +384,9 @@ src/
     └── slash-commands.ts       # 斜杠命令协议
 
 packages/
-└── dashboard/                  # Vue 3 Dashboard SPA
+└── dashboard/                  # React 18 + Vite Dashboard SPA
 
-migrations/                     # SQLite schema migrations（001~015）
+migrations/                     # SQLite schema migrations(001~058)
 docs/                           # 协作指南 / 用户手册 / 架构文档
 bin/
 ├── mesh-master.sh              # Master 启停脚本

@@ -27,6 +27,9 @@ import { handleIssuePatrolTerminal, handleLinkPatrolIssueTerminal } from "./patr
 import { DEFAULT_MASTER_PORT, DEFAULT_MASTER_HOST } from "../shared/constants.js";
 import os from "node:os";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
+import { getMasterIdentity } from "./federation/identity.js";
+import { runOpcBootstrap, ensureLocalExecutor, type LocalExecutor } from "./opc-bootstrap.js";
+import { initFederationManager } from "./federation/manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const log = createLogger("mesh-master");
@@ -88,6 +91,11 @@ async function main(): Promise<void> {
 
   // Database
   const db = new MeshDb(path.join(config.dataDir, "mesh.db"));
+
+  // OPC bootstrap — 解析本机 master 身份 + 首次启动建默认 agent / group。
+  // 失败(hostname 校验等)直接终止启动 —— OPC 是底层身份,不能没有。
+  const identity = getMasterIdentity({ rotomHome: config.dataDir });
+  const opcResult = runOpcBootstrap(db, identity);
 
   // Patrol auto-sync: when an issue reaches terminal state, advance patrol state
   db._onIssueTerminal = (issueId: string) => {
@@ -158,6 +166,15 @@ async function main(): Promise<void> {
   const hub = new WSHub(httpServer, db, auth, router, offlineQueue, log);
   hub.start();
 
+  // Federation:FederationManager 封装 fedClient/fedPublisher/fedServer 生命周期。
+  // API 层(POST /api/teams/join)可通过 getFederationManager() runtime 切换 federation 状态。
+  const federationManager = initFederationManager({
+    db, hub, router, httpServer, identity,
+    rotomHome: config.dataDir,
+    masterPort: config.port,
+  });
+  federationManager.initFromRole();
+
   // Web terminal hub — mounts on /api/terminal alongside the agent /ws.
   // Lazy-loads node-pty; no-op if the optional dep isn't installed.
   const terminalHub = new TerminalHub(httpServer, db, log);
@@ -172,6 +189,7 @@ async function main(): Promise<void> {
   app.use("/api", createApi(db, auth, hub, router, config.port, shareTokens));
 
   // Listen
+  let localExecutor: LocalExecutor | null = null;
   await new Promise<void>((resolve) => {
     httpServer.listen(config.port, config.host, () => {
       log.info(`Running on http://${config.host}:${config.port}`);
@@ -180,6 +198,15 @@ async function main(): Promise<void> {
       log.info(`Terminal:  ws://localhost:${config.port}/api/terminal`);
       log.info(`API: http://localhost:${config.port}/api`);
       log.warn("API authentication is DISABLED (internal network mode)");
+      // master 监听 ready 后再 spawn 本机 executor —— 避免 executor 比 master 早起来连不上。
+      // 注意:即使用户已有 agents(OPC bootstrap 没建 defaultAgent),也要 spawn executor,
+      // 否则用户的 agents 上不了线。defaultAgentName 仅用于 .auto-executor.json 的兜底,
+      // scanClis 模式下用不到。
+      localExecutor = ensureLocalExecutor({
+        rotomHome: config.dataDir,
+        masterPort: config.port,
+        defaultAgentName: opcResult.defaultAgent?.name,
+      });
       resolve();
     });
   });
@@ -187,6 +214,8 @@ async function main(): Promise<void> {
   // Graceful shutdown
   const shutdown = () => {
     log.info("Shutting down...");
+    federationManager.stop();
+    localExecutor?.stop();
     scheduler.stop();
     hub.stop();
     terminalHub.stop();

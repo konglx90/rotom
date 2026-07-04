@@ -36,8 +36,12 @@ const log = createLogger("mesh-executor-worker", { stream: "stderr" });
 export interface WorkerConfig {
   /** Agent 名称 */
   name: string;
-  /** 认证 token */
-  token: string;
+  /**
+   * 认证 token。OPC 本机模式下可省略 —— master 端 isLoopback(remoteAddr)
+   * 命中时会走 authenticateLocal 直通(`src/master/auth.ts`),无需 mesh_token。
+   * 跨机连接远程 master 时仍然必填。
+   */
+  token?: string;
   /** CLI 工具名 (不填则 auto-detect) */
   cliTool?: string;
   /** Agent 档案 */
@@ -838,11 +842,15 @@ export class ExecutorWorker {
   // ── Sending helpers (shared by all subsystems) ────────────────────
 
   agentEnv(): Record<string, string> {
-    return {
+    const env: Record<string, string> = {
       ROTOM_AGENT: this.config.name,
       ROTOM_MASTER: this.masterUrl,
-      ROTOM_TOKEN: this.config.token,
     };
+    // OPC 本机模式 token 可空,不强制设 ROTOM_TOKEN 让下游 CLI 自己处理。
+    if (this.config.token) {
+      env.ROTOM_TOKEN = this.config.token;
+    }
+    return env;
   }
 
   send(msg: Record<string, unknown>): void {

@@ -22,6 +22,9 @@ export interface Agent {
   status: 'online' | 'offline'
   hostname?: string
   endpoint?: string
+  /** 当前连接的 CLI 工具(claude/codex/hermes/openclaw/pi)。Offline 时为 null。
+   *  由 master 从 hub.connections 查出,DB 不存(那是 worker 运行时属性)。 */
+  cliTool?: string | null
   enabled: boolean
   last_heartbeat?: number
   connected_at?: number

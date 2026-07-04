@@ -3,6 +3,7 @@ import { agentsApi } from '../../api/agents'
 import { domainsApi } from '../../api/domains'
 import type { Agent, Domain } from '../../api/types'
 import { Button } from '../../components/ui/Button'
+import { FederationBanner } from './FederationBanner'
 import { AsyncBoundary } from '../../components/async/AsyncBoundary'
 import { useAgentsWithFilters } from '../../hooks/useAgents'
 import { FilterBar } from './FilterBar'
@@ -139,7 +140,7 @@ function AgentsViewBody({
   }
 
   const handleDeleteDomain = async (domain: Domain) => {
-    if (!window.confirm(`确定删除部门「${domain.name}」吗？`)) return
+    if (!window.confirm(`确定删除分组「${domain.name}」吗？`)) return
     try {
       await domainsApi.delete(domain.id)
       if (filters.domainFilter === domain.name) {
@@ -148,7 +149,7 @@ function AgentsViewBody({
       fetchDomains()
       refetch()
     } catch (err) {
-      const message = err instanceof Error ? err.message : '删除部门失败'
+      const message = err instanceof Error ? err.message : '删除分组失败'
       alert(message)
     }
   }
@@ -173,7 +174,8 @@ function AgentsViewBody({
   return (
     <div className={styles.layout}>
       <div className={styles.content}>
-        {/* 过滤栏：状态 / 部门 / 搜索 / 视图切换 / 添加员工 — 部门管理与跨域规则也整合在此 */}
+        <FederationBanner />
+        {/* 过滤栏：状态 / 分组 / 搜索 / 视图切换 / 添加员工 — 分组管理与跨域规则也整合在此 */}
         <FilterBar
           filter={filters.filter}
           onFilterChange={filters.setFilter}

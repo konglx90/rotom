@@ -543,14 +543,14 @@ export function TopologyView({ agents, statusFilter, domainFilter, onAgentClick 
     const state = topoStateRef.current;
     let lines: string[] = [];
     if (tip.isMaster) {
-      lines = ['调度中心', '管理所有数字员工通信', state.clusters.length + ' 个部门 · ' + (state.nodes.length - 1) + ' 名员工'];
+      lines = ['调度中心', '管理所有数字员工通信', state.clusters.length + ' 个分组 · ' + (state.nodes.length - 1) + ' 名员工'];
     } else if (tip.clR !== undefined) {
-      lines = [tip.name + ' 部门', '在线 ' + tip.onlineCount + ' / 共 ' + tip.totalCount + ' 名'];
+      lines = [tip.name + ' 分组', '在线 ' + tip.onlineCount + ' / 共 ' + tip.totalCount + ' 名'];
       const ml = tip.members.slice(0, 8).map((m: Agent) => (m.status === 'online' ? '● ' : '○ ') + m.name);
       if (tip.members.length > 8) ml.push('… 还有 ' + (tip.members.length - 8) + ' 名');
       lines = lines.concat(ml);
     } else {
-      lines = [tip.name, '部门: ' + (tip.domain || '—')];
+      lines = [tip.name, '分组: ' + (tip.domain || '—')];
       if (tip.endpoint) lines.push('EP: ' + tip.endpoint);
       if (tip.description) lines.push(tip.description.slice(0, 24));
       lines.push(tip.status === 'online' ? '● 在线' : '○ 离线');
@@ -692,7 +692,7 @@ export function TopologyView({ agents, statusFilter, domainFilter, onAgentClick 
         <div className={styles.stats}>
           <div className={styles.stat}>
             <span className={styles.statValue}>{stats.deptCount}</span>
-            <span className={styles.statLabel}>部门</span>
+            <span className={styles.statLabel}>分组</span>
           </div>
           <div className={styles.stat}>
             <span className={styles.statValue}>{stats.agentCount}</span>

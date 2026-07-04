@@ -63,7 +63,7 @@ export function registerAgentRoutes(
   apiRouter: ExpressRouter,
   db: MeshDb,
   auth: AuthService,
-  _hub?: WSHub,
+  hub?: WSHub,
   serverPort?: number,
 ): void {
   apiRouter.get("/agents", (_req, res) => {
@@ -73,6 +73,8 @@ export function registerAgentRoutes(
       const name = row.name as string;
       if (name) statsByName.set(name, row);
     }
+    // cliTool 不在 DB(那是 worker 运行时属性),从 hub.connections 查 online agent。
+    const cliToolByName = hub ? hub.onlineCliTools() : new Map<string, string>();
     const safe = agents.map((a: AgentRow) => ({
       id: a.id,
       name: a.name,
@@ -80,7 +82,7 @@ export function registerAgentRoutes(
       domain: a.domain,
       status: a.status,
       hostname: a.hostname,
-      endpoint: a.endpoint,
+      cliTool: cliToolByName.get(a.name) ?? null,
       enabled: a.enabled !== 0,
       lastHeartbeat: a.last_heartbeat,
       connectedAt: a.connected_at,
@@ -256,14 +258,14 @@ export function registerAgentRoutes(
       db.updateAgentEnabled(agent.id, !!enabled);
     }
 
-    if (_hub) {
+    if (hub) {
       if (domain !== undefined || enabled !== undefined) {
-        _hub.pushConfigUpdate(agent.id, {
+        hub.pushConfigUpdate(agent.id, {
           domain: domain ?? agent.domain ?? undefined,
           enabled: enabled !== undefined ? !!enabled : agent.enabled !== 0,
         });
       }
-      _hub.broadcastAgentUpdate(agent.id);
+      hub.broadcastAgentUpdate(agent.id);
     }
 
     res.json({ ok: true });

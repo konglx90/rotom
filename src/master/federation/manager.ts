@@ -1,0 +1,276 @@
+/**
+ * FederationManager —— federation 子系统的运行时管理器。
+ *
+ * 把 fedClient / fedPublisher / fedServer 的创建/启动/停止封装在一起,
+ * 让 API 层(POST /api/teams/join / leave)能在 master 运行时切换 federation 状态,
+ * 不需要重启 master。
+ *
+ * 生命周期:
+ *   - initFromRole():master 启动时调用,根据 identity.role 启动对应子系统
+ *   - joinTeam(teamId, coordEndpoints):runtime 从 standalone 切到 member
+ *   - leaveTeam():runtime 从 member 切回 standalone
+ *
+ * 单例:server.ts 初始化一次,API 层通过 getFederationManager() 访问。
+ */
+
+import fs from "node:fs";
+import path from "node:path";
+import type { Server } from "node:http";
+import type { MeshDb } from "../db.js";
+import type { WSHub } from "../ws-hub.js";
+import type { Router } from "../router.js";
+import type { MasterIdentity } from "./identity.js";
+import { FedServer } from "./server.js";
+import { FedClient } from "./client.js";
+import { FedPublisher } from "./publisher.js";
+import { createLogger } from "../../shared/logger.js";
+
+const log = createLogger("fed-manager");
+
+export interface FederationManagerOpts {
+  db: MeshDb;
+  hub: WSHub;
+  router: Router;
+  httpServer: Server;
+  identity: MasterIdentity;
+  rotomHome: string;
+  masterPort: number;
+}
+
+export class FederationManager {
+  private fedClient: FedClient | null = null;
+  private fedPublisher: FedPublisher | null = null;
+  private fedServer: FedServer | null = null;
+
+  constructor(private opts: FederationManagerOpts) {}
+
+  /** Master 启动时调用:根据 identity.role + team.json 启动对应子系统 */
+  initFromRole(): void {
+    const { identity, db, hub, router, httpServer, rotomHome, masterPort } = this.opts;
+
+    if (identity.role === "member") {
+      const teamConfigPath = path.join(rotomHome, "team.json");
+      if (fs.existsSync(teamConfigPath)) {
+        this.startMember(JSON.parse(fs.readFileSync(teamConfigPath, "utf-8")));
+      } else {
+        log.warn(`role=member but no ${teamConfigPath} — falling back to standalone`);
+      }
+    } else if (identity.role === "coordination") {
+      this.startCoordination();
+    }
+  }
+
+  /** Runtime:从 standalone 切到 member,连协调 master */
+  async joinTeam(input: { coordEndpoint: string; teamName?: string }): Promise<{ teamId: string; teamName: string }> {
+    if (this.fedClient) {
+      throw new Error("Already a member of a team — leave first");
+    }
+    const { identity, db, hub, router, rotomHome } = this.opts;
+
+    // 1. 连协调 master,握手拿 teamId(协调的 masterId)
+    const teamId = await this.fetchCoordIdentity(input.coordEndpoint);
+    const teamName = input.teamName || `团队@${identity.hostname}`;
+
+    // 2. 写 team.json
+    const teamConfigPath = path.join(rotomHome, "team.json");
+    fs.writeFileSync(
+      teamConfigPath,
+      JSON.stringify({
+        id: teamId,
+        name: teamName,
+        coord_endpoints: [input.coordEndpoint],
+      }, null, 2) + "\n",
+      "utf-8",
+    );
+
+    // 3. 建本地 team 行(本机视角)
+    if (!db.getTeam(teamId)) {
+      db.insertTeam({
+        id: teamId,
+        name: teamName,
+        my_role: "member",
+        coord_endpoints: input.coordEndpoint,
+      });
+    }
+
+    // 4. 启动 fedClient + fedPublisher
+    this.startMember({ id: teamId, name: teamName, coord_endpoints: [input.coordEndpoint] });
+
+    return { teamId, teamName };
+  }
+
+  /** Runtime:离开团队,切回 standalone */
+  leaveTeam(): void {
+    const { rotomHome, db, router } = this.opts;
+
+    // 停 fedClient + fedPublisher
+    this.fedPublisher?.stop();
+    this.fedClient?.stop();
+    this.fedPublisher = null;
+    this.fedClient = null;
+
+    // 撤回 Router 的 federation 注入
+    // (setFederation 接受 undefined?不,签名要求 client。简单起见用类型断言)
+    (router as unknown as { fedClient: unknown; teamId: unknown; localHostname: unknown }).fedClient = undefined;
+    (router as unknown as { teamId: unknown }).teamId = undefined;
+
+    // 删 team.json
+    const teamConfigPath = path.join(rotomHome, "team.json");
+    try { fs.unlinkSync(teamConfigPath); } catch { /* 不存在 */ }
+
+    // 清本地 team 行 + peer 缓存 + agent_visibility 缓存
+    const teams = db.listTeams();
+    for (const t of teams) {
+      if (t.my_role === "member") {
+        db.clearPeers(t.id);
+        db.clearVisibleAgents(t.id);
+        db.deleteTeam(t.id);
+      }
+    }
+
+    log.info("Left team — back to standalone");
+  }
+
+  getRole(): MasterIdentity["role"] {
+    return this.opts.identity.role;
+  }
+
+  getFedClient(): FedClient | null {
+    return this.fedClient;
+  }
+
+  // ─── 内部 ─────────────────────────────────────────────────────────────
+
+  /** 拉协调 master 的 /api/identity 拿 masterId(作 teamId) */
+  private async fetchCoordIdentity(coordEndpoint: string): Promise<string> {
+    const httpUrl = coordEndpoint
+      .replace(/^wss:/, "https:")
+      .replace(/^ws:/, "http:")
+      .replace(/\/$/, "");
+    const res = await fetch(`${httpUrl}/api/identity`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch coord identity: ${res.status} ${res.statusText}`);
+    }
+    const data = await res.json() as { id: string; role: string };
+    if (data.role !== "coordination") {
+      throw new Error(`Target master is not a coordination master (role=${data.role})`);
+    }
+    return data.id;
+  }
+
+  private startMember(teamCfg: { id: string; name?: string; coord_endpoints: string[] }): void {
+    const { identity, db, hub, router } = this.opts;
+
+    this.fedClient = new FedClient(db, {
+      identity,
+      coordEndpoints: teamCfg.coord_endpoints,
+      teamId: teamCfg.id,
+      role: "member",
+    });
+    this.fedClient.setHandlers({
+      deliverLocal: (msg) => {
+        const target = db.getLocalAgentByName(msg.to.name) ?? db.getAgentByName(msg.to.name);
+        if (!target) return false;
+        const fromAgent = db.getAgentByName(msg.from.name);
+        const fromInfo = {
+          name: msg.from.name,
+          status: "online" as const,
+          domain: fromAgent?.domain ?? undefined,
+          description: fromAgent?.description ?? undefined,
+          enabled: (fromAgent?.enabled ?? 1) !== 0,
+        };
+        return hub.sendToAgent(target.id as string, {
+          type: "a2a_message",
+          requestId: msg.requestId,
+          from: fromInfo,
+          payload: msg.payload as never,
+          routeType: "federated",
+          conversation: msg.conversation as never,
+        });
+      },
+      handleReply: (msg) => {
+        const targetId = router.resolveReplyTarget(msg.requestId);
+        if (!targetId) return;
+        hub.sendToAgent(targetId, {
+          type: "a2a_reply",
+          requestId: msg.requestId,
+          from: msg.from.name,
+          payload: msg.payload,
+        } as never);
+      },
+    });
+    this.fedClient.start();
+    router.setFederation(this.fedClient, teamCfg.id, identity.hostname);
+
+    this.fedPublisher = new FedPublisher(db, this.fedClient, { teamId: teamCfg.id });
+    this.fedPublisher.start();
+
+    log.info(`Started member mode — team=${teamCfg.id}, endpoints=${teamCfg.coord_endpoints.join(",")}`);
+  }
+
+  private startCoordination(): void {
+    const { identity, db, httpServer, masterPort } = this.opts;
+    const teamId = identity.id;
+    const teamName = identity.teamName || `${identity.hostname} 团队`;
+
+    if (!db.getTeam(teamId)) {
+      db.insertTeam({
+        id: teamId,
+        name: teamName,
+        my_role: "coordination",
+        coord_endpoints: `ws://${identity.hostname}:${masterPort}`,
+      });
+    }
+    db.upsertPeer({
+      team_id: teamId,
+      master_id: identity.id,
+      hostname: identity.hostname,
+      role: "coordination",
+    });
+
+    this.fedServer = new FedServer(httpServer, db, { identity, teamId });
+    this.fedServer.setHandlers({
+      deliverLocal: (msg) => {
+        const { hub, db } = this.opts;
+        const target = db.getLocalAgentByName(msg.to.name) ?? db.getAgentByName(msg.to.name);
+        if (!target) return false;
+        const fromAgent = db.getAgentByName(msg.from.name);
+        const fromInfo = {
+          name: msg.from.name,
+          status: "online" as const,
+          domain: fromAgent?.domain ?? undefined,
+          description: fromAgent?.description ?? undefined,
+          enabled: (fromAgent?.enabled ?? 1) !== 0,
+        };
+        return hub.sendToAgent(target.id as string, {
+          type: "a2a_message",
+          requestId: msg.requestId,
+          from: fromInfo,
+          payload: msg.payload as never,
+          routeType: "federated",
+          conversation: msg.conversation as never,
+        });
+      },
+    });
+    this.fedServer.start();
+    log.info(`Started coordination mode — team=${teamId}`);
+  }
+
+  stop(): void {
+    this.fedPublisher?.stop();
+    this.fedClient?.stop();
+    this.fedServer?.stop();
+  }
+}
+
+// 全局单例
+let manager: FederationManager | null = null;
+
+export function initFederationManager(opts: FederationManagerOpts): FederationManager {
+  manager = new FederationManager(opts);
+  return manager;
+}
+
+export function getFederationManager(): FederationManager | null {
+  return manager;
+}

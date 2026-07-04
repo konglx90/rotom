@@ -82,7 +82,7 @@ export function CrossDomainRulesPanel({ domains }: CrossDomainRulesPanelProps) {
       <div className={styles.sectionHeader}>
         <div>
           <h2>跨域规则</h2>
-          <p className={styles.subtitle}>配置不同部门间的数字员工通信权限</p>
+          <p className={styles.subtitle}>配置不同分组间的数字员工通信权限</p>
         </div>
         <Button
           type="button"
@@ -102,22 +102,22 @@ export function CrossDomainRulesPanel({ domains }: CrossDomainRulesPanelProps) {
         <div className={styles.loading}>加载中...</div>
       ) : domains.length < 2 ? (
         <div className={styles.warning}>
-          当前不足 2 个部门，请先创建多个部门再添加跨域规则
+          当前不足 2 个分组，请先创建多个分组再添加跨域规则
         </div>
       ) : rules.length === 0 ? (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>📋</div>
           <p>暂无跨域规则</p>
-          <p className={styles.hint}>添加规则以允许不同部门间的数字员工通信</p>
+          <p className={styles.hint}>添加规则以允许不同分组间的数字员工通信</p>
         </div>
       ) : (
         <div className={styles.rulesTable}>
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>源部门</th>
+                <th>源分组</th>
                 <th></th>
-                <th>目标部门</th>
+                <th>目标分组</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -163,12 +163,12 @@ export function CrossDomainRulesPanel({ domains }: CrossDomainRulesPanelProps) {
               <div className={styles.fieldGroup}>
                 <div className={styles.field}>
                   <Select
-                    label="源部门"
+                    label="源分组"
                     value={ruleFrom}
                     onChange={(e) => setRuleFrom(e.target.value)}
                     required
                     options={[
-                      { value: '', label: '选择部门' },
+                      { value: '', label: '选择分组' },
                       ...domains.map((d) => ({ value: d.name, label: d.name })),
                     ]}
                   />
@@ -178,12 +178,12 @@ export function CrossDomainRulesPanel({ domains }: CrossDomainRulesPanelProps) {
 
                 <div className={styles.field}>
                   <Select
-                    label="目标部门"
+                    label="目标分组"
                     value={ruleTo}
                     onChange={(e) => setRuleTo(e.target.value)}
                     required
                     options={[
-                      { value: '', label: '选择部门' },
+                      { value: '', label: '选择分组' },
                       ...domains.map((d) => ({ value: d.name, label: d.name })),
                     ]}
                   />

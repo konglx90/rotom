@@ -17,6 +17,7 @@
 
 import type { Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
+import type { IncomingMessage } from "node:http";
 import type { MeshDb } from "../db/index.js";
 import type { AuthService } from "../auth.js";
 import type { Router } from "../router.js";
@@ -120,10 +121,12 @@ export interface WSHubSelf {
   broadcastDirectory(event: "join" | "leave" | "update", agent: AgentInfo): void;
   /** Read latest directory from DB (used in auth_ok). */
   getDirectory(): AgentInfo[];
+  /** 在线 agent 的 cliTool 映射(name → cliTool),给 API /agents 用。 */
+  onlineCliTools(): Map<string, string>;
 
   // ─── Message dispatcher ────────────────────────────────────────────────
   /** Top-level message handler — wired in start() to ws.on("connection"). */
-  handleConnection(ws: WebSocket): void;
+  handleConnection(ws: WebSocket, req: IncomingMessage): void;
   /** Generation-aware disconnect — keeps stale events from kicking new connections. */
   handleDisconnect(agentId: string, generation: number, reason: string): void;
 
@@ -220,7 +223,7 @@ export class WSHubCore {
 
   start(): void {
     const self = this as unknown as WSHubSelf;
-    this.wss.on("connection", (ws) => self.handleConnection(ws));
+    this.wss.on("connection", (ws, req) => self.handleConnection(ws, req));
 
     // Periodic heartbeat check
     this.heartbeatTimer = setInterval(() => {

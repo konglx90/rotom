@@ -82,6 +82,70 @@ export interface DomainRow {
   created_at: string;
 }
 
+/**
+ * master_node 表的行类型 —— 单行表,存本机 master 的身份(masterId、hostname、role、teamName)。
+ * masterId 是 8 字符 base36,首次启动由 OPC bootstrap 生成、永远稳定。
+ * hostname 仅作显示用,可改;role 在 Phase 1 永远 standalone。
+ * team_name 是人取的团队展示名(如"西花团队"),默认 = hostname,可改。
+ */
+export interface MasterNodeRow {
+  id: string;
+  hostname: string;
+  role: "standalone" | "coordination" | "member";
+  display_name: string | null;
+  endpoint: string | null;
+  federation_enabled: number;
+  team_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Federation (migration 056 + 058 rename) ──────────────────────────────
+
+/** team 行 —— 本机 master 加入的团队(每行一个团队) */
+export interface TeamRow {
+  id: string;
+  name: string;
+  description: string | null;
+  /** 本机在此团队里的角色:coordination(我是协调)/ member(我接入) */
+  my_role: "coordination" | "member";
+  /** 逗号分隔的协调 master ws endpoint 列表 */
+  coord_endpoints: string;
+  joined_at: string;
+}
+
+/** team_peers 行 —— 团队内其他 master(协调侧权威,member 侧缓存) */
+export interface TeamPeerRow {
+  team_id: string;
+  master_id: string;
+  hostname: string;
+  endpoint: string | null;
+  role: "coordination" | "member";
+  last_seen_at: string | null;
+}
+
+/**
+ * agent_visibility 行 —— 跨 master 可见的 agent 发布记录。
+ * 协调侧权威,member 侧缓存。PK 用 master_id 而非 hostname(hostname 只是 display)。
+ */
+export interface AgentVisibilityRow {
+  team_id: string;
+  master_id: string;
+  agent_name: string;
+  hostname: string;
+  display_name: string | null;
+  is_human: number;
+  online: number;
+  last_heartbeat: string | null;
+}
+
+/** human_membership 行 —— 真人加入哪些团队 */
+export interface HumanMembershipRow {
+  agent_id: string;
+  team_id: string;
+  joined_at: string;
+}
+
 export interface IssueRow {
   id: string;
   group_id: string;

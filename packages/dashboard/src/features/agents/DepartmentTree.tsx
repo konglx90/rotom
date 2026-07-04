@@ -34,15 +34,15 @@ export function DepartmentTree({
   return (
     <aside className={styles.tree}>
       <div className={styles.header}>
-        <span className={styles.title}>部门</span>
+        <span className={styles.title}>分组</span>
         <Button
           type="button"
           variant="ghost"
           size="xs"
           iconOnly
           onClick={onAddDomain}
-          title="添加部门"
-          aria-label="添加部门"
+          title="添加分组"
+          aria-label="添加分组"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 3a1 1 0 011 1v3h3a1 1 0 110 2H9v3a1 1 0 11-2 0V9H4a1 1 0 110-2h3V4a1 1 0 011-1z" />
@@ -65,7 +65,7 @@ export function DepartmentTree({
 
         {sorted.length === 0 ? (
           <li className={styles.empty}>
-            <span>暂无部门</span>
+            <span>暂无分组</span>
           </li>
         ) : (
           sorted.map((domain) => {
@@ -92,7 +92,7 @@ export function DepartmentTree({
                         onEditDomain(domain)
                       }}
                       title="重命名"
-                      aria-label="重命名部门"
+                      aria-label="重命名分组"
                     >
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M12.146 1.146a.5.5 0 01.708 0l2 2a.5.5 0 010 .708l-9.5 9.5a.5.5 0 01-.168.11l-4 1.5a.5.5 0 01-.65-.65l1.5-4a.5.5 0 01.11-.168l9.5-9.5zM11.207 3L13 4.793 14.293 3.5 12.5 1.707 11.207 3z" />
@@ -105,8 +105,8 @@ export function DepartmentTree({
                         e.stopPropagation()
                         onDeleteDomain(domain)
                       }}
-                      title="删除部门"
-                      aria-label="删除部门"
+                      title="删除分组"
+                      aria-label="删除分组"
                     >
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M5.5 5.5A.5.5 0 016 6v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm2.5 0a.5.5 0 01.5.5v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm3 .5a.5.5 0 011 0v6a.5.5 0 01-1 0V6zM14.5 3a1 1 0 01-1 1H13v9a2 2 0 01-2 2H5a2 2 0 01-2-2V4h-.5a1 1 0 010-2H6V1.5A.5.5 0 016.5 1h3a.5.5 0 01.5.5V2h3.5a1 1 0 011 1zM4 4v9a1 1 0 001 1h6a1 1 0 001-1V4H4z" />

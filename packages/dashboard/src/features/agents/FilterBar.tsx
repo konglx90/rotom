@@ -1,7 +1,6 @@
 import type { Domain } from '../../api/types'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
-import { Select } from '../../components/ui/Select'
 import styles from './FilterBar.module.css'
 
 interface FilterBarProps {
@@ -27,19 +26,20 @@ export function FilterBar({
   onFilterChange,
   searchQuery,
   onSearchChange,
-  domains,
-  selectedDomain,
-  onSelectDomain,
-  onAddDomain,
-  onEditDomain,
-  onDeleteDomain,
-  onSelectRules,
-  isRulesView,
+  domains: _domains,
+  selectedDomain: _selectedDomain,
+  onSelectDomain: _onSelectDomain,
+  onAddDomain: _onAddDomain,
+  onEditDomain: _onEditDomain,
+  onDeleteDomain: _onDeleteDomain,
+  onSelectRules: _onSelectRules,
+  isRulesView: _isRulesView,
   viewMode,
   onViewModeChange,
   onAddAgent,
 }: FilterBarProps) {
-  const sortedDomains = [...domains].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+  // 老的 Domain 分组筛选已移除 — 新模型下 agents 页只看本机 agent。
+  // domain 相关 props 保留(向后兼容 AgentsView 调用),但不再使用。
 
   return (
     <div className={styles.container}>
@@ -59,83 +59,9 @@ export function FilterBar({
         </button>
       </div>
 
-      {/* Domain Filter — 合并原 DepartmentTree 的部门筛选与跨域规则入口 */}
-      <div className={styles.group}>
-        <div className={styles.domainSelectWrapper}>
-          <Select
-            className={styles.domainSelect}
-            value={isRulesView ? '__rules__' : selectedDomain}
-            onChange={(e) => {
-              const val = e.target.value
-              if (val === '__rules__') {
-                onSelectRules?.()
-              } else {
-                onSelectDomain(val)
-              }
-            }}
-          >
-            <option value="all">👥 全部部门</option>
-            {sortedDomains.map((d) => (
-              <option key={d.id} value={d.name}>
-                🏢 {d.name} ({d.agentCount ?? 0})
-              </option>
-            ))}
-            <option disabled>──────────</option>
-            <option value="__rules__">🔗 跨域规则</option>
-          </Select>
-
-          {/* 添加部门按钮 */}
-          {!isRulesView && onAddDomain && (
-            <button
-              type="button"
-              className={styles.domainActionBtn}
-              onClick={onAddDomain}
-              title="添加部门"
-              aria-label="添加部门"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 3a1 1 0 011 1v3h3a1 1 0 110 2H9v3a1 1 0 11-2 0V9H4a1 1 0 110-2h3V4a1 1 0 011-1z" />
-              </svg>
-            </button>
-          )}
-
-          {/* 编辑当前部门按钮 */}
-          {!isRulesView && selectedDomain !== 'all' && onEditDomain && (() => {
-            const d = sortedDomains.find((d) => d.name === selectedDomain)
-            return d ? (
-              <button
-                type="button"
-                className={styles.domainActionBtn}
-                onClick={() => onEditDomain(d)}
-                title="编辑部门名称"
-                aria-label="编辑部门"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M12.146 1.146a.5.5 0 01.708 0l2 2a.5.5 0 010 .708l-9.5 9.5a.5.5 0 01-.168.11l-4 1.5a.5.5 0 01-.65-.65l1.5-4a.5.5 0 01.11-.168l9.5-9.5zM11.207 3L13 4.793 14.293 3.5 12.5 1.707 11.207 3z" />
-                </svg>
-              </button>
-            ) : null
-          })()}
-
-          {/* 删除当前部门按钮 */}
-          {!isRulesView && selectedDomain !== 'all' && onDeleteDomain && (() => {
-            const d = sortedDomains.find((d) => d.name === selectedDomain)
-            return d ? (
-              <button
-                type="button"
-                className={`${styles.domainActionBtn} ${styles.domainActionDanger}`}
-                onClick={() => onDeleteDomain(d)}
-                title="删除当前部门"
-                aria-label="删除部门"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M5.5 5.5A.5.5 0 016 6v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm2.5 0a.5.5 0 01.5.5v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm3 .5a.5.5 0 011 0v6a.5.5 0 01-1 0V6zM14.5 3a1 1 0 01-1 1H13v9a2 2 0 01-2 2H5a2 2 0 01-2-2V4h-.5a1 1 0 010-2H6V1.5A.5.5 0 016.5 1h3a.5.5 0 01.5.5V2h3.5a1 1 0 011 1zM4 4v9a1 1 0 001 1h6a1 1 0 001-1V4H4z" />
-                </svg>
-              </button>
-            ) : null
-          })()}
-        </div>
-      </div>
+      {/* 老的 Domain 分组筛选已移除 — 新模型下 agents 页只看本机 agent,
+          跨机协作走 federation team(见 sidebar「团队」)。domain 字段仍在 DB,
+          但 UI 不再展示筛选。如需跨域权限,在 toolbox 里单独配置。 */}
 
       {/* Search */}
       <div className={styles.group}>
