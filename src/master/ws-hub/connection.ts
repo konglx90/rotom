@@ -30,7 +30,7 @@ import {
   PROTOCOL_VERSION,
 } from "../../shared/constants.js";
 import { isClientMessage, type ClientMessage, type ServerMessage } from "../../shared/protocol.js";
-import { isLoopback } from "../../shared/network.js";
+import { isLocalNetwork } from "../../shared/network.js";
 import { parseProfile, type WSHubSelf } from "./hub.js";
 import { enrichWorkerDispatch } from "./dispatch-enrich.js";
 import { resolveGroupRepoCtxLocalOnly } from "../group-paths.js";
@@ -174,7 +174,7 @@ export const connectionMethods = {
         // 无视 token / JWT 是否有效。这是 OPC 模式的核心 —— 本机即真人接入,
         // 不需要 mesh_token 这种"对外认证"机制。每台机器跑 master 后,本机所有
         // executor / CLI 调用都直通。
-        if (!result && isLoopback(remoteAddr)) {
+        if (!result && isLocalNetwork(remoteAddr)) {
           result = this.auth.authenticateLocal(msg.name);
           if (result) {
             this.logger.info(`[mesh] Local trust auth: "${msg.name}" from ${remoteAddr}`);

@@ -107,7 +107,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const connectRef = useRef<() => void>(() => {})
 
   const doConnect = useCallback(() => {
-    if (!myAgentName || !myAgentToken) return
+    // OPC 模式下 token 可空(本机/局域网走 loopback 信任,master 端 isLocalNetwork 兜底)。
+    // 远程连接才需要 token(向后兼容)。只要有 myAgentName 就连。
+    if (!myAgentName) return
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsHost = window.location.hostname === 'localhost'
@@ -120,7 +122,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     ws.onopen = () => {
       setStatus('connecting')
-      ws.send(JSON.stringify({ type: 'auth', name: myAgentName, token: myAgentToken, version: '2' }))
+      // token 可能为空(OPC 模式)—— master 端 isLocalNetwork(remoteAddr) 兜底认证
+      ws.send(JSON.stringify({ type: 'auth', name: myAgentName, token: myAgentToken || '', version: '2' }))
     }
 
     ws.onmessage = (event) => {
@@ -195,11 +198,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       }
 
       setStatus('disconnected')
-      if (wsRef.current === ws && myAgentName && myAgentToken) {
+      // OPC 模式 token 可空,只要 myAgentName 在就允许重连
+      if (wsRef.current === ws && myAgentName) {
         scheduleReconnectRef.current()
       }
     }
-  }, [myAgentName, myAgentToken, clearTimers, startHeartbeat])
+  }, [myAgentName, clearTimers, startHeartbeat])
 
   const scheduleReconnect = useCallback(() => {
     const attempt = reconnectAttemptRef.current
@@ -215,7 +219,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const connect = useCallback(() => {
-    if (!myAgentName || !myAgentToken) return
+    // OPC 模式 token 可空(本机/局域网走 loopback 信任)。只要有 myAgentName 就连。
+    if (!myAgentName) return
     try {
       const raw = localStorage.getItem('ws_active_tab')
       if (raw) {
@@ -227,7 +232,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       }
     } catch { /* non-fatal */ }
     doConnect()
-  }, [myAgentName, myAgentToken, doConnect])
+  }, [myAgentName, doConnect])
 
   useEffect(() => { scheduleReconnectRef.current = scheduleReconnect }, [scheduleReconnect])
   useEffect(() => { connectRef.current = connect }, [connect])
@@ -248,15 +253,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   // Connect on credentials change.
+  // OPC 模式 token 可空(本机/局域网 loopback 信任),只看 myAgentName。
   useEffect(() => {
-    if (!myAgentName || !myAgentToken) return
+    if (!myAgentName) return
     connect()
     return () => {
       clearTimers()
       wsRef.current?.close()
       wsRef.current = null
     }
-  }, [myAgentName, myAgentToken, connect, clearTimers])
+  }, [myAgentName, connect, clearTimers])
 
   const send = useCallback((payload: unknown): boolean => {
     const ws = wsRef.current

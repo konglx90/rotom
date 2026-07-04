@@ -1041,6 +1041,9 @@
   line-height: 1;
   cursor: pointer;
   opacity: 0;
+  /* 透明时不可点击 —— 否则 iPad 触摸会命中透明按钮(28x28 拦截群项右侧),
+     stopPropagation 导致群切换失败。显示时再放开。 */
+  pointer-events: none;
   transition: opacity var(--duration-base) var(--ease-out),
               background var(--duration-base) var(--ease-out),
               border-color var(--duration-base) var(--ease-out);
@@ -1050,6 +1053,8 @@
 .groupItem:focus-within .moreBtn,
 .groupItem:has(.moreDropdown) .moreBtn {
   opacity: 1;
+  /* 显示时恢复点击 —— 透明时 pointer-events: none 避免拦截群切换 */
+  pointer-events: auto;
 }
 
 .moreBtn:hover {
@@ -1100,4 +1105,43 @@
   height: 1px;
   background: var(--border-color-light);
   margin: 4px 8px;
+}
+
+/* ─── 触屏设备(iPad/手机)优化 ───────────────────────────────────────────
+ * iPad Safari 行为:第一次 tap 触发 hover 伪类,如果 hover 改变了元素外观
+ * (如显示 moreBtn / 改 background),浏览器认为元素"变了",等第二次 tap
+ * 才触发 click —— 表现为"双击才能切换群"。
+ *
+ * 修复:在 `@media (hover: none)` 下把 hover 触发的样式变化全部还原成
+ * 默认值,让 hover 伪类在触屏上"无效"→ 元素不变 → 第一次 tap 直接 click。
+ * 桌面端 `@media (hover: hover)` 不受影响,hover 效果保留。
+ * ──────────────────────────────────────────────────────────────────────── */
+@media (hover: none) {
+  .groupItem:hover,
+  .groupItem:hover .moreBtn,
+  .groupItem:hover .memberCount,
+  .groupItem:hover .pinBtn,
+  .groupItem.archived:hover,
+  .navItem:hover,
+  .navToggleBtn:hover,
+  .createBtn:hover,
+  .directItem:hover,
+  .newConvBtn:hover,
+  .showMoreBtn:hover,
+  .convThreadItem:hover,
+  .userInfo:hover,
+  .pinBtn:hover,
+  .moreBtn:hover {
+    /* 还原成默认态,让 hover 在触屏上无视觉效果 → 不触发"等待第二次 tap" */
+    background: inherit;
+    opacity: inherit;
+    border-color: inherit;
+    color: inherit;
+  }
+  /* moreBtn 透明时不可点击(已由默认规则 pointer-events: none 覆盖,
+     这里确保 hover 时也不意外放开) */
+  .groupItem:hover .moreBtn {
+    opacity: 0;
+    pointer-events: none;
+  }
 }

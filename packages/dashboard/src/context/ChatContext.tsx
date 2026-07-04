@@ -34,7 +34,7 @@ interface ChatContextValue {
   // Identity
   myAgentName: string
   myAgentToken: string
-  setMyAgentConfig: (name: string, token: string) => void
+  setMyAgentConfig: (name: string) => void
 
   // Config modal
   showConfigModal: boolean
@@ -94,7 +94,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [myAgentName, setMyAgentName] = useState<string>(
     () => localStorage.getItem('chat_agent_name') ?? '',
   )
-  const [myAgentToken, setMyAgentToken] = useState<string>(
+  // OPC 模式下 token 不再需要(本机/局域网走 loopback 信任)。保留读取兼容老 localStorage。
+  const [myAgentToken] = useState<string>(
     () => localStorage.getItem('chat_agent_token') ?? '',
   )
   // Don't force the agent-config modal open on first load — the dashboard is
@@ -110,6 +111,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await agentsApi.list()
       setAgents(data)
+      // OPC 模式自动绑定身份:无 myAgentName 时优先绑定真人 agent(如"西花"),
+      // 没有真人则 fallback 第一个。本机/局域网走 loopback 信任,无需 token。
+      // 避免每次刷新都弹「匿名访问」横条让用户手动选。
+      setMyAgentName((current) => {
+        if (current) return current // 已绑定,保留
+        if (data.length === 0) return '' // 还没 agent,等用户建
+        // 优先真人(category="真人"),fallback 第一个
+        const realPerson = data.find(a => a.profile?.category === '真人')
+        const picked = realPerson ?? data[0]
+        localStorage.setItem('chat_agent_name', picked.name)
+        return picked.name
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load agents'
       setAgentsError(message)
@@ -151,9 +164,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [loadAgents])
 
-  const setMyAgentConfig = useCallback((name: string, token: string) => {
+  const setMyAgentConfig = useCallback((name: string) => {
     setMyAgentName(name)
-    setMyAgentToken(token)
+    // token 留空 —— OPC 模式本机/局域网走 loopback 信任,无需 mesh_token。
+    // 保留 localStorage 字段向后兼容,但不再使用。
     setShowConfigModal(false)
   }, [])
 

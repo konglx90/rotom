@@ -1,73 +1,35 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
-import { Input } from '../../../components/ui/Input'
 import { Modal } from '../../../components/ui/Modal'
+import { Avatar } from '../../../components/ui/Avatar'
+import type { Agent } from '../../../api/types'
 import styles from '../GroupChatView.module.css'
 
 interface Props {
   open: boolean
-  onConfigured: (name: string, token: string) => void
+  onConfigured: (name: string) => void
   onClose: () => void
 }
 
+/**
+ * 选择「我的身份」modal —— OPC 模式下从 agent 列表里挑一个即可,无需 token。
+ * 老的「粘贴 mesh_token 绑定身份」流程已废除(本机/局域网走 loopback 信任)。
+ */
 export function ConfigModal({ open, onConfigured, onClose }: Props) {
-  const [token, setToken] = useState('')
-  const [resolvedName, setResolvedName] = useState('')
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [resolving, setResolving] = useState(false)
 
   useEffect(() => {
     if (!open) return
-    const savedToken = localStorage.getItem('chat_agent_token') || ''
-    setToken(savedToken)
-    setResolvedName('')
+    setLoading(true)
     setError('')
+    fetch('/api/agents')
+      .then(r => r.json())
+      .then((data: Agent[]) => setAgents(data))
+      .catch(() => setError('加载员工列表失败'))
+      .finally(() => setLoading(false))
   }, [open])
-
-  // 粘贴 mesh_xxx → 服务端反查匹配到的员工名
-  useEffect(() => {
-    const trimmed = token.trim()
-    if (!trimmed) {
-      setResolvedName(''); setError(''); setResolving(false)
-      return
-    }
-    if (!trimmed.startsWith('mesh_')) {
-      setResolvedName(''); setError('Token 必须以 mesh_ 开头'); setResolving(false)
-      return
-    }
-    setResolving(true)
-    setError('')
-    const ctrl = new AbortController()
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch('/api/whoami', {
-          headers: { Authorization: `Bearer ${trimmed}` },
-          signal: ctrl.signal,
-        })
-        const data = await res.json()
-        if (data?.kind === 'agent' && data.name) {
-          setResolvedName(data.name); setError('')
-        } else {
-          setResolvedName(''); setError('Token 无效，未匹配到员工')
-        }
-      } catch (e) {
-        if ((e as Error).name !== 'AbortError') {
-          setResolvedName(''); setError('网络请求失败')
-        }
-      } finally {
-        setResolving(false)
-      }
-    }, 300)
-    return () => { clearTimeout(t); ctrl.abort() }
-  }, [token])
-
-  const canSave = !!resolvedName && !resolving
-  const handleSave = () => {
-    if (!canSave) return
-    localStorage.setItem('chat_agent_name', resolvedName)
-    localStorage.setItem('chat_agent_token', token.trim())
-    onConfigured(resolvedName, token.trim())
-  }
 
   return (
     <Modal
@@ -76,36 +38,58 @@ export function ConfigModal({ open, onConfigured, onClose }: Props) {
       footer={
         <div className={styles.modalActions}>
           <Button variant="secondary" size="md" onClick={onClose}>取消</Button>
-          <Button variant="primary" size="md" onClick={handleSave} disabled={!canSave}>
-            绑定
-          </Button>
         </div>
       }
     >
       <p style={{ color: 'var(--color-slate)', fontSize: 14, marginBottom: 16 }}>
-        Dashboard 这边的你是「真人」。粘贴一个员工的 Mesh Token，名字会自动匹配出来。
+        Dashboard 这边的你是「真人」。挑一个员工作为你的操作身份 —— 本机/局域网免 token,直接绑定。
       </p>
-      <div className={styles.formField}>
-        <Input
-          label="Mesh Token："
-          type="password"
-          value={token}
-          onChange={e => setToken(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave() }}
-          placeholder="例如: mesh_xxx"
-          autoFocus
-        />
-      </div>
-      <div style={{ minHeight: 22, marginTop: 4, fontSize: 13 }}>
-        {resolving && <span style={{ color: 'var(--color-slate)' }}>匹配中…</span>}
-        {!resolving && resolvedName && (
-          <span style={{ color: 'var(--color-success, #16a34a)' }}>
-            ✓ 已匹配到员工：<strong>{resolvedName}</strong>
-          </span>
-        )}
-        {!resolving && error && (
-          <span style={{ color: 'var(--color-danger, #dc2626)' }}>{error}</span>
-        )}
+
+      {loading && <div style={{ fontSize: 13, color: 'var(--color-slate)' }}>加载中…</div>}
+      {error && <div style={{ fontSize: 13, color: 'var(--color-danger, #dc2626)' }}>{error}</div>}
+
+      {!loading && !error && agents.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--color-slate)' }}>
+          暂无员工。先在「员工管理」页添加一个。
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 360, overflowY: 'auto' }}>
+        {agents.map(a => (
+          <button
+            key={a.id}
+            onClick={() => {
+              localStorage.setItem('chat_agent_name', a.name)
+              onConfigured(a.name)
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 10px',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 6,
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            <Avatar name={a.name} src={a.avatar_url ?? undefined} size={28} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>{a.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                {a.profile?.position || a.description || a.status}
+              </div>
+            </div>
+            <span style={{
+              fontSize: 11,
+              padding: '1px 6px',
+              borderRadius: 3,
+              background: a.status === 'online' ? 'var(--color-success-bg, #f0fdf4)' : 'var(--color-tag-bg)',
+              color: a.status === 'online' ? 'var(--color-success, #16a34a)' : 'var(--color-text-tertiary)',
+            }}>
+              {a.status === 'online' ? '在线' : '离线'}
+            </span>
+          </button>
+        ))}
       </div>
     </Modal>
   )
