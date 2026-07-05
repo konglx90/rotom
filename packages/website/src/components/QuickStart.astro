@@ -2,49 +2,48 @@
 const steps = [
   {
     n: 1,
-    title: "安装 & 构建",
-    code: `git clone <repo> rotom && cd rotom
-pnpm install
-pnpm build:master`,
-    desc: "构建 master + 内嵌 dashboard,dist/master 即可启动",
+    title: "全局安装(无需克隆)",
+    code: `# 任选一种包管理器,二进制 mesh-master + rotom 全局可用
+tnpm i -g @alipay/rotom
+# 或:npm i -g @alipay/rotom
+# 验证:rotom --version && mesh-master --help`,
+    desc: "包内已预编译 master + 内嵌 dashboard,无需 git clone / build",
   },
   {
     n: 2,
     title: "启动 OPC(默认)",
-    code: `# ① 通过 rotom CLI(推荐)
-rotom run opc
-
-# ② 或直接用脚本
-pnpm start                # = bin/rotom-up.sh start
-# 浏览器打开 http://localhost:28800/dashboard`,
-    desc: "Master 自动 spawn executor + 建默认 agent/group,本机免 token",
+    code: `rotom run opc
+# = mesh-master + 自动 spawn executor + 默认 agent
+# 浏览器打开 http://localhost:28800/dashboard
+# 首次启动日志里打印 dashboard 随机密码`,
+    desc: "本机走 loopback 信任,免 mesh_token;executor 自动扫描 claude/codex/hermes",
   },
   {
     n: 3,
     title: "(可选)联邦成团队",
     code: `# 协调 master(稳定地址机器)
 rotom run federation
-# = ROTOM_MASTER_ROLE=coordination bin/rotom-up.sh start
+# = ROTOM_MASTER_ROLE=coordination mesh-master start
 
 # member master(在另一台)
 # Dashboard → 团队页 → 填协调 master 地址 → 加入
 # 或预先写 ~/.rotom/team.json`,
-    desc: "星型拓扑,member 主动连协调,数据归属本地",
+    desc: "星型拓扑,member 主动 outbound 连协调,数据归属本地",
   },
   {
     n: 4,
-    title: "装 rotom CLI",
-    code: `pnpm build
-ln -s "$PWD/bin/rotom" /usr/local/bin/rotom
-rotom whoami             # 验证身份解析
-rotom directory --pretty # 列出在线员工`,
-    desc: "自动发现 ~/.rotom/executor.config.json 里的 worker",
+    title: "登录 Dashboard",
+    code: `# ① 打开 http://localhost:28800/dashboard
+# ② 日志里复制随机生成的 admin 密码
+# ③ 员工管理 → 看 executor 自动注册的 agent
+#    (claude-<hostname> / codex-<hostname> / ...)`,
+    desc: "executor scanClis 自动注册本机 CLI,无需手动建 agent",
   },
   {
     n: 5,
     title: "发个协作消息",
-    code: `rotom group list --pretty
-rotom group send <groupId> <agent> "@<agent> hi"
+    code: `rotom directory --pretty       # 列出在线员工
+rotom group list --pretty
 rotom issue create <groupId> \\
   --title "修个 bug" \\
   --description "..." \\
@@ -58,7 +57,7 @@ rotom issue create <groupId> \\
     <span class="eyebrow">QUICK START</span>
     <h2>5 步跑起来</h2>
     <p class="lead">
-      最短路径。完整安装文档见 <code>docs/INSTALL.md</code>,联邦玩法见 <a href="#federation">Federation 章节</a>。
+      最短路径 —— 一行 <code>tnpm i -g @alipay/rotom</code> 装好,一行 <code>rotom run opc</code> 跑起来。完整安装文档见 <a href="/docs/install/">INSTALL</a>,联邦玩法见 <a href="#federation">Federation 章节</a>。
     </p>
     <div class="steps">
       {steps.map((s) => (
@@ -71,7 +70,7 @@ rotom issue create <groupId> \\
       ))}
     </div>
     <p style="margin-top:24px;color:var(--text-mute);font-size:13px;">
-      ※ <code>rotom run</code> 是 v2.20 新增的一站式入口,等价于 <code>bin/rotom-up.sh start</code>;federation 子命令会自动注入 <code>ROTOM_MASTER_ROLE=coordination</code>。
+      ※ <code>rotom run</code> 是 v2.20 新增的一站式入口;无需 git clone,直接 tnpm 全局装就能用。源码开发请见 <a href="/docs/install/">源码安装章节</a>。
     </p>
   </div>
 </section>
