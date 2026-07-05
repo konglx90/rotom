@@ -52,6 +52,7 @@ export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps)
                 状态 {sortField === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
               </th>
               <th>类型</th>
+              <th>CLI 工具</th>
               <th>详情</th>
               {(onDelete || onEditProfile) && <th>操作</th>}
             </tr>
@@ -69,16 +70,18 @@ export function AgentTable({ agents, onDelete, onEditProfile }: AgentTableProps)
                   </span>
                 </td>
                 <td>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span>
-                      {agent.profile?.category
-                        ? (agent.profile.category === '真人' ? '👤 ' : '🚀 ') + agent.profile.category
-                        : '🚀 Agent'}
-                    </span>
-                    {agent.cliTool && (
-                      <span style={{ fontSize: 11, color: '#6b7280' }}>🔧 {agent.cliTool}</span>
-                    )}
-                  </div>
+                  <span className={[styles.typeBadge, agent.profile?.category === '真人' ? styles.typeHuman : styles.typeAgent].join(' ')}>
+                    {agent.profile?.category
+                      ? (agent.profile.category === '真人' ? '👤 ' : '🚀 ') + agent.profile.category
+                      : '🚀 Agent'}
+                  </span>
+                </td>
+                <td>
+                  {agent.cliTool ? (
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>🔧 {agent.cliTool}</span>
+                  ) : (
+                    <span style={{ fontSize: 12, color: '#d0d0d0' }}>-</span>
+                  )}
                 </td>
                 <td className={styles.detailCell}>
                   <div className={styles.detailRow}>
