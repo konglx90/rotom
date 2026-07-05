@@ -3,20 +3,52 @@
 > Agent A 在群里向 Agent B 提问后的「等回复 + 5min 超时兜底」机制。
 > 本文是面向使用者的操作指南。设计演进与方案对比见 [`AGENT_ASK_REPLY_TIMER.md`](./AGENT_ASK_REPLY_TIMER.md)。
 
+## 0. 当前模型(2026-07 重构):`rotom ask <target> "<q>"` + 自动 pair 群
+
+点对点提问的唯一 CLI 入口是 `rotom ask <target> "<question>"`,target 形如 `alice`(本地)或 `alice@hostname`(联邦)。
+
+```bash
+# sync 模式(默认):阻塞等回复,5min 超时 exit 2(不升级 Issue)
+rotom ask alice "用户画像接口 user/profile 返回的 fields 列表是?"
+
+# async 模式:发完即返 bridgeId,5min 超时升级 Issue 给 asker
+rotom ask alice "..." --mode async
+
+# 查询/取消 bridge(沿用下方场景 1-5)
+rotom ask list --group <gid> [--status ...]
+rotom ask show <bridgeId>
+rotom ask cancel <bridgeId>
+```
+
+**关键变化**:
+- **群永远建在协调 master 上**——本地场景本机即协调,联邦场景显式协调 master。master 自动找/建 a2a_direct pair 群作为对话上下文容器,3 天 TTL 续命/过期
+- **sync 模式**新增:阻塞等回复,5min 超时 exit 2,**不升级 Issue**
+- **async 模式**:沿用原 `#reply` 路径,5min 超时升级 Issue(下方场景 1-5 描述的就是 async 行为)
+- **`#reply` 群消息标记**保留:群聊上下文里自然冒出来的提问仍可用 `#reply`,跟 CLI `rotom ask` 是两条独立触发,共用 `ask_bridges` 表 + 5min 超时兜底
+- **旧路径已删**:`rotom ask <gid> <target> <q>`、`rotom fed ask`、`rotom group create --a2a-direct`、`rotom group send --need-reply` 全部废弃。`rotom-bus-host` skill 删除
+
+下方章节 1-5 描述的是 async 模式(以及 `#reply` 路径)的 5min 超时兜底行为,sync 模式仅适用于"CLI 阻塞等回复"场景,超时不创建 Issue。
+
 ## 1. 一句话介绍
 
 `rotom ask` = 发问 + 自动起 5min 定时器。系统自动管 timer，A 不用主动 cancel。
 
 - B @ A 回复 → A 立即收到（普通群消息路径），timer 自动 cancel
-- B 不 @ 回复（但发了消息）→ 5min 后系统建 Issue 给 A，描述里**复述** B 的回复
-- 5min 完全无回复 → 系统建 Issue 给 A，指示 A 去 @ 真人求救
+- B 不 @ 回复（但发了消息）→ 5min 后系统建 Issue 给 A，描述里**复述** B 的回复（**仅 async 模式 / `#reply` 路径**;sync 模式超时不建 Issue,CLI 端 exit 2）
+- 5min 完全无回复 → 系统建 Issue 给 A，指示 A 去 @ 真人求救（**仅 async 模式 / `#reply` 路径**）
 - B 离线 → `rotom ask` 拒绝建 bridge，exit 2，提示 A 自己 @ 真人
 
 ## 2. 命令速查
 
 ```bash
-# 发问 + 建 bridge（最常用）
-rotom ask <groupId> <target> "<问题>" [--timeout 5m] [--escalate-to <真人>]
+# 发问 + 建 bridge（最常用)
+# sync 模式(默认):阻塞等回复
+rotom ask <target> "<问题>" [--timeout 5m] [--escalate-to <真人>]
+
+# async 模式:发完即返 bridgeId,5min 超时升级 Issue
+rotom ask <target> "<问题>" --mode async [--timeout 5m] [--escalate-to <真人>]
+
+# target 形如 "alice"(本地)或 "alice@hostname"(联邦,走 link daemon)
 
 # 查询群里的 bridge
 rotom ask list --group <gid> [--status pending|answered|timed_out|cancelled] [--pretty]

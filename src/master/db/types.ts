@@ -261,4 +261,5 @@ export interface AskBridgeRow {
   reply_msg_id: number | null;
   resolved_at: number | null;
   issue_id: string | null;
+  mode: "sync" | "async";
 }

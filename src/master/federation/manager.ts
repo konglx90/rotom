@@ -15,6 +15,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
@@ -25,6 +26,7 @@ import { FedClient } from "./client.js";
 import { FedPublisher } from "./publisher.js";
 import { SelfPublisher } from "./self-publisher.js";
 import { createLogger } from "../../shared/logger.js";
+import { extractMentions } from "../../shared/mention.js";
 
 const log = createLogger("fed-manager");
 
@@ -273,6 +275,61 @@ export class FederationManager {
           routeType: "federated",
           conversation: msg.conversation as never,
         });
+      },
+      // `rotom ask` 跨机路径:协调 master 本地建/复用 pair 群 + 写 asker 提问 + 建 bridge。
+      // 调用方:fedServer.handleRouteMessage 检测 msg.bridge 时调用。
+      createBridgeForRoute: (msg) => {
+        if (!msg.bridge) return null;
+        const { hub, db } = this.opts;
+        const asker = msg.bridge.asker;
+        const target = msg.bridge.target;
+        // 找/建 a2a_direct pair 群(3 天 TTL 续命)
+        let group = db.findActivePairGroup(asker, target);
+        if (!group) group = db.createPairGroup(asker, target);
+        // 写 asker 提问进群(a2a_direct 群不广播;needReply=true 触发 sendAsAgent 内部 dispatch 到 target)
+        // 注意:这里 from=asker,target=msg.to.name(目标在远程,本机 master 没有这个 agent 注册)
+        // sendAsAgent 会查本地 agent 找不到 target → 返回 error。
+        // 所以这里 a2a_direct 群只入库消息,不通过 sendAsAgent dispatch(目标在远程,后面 forwardDeliver 会处理)。
+        // 直接调 addGroupMessage + bumpGroupActivity。
+        const mentionTag = `@${target}`;
+        const messageBody = msg.payload.message.startsWith(mentionTag) ? msg.payload.message : `${mentionTag} ${msg.payload.message}`;
+        const mentions = [target];
+        const messageId = db.addGroupMessage(group.id, asker, messageBody, mentions);
+        db.bumpGroupActivity(group.id);
+        // 建 ask-bridge(sync 模式:CLI 端阻塞;async 模式:scheduler 超时升级 Issue)
+        const bridgeId = randomUUID();
+        db.createAskBridge({
+          id: bridgeId,
+          groupId: group.id,
+          asker,
+          target,
+          questionMsgId: messageId,
+          escalateTo: msg.bridge.escalateTo ?? null,
+          timeoutMs: msg.bridge.timeoutMs,
+          mode: msg.bridge.mode,
+        });
+        // 起 ask-bridge-check 定时任务(20s interval,scheduler 跑 reply 检测兜底;sync 模式超时不升级 Issue)
+        db.createScheduledTask({
+          name: `星期五 · 等待 ${target} 回复`,
+          groupId: group.id,
+          mode: "message",
+          scheduleKind: "interval",
+          intervalSec: 20,
+          prompt: `星期五 每 20s 检查一次 ${target} 有没有回复 ${asker} 的问题;有回复就 resolve bridge,5 分钟 sync 模式不升级、async 模式升级 Issue。`,
+          handlerKey: "ask-bridge-check",
+          handlerPayload: JSON.stringify({ bridgeId, asker, target, mode: msg.bridge.mode }),
+        });
+        log.info(`[fed-manager] bridge created for route requestId=${msg.requestId}: bridge=${bridgeId} group=${group.id} (${asker}→${target})`);
+        return { bridgeId, groupId: group.id };
+      },
+      // reply 到达协调 master 时写进 pair 群 + resolve bridge
+      onBridgeReply: (requestId, bridgeId, groupId, asker, target, replyMessage) => {
+        const { db } = this.opts;
+        const mentions = extractMentions(replyMessage);
+        const messageId = db.addGroupMessage(groupId, target, replyMessage, mentions);
+        db.bumpGroupActivity(groupId);
+        db.markBridgeAnswered(bridgeId, messageId);
+        log.info(`[fed-manager] bridge ${bridgeId} resolved by reply (requestId=${requestId}, group=${groupId}, target=${target})`);
       },
     });
     this.fedServer.start();

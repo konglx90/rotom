@@ -184,13 +184,12 @@ Schedule (群内定时任务,master 端 30s tick 调度):
     --at    <iso>   例 2026-06-22T09:00          one-shot,绝对时间
     --repeat N      最多跑 N 次后自动 disable;传 0 或 ∞ 表示不限次数
 
-Ask (Agent A 提问 B + 5min 超时兜底 bridge,详见 docs/AGENT_ASK_REPLY_TIMER.md):
-  ask <groupId> <target> <question...>   [--timeout 5m] [--escalate-to <真人>]
-    发问 + 建 bridge。系统自动 5min 超时:
-      - B @ A → master 正常 dispatch 给 A,timer 自动 cancel
-      - B 不 @ 回复 → 5min 后系统建 Issue 给 A,描述里复述回复
-      - 完全无回复 → 5min 后系统建 Issue 指示 A @ 真人求救
-    target 离线 → 不建 bridge,exit 2(提示 A 自己 @ 真人)
+Ask (点对点提问的唯一入口,自动维护 a2a_direct pair 群 + 3 天 TTL;详见 docs/AGENT_ASK_REPLY_TIMER.md):
+  ask <target> "<question>"   [--mode sync|async] [--timeout 5m] [--escalate-to <真人>]
+    target 形如 "alice"(本地)或 "alice@hostname"(联邦,走 link daemon)
+    sync(默认):阻塞等回复,5min 超时 exit 2(不升级 Issue)
+    async:发完即返 bridgeId,5min 超时升级 Issue 给 asker(沿用 #reply 路径)
+    群永远建在协调 master 上(本地场景本机即协调,联邦场景显式协调 master)
   ask list --group <id> [--status pending|answered|timed_out|cancelled] [--pretty]
   ask show <bridgeId>
   ask cancel <bridgeId>                    A 主动 cancel(收到非@回复,自己判断是回复了)
@@ -220,10 +219,10 @@ Federation (跨 master 协作,不依赖 dashboard):
   link join <coordEndpoint> [--hostname N]    一次性:生成 masterId + 写 ~/.rotom/link.json(轻量客户端模式)
   link start [--port N]                       启动 rotom-link daemon(默认端口 28900),不起完整 master
   link stop | restart | status | logs         daemon 生命周期
-  (随后可 rotom fed members / rotom fed ask <ref> "...")
+  (随后可 rotom fed members / rotom ask <name@hostname> "<q>")
 
   fed members                                 列出协调 master 同步来的可见 agent
-  fed ask <ref> "<question>" [--timeout 5m]   阻塞等回复(ref 形如 alice@hostB 或 alice)
+  (跨机点对点提问用 "rotom ask <name@hostname> \"<q>\"",见 Ask 段)
 
 Global flags:
   --pretty   format output for humans (tables / indented JSON)

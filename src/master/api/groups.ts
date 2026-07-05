@@ -9,6 +9,7 @@ import type { WSHub } from "../ws-hub.js";
 import { defaultGroupWorkingDir } from "../group-paths.js";
 import { scanAllRepos, resolveGroupWorktreeInfo } from "../repo-scan.js";
 import { createLogger } from "../../shared/logger.js";
+import { isLoopback } from "../../shared/network.js";
 import { parseAgentProfile, mergeGroupProfile } from "../../shared/agent-profile.js";
 import { extractMentions } from "../../shared/mention.js";
 import { validateWorkingDir } from "../util/paths.js";
@@ -395,6 +396,7 @@ export function registerGroupRoutes(
       ? mentions
       : extractMentions(content);
     const msgId = db.addGroupMessage(req.params.id, sender, content, resolvedMentions);
+    db.bumpGroupActivity(req.params.id);
     // 链接采集(inline hook,失败不影响主路径)
     try {
       collectLinksFromText(content, {
@@ -548,6 +550,84 @@ export function registerGroupRoutes(
     res.json({ ok: true });
   });
 
+  // ── POST /api/asks —— rotom ask <target> "<q>" 入口 ─────────────────────
+  // 自动找/建 a2a_direct pair 群(协调 master 持群),写 asker 提问进群 + 建 bridge。
+  // sync 模式:阻塞等 reply_msg_id 落库,5min 超时 exit (不升级 Issue)
+  // async 模式:立即返回 bridgeId + groupId,5min 超时升级 Issue(沿用 #reply 路径)
+  //
+  // 联邦场景下协调 master 通过 federation server 收到 FedAskWithBridge
+  // 后调用同一个 handleAskRequest 函数,把消息路由到目标 member master。
+  apiRouter.post("/asks", async (req, res) => {
+    if (!hub) { res.status(500).json({ error: "WSHub not available" }); return; }
+    const { target, message, mode, timeoutMs, escalateTo } = req.body || {};
+    // 鉴权:mesh token 优先;loopback(本机 CLI 直发)允许用 body.asker 兜底
+    // 跟 internal network mode 对齐,本机默认信任,免去手写 mesh_token 配置
+    const agentAuth = (req as any).agentAuth as { name: string } | undefined;
+    const askerName = agentAuth?.name
+      ?? (isLoopback(req.socket.remoteAddress) && typeof req.body?.asker === "string" && req.body.asker.trim() ? req.body.asker.trim() : null);
+    if (!askerName) {
+      res.status(403).json({ error: "Mesh token required (or call from loopback with body.asker)" });
+      return;
+    }
+    if (!target || typeof target !== "string" || !target.trim()) {
+      res.status(400).json({ error: "target is required" });
+      return;
+    }
+    if (!message || typeof message !== "string" || !message.trim()) {
+      res.status(400).json({ error: "message is required" });
+      return;
+    }
+    const bridgeMode: "sync" | "async" = mode === "async" ? "async" : "sync";
+    const timeout = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 5 * 60_000;
+    const escalateToStr = typeof escalateTo === "string" && escalateTo.trim() ? escalateTo.trim() : null;
+
+    const created = handleAskRequest({
+      db, hub,
+      asker: askerName,
+      target,
+      message,
+      mode: bridgeMode,
+      timeoutMs: timeout,
+      escalateTo: escalateToStr,
+    });
+    if (created.error) {
+      res.status(400).json({ ok: false, error: created.error });
+      return;
+    }
+    const { bridgeId, groupId } = created;
+
+    // async 模式:立即返回 bridgeId + groupId
+    if (bridgeMode === "async") {
+      res.json({ ok: true, bridgeId, groupId, status: "pending" });
+      return;
+    }
+
+    // sync 模式:阻塞轮询 bridge.status,200ms 间隔(避免 scheduler 20s tick 太慢)
+    const deadline = Date.now() + timeout;
+    const pollInterval = 200;
+    while (Date.now() < deadline) {
+      const b = db.getAskBridge(bridgeId!);
+      if (!b) {
+        res.status(500).json({ ok: false, error: `bridge ${bridgeId} not found after create` });
+        return;
+      }
+      if (b.status === "answered") {
+        const replyMsgId = b.reply_msg_id ?? 0;
+        const replyContent = db.getGroupMessageContent(replyMsgId) ?? "";
+        res.json({ ok: true, bridgeId, reply: { id: replyMsgId, content: replyContent }, status: "answered" });
+        return;
+      }
+      if (b.status === "timed_out" || b.status === "cancelled") {
+        res.json({ ok: false, bridgeId, status: b.status });
+        return;
+      }
+      await new Promise((r) => setTimeout(r, pollInterval));
+    }
+    // CLI 端 5min 到点
+    db.markBridgeTimedOut(bridgeId!, null, null);
+    res.json({ ok: false, bridgeId, status: "timed_out" });
+  });
+
   // ── Worktree 视图(供 Dashboard 展示)───────────────────────────────────
 
   /** GET /api/groups/:id/worktree —— 当前 group 的 worktree 推算信息。
@@ -612,4 +692,100 @@ export function registerGroupRoutes(
     log.info(`Worktree removed: ${resolved}`);
     res.json({ ok: true });
   });
+}
+
+// ── handleAskRequest —— POST /asks 与 federation createBridgeForRoute 共用的核心 ─
+//
+// 在协调 master 本地建/复用 a2a_direct pair 群 + 写 asker 提问 + 建 ask-bridge。
+// 返回 { bridgeId, groupId };由调用方决定后续行为:
+//   - POST /asks 本地路径:调 sendAsAgent dispatch + sync 模式阻塞轮询 / async 立即返回
+//   - federation createBridgeForRoute:不调 sendAsAgent(目标在远程,由 forwardDeliver 路由),
+//     reply 到达时由 onBridgeReply 写群+resolve bridge
+//
+// 注:本地路径下,asker 在本机注册,target 也在本机注册;sendAsAgent 走 a2a_direct 静默分支
+// (conversation.ts:271-282),needReply=true 触发 target dispatch,不广播。
+//
+// 返回 null 表示出错(error 字符串在 .error),否则返回 { bridgeId, groupId, questionMsgId }。
+
+interface AskRequestInput {
+  db: MeshDb;
+  hub: WSHub;
+  asker: string;
+  target: string;
+  message: string;
+  mode: "sync" | "async";
+  timeoutMs: number;
+  escalateTo: string | null;
+  /** 不调 sendAsAgent,只入库消息(用于 federation 路径,目标在远程)。默认 false。 */
+  skipDispatch?: boolean;
+}
+
+interface AskRequestResult {
+  error?: string;
+  bridgeId?: string;
+  groupId?: string;
+  questionMsgId?: number;
+}
+
+export function handleAskRequest(input: AskRequestInput): AskRequestResult {
+  const { db, hub, asker, target, message, mode, timeoutMs, escalateTo, skipDispatch } = input;
+  const askerAgent = db.getAgentByName(asker);
+  if (!askerAgent) return { error: `Asker agent "${asker}" not found` };
+  const targetAgent = db.getAgentByName(target);
+  if (!targetAgent && !skipDispatch) return { error: `Target agent "${target}" not found` };
+
+  // 1. 找/建 a2a_direct pair 群(3 天 TTL 续命)
+  let group = db.findActivePairGroup(asker, target);
+  if (!group) group = db.createPairGroup(asker, target);
+
+  // 2. 写 asker 提问进群
+  let questionMsgId: number;
+  if (skipDispatch) {
+    // federation 路径:目标在远程,sendAsAgent 找不到 target agent → 直接入库
+    const mentionTag = `@${target}`;
+    const messageBody = message.startsWith(mentionTag) ? message : `${mentionTag} ${message}`;
+    questionMsgId = db.addGroupMessage(group.id, asker, messageBody, [target]);
+    db.bumpGroupActivity(group.id);
+  } else {
+    // 本地路径:调 sendAsAgent 走 a2a_direct 静默分支,触发 target dispatch
+    const sendResult = hub.sendAsAgent({
+      fromName: asker,
+      target,
+      message,
+      groupId: group.id,
+      groupName: group.name,
+      needReply: true,
+    });
+    if (sendResult.error) return { error: sendResult.error };
+    questionMsgId = sendResult.messageId!;
+    // sendAsAgent 内部已调 addGroupMessage + bumpGroupActivity + autoCreateBridgeOnMention 等
+  }
+
+  // 3. 建 ask-bridge
+  const bridgeId = randomUUID();
+  db.createAskBridge({
+    id: bridgeId,
+    groupId: group.id,
+    asker,
+    target,
+    questionMsgId,
+    escalateTo,
+    timeoutMs,
+    mode,
+  });
+
+  // 4. 起 ask-bridge-check 定时任务(20s interval,scheduler 跑 reply 检测兜底)
+  db.createScheduledTask({
+    name: `星期五 · 等待 ${target} 回复`,
+    groupId: group.id,
+    mode: "message",
+    scheduleKind: "interval",
+    intervalSec: 20,
+    prompt: `星期五 每 20s 检查一次 ${target} 有没有回复 ${asker} 的问题;有回复就 resolve bridge,5 分钟 sync 模式不升级、async 模式升级 Issue。`,
+    handlerKey: "ask-bridge-check",
+    handlerPayload: JSON.stringify({ bridgeId, asker, target, mode }),
+  });
+
+  log.info(`[api/asks] bridge created: bridge=${bridgeId} group=${group.id} (${asker}→${target}, mode=${mode})`);
+  return { bridgeId, groupId: group.id, questionMsgId };
 }

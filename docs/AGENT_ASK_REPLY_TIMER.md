@@ -4,6 +4,19 @@
 > 本文档收录讨论过程中出现过的几套方案、各自的取舍、以及当前推荐方向。
 > 实现进度以代码为准,本文是设计快照。
 
+## 0. 当前实现(2026-07 重构)
+
+`rotom ask <target> "<q>"` 是点对点提问的唯一 CLI 入口,target 形如 `alice`(本地)或 `alice@hostname`(联邦)。提供两种模式:
+
+- **sync(默认)**:阻塞等回复,5min 超时 exit 2,**不升级 Issue**。CLI 端 200ms 轮询 `bridge.status`,scheduler `ask-bridge-check` handler 每 20s 兜底检测 reply。
+- **async**:发完即返 `bridgeId`,5min 超时升级 Issue 给 asker(沿用 #reply 路径,见下方章节)。
+
+群永远建在协调 master 上(本地场景本机即协调,联邦场景显式协调 master 持群)。master 自动找/建 `a2a_direct` pair 群作为对话上下文容器,`last_activity_at` 3 天 TTL 续命/过期(scheduler `a2a-direct-ttl-sweep` handler 每小时跑)。
+
+`#reply` 群消息标记保留——群聊上下文里自然冒出来的提问仍可用 `#reply`,跟 CLI `rotom ask` 是两条独立触发,共用 `ask_bridges` 表 + 5min 超时兜底。`#reply` 触发的 bridge 自动是 async 模式。
+
+旧路径(`rotom ask <gid> <target> <q>`、`rotom fed ask`、`rotom group create --a2a-direct`、`rotom group send --need-reply`)全部废弃;`skill/rotom-bus-host` 删除。详见下方章节。
+
 ## 1. 问题背景
 
 ### 1.1 现状缺口

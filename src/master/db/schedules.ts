@@ -209,4 +209,10 @@ export const scheduleMethods = {
       "UPDATE scheduled_tasks SET enabled = 0, updated_at = ? WHERE id = ?",
     ).run(Date.now(), id);
   },
+
+  /** 按 handler_key 找第一条任务(用于 bootstrap 时查重,避免重复注册)。 */
+  findScheduledTaskByHandlerKey(this: MeshDbSelf, handlerKey: string): ScheduledTaskRow | undefined {
+    return this.db.prepare("SELECT * FROM scheduled_tasks WHERE handler_key = ? LIMIT 1")
+      .get(handlerKey) as ScheduledTaskRow | undefined;
+  },
 };

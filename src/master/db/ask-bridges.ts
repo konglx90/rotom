@@ -24,13 +24,14 @@ export const askBridgeMethods = {
     questionMsgId: number;
     escalateTo: string | null;
     timeoutMs: number;
+    mode: "sync" | "async";
   }): AskBridgeRow {
     const now = Date.now();
     this.db.prepare(`
       INSERT INTO ask_bridges
         (id, group_id, asker, target, question_msg_id, escalate_to,
-         timeout_ms, created_at, expires_at, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+         timeout_ms, created_at, expires_at, status, mode)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
     `).run(
       input.id,
       input.groupId,
@@ -41,6 +42,7 @@ export const askBridgeMethods = {
       input.timeoutMs,
       now,
       now + input.timeoutMs,
+      input.mode,
     );
     return this.db.prepare("SELECT * FROM ask_bridges WHERE id = ?")
       .get(input.id) as AskBridgeRow;
@@ -118,7 +120,7 @@ export const askBridgeMethods = {
     `).run(replyMsgId, Date.now(), id);
   },
 
-  markBridgeTimedOut(this: MeshDbSelf, id: string, issueId: string, replyMsgId: number | null): void {
+  markBridgeTimedOut(this: MeshDbSelf, id: string, issueId: string | null, replyMsgId: number | null): void {
     this.db.prepare(`
       UPDATE ask_bridges
       SET status = 'timed_out', issue_id = ?, reply_msg_id = ?, resolved_at = ?

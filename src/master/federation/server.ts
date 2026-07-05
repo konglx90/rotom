@@ -49,6 +49,20 @@ export interface FedRouteHandlers {
   deliverLocal?: (msg: FedRouteDeliver) => boolean;
   /** 转发到其他 member(目标在另一个 member 时)。返回 true 表示已找到目标并发送。 */
   forwardToMember?: (targetMasterId: string, msg: FedMessage) => boolean;
+  /**
+   * `rotom ask` 跨机路径专用:协调 master 收到带 `bridge` 字段的 FedRouteMessage 时调用。
+   * 在协调 master 本地建/复用 a2a_direct pair 群 + 写 asker 提问进群 + 建 ask-bridge,
+   * 返回 { bridgeId, groupId } 挂到 pendingFedRequests,供 reply 时反查。
+   *
+   * mode="async" 时,reply 到达时协调 master 调 onBridgeReply 写群+resolve bridge;
+   * mode="async" 的超时由 scheduler ask-bridge-check 处理(沿用 #reply 路径)。
+   */
+  createBridgeForRoute?: (msg: FedRouteMessage) => { bridgeId: string; groupId: string } | null;
+  /**
+   * `rotom ask` 跨机路径的 reply 钩子:协调 master 收到 FedRouteReply,
+   * 若该 requestId 有 bridge,调此 hook 写进 pair 群 + resolve bridge。
+   */
+  onBridgeReply?: (requestId: string, bridgeId: string, groupId: string, asker: string, target: string, replyMessage: string) => void;
 }
 
 export interface FedServerOpts {
@@ -73,7 +87,12 @@ export class FedServer {
    * 取代 Phase 2 的广播兜底,避免 member 多了被 reply 噪声淹没 + 隐私泄漏。
    * 失败出口(sendRouteFailed)和 reply 成功出口都 delete;TTL 兜底由 cleanupTimer 清。
    */
-  private pendingFedRequests = new Map<string, { sourceMasterId: string; createdAt: number }>();
+  private pendingFedRequests = new Map<string, {
+    sourceMasterId: string;
+    createdAt: number;
+    /** 若该请求是 `rotom ask` 跨机路径(reply 时协调 master 写进 pair 群 + resolve bridge),则记录 bridgeId+groupId */
+    bridge?: { bridgeId: string; groupId: string; asker: string; target: string };
+  }>();
   private cleanupTimer?: NodeJS.Timeout;
   private handlers: FedRouteHandlers = {};
   /** 捕获的旧 upgrade listeners(start 时接管,非 /federation 的请求 delegate 回它们) */
@@ -372,7 +391,24 @@ export class FedServer {
 
   private handleRouteMessage(msg: FedRouteMessage, fromMasterId: string): void {
     // 记录来源 member,供 FedReply 精确路由回来源(取代广播)
-    this.pendingFedRequests.set(msg.requestId, { sourceMasterId: fromMasterId, createdAt: Date.now() });
+    const entry: { sourceMasterId: string; createdAt: number; bridge?: { bridgeId: string; groupId: string; asker: string; target: string } } = {
+      sourceMasterId: fromMasterId,
+      createdAt: Date.now(),
+    };
+
+    // `rotom ask` 跨机路径:若 msg.bridge 存在,协调 master 本地建/复用 pair 群 + 写提问进群 + 建 bridge
+    if (msg.bridge && this.handlers.createBridgeForRoute) {
+      const created = this.handlers.createBridgeForRoute(msg);
+      if (created) {
+        entry.bridge = {
+          bridgeId: created.bridgeId,
+          groupId: created.groupId,
+          asker: msg.bridge.asker,
+          target: msg.bridge.target,
+        };
+      }
+    }
+    this.pendingFedRequests.set(msg.requestId, entry);
 
     // 查目标 agent 的 master_id(从 agent_visibility)
     const visible = this.db.findVisibleAgentByHostAndName(
@@ -478,6 +514,22 @@ export class FedServer {
       log.warn(`[fed-server] reply for unknown requestId=${msg.requestId} (TTL'd or already routed), broadcasting as fallback`);
       this.broadcastReply(msg);
       return;
+    }
+    // `rotom ask` 跨机路径:reply 到达协调 master 时,先写进 pair 群 + resolve bridge
+    // (协调 master 持群),再转发给发起方 member/link。
+    if (entry.bridge && this.handlers.onBridgeReply) {
+      try {
+        this.handlers.onBridgeReply(
+          msg.requestId,
+          entry.bridge.bridgeId,
+          entry.bridge.groupId,
+          entry.bridge.asker,
+          entry.bridge.target,
+          msg.payload.message,
+        );
+      } catch (e) {
+        log.warn(`[fed-server] onBridgeReply failed for requestId=${msg.requestId}: ${(e as Error).message}`);
+      }
     }
     const ok = this.sendToMember(entry.sourceMasterId, msg);
     if (!ok) {

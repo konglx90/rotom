@@ -127,6 +127,28 @@ export class MeshDbCore {
     } catch {
       // Column already exists — ignore.
     }
+
+    // Inline migration (2026-07): ask-bridge 重构加 groups.last_activity_at +
+    // ask_bridges.mode 列。旧 DB 不会因 001-schema.sql 重跑而 alter,这里手动加。
+    try {
+      this.db.exec("ALTER TABLE groups ADD COLUMN last_activity_at INTEGER");
+    } catch {
+      // Column already exists — ignore.
+    }
+    try {
+      this.db.exec("ALTER TABLE ask_bridges ADD COLUMN mode TEXT NOT NULL DEFAULT 'async'");
+    } catch {
+      // Column already exists — ignore.
+    }
+    // 顺手补 CHECK 约束无法事后加(SQLite 限制),mode 取值靠应用层保证。
+    // a2a_direct pair 群 TTL 查询索引(老 DB 不存在,补上)
+    try {
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_groups_pair_activity ON groups(type, last_activity_at) WHERE type = 'a2a_direct' AND archived_at IS NULL",
+      );
+    } catch {
+      // Index creation failed (e.g. last_activity_at not yet added) — ignore.
+    }
   }
 
   close(): void {

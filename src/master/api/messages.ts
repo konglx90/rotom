@@ -159,7 +159,7 @@ export function registerMessageRoutes(
     const group = db.getGroupById(req.params.groupId);
     if (!group) { res.status(404).json({ error: "Group not found" }); return; }
     if (group.archived_at) { res.status(403).json({ error: "Group is archived, cannot send messages" }); return; }
-    const { target, message, noDispatch, needReply } = req.body || {};
+    const { target, message, noDispatch } = req.body || {};
     if (!target || !message) { res.status(400).json({ error: "target and message are required" }); return; }
     const r = hub.sendAsAgent({
       fromName: agentAuth.name,
@@ -168,7 +168,6 @@ export function registerMessageRoutes(
       groupId: req.params.groupId,
       groupName: group.name,
       ...(noDispatch === true ? { noDispatch: true } : {}),
-      ...(needReply === true ? { needReply: true } : {}),
     });
     if (r.error) { res.status(400).json(r); return; }
     res.json(r);

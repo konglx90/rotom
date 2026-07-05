@@ -147,6 +147,23 @@ export interface FedRouteMessage {
     files?: FedFileRef[];
   };
   conversation?: FedConversationRef;
+  /**
+   * `rotom ask` 路径专用:协调 master 收到带此字段的 FedRouteMessage 后,
+   * 在协调 master 本地建/复用 a2a_direct pair 群 + 建 ask-bridge,
+   * 然后路由消息到目标 member;target 回复时协调 master 写进 pair 群 + resolve bridge。
+   *
+   * mode="sync" 时,CLI 端(link daemon)阻塞等 FedReply;协调 master 在 reply 路径上
+   * 既写群+resolve bridge,又转发 reply 给发起方 link daemon(由 PendingRequests 解 promise)。
+   *
+   * mode="async" 时,CLI 立即返回 bridgeId;超时由 scheduler-handlers ask-bridge-check 升级 Issue。
+   */
+  bridge?: {
+    mode: "sync" | "async";
+    asker: string;
+    target: string;
+    timeoutMs: number;
+    escalateTo?: string | null;
+  };
 }
 
 export interface FedRouteDeliver {

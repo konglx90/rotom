@@ -128,6 +128,7 @@ export const conversationMethods = {
         questionMsgId: msgId,
         escalateTo: null,
         timeoutMs: 5 * 60_000,
+        mode: "async",
       });
       const task = this.db.createScheduledTask({
         name: `${TIMER_PERSONA_NAME} · 等待 ${targetName} 回复`,
@@ -284,6 +285,7 @@ export const conversationMethods = {
 
         const mentions = sendAsMentions;
         messageId = this.db.addGroupMessage(opts.groupId, opts.fromName, messageBody, mentions);
+        this.db.bumpGroupActivity(opts.groupId);
         this.autoCreateBridgeOnMention(opts.groupId, opts.fromName, mentions, messageId);
         this.checkAndCancelBridgesForMessage(opts.groupId, opts.fromName, mentions, messageId);
         // 链接采集(inline hook,失败不影响主路径)

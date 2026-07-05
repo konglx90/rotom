@@ -399,6 +399,7 @@ export const connectionMethods = {
             // (N sends) would store the same message N times.
             if (msg.conversation.type !== "group") {
               this.db.addGroupMessage(msg.conversation.groupId, fromName, msg.payload?.message || "", mentions);
+              this.db.bumpGroupActivity(msg.conversation.groupId);
             }
 
             if (msg.conversation.type === "group") {
@@ -522,6 +523,7 @@ export const connectionMethods = {
           // Persist to group history BEFORE sending (avoids race with history refresh)
           if ((conversation?.type === "group" || conversation?.type === "single") && conversation.groupId) {
             const msgId = this.db.addGroupMessage(conversation.groupId, fromName, replyContent, []);
+            this.db.bumpGroupActivity(conversation.groupId);
             // 提取 mentions 走 bridge 检测(同 sendAsAgent 的 regex)
             const mentions = extractMentions(replyContent);
             this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
@@ -662,6 +664,7 @@ export const connectionMethods = {
               [],
               cancelled ? { cancelledAt: nowBeijing() } : undefined,
             );
+            this.db.bumpGroupActivity(conversation.groupId);
             const mentions = extractMentions(endContent);
             this.autoCreateBridgeOnMention(conversation.groupId, fromName, mentions, msgId);
             this.checkAndCancelBridgesForMessage(conversation.groupId, fromName, mentions, msgId);
