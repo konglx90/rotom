@@ -47,6 +47,9 @@ export async function cmdRun(rest: string[]): Promise<void> {
       );
   }
 
-  const code = await runRotomUp(passthrough, env);
+  const code = await runRotomUp(
+    passthrough.length > 0 ? passthrough : ["start"],
+    env,
+  );
   process.exit(code);
 }
