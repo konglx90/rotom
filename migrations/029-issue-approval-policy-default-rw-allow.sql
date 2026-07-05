@@ -1,9 +1,0 @@
--- Default approval policy changed from r_allow to rw_allow.
--- This migration documents the app-layer default change:
---   - issue.approvalPolicy || "rw_allow" in src/master/db/issues.ts (create)
---   - approvalPolicy ?? "rw_allow" in src/shared/prompt-composer.ts (worker fallback)
---   - approvalPolicy ?? "rw_allow" in src/executor/worker-issue.ts (worker fallback)
---
--- SQLite does not support ALTER COLUMN SET DEFAULT, so the column default
--- remains 'r_allow' from migration 015. The code-level defaults above take
--- effect for all new issues. Existing issues with explicit 'r_allow' keep it.
