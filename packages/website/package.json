@@ -1,5 +1,5 @@
 {
-  "name": "@alipay/rotom-website",
+  "name": "@konglx/rotom-website",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -13,5 +13,5 @@
   "dependencies": {
     "astro": "^7.0.6"
   },
-  "repository": "git@code.alipay.com:cattery/rotom.git"
+  "repository": "https://github.com/konglx90/rotom.git"
 }

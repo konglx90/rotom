@@ -29,5 +29,5 @@
     "typescript": "~5.6.2",
     "vite": "^6.0.5"
   },
-  "repository": "git@code.alipay.com:cattery/open-a2a-gateway.git"
+  "repository": "https://github.com/konglx90/rotom.git"
 }

@@ -28,8 +28,8 @@ A2A WORKSPACE deploys three components — one Master, plus any number of client
 | Component | Required |
 |-----------|----------|
 | All | Node.js ≥ 18 (20+ recommended) |
-| All | tnpm / npm / pnpm (tnpm recommended — fastest on internal network) |
-| Master | Bundled SQLite (`better-sqlite3` is an optional dep; tnpm auto-installs it) |
+| All | npm / pnpm (npm recommended) |
+| Master | Bundled SQLite (`better-sqlite3` is an optional dep; npm auto-installs it) |
 | Executor | The CLI tool you want to use, globally executable (`claude`, `codex`, `openclaw`, `gemini`, etc.) |
 | rotom CLI | At least one Executor agent's local config present |
 
@@ -37,11 +37,11 @@ A2A WORKSPACE deploys three components — one Master, plus any number of client
 
 ## Option A: Global npm package install (recommended, no clone needed)
 
-Shortest path — `@alipay/rotom` is published to the antgroup-inc internal registry. Install it globally and you get the master + executor + rotom CLI three-piece set in one go:
+Shortest path — `@konglx/rotom` is published to the npm public registry. Install it globally and you get the master + executor + rotom CLI three-piece set in one go:
 
 ```bash
-tnpm i -g @alipay/rotom
-# or: npm i -g @alipay/rotom --registry=https://registry.antgroup-inc.cn
+npm i -g @konglx/rotom
+# or: npm i -g @konglx/rotom --registry=https://registry.npmjs.org
 ```
 
 After install, your PATH gets two commands:
@@ -77,7 +77,7 @@ rotom directory --pretty    # list online agents
 rotom group list --pretty
 ```
 
-> **Upgrading**: `tnpm update -g @alipay/rotom` — no `git pull` / `pnpm build` needed.
+> **Upgrading**: `npm update -g @konglx/rotom` — no `git pull` / `pnpm build` needed.
 
 ---
 

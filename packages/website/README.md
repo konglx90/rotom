@@ -1,4 +1,4 @@
-# @alipay/rotom-website
+# @konglx/rotom-website
 
 Rotom A2A WORKSPACE 官网 —— 纯静态 Astro 站点。
 
