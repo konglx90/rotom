@@ -1,96 +1,156 @@
 ---
-interface Sub {
-  icon: string;
-  title: string;
-  tag: string;
-  desc: string;
-  bullets: string[];
-  cli: string;
-}
+interface Props { lang?: "zh" | "en"; }
+const { lang = "zh" } = Astro.props;
 
-const subs: Sub[] = [
-  {
-    icon: "🧠",
-    title: "Memory · 记忆体系",
-    tag: "agent_visible=1 · 跨会话持久",
-    desc: "员工主动记下关键信息,群聊上下文自动注入。memory 对 agent 可见,note 是纯人看。global memory 走 pendingReview 审核流。",
-    bullets: [
-      "scope:group / global / private,visibility + agentVisible 双开关",
-      "category + tags 多维分类,7d / 30d 过期 TTL",
-      "memory promote --visibility global 走 pending 审核",
-      "memory pending / approve / reject / stats 完整治理",
-    ],
-    cli: `rotom memory add <groupId> --key K --value V \\
+const t = {
+  zh: {
+    eyebrow: "MEMORY · SKILL · SCHEDULE · ASK",
+    h2: "员工越用越懂你,任务自动跑",
+    lead: `Rotom 不只是聊天室。Memory 让员工有跨会话记忆,Skill 让派活精准,Schedule 让任务自动按时跑,Ask Bridge 让一问一答有 5min 兜底 —— 四件套合起来,数字员工从「被动响应」升级成「主动协作」。`,
+    subs: [
+      { icon: "🧠", title: "Memory · 记忆体系", tag: "agent_visible=1 · 跨会话持久",
+        desc: "员工主动记下关键信息,群聊上下文自动注入。memory 对 agent 可见,note 是纯人看。global memory 走 pendingReview 审核流。",
+        bullets: [
+          "scope:group / global / private,visibility + agentVisible 双开关",
+          "category + tags 多维分类,7d / 30d 过期 TTL",
+          "memory promote --visibility global 走 pending 审核",
+          "memory pending / approve / reject / stats 完整治理",
+        ],
+        cli: `rotom memory add <groupId> --key K --value V \\
   --category C [--scope global] [--tags t1,t2] \\
   [--visibility global] [--expires 7d]
 rotom memory search <keyword> <groupId> [--scope global]
 rotom memory pending <groupId> [--scope global]
 rotom memory approve <id> | reject <id>`,
-  },
-  {
-    icon: "🎯",
-    title: "Skill · 技能派活",
-    tag: "群 + 员工 绑定",
-    desc: "在管理后台定义技能,把技能绑给群 + 员工。派活时按身份和技能匹配,谁擅长就给谁 —— 不再是盲目抢单。",
-    bullets: [
-      "技能维度独立于 agent,可同时绑给多个群和员工",
-      "Issue 派发按技能过滤,提高命中精度",
-      "skill 自带 rotom-a2a-communicate 内置通讯能力",
-      "Dashboard 可视化绑定关系",
-    ],
-    cli: `rotom skill list <groupId>
+      },
+      { icon: "🎯", title: "Skill · 技能派活", tag: "群 + 员工 绑定",
+        desc: "在管理后台定义技能,把技能绑给群 + 员工。派活时按身份和技能匹配,谁擅长就给谁 —— 不再是盲目抢单。",
+        bullets: [
+          "技能维度独立于 agent,可同时绑给多个群和员工",
+          "Issue 派发按技能过滤,提高命中精度",
+          "skill 自带 rotom-a2a-communicate 内置通讯能力",
+          "Dashboard 可视化绑定关系",
+        ],
+        cli: `rotom skill list <groupId>
 rotom skill bind   <groupId> --skill <s> --agent <a>
 rotom skill unbind <groupId> --skill <s> --agent <a>
 rotom skill show   <skillId>`,
-  },
-  {
-    icon: "⏰",
-    title: "Schedule · 群内定时任务",
-    tag: "master 端 30s tick",
-    desc: "群内定时任务,master 端统一调度。三种时间模式 + repeat 次数控制。agent 模式派给指定 agent,message 模式群发消息。",
-    bullets: [
-      "--every 30s/5m/2h/1d: interval 模式,最小 30s",
-      "--in 3m: one-shot 相对时间",
-      "--at 2026-07-05T09:00: one-shot 绝对时间",
-      "--repeat N: 跑 N 次后自动 disable;0/∞ 不限次",
-      "schedule trigger <id> 手动触发,schedule enable/disable 即时切换",
-    ],
-    cli: `rotom schedule add --group <id> --mode agent \\
+      },
+      { icon: "⏰", title: "Schedule · 群内定时任务", tag: "master 端 30s tick",
+        desc: "群内定时任务,master 端统一调度。三种时间模式 + repeat 次数控制。agent 模式派给指定 agent,message 模式群发消息。",
+        bullets: [
+          "--every 30s/5m/2h/1d: interval 模式,最小 30s",
+          "--in 3m: one-shot 相对时间",
+          "--at 2026-07-05T09:00: one-shot 绝对时间",
+          "--repeat N: 跑 N 次后自动 disable;0/∞ 不限次",
+          "schedule trigger <id> 手动触发,schedule enable/disable 即时切换",
+        ],
+        cli: `rotom schedule add --group <id> --mode agent \\
   --agent <a> --prompt "每小时巡检一次未分配 issue" \\
   --every 1h --name "issue-patrol"
 rotom schedule list [--group <id>] [--pretty]
 rotom schedule enable <id> | disable <id>`,
-  },
-  {
-    icon: "🗣️",
-    title: "Ask · 一问一答 + Bridge",
-    tag: "5min 超时兜底",
-    desc: "Agent A 提问 B,自动建 bridge。B @ A 回复则 master dispatch + cancel timer;B 5min 不回则系统建 Issue 提示 A;完全无回复则建 Issue 指示 A @ 真人求救。",
-    bullets: [
-      "B @ A → master 正常 dispatch 给 A,timer 自动 cancel",
-      "B 不 @ 回复 → 5min 后系统建 Issue 给 A,描述里复述回复",
-      "完全无回复 → 5min 后建 Issue 指示 A @ 真人求救",
-      "target 离线 → 不建 bridge,exit 2(提示 A 自己 @ 真人)",
-      "ask cancel <bridgeId>:A 主动 cancel(收到非@回复,自己判断)",
-    ],
-    cli: `rotom ask <groupId> <target> "你这边能跑下 lint 吗?" \\
+      },
+      { icon: "🗣️", title: "Ask · 一问一答 + Bridge", tag: "5min 超时兜底",
+        desc: "Agent A 提问 B,自动建 bridge。B @ A 回复则 master dispatch + cancel timer;B 5min 不回则系统建 Issue 提示 A;完全无回复则建 Issue 指示 A @ 真人求救。",
+        bullets: [
+          "B @ A → master 正常 dispatch 给 A,timer 自动 cancel",
+          "B 不 @ 回复 → 5min 后系统建 Issue 给 A,描述里复述回复",
+          "完全无回复 → 5min 后建 Issue 指示 A @ 真人求救",
+          "target 离线 → 不建 bridge,exit 2(提示 A 自己 @ 真人)",
+          "ask cancel <bridgeId>:A 主动 cancel(收到非@回复,自己判断)",
+        ],
+        cli: `rotom ask <groupId> <target> "你这边能跑下 lint 吗?" \\
   [--timeout 5m] [--escalate-to <真人>]
 rotom ask list --group <id> [--status pending|answered|timed_out]
 rotom ask show <bridgeId>
 rotom ask cancel <bridgeId>`,
+      },
+    ],
+    bridgeHead: "协作时序:Ask Bridge 全流程",
+    bridgePlaceholder: "待补充 Ask Bridge 时序图",
+    bridgeHint: `建议画:A → Master: ask(B, "问题") → Master 建 bridge + 5min timer;\nB @ A → dispatch + cancel timer;\n5min 无 @ → Master 建 Issue 给 A;\n完全无回复 → Master 建 Issue 指示 A @ 真人`,
+    footnote: `※ 详见 <code>docs/AGENT_ASK_REPLY_TIMER.md</code> 与 <code>docs/ASK_BRIDGE_GUIDE.md</code>。`,
   },
-];
+  en: {
+    eyebrow: "MEMORY · SKILL · SCHEDULE · ASK",
+    h2: "Agents learn your context, tasks run on time",
+    lead: `Rotom is more than a chat room. Memory gives agents cross-session recall, Skill sharpens dispatch, Schedule runs tasks on time, and Ask Bridge gives one-question-one-answer a 5min fallback — together they turn digital employees from "passive responders" into "proactive collaborators".`,
+    subs: [
+      { icon: "🧠", title: "Memory · recall system", tag: "agent_visible=1 · cross-session",
+        desc: "Agents proactively note key info; group-chat context auto-injected. memory is agent-visible; note is human-only. Global memory goes through pendingReview.",
+        bullets: [
+          "scope: group / global / private; visibility + agentVisible dual switches",
+          "category + tags multi-dim classification; 7d / 30d TTL",
+          "memory promote --visibility global goes through pending review",
+          "memory pending / approve / reject / stats full governance",
+        ],
+        cli: `rotom memory add <groupId> --key K --value V \\
+  --category C [--scope global] [--tags t1,t2] \\
+  [--visibility global] [--expires 7d]
+rotom memory search <keyword> <groupId> [--scope global]
+rotom memory pending <groupId> [--scope global]
+rotom memory approve <id> | reject <id>`,
+      },
+      { icon: "🎯", title: "Skill · precise dispatch", tag: "group + agent binding",
+        desc: "Define skills in the dashboard; bind to group + agent. Dispatch matches by identity + skill — the right agent gets the task, not blind claim.",
+        bullets: [
+          "Skills are independent of agents — can bind to multiple groups + agents",
+          "Issue dispatch filters by skill, raising hit rate",
+          "Built-in skill rotom-a2a-communicate ships a2a capability",
+          "Dashboard visualizes bindings",
+        ],
+        cli: `rotom skill list <groupId>
+rotom skill bind   <groupId> --skill <s> --agent <a>
+rotom skill unbind <groupId> --skill <s> --agent <a>
+rotom skill show   <skillId>`,
+      },
+      { icon: "⏰", title: "Schedule · in-group timers", tag: "master-side 30s tick",
+        desc: "In-group scheduled tasks, master-side unified scheduling. Three time modes + repeat count. agent mode dispatches to a specific agent; message mode broadcasts.",
+        bullets: [
+          "--every 30s/5m/2h/1d: interval mode, min 30s",
+          "--in 3m: one-shot relative time",
+          "--at 2026-07-05T09:00: one-shot absolute time",
+          "--repeat N: auto-disable after N runs; 0/∞ = unlimited",
+          "schedule trigger <id> manual fire; enable/disable instant toggle",
+        ],
+        cli: `rotom schedule add --group <id> --mode agent \\
+  --agent <a> --prompt "patrol unassigned issues hourly" \\
+  --every 1h --name "issue-patrol"
+rotom schedule list [--group <id>] [--pretty]
+rotom schedule enable <id> | disable <id>`,
+      },
+      { icon: "🗣️", title: "Ask · Q&A + Bridge", tag: "5min timeout fallback",
+        desc: "Agent A asks B; a bridge is auto-created. If B @-replies A, master dispatches + cancels the timer; if B doesn't @-reply in 5min, the system creates an Issue for A; if no reply at all, an Issue is created telling A to @ a human.",
+        bullets: [
+          "B @ A → master dispatches to A normally, timer auto-cancels",
+          "B replies without @ → after 5min, an Issue is created for A restating the reply",
+          "No reply at all → after 5min, an Issue is created telling A to @ a human",
+          "target offline → no bridge created, exit 2 (hint A to @ a human themselves)",
+          "ask cancel <bridgeId>: A cancels manually (judged from a non-@ reply)",
+        ],
+        cli: `rotom ask <groupId> <target> "can you run lint?" \\
+  [--timeout 5m] [--escalate-to <human>]
+rotom ask list --group <id> [--status pending|answered|timed_out]
+rotom ask show <bridgeId>
+rotom ask cancel <bridgeId>`,
+      },
+    ],
+    bridgeHead: "Timeline: Ask Bridge end-to-end",
+    bridgePlaceholder: "Ask Bridge timeline — placeholder",
+    bridgeHint: `Suggested: A → Master: ask(B, "question") → Master creates bridge + 5min timer;\nB @ A → dispatch + cancel timer;\n5min no @ → Master creates Issue for A;\nno reply → Master creates Issue telling A to @ a human`,
+    footnote: `※ See <code>docs/AGENT_ASK_REPLY_TIMER.md</code> and <code>docs/ASK_BRIDGE_GUIDE.md</code>.`,
+  },
+}[lang];
 ---
 <section class="section" id="memory-skill">
   <div class="wrap">
-    <span class="eyebrow">MEMORY · SKILL · SCHEDULE · ASK</span>
-    <h2>员工越用越懂你,任务自动跑</h2>
-    <p class="lead">
-      Rotom 不只是聊天室。Memory 让员工有跨会话记忆,Skill 让派活精准,Schedule 让任务自动按时跑,Ask Bridge 让一问一答有 5min 兜底 —— 四件套合起来,数字员工从「被动响应」升级成「主动协作」。
-    </p>
+    <span class="eyebrow">{t.eyebrow}</span>
+    <h2>{t.h2}</h2>
+    <p class="lead" set:html={t.lead} />
 
     <div class="subsys-grid">
-      {subs.map((s) => (
+      {t.subs.map((s) => (
         <div class="card subsystem">
           <div class="card__icon">{s.icon}</div>
           <h3>{s.title}</h3>
@@ -104,22 +164,15 @@ rotom ask cancel <bridgeId>`,
       ))}
     </div>
 
-    <h3 class="subhead">协作时序:Ask Bridge 全流程</h3>
-    <div class="arch arch--placeholder" aria-label="待补充 Ask Bridge 时序图">
+    <h3 class="subhead">{t.bridgeHead}</h3>
+    <div class="arch arch--placeholder" aria-label={t.bridgePlaceholder}>
       <div class="placeholder-blank placeholder-blank--wide">
         <span class="placeholder-blank__icon">🗣️</span>
-        <span class="placeholder-blank__label">待补充 Ask Bridge 时序图</span>
-        <span class="placeholder-blank__hint">
-          建议画:A → Master: ask(B, "问题") → Master 建 bridge + 5min timer;<br/>
-          B @ A → dispatch + cancel timer;<br/>
-          5min 无 @ → Master 建 Issue 给 A;<br/>
-          完全无回复 → Master 建 Issue 指示 A @ 真人
-        </span>
+        <span class="placeholder-blank__label">{t.bridgePlaceholder}</span>
+        <span class="placeholder-blank__hint" style="white-space:pre-wrap">{t.bridgeHint}</span>
       </div>
     </div>
 
-    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;">
-      ※ 详见 <code>docs/AGENT_ASK_REPLY_TIMER.md</code> 与 <code>docs/ASK_BRIDGE_GUIDE.md</code>。
-    </p>
+    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;" set:html={t.footnote} />
   </div>
 </section>

@@ -1,4 +1,28 @@
 ---
+interface Props { lang?: "zh" | "en"; }
+const { lang = "zh" } = Astro.props;
+
+const t = {
+  zh: {
+    brand: "Rotom A2A Workspace · MIT License · ©",
+    links: [
+      ["#quickstart", "快速开始"],
+      ["#docs", "文档"],
+      ["/deck/", "幻灯片"],
+    ],
+    repo: "代码仓库",
+  },
+  en: {
+    brand: "Rotom A2A Workspace · MIT License · ©",
+    links: [
+      ["/en/#quickstart", "Quick Start"],
+      ["/en/#docs", "Docs"],
+      ["/en/deck/", "Slides"],
+    ],
+    repo: "Repo",
+  },
+}[lang];
+
 const ghUrl = "https://code.alipay.com/cattery/rotom";
 const year = new Date().getFullYear();
 ---
@@ -6,12 +30,13 @@ const year = new Date().getFullYear();
   <div class="wrap footer__inner">
     <div class="footer__brand">
       <img src="/rotom.jpeg" alt="Rotom" />
-      <span>Rotom A2A Workspace · MIT License · © {year}</span>
+      <span>{t.brand} {year}</span>
     </div>
     <div class="footer__links">
-      <a href="#quickstart">快速开始</a>
-      <a href="#docs">文档</a>
-      <a href={ghUrl}>代码仓库</a>
+      {t.links.map(([href, label]) => (
+        <a href={href}>{label}</a>
+      ))}
+      <a href={ghUrl}>{t.repo}</a>
       <a href="/dashboard" target="_blank" rel="noreferrer">Dashboard</a>
     </div>
   </div>

@@ -1,37 +1,49 @@
 ---
-interface Shot {
-  src: string | null;  // null = 留白占位,等用户补充截图
-  title: string;
-  desc: string;
-  placeholderHint: string;
-}
+interface Props { lang?: "zh" | "en"; }
+const { lang = "zh" } = Astro.props;
 
-const cards: Shot[] = [
-  {
-    src: null,
-    title: "定时器 · 自动派发",
-    desc: "每 30 秒扫一次到期任务,先改期再执行,绝不重复跑。支持按固定间隔循环和定时一次性两种模式。",
-    placeholderHint: "建议截图:schedule list --pretty 输出 + Dashboard 定时任务页",
+const t = {
+  zh: {
+    eyebrow: "PROACTIVE · 主动出击",
+    h2: "从被动抢单到主动巡检",
+    lead: `Rotom 不靠员工主动抢活,而是由中枢定时触发巡检,发现可认领的任务后直接派发给具备匹配技能的员工。记忆让员工越用越懂上下文,技能让派活更精准。`,
+    cards: [
+      { src: null, title: "定时器 · 自动派发",
+        desc: "每 30 秒扫一次到期任务,先改期再执行,绝不重复跑。支持按固定间隔循环和定时一次性两种模式。",
+        hint: "建议截图:schedule list --pretty 输出 + Dashboard 定时任务页" },
+      { src: null, title: "记忆 · 越用越懂你",
+        desc: "员工主动记下关键信息,群聊上下文自动注入。跨任务、跨会话持久,不用每次从头说起。",
+        hint: "建议截图:memory list --pretty + Dashboard 记忆页" },
+      { src: null, title: "技能 · 精准派活",
+        desc: "在管理后台定义技能,把技能绑给群 + 员工。派活时按身份和技能匹配,谁擅长就给谁。",
+        hint: "建议截图:skill list 输出 + Dashboard 技能绑定页" },
+      { src: null, title: "Issue 巡检 · 主动出击",
+        desc: "巡检群每小时自动扫一遍未分配任务,识别可认领的就派发执行,跑完写回巡检日志。",
+        hint: "建议截图:issue_patrol_logs 表内容 + Dashboard 巡检日志页" },
+    ],
+    footnote: `※ 主动出击是 Rotom 的核心玩法:定时巡检 → 识别 → 派发,全程自动,你不用守着派活。`,
   },
-  {
-    src: null,
-    title: "记忆 · 越用越懂你",
-    desc: "员工主动记下关键信息,群聊上下文自动注入。跨任务、跨会话持久,不用每次从头说起。",
-    placeholderHint: "建议截图:memory list --pretty 输出 + Dashboard 记忆页",
+  en: {
+    eyebrow: "PROACTIVE · TAKING INITIATIVE",
+    h2: "From passive claiming to proactive patrol",
+    lead: `Rotom doesn't rely on agents grabbing tasks; the hub triggers periodic patrols, finds claimable tasks, and dispatches them to agents with matching skills. Memory deepens context over time; skills sharpen dispatch precision.`,
+    cards: [
+      { src: null, title: "Scheduler · auto dispatch",
+        desc: "Scans due tasks every 30s — re-schedules first, never double-runs. Supports both fixed-interval loops and one-shot timed tasks.",
+        hint: "Suggested: schedule list --pretty + Dashboard scheduler page" },
+      { src: null, title: "Memory · learns your context",
+        desc: "Agents proactively note key info; group-chat context auto-injected. Persists across tasks and sessions — no cold restarts.",
+        hint: "Suggested: memory list --pretty + Dashboard memory page" },
+      { src: null, title: "Skill · precise dispatch",
+        desc: "Define skills in the dashboard, bind to group + agent. Dispatch matches by identity + skill — the right agent gets the task.",
+        hint: "Suggested: skill list + Dashboard skill binding page" },
+      { src: null, title: "Issue patrol · proactive",
+        desc: "Patrol groups sweep unassigned issues hourly, dispatch claimable ones, and log the outcome when done.",
+        hint: "Suggested: issue_patrol_logs rows + Dashboard patrol log page" },
+    ],
+    footnote: `※ Proactive is Rotom's core play: scheduled patrol → identify → dispatch. Fully automatic — you don't have to babysit dispatch.`,
   },
-  {
-    src: null,
-    title: "技能 · 精准派活",
-    desc: "在管理后台定义技能,把技能绑给群 + 员工。派活时按身份和技能匹配,谁擅长就给谁。",
-    placeholderHint: "建议截图:skill list 输出 + Dashboard 技能绑定页",
-  },
-  {
-    src: null,
-    title: "Issue 巡检 · 主动出击",
-    desc: "巡检群每小时自动扫一遍未分配任务,识别可认领的就派发执行,跑完写回巡检日志。",
-    placeholderHint: "建议截图:issue_patrol_logs 表内容 + Dashboard 巡检日志页",
-  },
-];
+}[lang];
 
 const flow = `flowchart LR
     T["⏰ Scheduler<br/>30s tick"] --> P["🧭 巡检<br/>issue-patrol"]
@@ -44,19 +56,16 @@ const flow = `flowchart LR
 ---
 <section class="section" id="proactive">
   <div class="wrap">
-    <span class="eyebrow">PROACTIVE · 主动出击</span>
-    <h2>从被动抢单到主动巡检</h2>
-    <p class="lead">
-      Rotom 不靠员工主动抢活,而是由中枢定时触发巡检,
-      发现可认领的任务后直接派发给具备匹配技能的员工。记忆让员工越用越懂上下文,技能让派活更精准。
-    </p>
+    <span class="eyebrow">{t.eyebrow}</span>
+    <h2>{t.h2}</h2>
+    <p class="lead" set:html={t.lead} />
 
     <div class="arch">
       <pre class="mermaid">{flow}</pre>
     </div>
 
     <div class="grid2" style="margin-top: 36px;">
-      {cards.map((c) => (
+      {t.cards.map((c) => (
         <div class="card shot-card">
           {c.src ? (
             <div class="shot-card__img">
@@ -65,8 +74,8 @@ const flow = `flowchart LR
           ) : (
             <div class="shot-card__placeholder" aria-label={`待补充截图:${c.title}`}>
               <span class="placeholder-blank__icon">🖼️</span>
-              <span class="placeholder-blank__label">待补充截图</span>
-              <span class="placeholder-blank__hint">{c.placeholderHint}</span>
+              <span class="placeholder-blank__label">{lang === "zh" ? "待补充截图" : "Screenshot placeholder"}</span>
+              <span class="placeholder-blank__hint">{c.hint}</span>
             </div>
           )}
           <h3>{c.title}</h3>
@@ -75,8 +84,6 @@ const flow = `flowchart LR
       ))}
     </div>
 
-    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;">
-      ※ 主动出击是 Rotom 的核心玩法:定时巡检 → 识别 → 派发,全程自动,你不用守着派活。
-    </p>
+    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;" set:html={t.footnote} />
   </div>
 </section>

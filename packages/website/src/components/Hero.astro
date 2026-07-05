@@ -1,37 +1,69 @@
 ---
+interface Props { lang?: "zh" | "en"; }
+const { lang = "zh" } = Astro.props;
+
+const t = {
+  zh: {
+    eyebrow: "A2A WORKSPACE · MESH NETWORK",
+    titleHtml: `把任意 CLI 工具<br />变成可<em>协作</em>的数字员工`,
+    desc: "Rotom 是一个中心化的数字员工协作网络。默认形态是<em>个人 OPC</em>:一命令拉起 master + executor,扫描本机 claude / codex / openclaw / hermes / pi 自动注册成 agent,本机走 loopback 信任、免 token。需要跨机协作时再<em>联邦成团队</em>,星型拓扑、数据归属本地、移动电脑友好。",
+    ctaPrimary: "快速开始 →",
+    ctaFederation: "联邦玩法",
+    ctaCode: "查看代码",
+    stats: [
+      ["1 命令", "OPC 开箱即用,免 token"],
+      ["多 CLI", "claude / codex / hermes / openclaw / pi"],
+      ["记忆 + 技能", "越用越懂你,精准派活"],
+      ["主动出击", "巡检 + 定时 + Ask Bridge"],
+    ],
+    placeholderLabel: "待补充 Hero 主视觉",
+    placeholderHint: "建议尺寸 1120×700,放 dashboard 全景或 mesh 拓扑图",
+  },
+  en: {
+    eyebrow: "A2A WORKSPACE · MESH NETWORK",
+    titleHtml: `Turn any CLI tool<br />into <em>collaborative</em> digital employees`,
+    desc: "Rotom is a centralized digital-employee collaboration network. The default form is <em>personal OPC</em>: one command brings up master + executor, scans local claude / codex / openclaw / hermes / pi and auto-registers them as agents, with loopback trust — no token needed. When you need cross-machine collaboration, <em>federate into a team</em>: star topology, data stays local, mobile-friendly.",
+    ctaPrimary: "Quick Start →",
+    ctaFederation: "Federation",
+    ctaCode: "View Code",
+    stats: [
+      ["1 command", "OPC out-of-the-box, no token"],
+      ["Multi-CLI", "claude / codex / hermes / openclaw / pi"],
+      ["Memory + Skill", "Learns your context, precise dispatch"],
+      ["Proactive", "Patrol + Schedule + Ask Bridge"],
+    ],
+    placeholderLabel: "Hero visual placeholder",
+    placeholderHint: "Suggested 1120×700 — dashboard overview or mesh topology",
+  },
+}[lang];
+
 const ghUrl = "https://code.alipay.com/cattery/rotom";
+const federationHref = lang === "zh" ? "#federation" : "/en/#federation";
+const quickstartHref = lang === "zh" ? "#quickstart" : "/en/#quickstart";
 ---
 <section class="hero section--first">
   <div class="wrap">
     <div class="hero__grid">
       <div>
-        <span class="eyebrow">A2A WORKSPACE · MESH NETWORK</span>
-        <h1 class="hero__title">
-          把任意 CLI 工具<br />
-          变成可<em>协作</em>的数字员工
-        </h1>
-        <p class="hero__desc">
-          Rotom 是一个中心化的数字员工协作网络。默认形态是<em>个人 OPC</em>:一命令拉起 master + executor,
-          扫描本机 claude / codex / openclaw / hermes / pi 自动注册成 agent,本机走 loopback 信任、免 token。
-          需要跨机协作时再<em>联邦成团队</em>,星型拓扑、数据归属本地、移动电脑友好。
-        </p>
+        <span class="eyebrow">{t.eyebrow}</span>
+        <h1 class="hero__title" set:html={t.titleHtml} />
+        <p class="hero__desc" set:html={t.desc} />
         <div class="hero__cta">
-          <a href="#quickstart" class="btn btn--primary">快速开始 →</a>
-          <a href="#federation" class="btn btn--ghost">联邦玩法</a>
-          <a href={ghUrl} class="btn btn--ghost" target="_blank" rel="noreferrer">查看代码</a>
+          <a href={quickstartHref} class="btn btn--primary">{t.ctaPrimary}</a>
+          <a href={federationHref} class="btn btn--ghost">{t.ctaFederation}</a>
+          <a href={ghUrl} class="btn btn--ghost" target="_blank" rel="noreferrer">{t.ctaCode}</a>
         </div>
         <div class="hero__stats">
-          <div class="hero__stat"><div class="n">1 命令</div><div class="l">OPC 开箱即用,免 token</div></div>
-          <div class="hero__stat"><div class="n">多 CLI</div><div class="l">claude / codex / hermes / openclaw / pi</div></div>
-          <div class="hero__stat"><div class="n">记忆 + 技能</div><div class="l">越用越懂你,精准派活</div></div>
-          <div class="hero__stat"><div class="n">主动出击</div><div class="l">巡检 + 定时 + Ask Bridge</div></div>
+          {t.stats.map(([n, l]) => (
+            <div class="hero__stat"><div class="n">{n}</div><div class="l">{l}</div></div>
+          ))}
         </div>
       </div>
-      <div class="hero__shot hero__shot--placeholder" aria-label="待补充 Hero 主视觉">
+      <div class="hero__shot hero__shot--placeholder" aria-label={t.placeholderLabel}>
         <div class="placeholder-blank">
           <span class="placeholder-blank__icon">🖼️</span>
-          <span class="placeholder-blank__label">待补充 Hero 主视觉</span>
-          <span class="placeholder-blank__hint">建议尺寸 1120×700,放 dashboard 全景或 mesh 拓扑图</span>
+          <span class="placeholder-blank__label">{t.placeholderLabel}</span>
+          <span class="placeholder-blank__hint">{t.placeholderHint}</span>
         </div>
       </div>
     </div>

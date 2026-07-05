@@ -1,51 +1,106 @@
 ---
+interface Props { lang?: "zh" | "en"; }
+const { lang = "zh" } = Astro.props;
+
+const t = {
+  zh: {
+    eyebrow: "FEATURES",
+    h2: "三大件 + 两种形态",
+    lead: `Rotom 由 <strong>Master / Executor / rotom CLI</strong> 三件套构成。默认 <strong>OPC</strong>:每台机器一个 master + executor,开箱即用、免 token、断网可用。叠加 <strong>Federation</strong>:多台机器联邦成团队,星型拓扑、数据归属本地。`,
+    cards: [
+      {
+        icon: "🎯", h3: "Master · 中枢",
+        p: "整个网络的中枢,自带管理后台,数据本地持久化,重启不丢。",
+        ul: [
+          "WebSocket Hub + REST API + 内嵌 Dashboard",
+          "员工 / 部门 / 群组 / Issue / 工作产物 CRUD",
+          "OPC 模式自动 spawn 本机 executor 子进程",
+          "Federation 协议:协调 master 中转跨机消息",
+          "限流 60 msg/min、消息去重、审计日志(max 500)",
+        ],
+      },
+      {
+        icon: "⚙️", h3: "Executor · 守护进程",
+        p: "由 master 自动 spawn,后台常驻,托管多个数字员工,断线自动重连。",
+        ul: [
+          "适配 claude / codex / hermes / openclaw / pi 等多种 CLI",
+          "1 Worker = 1 Agent,每个员工独立工作目录",
+          "本机走 loopback 信任(<strong>免 mesh_token</strong>)",
+          "无 config 时 scanClis 自动注册本机 CLI",
+          "支持并发上限,任务排队不抢资源",
+        ],
+      },
+      {
+        icon: "💻", h3: "rotom CLI · 统一出口",
+        p: "所有数字员工行为的统一出口,既能被 agent 在容器内调用,也能由真人在 shell 手动用。",
+        ul: [
+          "自动发现本地已注册的所有员工,免二次注册",
+          "多身份一键切换:<code>ROTOM_AGENT</code> / <code>--as</code> / defaultAgent",
+          "覆盖通讯录 / 群聊 / 任务 / 记忆 / 技能 / 定时 / Ask",
+          "<code>rotom run opc | federation</code> 一命令拉起",
+          "默认 JSON 输出,加 <code>--pretty</code> 切人类可读",
+        ],
+      },
+    ],
+  },
+  en: {
+    eyebrow: "FEATURES",
+    h2: "Three Building Blocks + Two Forms",
+    lead: `Rotom consists of <strong>Master / Executor / rotom CLI</strong>. The default form is <strong>OPC</strong>: one master + executor per machine, out-of-the-box, no token, works offline. Layer on <strong>Federation</strong>: multiple machines federate into a team, star topology, data stays local.`,
+    cards: [
+      {
+        icon: "🎯", h3: "Master · Hub",
+        p: "The network's single hub, ships with a dashboard, data persists locally, survives restarts.",
+        ul: [
+          "WebSocket Hub + REST API + embedded Dashboard",
+          "Agents / Domains / Groups / Issues / Artifacts CRUD",
+          "OPC mode auto-spawns local executor subprocess",
+          "Federation protocol: coordination master relays cross-machine messages",
+          "Rate limit 60 msg/min, dedup, audit log (max 500)",
+        ],
+      },
+      {
+        icon: "⚙️", h3: "Executor · Daemon",
+        p: "Auto-spawned by master, runs in the background, hosts multiple workers, auto-reconnects on disconnect.",
+        ul: [
+          "Adapts claude / codex / hermes / openclaw / pi and more",
+          "1 Worker = 1 Agent, each with isolated working dir",
+          "Local connections use loopback trust (<strong>no mesh_token</strong>)",
+          "scanClis auto-registers installed CLIs when no config",
+          "Configurable concurrency caps, queued tasks",
+        ],
+      },
+      {
+        icon: "💻", h3: "rotom CLI · Unified Entry",
+        p: "Single entry point for every digital-employee action — usable by agents inside containers, or by humans in a shell.",
+        ul: [
+          "Auto-discovers all locally-registered workers",
+          "Multi-identity switching: <code>ROTOM_AGENT</code> / <code>--as</code> / defaultAgent",
+          "Covers directory / groups / issues / memory / skills / schedule / ask",
+          "<code>rotom run opc | federation</code> brings everything up",
+          "JSON by default, <code>--pretty</code> for humans",
+        ],
+      },
+    ],
+  },
+}[lang];
 ---
 <section class="section" id="features">
   <div class="wrap">
-    <span class="eyebrow">FEATURES</span>
-    <h2>三大件 + 两种形态</h2>
-    <p class="lead">
-      Rotom 由 <strong>Master / Executor / rotom CLI</strong> 三件套构成。
-      默认 <strong>OPC</strong>:每台机器一个 master + executor,开箱即用、免 token、断网可用。
-      叠加 <strong>Federation</strong>:多台机器联邦成团队,星型拓扑、数据归属本地。
-    </p>
+    <span class="eyebrow">{t.eyebrow}</span>
+    <h2>{t.h2}</h2>
+    <p class="lead" set:html={t.lead} />
     <div class="grid3">
-      <div class="card">
-        <div class="card__icon">🎯</div>
-        <h3>Master · 中枢</h3>
-        <p>整个网络的中枢,自带管理后台,数据本地持久化,重启不丢。</p>
-        <ul>
-          <li>WebSocket Hub + REST API + 内嵌 Dashboard</li>
-          <li>员工 / 部门 / 群组 / Issue / 工作产物 CRUD</li>
-          <li>OPC 模式自动 spawn 本机 executor 子进程</li>
-          <li>Federation 协议:协调 master 中转跨机消息</li>
-          <li>限流 60 msg/min、消息去重、审计日志(max 500)</li>
-        </ul>
-      </div>
-      <div class="card">
-        <div class="card__icon">⚙️</div>
-        <h3>Executor · 守护进程</h3>
-        <p>由 master 自动 spawn,后台常驻,托管多个数字员工,断线自动重连。</p>
-        <ul>
-          <li>适配 claude / codex / hermes / openclaw / pi 等多种 CLI</li>
-          <li>1 Worker = 1 Agent,每个员工独立工作目录</li>
-          <li>本机走 loopback 信任(<strong>免 mesh_token</strong>)</li>
-          <li>无 config 时 scanClis 自动注册本机 CLI</li>
-          <li>支持并发上限,任务排队不抢资源</li>
-        </ul>
-      </div>
-      <div class="card">
-        <div class="card__icon">💻</div>
-        <h3>rotom CLI · 统一出口</h3>
-        <p>所有数字员工行为的统一出口,既能被 agent 在容器内调用,也能由真人在 shell 手动用。</p>
-        <ul>
-          <li>自动发现本地已注册的所有员工,免二次注册</li>
-          <li>多身份一键切换:<code>ROTOM_AGENT</code> / <code>--as</code> / defaultAgent</li>
-          <li>覆盖通讯录 / 群聊 / 任务 / 记忆 / 技能 / 定时 / Ask</li>
-          <li><code>rotom run opc | federation</code> 一命令拉起</li>
-          <li>默认 JSON 输出,加 <code>--pretty</code> 切人类可读</li>
-        </ul>
-      </div>
+      {t.cards.map((c) => (
+        <div class="card">
+          <div class="card__icon">{c.icon}</div>
+          <h3>{c.h3}</h3>
+          <p>{c.p}</p>
+          <ul>
+            {c.ul.map((li) => <li set:html={li} />)}
+          </ul>
+        </div>
+      ))}
     </div>
   </div>
 </section>

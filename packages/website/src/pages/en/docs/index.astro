@@ -1,0 +1,84 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../../layouts/Base.astro";
+
+const HIDDEN = [
+  /^REFACTOR_BACKLOG$/,
+  /^review$/,
+  /^toolbox-tab-reorder$/,
+  /^codex-sandbox-network-blocked$/,
+  /^minimax-connection-error$/,
+  /^claude-tag\//,
+  /^infos\//,
+];
+const isHidden = (id: string) => HIDDEN.some((re) => re.test(id));
+
+const all = await getCollection("docsEn");
+const docs = all
+  .filter((d) => !isHidden(d.id))
+  .sort((a, b) => a.id.localeCompare(b.id));
+
+function titleOf(id: string): string {
+  return id.replace(/\//g, " · ").replace(/-/g, " ");
+}
+
+const groups = [
+  { match: /INSTALL|README|FEDERATION|QUICK_REF/, title: "Setup / Config" },
+  { match: /AGENT_USER_GUIDE|AGENT_WHITEBOX|ASK_BRIDGE|AGENT_ASK_REPLY/, title: "Agent Collaboration" },
+  { match: /GROUP_CHAT|DEV_DELIVERY/, title: "Group Chat / Workflow" },
+];
+const grouped = groups.map((g) => ({
+  ...g,
+  items: docs.filter((d) => g.match.test(d.id)),
+}));
+const leftover = docs.filter((d) => !groups.some((g) => g.match.test(d.id)));
+---
+<Base lang="en" title="Docs · Rotom">
+  <section class="section section--first" style="padding-top:48px;">
+    <div class="wrap">
+      <span class="eyebrow">DOCS INDEX</span>
+      <h1>Docs Center</h1>
+      <p class="lead">
+        All docs ship with the repo, sourced from <code>/docs/en/*.md</code>. Click any entry to read online (supports mermaid / tables / code blocks).
+      </p>
+
+      {grouped.map((g) => g.items.length > 0 && (
+        <div class="doc-group">
+          <h2 class="subhead">{g.title}</h2>
+          <div class="docs">
+            {g.items.map((d) => (
+              <a class="doc" href={`/en/docs/${d.id}/`}>
+                <h4>{d.data.title || titleOf(d.id)}</h4>
+                <p>{d.data.description || `docs/en/${d.id}.md`}</p>
+                <span class="doc__ext">Read →</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {leftover.length > 0 && (
+        <div class="doc-group">
+          <h2 class="subhead">Other</h2>
+          <div class="docs">
+            {leftover.map((d) => (
+              <a class="doc" href={`/en/docs/${d.id}/`}>
+                <h4>{d.data.title || titleOf(d.id)}</h4>
+                <p>{d.data.description || `docs/en/${d.id}.md`}</p>
+                <span class="doc__ext">Read →</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p style="margin-top:32px;color:var(--text-mute);font-size:13px;">
+        ※ Some internal docs (REFACTOR_BACKLOG / review / incident notes) are not listed here but remain viewable in the repo's <code>/docs/</code>.
+      </p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .doc-group { margin-bottom: 32px; }
+</style>

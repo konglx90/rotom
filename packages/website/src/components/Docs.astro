@@ -1,37 +1,67 @@
 ---
-// 站内文档页(由 Astro content collection 渲染 /docs/<id>/)
-// 这里展示官网首页"文档"区块的精选入口;完整列表见 /docs/
-const featured = [
-  { href: "/docs/install/", title: "INSTALL", desc: "完整安装手册 · 三件套构建与首次启动" },
-  { href: "/docs/federation/", title: "FEDERATION", desc: "OPC + Federation 玩法 · 协调/member/standalone 三种角色" },
-  { href: "/docs/agent_user_guide/", title: "AGENT_USER_GUIDE", desc: "Agent 协作用户指南 · 群聊 / Issue / Ask 全流程" },
-  { href: "/docs/agent_whitebox/", title: "AGENT_WHITEBOX", desc: "Agent 白盒机制 · 任务可观察性设计" },
-  { href: "/docs/ask_bridge_guide/", title: "ASK_BRIDGE_GUIDE", desc: "Ask Bridge 完整说明 · 一问一答 + 5min 超时兜底" },
-  { href: "/docs/group_chat_architecture/", title: "GROUP_CHAT_ARCHITECTURE", desc: "群聊架构 · 消息路由 / 限流 / 已读 / 归档" },
-  { href: "/docs/group_chat_render_perf/", title: "GROUP_CHAT_RENDER_PERF", desc: "群聊渲染性能优化 · 虚拟滚动与增量提交" },
-  { href: "/docs/dev_delivery_workflow/", title: "DEV_DELIVERY_WORKFLOW", desc: "研发交付工作流 · Issue 全生命周期 SOP" },
-  { href: "/docs/quick_ref/", title: "QUICK_REF", desc: "Issue / 协作 / 群消息 三种场景速查" },
-];
+interface Props { lang?: "zh" | "en"; }
+const { lang = "zh" } = Astro.props;
+
+const t = {
+  zh: {
+    eyebrow: "DOCS · 深入阅读",
+    h2: "所有文档随仓库一同发布",
+    lead: `官网 <a href="/docs/">文档中心</a> 由仓库根 <code>/docs/*.md</code> 自动渲染,支持 mermaid 图表 / 表格 / 代码块。下面是精选入口。`,
+    featured: [
+      ["/docs/install/", "INSTALL", "完整安装手册 · 三件套构建与首次启动"],
+      ["/docs/federation/", "FEDERATION", "OPC + Federation 玩法 · 协调/member/standalone 三种角色"],
+      ["/docs/agent_user_guide/", "AGENT_USER_GUIDE", "Agent 协作用户指南 · 群聊 / Issue / Ask 全流程"],
+      ["/docs/agent_whitebox/", "AGENT_WHITEBOX", "Agent 白盒机制 · 任务可观察性设计"],
+      ["/docs/ask_bridge_guide/", "ASK_BRIDGE_GUIDE", "Ask Bridge 完整说明 · 一问一答 + 5min 超时兜底"],
+      ["/docs/group_chat_architecture/", "GROUP_CHAT_ARCHITECTURE", "群聊架构 · 消息路由 / 限流 / 已读 / 归档"],
+      ["/docs/group_chat_render_perf/", "GROUP_CHAT_RENDER_PERF", "群聊渲染性能优化 · 虚拟滚动与增量提交"],
+      ["/docs/dev_delivery_workflow/", "DEV_DELIVERY_WORKFLOW", "研发交付工作流 · Issue 全生命周期 SOP"],
+      ["/docs/quick_ref/", "QUICK_REF", "Issue / 协作 / 群消息 三种场景速查"],
+    ],
+    allTitle: "全部文档 →",
+    allDesc: "12+ 篇 · 文档索引页",
+    allCta: "进入文档中心 →",
+  },
+  en: {
+    eyebrow: "DOCS · DEEP DIVES",
+    h2: "Docs ship with the repo",
+    lead: `The website <a href="/en/docs/">docs center</a> is auto-rendered from <code>/docs/en/*.md</code> in the repo — supports mermaid diagrams / tables / code blocks. Featured entries below.`,
+    featured: [
+      ["/en/docs/install/", "INSTALL", "Full install manual — three-piece build & first launch"],
+      ["/en/docs/federation/", "FEDERATION", "OPC + Federation — coordinator/member/standalone roles"],
+      ["/en/docs/agent_user_guide/", "AGENT_USER_GUIDE", "Agent collaboration guide — group / Issue / Ask full flow"],
+      ["/en/docs/agent_whitebox/", "AGENT_WHITEBOX", "Agent white-box mechanism — task observability"],
+      ["/en/docs/ask_bridge_guide/", "ASK_BRIDGE_GUIDE", "Ask Bridge full spec — Q&A + 5min timeout fallback"],
+      ["/en/docs/group_chat_architecture/", "GROUP_CHAT_ARCHITECTURE", "Group chat architecture — routing / rate-limit / read / archive"],
+      ["/en/docs/group_chat_render_perf/", "GROUP_CHAT_RENDER_PERF", "Group chat render perf — virtual scroll + incremental commit"],
+      ["/en/docs/dev_delivery_workflow/", "DEV_DELIVERY_WORKFLOW", "Dev delivery workflow — Issue lifecycle SOP"],
+      ["/en/docs/quick_ref/", "QUICK_REF", "Issue / collab / group message — three scenarios cheat sheet"],
+    ],
+    allTitle: "All docs →",
+    allDesc: "12+ entries · docs index",
+    allCta: "Enter docs center →",
+  },
+}[lang];
+
+const indexPath = lang === "zh" ? "/docs/" : "/en/docs/";
 ---
 <section class="section" id="docs">
   <div class="wrap">
-    <span class="eyebrow">DOCS · 深入阅读</span>
-    <h2>所有文档随仓库一同发布</h2>
-    <p class="lead">
-      官网 <a href="/docs/">文档中心</a> 由仓库根 <code>/docs/*.md</code> 自动渲染,支持 mermaid 图表 / 表格 / 代码块。下面是精选入口。
-    </p>
+    <span class="eyebrow">{t.eyebrow}</span>
+    <h2>{t.h2}</h2>
+    <p class="lead" set:html={t.lead} />
     <div class="docs">
-      {featured.map((d) => (
-        <a class="doc" href={d.href}>
-          <h4>{d.title}</h4>
-          <p>{d.desc}</p>
-          <span class="doc__ext">查看文档 →</span>
+      {t.featured.map(([href, title, desc]) => (
+        <a class="doc" href={href}>
+          <h4>{title}</h4>
+          <p>{desc}</p>
+          <span class="doc__ext">{lang === "zh" ? "查看文档" : "Read doc"} →</span>
         </a>
       ))}
-      <a class="doc doc--index" href="/docs/">
-        <h4>全部文档 →</h4>
-        <p>18+ 篇 · 文档索引页</p>
-        <span class="doc__ext">进入文档中心 →</span>
+      <a class="doc doc--index" href={indexPath}>
+        <h4>{t.allTitle}</h4>
+        <p>{t.allDesc}</p>
+        <span class="doc__ext">{t.allCta}</span>
       </a>
     </div>
   </div>

@@ -1,66 +1,103 @@
 ---
-const steps = [
-  {
-    n: 1,
-    title: "全局安装(无需克隆)",
-    code: `# 任选一种包管理器,二进制 mesh-master + rotom 全局可用
+interface Props { lang?: "zh" | "en"; }
+const { lang = "zh" } = Astro.props;
+
+const t = {
+  zh: {
+    eyebrow: "QUICK START",
+    h2: "5 步跑起来",
+    lead: `最短路径 —— 一行 <code>tnpm i -g @alipay/rotom</code> 装好,一行 <code>rotom run opc</code> 跑起来。完整安装文档见 <a href="/docs/install/">INSTALL</a>,联邦玩法见 <a href="#federation">Federation 章节</a>。`,
+    steps: [
+      { n: 1, title: "全局安装(无需克隆)",
+        code: `# 任选一种包管理器,二进制 mesh-master + rotom 全局可用
 tnpm i -g @alipay/rotom
 # 或:npm i -g @alipay/rotom
 # 验证:rotom --version && mesh-master --help`,
-    desc: "包内已预编译 master + 内嵌 dashboard,无需 git clone / build",
-  },
-  {
-    n: 2,
-    title: "启动 OPC(默认)",
-    code: `rotom run opc
+        desc: "包内已预编译 master + 内嵌 dashboard,无需 git clone / build" },
+      { n: 2, title: "启动 OPC(默认)",
+        code: `rotom run opc
 # = mesh-master + 自动 spawn executor + 默认 agent
 # 浏览器打开 http://localhost:28800/dashboard
 # 首次启动日志里打印 dashboard 随机密码`,
-    desc: "本机走 loopback 信任,免 mesh_token;executor 自动扫描 claude/codex/hermes",
-  },
-  {
-    n: 3,
-    title: "(可选)联邦成团队",
-    code: `# 协调 master(稳定地址机器)
+        desc: "本机走 loopback 信任,免 mesh_token;executor 自动扫描 claude/codex/hermes" },
+      { n: 3, title: "(可选)联邦成团队",
+        code: `# 协调 master(稳定地址机器)
 rotom run federation
 # = ROTOM_MASTER_ROLE=coordination mesh-master start
 
 # member master(在另一台)
 # Dashboard → 团队页 → 填协调 master 地址 → 加入
 # 或预先写 ~/.rotom/team.json`,
-    desc: "星型拓扑,member 主动 outbound 连协调,数据归属本地",
-  },
-  {
-    n: 4,
-    title: "登录 Dashboard",
-    code: `# ① 打开 http://localhost:28800/dashboard
+        desc: "星型拓扑,member 主动 outbound 连协调,数据归属本地" },
+      { n: 4, title: "登录 Dashboard",
+        code: `# ① 打开 http://localhost:28800/dashboard
 # ② 日志里复制随机生成的 admin 密码
 # ③ 员工管理 → 看 executor 自动注册的 agent
 #    (claude-<hostname> / codex-<hostname> / ...)`,
-    desc: "executor scanClis 自动注册本机 CLI,无需手动建 agent",
-  },
-  {
-    n: 5,
-    title: "发个协作消息",
-    code: `rotom directory --pretty       # 列出在线员工
+        desc: "executor scanClis 自动注册本机 CLI,无需手动建 agent" },
+      { n: 5, title: "发个协作消息",
+        code: `rotom directory --pretty       # 列出在线员工
 rotom group list --pretty
 rotom issue create <groupId> \\
   --title "修个 bug" \\
   --description "..." \\
   --priority high --assignee <agent> --run`,
-    desc: "Issue 创建即派发,agent 自动抢单执行",
+        desc: "Issue 创建即派发,agent 自动抢单执行" },
+    ],
+    footnote: `※ <code>rotom run</code> 是 v2.20 新增的一站式入口;无需 git clone,直接 tnpm 全局装就能用。源码开发请见 <a href="/docs/install/">源码安装章节</a>。`,
   },
-];
+  en: {
+    eyebrow: "QUICK START",
+    h2: "5 steps to running",
+    lead: `Shortest path — one line of <code>tnpm i -g @alipay/rotom</code> to install, one line of <code>rotom run opc</code> to start. Full install doc at <a href="/en/docs/install/">INSTALL</a>; federation in <a href="#federation">the Federation section</a>.`,
+    steps: [
+      { n: 1, title: "Install globally (no clone)",
+        code: `# Pick a package manager — mesh-master + rotom binaries go on PATH
+tnpm i -g @alipay/rotom
+# or: npm i -g @alipay/rotom
+# verify: rotom --version && mesh-master --help`,
+        desc: "Pre-built master + embedded dashboard — no git clone / build" },
+      { n: 2, title: "Start OPC (default)",
+        code: `rotom run opc
+# = mesh-master + auto-spawn executor + default agent
+# Open http://localhost:28800/dashboard
+# First-run logs print a random dashboard password`,
+        desc: "Local loopback trust, no mesh_token; executor auto-scans claude/codex/hermes" },
+      { n: 3, title: "(optional) Federate into a team",
+        code: `# Coordinator master (stable-address machine)
+rotom run federation
+# = ROTOM_MASTER_ROLE=coordination mesh-master start
+
+# Member master (another machine)
+# Dashboard → Team page → enter coordinator address → Join
+# Or pre-write ~/.rotom/team.json`,
+        desc: "Star topology; members connect outbound to coordinator; data stays local" },
+      { n: 4, title: "Sign in to Dashboard",
+        code: `# ① Open http://localhost:28800/dashboard
+# ② Copy the random admin password from logs
+# ③ Agent management → see auto-registered agents
+#    (claude-<hostname> / codex-<hostname> / ...)`,
+        desc: "executor scanClis auto-registers local CLIs — no manual agent setup" },
+      { n: 5, title: "Send a collab message",
+        code: `rotom directory --pretty       # list online agents
+rotom group list --pretty
+rotom issue create <groupId> \\
+  --title "fix a bug" \\
+  --description "..." \\
+  --priority high --assignee <agent> --run`,
+        desc: "Issue is dispatched on create; agent claims and executes" },
+    ],
+    footnote: `※ <code>rotom run</code> is a v2.20 one-shot entry; no git clone needed — install via tnpm and go. For source dev see <a href="/en/docs/install/">source install</a>.`,
+  },
+}[lang];
 ---
 <section class="section" id="quickstart">
   <div class="wrap">
-    <span class="eyebrow">QUICK START</span>
-    <h2>5 步跑起来</h2>
-    <p class="lead">
-      最短路径 —— 一行 <code>tnpm i -g @alipay/rotom</code> 装好,一行 <code>rotom run opc</code> 跑起来。完整安装文档见 <a href="/docs/install/">INSTALL</a>,联邦玩法见 <a href="#federation">Federation 章节</a>。
-    </p>
+    <span class="eyebrow">{t.eyebrow}</span>
+    <h2>{t.h2}</h2>
+    <p class="lead" set:html={t.lead} />
     <div class="steps">
-      {steps.map((s) => (
+      {t.steps.map((s) => (
         <div class="step">
           <span class="step__num">{s.n}</span>
           <h4>{s.title}</h4>
@@ -69,8 +106,6 @@ rotom issue create <groupId> \\
         </div>
       ))}
     </div>
-    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;">
-      ※ <code>rotom run</code> 是 v2.20 新增的一站式入口;无需 git clone,直接 tnpm 全局装就能用。源码开发请见 <a href="/docs/install/">源码安装章节</a>。
-    </p>
+    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;" set:html={t.footnote} />
   </div>
 </section>

@@ -2,20 +2,62 @@
 import "../styles/global.css";
 import Footer from "../components/Footer.astro";
 
+type Lang = "zh" | "en";
+
 interface Props {
   title?: string;
   description?: string;
-  /** 是否加载 mermaid 客户端渲染(页面含 <pre class="mermaid"> 时开启) */
+  lang?: Lang;
+  /** 是否加载 mermaid 客户端渲染 */
   withMermaid?: boolean;
 }
+
+const t = {
+  zh: {
+    brandTag: "A2A Workspace",
+    nav: [
+      ["#features", "特性"],
+      ["#federation", "联邦"],
+      ["#proactive", "主动出击"],
+      ["#architecture", "架构"],
+      ["#cli-ref", "CLI"],
+      ["#quickstart", "快速开始"],
+      ["/docs/", "文档"],
+      ["/deck/", "幻灯片"],
+    ],
+    langSwitch: "EN",
+    langSwitchHref: "/en/",
+  },
+  en: {
+    brandTag: "A2A Workspace",
+    nav: [
+      ["/en/#features", "Features"],
+      ["/en/#federation", "Federation"],
+      ["/en/#proactive", "Proactive"],
+      ["/en/#architecture", "Architecture"],
+      ["/en/#cli-ref", "CLI"],
+      ["/en/#quickstart", "Quick Start"],
+      ["/en/docs/", "Docs"],
+      ["/deck/", "Slides (中文)"],
+    ],
+    langSwitch: "中文",
+    langSwitchHref: "/",
+  },
+};
+
 const {
-  title = "Rotom · 数字员工 Mesh",
-  description = "一个中心化的 Agent 协作网络。Master 中转 + Executor 抢单 + rotom CLI 调用,把 claude / codex / hermes / openclaw 等专业 CLI 工具封装成可协作的数字员工。",
+  title = "Rotom · Digital Employee Mesh",
+  description = "A centralized digital-employee collaboration network. Master relays + Executor claims + rotom CLI — wraps claude / codex / hermes / openclaw into collaborating digital employees.",
+  lang = "zh",
   withMermaid = false,
 } = Astro.props;
+
+const tr = t[lang];
+const htmlLang = lang === "zh" ? "zh-CN" : "en";
 ---
+
 <!doctype html>
-<html lang="zh-CN">
+<html lang={htmlLang}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -29,20 +71,16 @@ const {
   <body>
     <nav class="nav">
       <div class="wrap nav__inner">
-        <a href="/" class="brand">
+        <a href={lang === "zh" ? "/" : "/en/"} class="brand">
           <img src="/rotom.jpeg" alt="Rotom" class="brand__logo" />
           <span class="brand__name">Rotom</span>
-          <span class="brand__tag">A2A Workspace</span>
+          <span class="brand__tag">{tr.brandTag}</span>
         </a>
         <div class="nav__links">
-          <a href="/#features">特性</a>
-          <a href="/#federation">联邦</a>
-          <a href="/#proactive">主动出击</a>
-          <a href="/#architecture">架构</a>
-          <a href="/#cli-ref">CLI</a>
-          <a href="/#quickstart">快速开始</a>
-          <a href="/docs/">文档</a>
-          <a href="/deck/">幻灯片</a>
+          {tr.nav.map(([href, label]) => (
+            <a href={href}>{label}</a>
+          ))}
+          <a href={tr.langSwitchHref} class="nav__lang" aria-label="Switch language">{tr.langSwitch}</a>
           <a href="https://code.alipay.com/cattery/rotom" class="nav__cta">GitHub</a>
         </div>
       </div>
@@ -52,7 +90,7 @@ const {
       <slot />
     </main>
 
-    <Footer />
+    <Footer lang={lang} />
 
     {withMermaid && (
       <script type="module">
@@ -82,3 +120,19 @@ const {
     )}
   </body>
 </html>
+
+<style>
+  .nav__lang {
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 999px;
+    color: var(--text) !important;
+    font-size: 13px;
+    font-weight: 600;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .nav__lang:hover {
+    border-color: var(--accent);
+    background: rgba(124, 156, 255, 0.08);
+  }
+</style>
