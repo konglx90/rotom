@@ -45,6 +45,7 @@ import { cmdExecutor } from "./executor.js";
 import { cmdInit } from "./init.js";
 import { cmdJoin } from "./join.js";
 import { cmdRepo } from "./repo.js";
+import { cmdRun } from "./run.js";
 
 const HELP = `rotom — Mesh CLI
 
@@ -192,6 +193,10 @@ Ask (Agent A 提问 B + 5min 超时兜底 bridge,详见 docs/AGENT_ASK_REPLY_TIM
   ask cancel <bridgeId>                    A 主动 cancel(收到非@回复,自己判断是回复了)
 
 Process lifecycle (local daemon control — do not require an agent):
+  run <opc|federation> [opts]     一站式启动 master + executor(等价 bin/rotom-up.sh start)
+    opc           OPC 模式(默认,本机 master + 自动 spawn executor)
+    federation    协调 master(注入 ROTOM_MASTER_ROLE=coordination),作为 federation 中心节点
+    通用选项: --port N | --host A | --data D | --no-build | --dev
   master <start|stop|restart|status> [--daemon] [--port N] [--host A] [--data D] [--dev]
   master:start | master:stop | master:status | master:restart   (alias)
   executor [--config <path>]      start executor workers (reads ~/.rotom/executor.config.json by default)
@@ -236,6 +241,9 @@ async function main(): Promise<void> {
   }
   if (cmd === "repo") {
     return cmdRepo(rest, flags);
+  }
+  if (cmd === "run") {
+    return cmdRun(rest);
   }
   if (cmd === "status") {
     return cmdStatus(rest, flags);
