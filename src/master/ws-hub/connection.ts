@@ -467,6 +467,37 @@ export const connectionMethods = {
       if (msg.type === "a2a_reply") {
         this.logger.info(`[mesh] Received a2a_reply (non-streaming) for requestId=${msg.requestId}`);
         const { targetId, conversation, conn, fromName, isA2aDirect } = resolveReplyContext(this, msg.requestId, agentId);
+
+        // ── Federation reply branch ─────────────────────────────────────
+        // 本地 agent 给一个 federated 请求(来自远端 member / link daemon,经
+        // FedDeliver 投到本机)回了消息 → 不走本地 sendToAgent,改通过
+        // router.fedReplyHook 把 FedReply 发回协调 master,协调再广播给所有 member,
+        // 由发起端的 FedClient.handleReply 解开 pendingRequest。
+        if (this.router.isFederatedRequest(msg.requestId)) {
+          const replyContent = msg.payload?.message || "";
+          this.logger.info(`[mesh] Federated reply for requestId=${msg.requestId} from ${fromName} (${replyContent.length} chars)`);
+          this.db.logMessage({
+            requestId: msg.requestId,
+            fromName,
+            fromDomain: conn?.domain,
+            toName: undefined,
+            toDomain: undefined,
+            routeType: "reply",
+            direction: "reply",
+            payload: JSON.stringify(msg.payload),
+            status: "replied",
+            latencyMs: this.sendTimestamps.get(msg.requestId) ? Date.now() - this.sendTimestamps.get(msg.requestId)! : undefined,
+            groupId: conversation?.groupId,
+            source: "ws",
+          });
+          try {
+            this.router.fedReplyHook?.(msg.requestId, fromName, { message: replyContent });
+          } catch (err) {
+            this.logger.warn(`[mesh] fedReplyHook error for requestId=${msg.requestId}: ${(err as Error).message}`);
+          }
+          return;
+        }
+
         if (targetId) {
           const targetAgent = this.db.getAgentById(targetId);
           const enrichedConversation = this.enrichGroupConversation(conversation, targetAgent?.name);
@@ -546,6 +577,11 @@ export const connectionMethods = {
       // ── Streaming reply chunk ──────────────────────────────────────────
       if (msg.type === "a2a_reply_chunk") {
         const { targetId, conversation, conn, fromName, isA2aDirect } = resolveReplyContext(this, msg.requestId, agentId);
+        // Federation:chunk 不转发给 link/远端 member(跨 master 流式太重);
+        //              最终完整内容随 a2a_reply_end 一次性以 FedReply 发回。
+        if (this.router.isFederatedRequest(msg.requestId)) {
+          return;
+        }
         if (targetId) {
           const chunkMsg = {
             type: "a2a_stream_chunk" as const,
@@ -569,6 +605,33 @@ export const connectionMethods = {
       // ── Streaming reply end ────────────────────────────────────────────
       if (msg.type === "a2a_reply_end") {
         const { targetId, conversation, conn, fromName, isA2aDirect } = resolveReplyContext(this, msg.requestId, agentId);
+        // Federation:本地 agent 给一个 federated 请求回完了流式回复 →
+        // 把最终完整 payload 通过 fedReplyHook 一次性以 FedReply 发回协调 master。
+        // (chunk 阶段已经被 isFederatedRequest 分支丢弃,所以最终内容只在 end 这里。)
+        if (this.router.isFederatedRequest(msg.requestId)) {
+          const endContent = msg.payload?.message || "";
+          this.logger.info(`[mesh] Federated reply-end for requestId=${msg.requestId} from ${fromName} (${endContent.length} chars)`);
+          this.db.logMessage({
+            requestId: msg.requestId,
+            fromName,
+            fromDomain: conn?.domain,
+            toName: undefined,
+            toDomain: undefined,
+            routeType: "reply",
+            direction: "reply",
+            payload: JSON.stringify(msg.payload),
+            status: "replied",
+            latencyMs: this.sendTimestamps.get(msg.requestId) ? Date.now() - this.sendTimestamps.get(msg.requestId)! : undefined,
+            groupId: conversation?.groupId,
+            source: "ws",
+          });
+          try {
+            this.router.fedReplyHook?.(msg.requestId, fromName, { message: endContent });
+          } catch (err) {
+            this.logger.warn(`[mesh] fedReplyHook error for requestId=${msg.requestId}: ${(err as Error).message}`);
+          }
+          return;
+        }
         if (targetId) {
           const cancelled = msg.cancelled === true;
           const endMsg: Record<string, unknown> = {

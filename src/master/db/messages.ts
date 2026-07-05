@@ -55,6 +55,71 @@ export const messageMethods = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Federation offline messages (跨 master 暂存重投)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * 暂存一条跨 master FedDeliver(target member 离线时由协调 master 调用)。
+   *
+   * 复用 offline_messages 表(migration 057/059 扩的 3 列),按 target_master_id 主键查重投。
+   * 不做"target agent 是否存在"的校验——member 重连后如果该 agent 还在 agent_visibility
+   * 就投,不在就由 member 端 FedClient.handleDeliver 返回 false,coord 记 route_failed。
+   *
+   * per-member 100 条上限(对齐本地 agent 离线队列)。
+   */
+  enqueueFedOffline(
+    this: MeshDbSelf,
+    input: {
+      target_master_id: string;
+      target_hostname: string;
+      target_agent: string;
+      source_master_id: string;
+      source_hostname: string;
+      source_agent: string;
+      payload: string; // JSON.stringify(FedRouteDeliver)
+      request_id: string;
+    },
+  ): boolean {
+    // Purge expired(同 enqueueOffline 的清理时机)
+    this.db.prepare("DELETE FROM offline_messages WHERE expires_at < datetime('now')").run();
+
+    const row = this.db.prepare(
+      "SELECT COUNT(*) as c FROM offline_messages WHERE target_master_id = ?",
+    ).get(input.target_master_id) as { c: number };
+    if (row.c >= 100) return false;
+
+    this.db.prepare(`
+      INSERT INTO offline_messages
+        (target_agent, from_name, from_domain, payload, route_type, expires_at,
+         target_hostname, source_master_id, target_master_id)
+      VALUES (?, ?, ?, ?, 'federated', datetime('now', '+1 day'), ?, ?, ?)
+    `).run(
+      input.target_agent,
+      input.source_agent,
+      input.source_hostname,
+      input.payload,
+      input.target_hostname,
+      input.source_master_id,
+      input.target_master_id,
+    );
+    return true;
+  },
+
+  /** 取出并删除某 member 的所有 fed 暂存消息(原子,member 重连时调用) */
+  popFedOfflineByMaster(this: MeshDbSelf, targetMasterId: string): OfflineMessageRow[] {
+    const msgs = this.db.prepare(
+      `SELECT * FROM offline_messages
+       WHERE target_master_id = ? AND expires_at > datetime('now')
+       ORDER BY created_at`,
+    ).all(targetMasterId) as OfflineMessageRow[];
+
+    if (msgs.length > 0) {
+      this.db.prepare("DELETE FROM offline_messages WHERE target_master_id = ?").run(targetMasterId);
+    }
+    return msgs;
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Audit
   // ─────────────────────────────────────────────────────────────────────────
 

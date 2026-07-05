@@ -21,6 +21,10 @@ import type { Socket } from "node:net";
 import type { MeshDb } from "../db.js";
 import type { MasterIdentity } from "./identity.js";
 import {
+  PENDING_REQUEST_TTL_MS,
+  CLEANUP_INTERVAL_MS,
+} from "../../shared/constants.js";
+import {
   FED_PROTOCOL_VERSION,
   isFedMessage,
   parseAgentRef,
@@ -32,6 +36,7 @@ import {
   type FedRouteMessage,
   type FedRouteDeliver,
   type FedRouteReply,
+  type FedRouteFailed,
   type FedMessage,
 } from "../../shared/protocol/federation.js";
 import { createLogger } from "../../shared/logger.js";
@@ -61,6 +66,15 @@ export class FedServer {
   /** 反查:ws → masterId(用于 close 时清理) */
   private wsToMaster: Map<WebSocket, string>;
   private syncTimer?: NodeJS.Timeout;
+  /**
+   * requestId → 来源 member 的 masterId。
+   *
+   * FedRouteMessage 入口注册,FedReply 到达时按 requestId 反查 → 只发给来源 member(精确路由)。
+   * 取代 Phase 2 的广播兜底,避免 member 多了被 reply 噪声淹没 + 隐私泄漏。
+   * 失败出口(sendRouteFailed)和 reply 成功出口都 delete;TTL 兜底由 cleanupTimer 清。
+   */
+  private pendingFedRequests = new Map<string, { sourceMasterId: string; createdAt: number }>();
+  private cleanupTimer?: NodeJS.Timeout;
   private handlers: FedRouteHandlers = {};
   /** 捕获的旧 upgrade listeners(start 时接管,非 /federation 的请求 delegate 回它们) */
   private delegatedUpgradeListeners: Array<(req: IncomingMessage, socket: Socket, head: Buffer) => void> = [];
@@ -105,11 +119,24 @@ export class FedServer {
     this.wss.on("connection", (ws, req) => this.handleConnection(ws, req.socket.remoteAddress));
     // 30s 全量 directory sync 给所有 member
     this.syncTimer = setInterval(() => this.broadcastDirectorySync(), 30_000);
+    // 60s 清理超时的 pendingFedRequests(对齐 Router.cleanupTimer 模式)
+    this.cleanupTimer = setInterval(() => this.cleanupPendingFedRequests(), CLEANUP_INTERVAL_MS);
     log.info(`[fed-server] listening on /federation (teamId=${this.opts.teamId})`);
+  }
+
+  private cleanupPendingFedRequests(): void {
+    const now = Date.now();
+    for (const [id, entry] of this.pendingFedRequests) {
+      if (now - entry.createdAt > PENDING_REQUEST_TTL_MS) {
+        this.pendingFedRequests.delete(id);
+      }
+    }
   }
 
   stop(): void {
     if (this.syncTimer) clearInterval(this.syncTimer);
+    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
+    this.pendingFedRequests.clear();
     // 恢复原 listeners
     if (this.upgradeHandler) {
       this.httpServer.removeListener("upgrade", this.upgradeHandler);
@@ -265,7 +292,35 @@ export class FedServer {
     const sync = this.buildDirectorySync();
     ws.send(JSON.stringify(sync));
 
+    // 重投该 member 离线期间暂存的 fed 消息(Phase 3 离线暂存重投)
+    this.replayOfflineFedMessages(msg.masterId);
+
     return { accepted: true, masterId: msg.masterId };
+  }
+
+  /**
+   * 把 member 离线期间暂存的 FedDeliver 批量重投过去。
+   *
+   * 暂存由 forwardDeliver 在 target member 离线时调 enqueueFedOffline 写入。
+   * member 重连(握手成功)后立即重投 —— 顺序按 created_at,最早的先投。
+   * 单条重投失败(WS 又断了)→ 不回暂存,丢了;后续 reply 路由会 TTL 超时,member 端 PendingRequests 也同步超时。
+   */
+  private replayOfflineFedMessages(masterId: string): void {
+    const rows = this.db.popFedOfflineByMaster(masterId);
+    if (rows.length === 0) return;
+    log.info(`[fed-server] replaying ${rows.length} offline fed messages to ${masterId}`);
+    for (const row of rows) {
+      try {
+        const deliver = JSON.parse(row.payload) as FedRouteDeliver;
+        const ok = this.sendToMember(masterId, deliver);
+        if (!ok) {
+          log.warn(`[fed-server] replay deliver failed (member WS gone again?) requestId=${deliver.requestId}`);
+          break; // member 又断了,后面的也不投了
+        }
+      } catch (e) {
+        log.warn(`[fed-server] replay parse failed for offline id=${row.id}: ${(e as Error).message}`);
+      }
+    }
   }
 
   private async handleFedMessage(msg: FedMessage, fromMasterId: string): Promise<void> {
@@ -275,7 +330,7 @@ export class FedServer {
       case "fed_agent_unpublish":
         return this.handleAgentUnpublish(msg as FedAgentUnpublish);
       case "fed_route":
-        return this.handleRouteMessage(msg as FedRouteMessage);
+        return this.handleRouteMessage(msg as FedRouteMessage, fromMasterId);
       case "fed_reply":
         return this.handleRouteReply(msg as FedRouteReply);
       case "fed_deliver":
@@ -315,7 +370,10 @@ export class FedServer {
     this.broadcastDirectorySync();
   }
 
-  private handleRouteMessage(msg: FedRouteMessage): void {
+  private handleRouteMessage(msg: FedRouteMessage, fromMasterId: string): void {
+    // 记录来源 member,供 FedReply 精确路由回来源(取代广播)
+    this.pendingFedRequests.set(msg.requestId, { sourceMasterId: fromMasterId, createdAt: Date.now() });
+
     // 查目标 agent 的 master_id(从 agent_visibility)
     const visible = this.db.findVisibleAgentByHostAndName(
       msg.teamId,
@@ -330,10 +388,38 @@ export class FedServer {
         return;
       }
       log.warn(`[fed-server] route target not found: ${msg.to.name}@${msg.to.hostname}`);
-      // Phase 3:回 route_failed 给来源
+      this.sendRouteFailed(fromMasterId, msg, "NOT_FOUND");
       return;
     }
     this.forwardDeliver(visible.master_id, msg);
+  }
+
+  /**
+   * 给发起方 member / link 回 FedRouteFailed。
+   *
+   * 何时调用:
+   *   - handleRouteMessage 找不到目标 agent(NOT_FOUND)
+   *   - (后续)forwardDeliver 暂存失败或目标永久不可达(OFFLINE_DROPPED,Phase 4)
+   * 成功发送后删 pendingFedRequests entry(避免 reply 来时再发一次)。
+   * 来源 member 离线时 sendToMember 失败 → 静默丢弃(member 端 PendingRequests 自己 TTL 超时)。
+   */
+  private sendRouteFailed(
+    targetMasterId: string,
+    route: FedRouteMessage,
+    reason: "NOT_FOUND" | "OFFLINE_DROPPED",
+  ): void {
+    const msg: FedRouteFailed = {
+      type: "fed_route_failed",
+      requestId: route.requestId,
+      reason,
+      from: route.from,
+      to: route.to,
+    };
+    const ok = this.sendToMember(targetMasterId, msg);
+    if (!ok) {
+      log.warn(`[fed-server] route_failed delivery to ${targetMasterId} failed (offline?), requestId=${route.requestId}`);
+    }
+    this.pendingFedRequests.delete(route.requestId);
   }
 
   private forwardDeliver(targetMasterId: string, route: FedRouteMessage): void {
@@ -362,17 +448,78 @@ export class FedServer {
     };
     const ok = this.sendToMember(targetMasterId, deliver);
     if (!ok) {
-      // 目标 member 离线 → 暂存 offline_messages(扩字段)
-      log.warn(`[fed-server] target member ${targetMasterId} offline, dropping requestId=${route.requestId}`);
-      // Phase 3 加离线暂存重投
+      // 目标 member 离线 → 暂存到 offline_messages(member 重连时 replay)
+      const queued = this.db.enqueueFedOffline({
+        target_master_id: targetMasterId,
+        target_hostname: route.to.hostname,
+        target_agent: route.to.name,
+        source_master_id: this.opts.identity.id, // coord 自己记的 pendingFedRequests 用
+        source_hostname: route.from.hostname,
+        source_agent: route.from.name,
+        payload: JSON.stringify(deliver),
+        request_id: route.requestId,
+      });
+      if (queued) {
+        log.info(`[fed-server] target member ${targetMasterId} offline, queued requestId=${route.requestId} (will replay on reconnect)`);
+      } else {
+        // per-member 100 条上限 → 丢老消息
+        log.warn(`[fed-server] offline queue full for member ${targetMasterId}, dropping requestId=${route.requestId}`);
+      }
+      // 注意:pendingFedRequests 不在这里删 —— member 重投成功后会回 FedReply,届时再删。
+      // route_failed 才删。
     }
   }
 
   private handleRouteReply(msg: FedRouteReply): void {
-    // reply 也是经协调中转。来源 member 在 requestId 上 register 了 pendingRequest
-    // 这里简化:把 reply 转发给"from" hostname 对应的 member
-    // 实际路由应该用 requestId 反查来源 master_id(Phase 3 加 pendingFedRequests 表)
-    // Phase 2 MVP:广播 reply 给所有 member,谁 pending 谁接收
+    // 精确路由:按 requestId 反查来源 member,只发给来源(取代广播兜底)
+    const entry = this.pendingFedRequests.get(msg.requestId);
+    if (!entry) {
+      // TTL 超时 / 重复 reply / 协调重启后丢了 → 兜底广播,member 端没 pending 就忽略
+      log.warn(`[fed-server] reply for unknown requestId=${msg.requestId} (TTL'd or already routed), broadcasting as fallback`);
+      this.broadcastReply(msg);
+      return;
+    }
+    const ok = this.sendToMember(entry.sourceMasterId, msg);
+    if (!ok) {
+      log.warn(`[fed-server] reply delivery to source ${entry.sourceMasterId} failed (offline?) requestId=${msg.requestId}`);
+      // 来源 member 离线 → 没法投递 reply。删 entry,member 端会自己 TTL 超时。
+      // 不再广播兜底(给其他 member 投也是噪声)。
+    }
+    this.pendingFedRequests.delete(msg.requestId);
+  }
+
+  /**
+   * 协调 master 把 FedReply 发给"发起方 member"。
+   *
+   * 由 FederationManager.fedReplyHook 调用:本机 agent 给一个 federated 请求回了消息,
+   * 把 reply 转回发起方。Phase 3 改为精确路由(查 pendingFedRequests 找 sourceMasterId);
+   * 若查不到(TTL 超时 / 协调重启后丢了),兜底广播。
+   */
+  sendReply(
+    requestId: string,
+    from: { hostname: string; name: string },
+    payload: { message: string },
+  ): void {
+    const msg: FedRouteReply = {
+      type: "fed_reply",
+      requestId,
+      from,
+      payload,
+    };
+    const entry = this.pendingFedRequests.get(requestId);
+    if (!entry) {
+      log.warn(`[fed-server] sendReply: unknown requestId=${requestId} (TTL'd or coord restart), broadcasting as fallback`);
+      this.broadcastReply(msg);
+      return;
+    }
+    const ok = this.sendToMember(entry.sourceMasterId, msg);
+    if (!ok) {
+      log.warn(`[fed-server] sendReply to source ${entry.sourceMasterId} failed (offline?) requestId=${requestId}`);
+    }
+    this.pendingFedRequests.delete(requestId);
+  }
+
+  private broadcastReply(msg: FedRouteReply): void {
     for (const [masterId, ws] of this.peers) {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(msg));

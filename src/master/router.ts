@@ -30,13 +30,27 @@ export interface RouteResult {
   error?: string;
 }
 
+/** Sentinel fromAgentId for federated pending requests(本地 ws-hub 永远不会拿这个 id 去路由) */
+export const FEDERATED_REPLY_MARKER = "__federation__";
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
+export interface FederatedReplyHook {
+  /** 本地 agent 给一个 federated 请求回了消息 → 通过 federation 把 FedReply 发回来源 */
+  (requestId: string, fromName: string, payload: { message: string }): void;
+}
+
 export class Router {
   private dedup = new MessageDedup(DEDUP_TTL_MS);
-  private pendingRequests = new Map<string, { fromAgentId: string; createdAt: number; conversation?: import("../shared/protocol.js").ConversationContext }>();
+  private pendingRequests = new Map<string, {
+    fromAgentId: string;
+    createdAt: number;
+    conversation?: import("../shared/protocol.js").ConversationContext;
+    /** 标记此请求来自 federation(对端 member 经 FedDeliver 投来的);本地 agent 回复时走 fedReplyHook 而非 sendToAgent */
+    isFederated?: boolean;
+  }>();
   private cleanupTimer: ReturnType<typeof setInterval>;
   /** Federation 客户端(member 模式);standalone 时为 undefined */
   private fedClient?: FedClient;
@@ -44,6 +58,8 @@ export class Router {
   private teamId?: string;
   /** 本机 hostname(用于 from.hostname 字段) */
   private localHostname?: string;
+  /** Federation 回复 hook:本地 agent 回复 federated 请求时调用,由 FederationManager 注入 */
+  fedReplyHook?: FederatedReplyHook;
 
   constructor(
     private db: MeshDb,
@@ -142,6 +158,35 @@ export class Router {
       return entry.fromAgentId;
     }
     return undefined;
+  }
+
+  /** 查询 requestId 是否来自 federation(本地 agent 回复时若为 true,走 fedReplyHook 而非 sendToAgent) */
+  isFederatedRequest(requestId: string): boolean {
+    return this.pendingRequests.get(requestId)?.isFederated === true;
+  }
+
+  /**
+   * 注册一个 federated 来源的 pending request。
+   *
+   * 协调 master / member 收到 FedDeliver 投到本地 agent 之前调用。
+   * fromAgentId 用一个 sentinel,使 ws-hub 的 sendToAgent 不会真投递到任何本地 agent
+   * (实际上 ws-hub reply handler 在 isFederated 时会改走 fedReplyHook,不会 sendToAgent)。
+   */
+  registerFederatedPendingRequest(
+    requestId: string,
+    conversation?: import("../shared/protocol.js").ConversationContext,
+  ): void {
+    this.pendingRequests.set(requestId, {
+      fromAgentId: FEDERATED_REPLY_MARKER,
+      createdAt: Date.now(),
+      conversation,
+      isFederated: true,
+    });
+  }
+
+  /** 消费并清掉一个 federated pending request(成功 dispatch reply 后调用) */
+  consumeFederatedPendingRequest(requestId: string): boolean {
+    return this.pendingRequests.delete(requestId);
   }
 
   /**

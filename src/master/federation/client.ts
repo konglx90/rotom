@@ -25,6 +25,7 @@ import {
   type FedDirectorySync,
   type FedRouteDeliver,
   type FedRouteReply,
+  type FedRouteFailed,
   type FedMessage,
   type FedAgentRef,
   type FedConversationRef,
@@ -40,6 +41,8 @@ export interface FedClientHandlers {
   deliverLocal?: (msg: FedRouteDeliver) => boolean;
   /** FedReply 到达 → 交给本地 Router pendingRequests 解析 */
   handleReply?: (msg: FedRouteReply) => void;
+  /** FedRouteFailed 到达 → 跨机路由失败,通知本地 PendingRequests reject(立即失败,不等 TTL) */
+  handleRouteFailed?: (msg: FedRouteFailed) => void;
 }
 
 export interface FedClientOpts {
@@ -143,6 +146,24 @@ export class FedClient {
     });
   }
 
+  /**
+   * Member 本地 agent 给一个 federated 请求回了消息 → 发 FedReply 给协调 master,
+   * 协调 master 广播给所有 member(含发起方),发起方 FedClient.handleReply 用 requestId
+   * 反查自己 pendingRequests 解 promise。
+   */
+  reply(
+    requestId: string,
+    from: FedAgentRef,
+    payload: { message: string },
+  ): boolean {
+    return this.send({
+      type: "fed_reply",
+      requestId,
+      from,
+      payload,
+    });
+  }
+
   // ─── 内部 ─────────────────────────────────────────────────────────────────
 
   private connect(): void {
@@ -223,6 +244,8 @@ export class FedClient {
         return this.handleDeliver(msg as FedRouteDeliver);
       case "fed_reply":
         return this.handleReply(msg as FedRouteReply);
+      case "fed_route_failed":
+        return this.handleRouteFailed(msg as FedRouteFailed);
       case "fed_handshake_ack":
         log.warn("[fed-client] duplicate handshake_ack, ignoring");
         return;
@@ -289,6 +312,10 @@ export class FedClient {
 
   private handleReply(msg: FedRouteReply): void {
     this.handlers.handleReply?.(msg);
+  }
+
+  private handleRouteFailed(msg: FedRouteFailed): void {
+    this.handlers.handleRouteFailed?.(msg);
   }
 
   private handleClose(code: number, reason: string): void {

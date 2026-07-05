@@ -23,6 +23,7 @@ import type { MasterIdentity } from "./identity.js";
 import { FedServer } from "./server.js";
 import { FedClient } from "./client.js";
 import { FedPublisher } from "./publisher.js";
+import { SelfPublisher } from "./self-publisher.js";
 import { createLogger } from "../../shared/logger.js";
 
 const log = createLogger("fed-manager");
@@ -41,6 +42,7 @@ export class FederationManager {
   private fedClient: FedClient | null = null;
   private fedPublisher: FedPublisher | null = null;
   private fedServer: FedServer | null = null;
+  private fedSelfPublisher: SelfPublisher | null = null;
 
   constructor(private opts: FederationManagerOpts) {}
 
@@ -179,6 +181,8 @@ export class FederationManager {
           description: fromAgent?.description ?? undefined,
           enabled: (fromAgent?.enabled ?? 1) !== 0,
         };
+        // 注册 federated pending request,让本地 agent 的 a2a_reply 走 fedReplyHook
+        router.registerFederatedPendingRequest(msg.requestId, msg.conversation as never);
         return hub.sendToAgent(target.id as string, {
           type: "a2a_message",
           requestId: msg.requestId,
@@ -198,9 +202,26 @@ export class FederationManager {
           payload: msg.payload,
         } as never);
       },
+      handleRouteFailed: (msg) => {
+        // Member 端发起跨机请求(本机 alice 经 fedClient.route 给 B 上 carol)失败时,
+        // 把失败当作 a2a_reply 回给本机 alice,让 CLI/worker 拿到错误。
+        // 注意:这里 router.pendingRequests 里 entry 是 isFederated=false(本机发起,
+        // 不是远端投来),所以不用 consumeFederatedPendingRequest。
+        // MVP:member 起发起跨机请求是 Phase 4 群组跨机场景,这里先 log + reject 思路 stub。
+        log.warn(
+          `[fed-manager] route_failed for requestId=${msg.requestId} reason=${msg.reason} ` +
+          `to=${msg.to?.name}@${msg.to?.hostname} — Phase 4 才接 member 端 PendingRequests reject`,
+        );
+      },
     });
     this.fedClient.start();
     router.setFederation(this.fedClient, teamCfg.id, identity.hostname);
+    // 本地 agent 给 federated 请求回复 → 通过 fedClient 把 FedReply 发给协调 master
+    router.fedReplyHook = (requestId, fromName, payload) => {
+      if (!this.fedClient) return;
+      this.fedClient.reply(requestId, { hostname: identity.hostname, name: fromName }, payload);
+      router.consumeFederatedPendingRequest(requestId);
+    };
 
     this.fedPublisher = new FedPublisher(db, this.fedClient, { teamId: teamCfg.id });
     this.fedPublisher.start();
@@ -209,7 +230,7 @@ export class FederationManager {
   }
 
   private startCoordination(): void {
-    const { identity, db, httpServer, masterPort } = this.opts;
+    const { identity, db, httpServer, masterPort, router } = this.opts;
     const teamId = identity.id;
     const teamName = identity.teamName || `${identity.hostname} 团队`;
 
@@ -231,7 +252,7 @@ export class FederationManager {
     this.fedServer = new FedServer(httpServer, db, { identity, teamId });
     this.fedServer.setHandlers({
       deliverLocal: (msg) => {
-        const { hub, db } = this.opts;
+        const { hub, db, router } = this.opts;
         const target = db.getLocalAgentByName(msg.to.name) ?? db.getAgentByName(msg.to.name);
         if (!target) return false;
         const fromAgent = db.getAgentByName(msg.from.name);
@@ -242,6 +263,8 @@ export class FederationManager {
           description: fromAgent?.description ?? undefined,
           enabled: (fromAgent?.enabled ?? 1) !== 0,
         };
+        // 注册 federated pending request,让本地 agent 的 a2a_reply 走 fedReplyHook
+        router.registerFederatedPendingRequest(msg.requestId, msg.conversation as never);
         return hub.sendToAgent(target.id as string, {
           type: "a2a_message",
           requestId: msg.requestId,
@@ -253,10 +276,19 @@ export class FederationManager {
       },
     });
     this.fedServer.start();
+    // 本地 agent 给 federated 请求回复 → 通过 fedServer 广播 FedReply 给所有 member
+    router.fedReplyHook = (requestId, fromName, payload) => {
+      if (!this.fedServer) return;
+      this.fedServer.sendReply(requestId, { hostname: identity.hostname, name: fromName }, payload);
+      router.consumeFederatedPendingRequest(requestId);
+    };
+    this.fedSelfPublisher = new SelfPublisher(db, identity);
+    this.fedSelfPublisher.start();
     log.info(`Started coordination mode — team=${teamId}`);
   }
 
   stop(): void {
+    this.fedSelfPublisher?.stop();
     this.fedPublisher?.stop();
     this.fedClient?.stop();
     this.fedServer?.stop();

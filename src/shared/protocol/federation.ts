@@ -172,6 +172,23 @@ export interface FedRouteReply {
   };
 }
 
+/**
+ * 协调 master → 发起方 member / link:跨机路由失败的回执。
+ *
+ * 触发场景:
+ *   - NOT_FOUND       目标 agent 在 agent_visibility 里查不到(没注册过 / 拼错 hostname)
+ *   - OFFLINE_DROPPED 目标 member 离线 + 暂存失败(Phase 3 暂未用,留给后续扩展)
+ *
+ * 用途:发起方 PendingRequests 立即 reject,不用干等 5min TTL 超时。
+ */
+export interface FedRouteFailed {
+  type: "fed_route_failed";
+  requestId: string;
+  reason: "NOT_FOUND" | "OFFLINE_DROPPED";
+  from?: FedAgentRef;
+  to?: FedAgentRef;
+}
+
 // ─── Union + guard ──────────────────────────────────────────────────────────
 
 export type FedMessage =
@@ -182,7 +199,8 @@ export type FedMessage =
   | FedDirectorySync
   | FedRouteMessage
   | FedRouteDeliver
-  | FedRouteReply;
+  | FedRouteReply
+  | FedRouteFailed;
 
 const FED_MESSAGE_TYPES = new Set<FedMessage["type"]>([
   "fed_handshake",
@@ -193,6 +211,7 @@ const FED_MESSAGE_TYPES = new Set<FedMessage["type"]>([
   "fed_route",
   "fed_deliver",
   "fed_reply",
+  "fed_route_failed",
 ]);
 
 export function isFedMessage(x: unknown): x is FedMessage {

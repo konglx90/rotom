@@ -46,6 +46,9 @@ import { cmdInit } from "./init.js";
 import { cmdJoin } from "./join.js";
 import { cmdRepo } from "./repo.js";
 import { cmdRun } from "./run.js";
+import { cmdTeam } from "./team.js";
+import { cmdLink } from "./link.js";
+import { cmdFed } from "./fed.js";
 
 const HELP = `rotom — Mesh CLI
 
@@ -207,6 +210,21 @@ Repo cache (内置 git worktree 缓存,migration 051;本机 FS 操作,不需要 
   repo fetch <repo-id>            显式 git fetch --prune 某 bare clone
   repo remove <repo-id>           删除 bare clone(要求无活跃 worktree)
 
+Federation (跨 master 协作,不依赖 dashboard):
+  team join <coordEndpoint> [--team-name N]   本机 master 运行时加入远端协调 master 形成团队
+                                              coordEndpoint 形如 ws://192.168.1.5:28800
+  team leave                                  离开当前团队,切回 standalone
+  team list                                   已加入的团队列表(本机视角)
+  team members [--team-id <id>]               团队内可见 agent 列表(--team-id 缺省读 ~/.rotom/team.json)
+
+  link join <coordEndpoint> [--hostname N]    一次性:生成 masterId + 写 ~/.rotom/link.json(轻量客户端模式)
+  link start [--port N]                       启动 rotom-link daemon(默认端口 28900),不起完整 master
+  link stop | restart | status | logs         daemon 生命周期
+  (随后可 rotom fed members / rotom fed ask <ref> "...")
+
+  fed members                                 列出协调 master 同步来的可见 agent
+  fed ask <ref> "<question>" [--timeout 5m]   阻塞等回复(ref 形如 alice@hostB 或 alice)
+
 Global flags:
   --pretty   format output for humans (tables / indented JSON)
 `;
@@ -230,6 +248,9 @@ async function main(): Promise<void> {
   if (cmd === "config") return cmdConfig(rest, flags);
   if (cmd === "init")   return cmdInit(rest, flags);
   if (cmd === "join")   return cmdJoin(rest, flags);
+  if (cmd === "team")   return cmdTeam(rest, flags);
+  if (cmd === "link")   return cmdLink(rest, flags);
+  if (cmd === "fed")    return cmdFed(rest, flags);
 
   // Master / executor / status — no agent required
   if (cmd === "master" || cmd === "master:start" || cmd === "master:stop" ||

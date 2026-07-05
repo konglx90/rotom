@@ -44,6 +44,12 @@ export interface OfflineMessageRow {
   route_type: string | null;
   created_at: string;
   expires_at: string | null;
+  /** 057 加:跨 master 投递时的目标 hostname(display,可改);本地 agent 离线队列为 NULL */
+  target_hostname?: string | null;
+  /** 057 加:跨 master 投递时来源 member 的 masterId;本地 agent 离线队列为 NULL */
+  source_master_id?: string | null;
+  /** 059 加:跨 master 投递时目标 member 的 masterId(稳定主键);本地 agent 离线队列为 NULL */
+  target_master_id?: string | null;
 }
 
 export interface AuditLogRow {
