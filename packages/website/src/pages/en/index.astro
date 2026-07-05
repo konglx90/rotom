@@ -1,28 +1,28 @@
 ---
 import Base from "../../layouts/Base.astro";
 import Hero from "../../components/Hero.astro";
+import QuickStart from "../../components/QuickStart.astro";
+import Screenshots from "../../components/Screenshots.astro";
 import Features from "../../components/Features.astro";
+import CliReference from "../../components/CliReference.astro";
 import Federation from "../../components/Federation.astro";
 import GroupPlay from "../../components/GroupPlay.astro";
 import Proactive from "../../components/Proactive.astro";
 import MemorySkill from "../../components/MemorySkill.astro";
 import Architecture from "../../components/Architecture.astro";
-import Screenshots from "../../components/Screenshots.astro";
-import CliReference from "../../components/CliReference.astro";
-import QuickStart from "../../components/QuickStart.astro";
 import Docs from "../../components/Docs.astro";
 const lang = "en";
 ---
 <Base withMermaid lang={lang}>
   <Hero lang={lang} />
+  <QuickStart lang={lang} />
+  <Screenshots lang={lang} />
   <Features lang={lang} />
+  <CliReference lang={lang} />
   <Federation lang={lang} />
   <GroupPlay lang={lang} />
   <Proactive lang={lang} />
   <MemorySkill lang={lang} />
   <Architecture lang={lang} />
-  <Screenshots lang={lang} />
-  <CliReference lang={lang} />
-  <QuickStart lang={lang} />
   <Docs lang={lang} />
 </Base>

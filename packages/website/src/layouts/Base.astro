@@ -16,12 +16,10 @@ const t = {
   zh: {
     brandTag: "A2A Workspace",
     nav: [
-      ["#features", "特性"],
-      ["#federation", "联邦"],
-      ["#proactive", "主动出击"],
-      ["#architecture", "架构"],
-      ["#cli-ref", "CLI"],
-      ["#quickstart", "快速开始"],
+      ["/#quickstart", "快速开始"],
+      ["/#features", "特性"],
+      ["/#cli-ref", "CLI"],
+      ["/#federation", "联邦"],
       ["/docs/", "文档"],
       ["/deck/", "幻灯片"],
     ],
@@ -31,14 +29,12 @@ const t = {
   en: {
     brandTag: "A2A Workspace",
     nav: [
-      ["/en/#features", "Features"],
-      ["/en/#federation", "Federation"],
-      ["/en/#proactive", "Proactive"],
-      ["/en/#architecture", "Architecture"],
-      ["/en/#cli-ref", "CLI"],
       ["/en/#quickstart", "Quick Start"],
+      ["/en/#features", "Features"],
+      ["/en/#cli-ref", "CLI"],
+      ["/en/#federation", "Federation"],
       ["/en/docs/", "Docs"],
-      ["/deck/", "Slides (中文)"],
+      ["/deck/", "Slides"],
     ],
     langSwitch: "中文",
     langSwitchHref: "/",
@@ -67,6 +63,9 @@ const htmlLang = lang === "zh" ? "zh-CN" : "en";
     <meta property="og:image" content="/rotom.jpeg" />
     <meta property="og:type" content="website" />
     <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900<title>{title}</title>display=swap" rel="stylesheet">
   </head>
   <body>
     <nav class="nav">
@@ -97,15 +96,15 @@ const htmlLang = lang === "zh" ? "zh-CN" : "en";
         import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
         mermaid.initialize({
           startOnLoad: false,
-          theme: "dark",
+          theme: "neutral",
           themeVariables: {
-            primaryColor: "#1a2244",
-            primaryTextColor: "#e8edf7",
-            primaryBorderColor: "#7c9cff",
-            lineColor: "#9aa7c7",
-            secondaryColor: "#131a32",
-            tertiaryColor: "#0a0f1f",
-            fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace",
+            primaryColor: "#e8ebe6",
+            primaryTextColor: "#0e0f0c",
+            primaryBorderColor: "#9fe870",
+            lineColor: "#454745",
+            secondaryColor: "#f2f5ef",
+            tertiaryColor: "#ffffff",
+            fontFamily: "Inter, -apple-system, sans-serif",
           },
           flowchart: { htmlLabels: true, curve: "basis" },
         });
@@ -133,6 +132,6 @@ const htmlLang = lang === "zh" ? "zh-CN" : "en";
   }
   .nav__lang:hover {
     border-color: var(--accent);
-    background: rgba(124, 156, 255, 0.08);
+    background: rgba(159, 232, 112, 0.08);
   }
 </style>

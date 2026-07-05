@@ -1,11 +1,17 @@
 import { defineCollection, z } from "astro:content";
 import { glob } from "astro/loaders";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 
-// 中文文档:仓库根 /docs/*.md
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const docsDir = path.resolve(__dirname, "../docs");
+const docsEnDir = path.resolve(__dirname, "../docs/en");
+
+// 中文文档
 const docs = defineCollection({
   loader: glob({
     pattern: "**/*.md",
-    base: "../../docs",
+    base: docsDir,
   }),
   schema: z.object({
     title: z.string().optional(),
@@ -13,11 +19,11 @@ const docs = defineCollection({
   }),
 });
 
-// 英文文档:仓库根 /docs/en/*.md(与中文版镜像)
+// 英文文档
 const docsEn = defineCollection({
   loader: glob({
     pattern: "**/*.md",
-    base: "../../docs/en",
+    base: docsEnDir,
   }),
   schema: z.object({
     title: z.string().optional(),

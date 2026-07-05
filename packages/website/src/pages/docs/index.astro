@@ -1,88 +1,46 @@
 ---
-import { getCollection } from "astro:content";
 import Base from "../../layouts/Base.astro";
-import Footer from "../../components/Footer.astro";
+import DocSidebar from "../../components/DocSidebar.astro";
+import { buildDocTree } from "../../utils/docs";
 
-// 内部文档 / 临时记录 → 不在官网 docs 索引里展示
-// 支持顶级 id(REFACTOR_BACKLOG)和子目录前缀(claude-tag/)
-const HIDDEN = [
-  /^REFACTOR_BACKLOG$/,        // 内部 backlog
-  /^review$/,                  // 内部 review
-  /^toolbox-tab-reorder$/,     // 内部 UI 调整记录
-  /^codex-sandbox-network-blocked$/,  // 故障速记
-  /^minimax-connection-error$/,        // 故障速记
-  /^claude-tag\//,             // claude-tag 子目录:设计讨论稿,索引里不展示
-  /^infos\//,                  // infos 子目录:早期 features 设计稿
-];
-const isHidden = (id: string) => HIDDEN.some((re) => re.test(id));
-
-const all = await getCollection("docs");
-const docs = all
-  .filter((d) => !isHidden(d.id))
-  .sort((a, b) => a.id.localeCompare(b.id));
-
-// 给没有 H1 的文档一个默认标题(去掉 .md)
-function titleOf(id: string): string {
-  return id.replace(/\//g, " · ").replace(/-/g, " ");
-}
-
-const groups = [
-  { match: /INSTALL|README|FEDERATION|QUICK_REF/, title: "上手 / 配置" },
-  { match: /AGENT_USER_GUIDE|AGENT_WHITEBOX|ASK_BRIDGE|AGENT_ASK_REPLY/, title: "Agent 协作" },
-  { match: /GROUP_CHAT|DEV_DELIVERY/, title: "群聊 / 工作流" },
-];
-const grouped = groups.map((g) => ({
-  ...g,
-  items: docs.filter((d) => g.match.test(d.id)),
-}));
-const leftover = docs.filter((d) => !groups.some((g) => g.match.test(d.id)));
+const tree = await buildDocTree("zh");
 ---
 <Base title="文档 · Rotom">
-  <section class="section section--first" style="padding-top:48px;">
-    <div class="wrap">
-      <span class="eyebrow">DOCS INDEX</span>
-      <h1>文档中心</h1>
-      <p class="lead">
-        所有文档随仓库一同发布,内容来自仓库根 <code>/docs/*.md</code>。点击文档名进入在线渲染页(支持 mermaid / 表格 / 代码块)。
-      </p>
-
-      {grouped.map((g) => g.items.length > 0 && (
-        <div class="doc-group">
-          <h2 class="subhead">{g.title}</h2>
-          <div class="docs">
-            {g.items.map((d) => (
-              <a class="doc" href={`/docs/${d.id}/`}>
-                <h4>{d.data.title || titleOf(d.id)}</h4>
-                <p>{d.data.description || `docs/${d.id}.md`}</p>
-                <span class="doc__ext">查看文档 →</span>
-              </a>
-            ))}
-          </div>
+  <div class="doc-layout">
+    <DocSidebar tree={tree} lang="zh" />
+    <main class="doc-content">
+      <div class="doc-home">
+        <span class="eyebrow">DOCS INDEX</span>
+        <h1>文档中心</h1>
+        <p class="lead">
+          所有文档随仓库一同发布，内容位于 <code>packages/website/docs/</code>。
+          从左侧目录选择文档阅读，支持 mermaid 图表 / 表格 / 代码块。
+        </p>
+        <div class="doc-home__tips">
+          <h3>快速入口</h3>
+          <ul>
+            <li><a href="/docs/user/get_started/">快速开始</a> — 全局安装 + 一键启动</li>
+            <li><a href="/docs/user/user_guide/">协作指南</a> — 群聊 / Issue / Ask 全流程</li>
+            <li><a href="/docs/federation/federation/">Federation</a> — OPC + 联邦团队</li>
+            <li><a href="/docs/dev/dev_delivery_workflow/">研发交付工作流</a> — Issue 全生命周期 SOP</li>
+          </ul>
         </div>
-      ))}
-
-      {leftover.length > 0 && (
-        <div class="doc-group">
-          <h2 class="subhead">其他</h2>
-          <div class="docs">
-            {leftover.map((d) => (
-              <a class="doc" href={`/docs/${d.id}/`}>
-                <h4>{d.data.title || titleOf(d.id)}</h4>
-                <p>{d.data.description || `docs/${d.id}.md`}</p>
-                <span class="doc__ext">查看文档 →</span>
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <p style="margin-top:32px;color:var(--text-mute);font-size:13px;">
-        ※ 部分内部文档(REFACTOR_BACKLOG / review / 故障速记等)未在官网索引,但仍可在仓库 <code>/docs/</code> 直接查看。
-      </p>
-    </div>
-  </section>
+        <p style="margin-top:32px;color:var(--text-mute);font-size:13px;">
+          ※ <code>claude-tag/</code> 和 <code>infos/</code> 为内部设计稿，未在索引中展示。
+        </p>
+      </div>
+    </main>
+  </div>
 </Base>
-
 <style>
-  .doc-group { margin-bottom: 32px; }
+  .doc-layout { display: flex; min-height: calc(100vh - 56px); }
+  .doc-content { flex: 1; max-width: 880px; padding: 48px 48px 80px; }
+  .doc-home h1 { font-size: 36px; margin: 8px 0 12px; letter-spacing: -0.015em; font-weight: 900; line-height: 0.85; font-feature-settings: "calt" 1; }
+  .doc-home__tips { margin-top: 40px; padding: 24px; background: var(--bg-elev); border-radius: var(--radius-sm); border: 1px solid var(--border); }
+  .doc-home__tips h3 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+  .doc-home__tips ul { margin: 0; padding: 0; list-style: none; }
+  .doc-home__tips li { margin: 6px 0; font-size: 14px; }
+  .doc-home__tips a { color: #2a7a4e; text-decoration: underline; text-underline-offset: 2px; }
+  .doc-home__tips a:hover { color: var(--text); }
+  @media (max-width: 768px) { .doc-layout { flex-direction: column; } .doc-content { padding: 24px 20px 60px; } }
 </style>

@@ -1,0 +1,22 @@
+<!-- ============ {{N}} rotom CLI 一图流 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="rotom CLI 一图流">
+  <div class="topbar"><span class="brand">背景 · CLI</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <h2>rotom CLI 一图流 · 17 个子命令</h2>
+  <p class="lead">身份解析:<code class="inline">ROTOM_AGENT</code> env > <code class="inline">--as &lt;name&gt;</code> > <code class="inline">defaultAgent</code> > executor.config 自动发现。<strong style="color:var(--err)">永远不接受 --from</strong>。</p>
+  <div class="cli-row">
+    <div class="cli-card"><div class="h">身份 / 启动</div><div class="b">init · whoami · status · config · master · executor</div></div>
+    <div class="cli-card"><div class="h">协作</div><div class="b">group list/members/history/send · issue * · ask</div></div>
+    <div class="cli-card"><div class="h">沉淀</div><div class="b">memory · skill · note · schedule · schedule-patterns</div></div>
+    <div class="cli-card"><div class="h">观测</div><div class="b">directory · audit · stats · share</div></div>
+  </div>
+  <pre style="margin-top:14px"><span style="color:var(--fg3)"># 最常用的 5 条(讲 1 遍就够)</span>
+rotom init                                  <span style="color:var(--fg3)"># 首次 bootstrap</span>
+rotom whoami
+rotom directory --pretty
+rotom group send &lt;groupId&gt; Claude·Agent "@Claude·Agent 帮我看下 #ISS-42 进度"
+rotom issue create &lt;groupId&gt; --title "..." --priority high</pre>
+  <div class="row" style="margin-top:10px">
+    Agent 在容器内通过 Bash 调 <code class="inline">rotom</code>(加载 <code class="inline">skill/rotom-a2a-communicate</code>),真人 / Claude Code 也能在 shell 手动用 —— <strong>同一套身份、同一个出口</strong>。
+  </div>
+</section>

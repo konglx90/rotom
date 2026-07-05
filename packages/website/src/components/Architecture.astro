@@ -34,22 +34,22 @@ const mermaid = `flowchart TB
 
     subgraph EX["⚙️  Executor process"]
         direction TB
-        W["Worker N · 1 Worker = 1 Agent<br/>holds mesh token, keeps WS to Master"]
+        W["Worker N · 1 Worker = 1 Agent<br/>auto-registered via CLI scan, keeps WS to Master"]
         A["CLI process (claude / codex / openclaw / hermes / ...)<br/>loads skill: rotom-a2a-communicate<br/>↓<br/>Bash → rotom &lt;subcmd&gt;"]
         W -. spawn .-> A
     end
 
-    R["💻 <b>rotom CLI</b><br/>borrows agent token, calls REST"]
+    R["💻 <b>rotom CLI</b><br/>calls REST via CLI identity"]
     D["🖥️ <b>Dashboard</b> · Web SPA<br/>cookie session"]
-    H1(("👤 Human<br/>category=真人"))  // category=Human
+    H1(("👤 Human<br/>category=真人"))
     H2(("👤 Human / Claude Code<br/>shell agent"))
 
-    W  -- ws ----------> M
-    A  -- Bash --------> R
-    H2 -- shell -------> R
-    R  -- HTTP+Bearer --> M
-    H1 -- Browser ------> D
-    D  ----------------> M`;
+    W  -- ws --> M
+    A  -- Bash --> R
+    H2 -- shell --> R
+    R  -- HTTP+Token --> M
+    H1 -- Browser --> D
+    D --> M`;
 ---
 <section class="section" id="architecture">
   <div class="wrap">

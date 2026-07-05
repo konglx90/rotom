@@ -1,0 +1,51 @@
+<!-- ============ {{N}} 外部集成 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="外部集成 · 嵌入其他工作流 + 与 mesh Agent 沟通">
+  <div class="topbar"><span class="brand">主线 · 外部集成</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <h2>外部集成 · 嵌入其他工作流 · 与 mesh Agent 沟通</h2>
+  <p class="lead">你的 codex / claude 在外面干别的活,中间卡了 —— 把 mesh 里的 agent 拉进来问一句就完事。前提:Master :28800 已跑 + token 在 <code class="inline">~/.rotom/executor.config.json</code>。</p>
+  <div class="install-bar">
+    <span class="ib-label">Client 端装一次(每台接入的机器)</span>
+    <div class="ib-step">
+      <span class="ib-no">①</span>
+      <code class="inline">tnpm install -g @alipay/rotom</code>
+    </div>
+    <div class="ib-step">
+      <span class="ib-no">②</span>
+      <code class="inline">rotom init --master 10.x.x.x:28800 --tools claude,codex,hermes,openclaw</code>
+    </div>
+    <div class="ib-step">
+      <span class="ib-no">③</span>
+      <span class="ib-hint">写 <code class="inline">~/.rotom/executor.config.json</code>(worker 启动参数 + mesh token + Master 地址)</span>
+    </div>
+  </div>
+  <div class="grid g2" style="margin-top:10px">
+    <div class="card lg">
+      <h4>两种群模式(按场景二选一)</h4>
+      <p><span class="pill">普通群</span> · 多 Agent 协作 · <code class="inline">@</code> 触发 worker 自动接话</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 8px 0">→ <code class="inline">rotom group create "&lt;需求&gt;" --agents a,b,c --message "@全体 ..."</code></p>
+      <p><span class="pill v">单播群 (--a2a-direct)</span> · 点对点 · 消息<strong>不广播</strong> · worker 不自动醒 · 只在 <code class="inline">--need-reply</code> 显式点名时起一手</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 0 0">→ <code class="inline">rotom group create "&lt;你和 B 的小窗口&gt;" --agents 你,B --a2a-direct</code></p>
+    </div>
+    <div class="card lg">
+      <h4>沟通循环 · 一问一答</h4>
+      <p><strong>提问</strong>:<code class="inline">rotom group send &lt;gid&gt; &lt;target&gt; "&lt;问题&gt;" --need-reply</code></p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 8px 0">master 自动补 <code class="inline">@target</code> + 登记 <code class="inline">requestId → asker</code>;对方回复时 master <strong>硬剥</strong> <code class="inline">@&lt;asker&gt;</code> 再入库,你的 worker 不被触发,不会来回聊</p>
+      <p><strong>等回复</strong>:<code class="inline">poll-replies.sh &lt;gid&gt; --as &lt;你&gt;</code> · 默认 10 轮 × 30s = 5min · 找到退出 0 · 超时退出 2</p>
+    </div>
+  </div>
+  <div class="flow" style="margin-top:10px">
+    <div class="step">外面 codex 卡</div>
+    <div class="arrow-r">→</div>
+    <div class="step"><code class="inline">group create --a2a-direct</code></div>
+    <div class="arrow-r">→</div>
+    <div class="step"><code class="inline">send --need-reply</code></div>
+    <div class="arrow-r">→</div>
+    <div class="step acc">江德福醒 + 回</div>
+    <div class="arrow-r">→</div>
+    <div class="step v acc">codex 拿到答案继续</div>
+  </div>
+  <div class="warn-row" style="margin-top:8px">
+    5 个反模式:<strong>轮询 &lt; 30s</strong> · <strong>不帶 <code class="inline">--need-reply</code> 直接 send</strong>(对方 SKIP,消息白发)· 明确任务塞群消息(用 issue)· 5+ 轮没收敛(升级 task issue)· 写盘没挂 issue · <strong style="color:var(--warn)">群消息异步,绝不能编造对方回答</strong>
+  </div>
+</section>

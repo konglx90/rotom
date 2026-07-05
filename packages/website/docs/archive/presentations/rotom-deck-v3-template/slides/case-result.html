@@ -1,0 +1,48 @@
+<!-- ============ {{N}} 资产排查 结果 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="深讲 · 结果 & 方法论">
+  <div class="topbar"><span class="brand">主线 · 深讲</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <h2>深讲 · 结果 & 方法论 · 4 条设计原则</h2>
+  <p class="lead">这一节把前面 17 页里的所有事 —— 1 个巡检群(3ff00a)· 1 个工具群(c211307e)· 1 个排查群(2fec433e)· 2 个 rotom 自迭代群(f080e51e / 54ab4777)· 1 个治理 + 1 个 CLI 演示 —— 收成 4 条设计原则。每条都有代码出处。</p>
+  <div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi"><div class="v">6 群</div><div class="l">5 业务 + 1 巡检</div></div>
+    <div class="kpi"><div class="v">44 + 23 + 6</div><div class="l">群消息(2fec / c211 / 3ff)</div></div>
+    <div class="kpi"><div class="v">2/2/1</div><div class="l">memory / skill / issue 沉淀</div></div>
+    <div class="kpi"><div class="v">2 任务</div><div class="l">接力 + 互检 4 次</div></div>
+  </div>
+  <div class="gov-card" style="margin-top:12px">
+    <div class="gov-num">设计原则 1 · rotom 不另搞一套 · 全部复用已有能力</div>
+    <ul class="gov-list">
+      <li><strong>群 = 普通群 + 一个标记</strong> · 巡检 = <code class="inline">groups.type=patrol</code>(<code class="inline">src/master/api/groups.ts</code>)· 跨机器部署 = <code class="inline">group_member_settings</code> 覆盖(<code class="inline">src/master/group-paths.ts</code>)· <strong>没有专用 UI,没有专用路由,没有专用协议</strong></li>
+      <li><strong>主动出击 = 定时任务派 issue</strong> · <code class="inline">scheduled_tasks.handler_key=issue-patrol</code>(<code class="inline">src/master/scheduler-handlers.ts</code>)· 共用 30s tick + at-most-once + grace window + dashboard 可见</li>
+      <li><strong>沉淀资产 = 已有 memory / skill / issue</strong> · 巡检规则走 <code class="inline">issue-patrol-rules</code> skill(rotom 内已建 · <code class="inline">/api/skills</code>);memory 走 <code class="inline">memory add</code>;产物走 <code class="inline">/api/artifacts</code> · 全部 rotom 已有</li>
+    </ul>
+  </div>
+  <div class="gov-card" style="margin-top:10px">
+    <div class="gov-num">设计原则 2 · 写盘必挂 issue · 让 audit trail 自然形成</div>
+    <ul class="gov-list">
+      <li><strong>硬规则写在 skill 里</strong> · <code class="inline">skill/rotom-a2a-communicate/SKILL.md</code> 写死"写盘必挂 issue",启动时写到 <code class="inline">~/.rotom/SKILL.md</code>(<code class="inline">src/shared/skill-md.ts</code>)· Agent 拿不到绕过</li>
+      <li><strong>所有写盘操作都进 <code class="inline">issue_events</code> 表</strong> · issue 创建 / 派发 / 审批 / 中断 / 完成 / 失败全留痕(<code class="inline">src/master/db/issues.ts</code> + <code class="inline">issue_events</code>)· dashboard 可回放</li>
+      <li><strong>审批粒度可选</strong> · <code class="inline">approval_policy ∈ {r_allow, rw_allow}</code>(migration 029)· <code class="inline">r_allow</code> 下写盘走 <code class="inline">PreToolUse</code> hook 挂 dashboard 审批 · 只读 Bash 走 <code class="inline">src/shared/readonly-allowlist.ts</code> 内置白名单(fail-closed)</li>
+    </ul>
+  </div>
+  <div class="gov-card" style="margin-top:10px">
+    <div class="gov-num">设计原则 3 · 群聊 = 工作台 · @ 路由 + 并发 + 自我纠错</div>
+    <ul class="gov-list">
+      <li><strong>@ 谁谁接活</strong> · <code class="inline">src/master/router.ts</code> + <code class="inline">ws-hub/routing.ts</code> · Agent 之间 @ 也走同一路径 · 2fec433e 群江德福@瓦力接力 review = 群消息驱动 agent 切换</li>
+      <li><strong>#reply 触发桥接 + 5min 升级</strong> · <code class="inline">ask_bridges</code> 表(<code class="inline">src/master/db/ask-bridges.ts</code>)+ <code class="inline">ask-bridge-check</code> handler(20s tick)· A @B + #reply → B 不回 5min 自动建 issue 升级</li>
+      <li><strong>多群并发 = 单 Agent <code class="inline">maxConcurrent</code>(默认 2),不是全局</strong> · <code class="inline">src/executor/worker.ts</code> · 西花同时在 c211307e 放任务 + 2fec433e 排查,江德福两边接活互不堵</li>
+      <li><strong>Agent 也会被实测打脸 + 用硬数据重做</strong> · 2fec433e 群:瓦力 07:26 判"非对象 TypeError",西花 07:32/07:33 两次实测反驳,瓦力用 V8 实测纠错 + 三方证据关掉 R2 风险 · <strong>单 Agent 给不出这种"被打脸后用硬数据重做"的回路</strong></li>
+    </ul>
+  </div>
+  <div class="gov-card" style="margin-top:10px">
+    <div class="gov-num">设计原则 4 · 持续学习 = 沉淀的资产在 rotom 里</div>
+    <ul class="gov-list">
+      <li><strong>memory 落 <code class="inline">memory</code> 表 · scope ∈ {group, global}</strong> · 2fec433e 群:<code class="inline">2273d7fd</code>(label/desc 根因 · 群级);c211307e 群:<code class="inline">6c046004</code>(Codex rollout 去重 · global)· <code class="inline">/api/memory/global</code> 可查</li>
+      <li><strong>skill 落 <code class="inline">skills</code> 表 · 可绑到 group+agent</strong> · 2 个 skill 已建:<code class="inline">issue-patrol-rules</code>(workflow · 2 views)· <code class="inline">test-skill</code>(test · 51 views)· 改规则 = 改 skill</li>
+      <li><strong>人 review 后 promote</strong> · <code class="inline">memory promote</code> 走 <code class="inline">/api/memory/:id/promote</code>,status pending → approved · 人未 review 不进下次 task prompt 注入(避免错误记忆污染)</li>
+      <li><strong>沉淀物直接喂回 rotom 自身</strong> · 4a9c1eaa / f080e51e / 54ab4777 三个 rotom 自迭代群:沉淀的 skill 回头用来优化 rotom 行为 · <strong>用 rotom 迭代 rotom 自身</strong></li>
+    </ul>
+  </div>
+  <div class="quote" style="margin-top:12px">这 4 条不是设计文档里写的 —— 是 6 个真实群 / 73 条群消息 / 1 个巡检 / 1 个工具交付 / 1 次 PR review 实际跑出来的。</div>
+</section>

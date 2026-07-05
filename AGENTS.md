@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file is the entry point for coding agents working in this repository. Keep it short and operational. 深背景在 `README.md`、`DESIGN.md` 和 `docs/`。
+This file is the entry point for coding agents working in this repository. Keep it short and operational. 深背景在 `README.md`、`DESIGN.md` 和 `packages/website/docs/`。
 
 ## Project Overview
 
@@ -83,14 +83,14 @@ Master 默认监听 `0.0.0.0:28800`(`MESH_MASTER_PORT` 可覆盖);数据目录 `
 ## Read These Docs
 
 - `README.md`:架构图、特性、快速开始、REST API 总表、WS 协议、close codes
-- `docs/INSTALL.md`:Master / Executor / rotom CLI 三件套完整安装手册
-- `docs/AGENT_USER_GUIDE.md`:Agent 协作用户指南
-- `docs/AGENT_ASK_REPLY_TIMER.md`:A → B 提问的 5min timer + 升级 Issue 兜底
-- `docs/ASK_BRIDGE_GUIDE.md`:ask-bridge 创建 / 取消 / 升级路径
-- `docs/DEV_DELIVERY_WORKFLOW.md`:E2ED 端到端需求交付 pipeline
-- `docs/GROUP_CHAT_ARCHITECTURE.md`:群聊子系统、Router 决策、离线队列
-- `docs/GROUP_CHAT_RENDER_PERF.md`:群聊渲染性能调优记录
-- `docs/QUICK_REF.md`:任务 Issue / 群消息的两场景速查
+- `packages/website/docs/INSTALL.md`:Master / Executor / rotom CLI 三件套完整安装手册
+- `packages/website/docs/AGENT_USER_GUIDE.md`:Agent 协作用户指南
+- `packages/website/docs/AGENT_ASK_REPLY_TIMER.md`:A → B 提问的 5min timer + 升级 Issue 兜底
+- `packages/website/docs/ASK_BRIDGE_GUIDE.md`:ask-bridge 创建 / 取消 / 升级路径
+- `packages/website/docs/DEV_DELIVERY_WORKFLOW.md`:E2ED 端到端需求交付 pipeline
+- `packages/website/docs/GROUP_CHAT_ARCHITECTURE.md`:群聊子系统、Router 决策、离线队列
+- `packages/website/docs/GROUP_CHAT_RENDER_PERF.md`:群聊渲染性能调优记录
+- `packages/website/docs/QUICK_REF.md`:任务 Issue / 群消息的两场景速查
 - `DESIGN.md`:Dashboard 视觉系统(Wise 风格设计规范)
 - `skill/rotom-a2a-communicate/SKILL.md`:注入到 agent 的协作 skill
 
@@ -118,7 +118,7 @@ Master 默认监听 `0.0.0.0:28800`(`MESH_MASTER_PORT` 可覆盖);数据目录 `
 - Worker WS → `src/master/ws-hub/connection.ts` 派发 → `src/master/ws-hub/{routing,conversation,sessions,directory}.ts` → SQLite → 推送给目标 client;离线收件人走 `src/master/offline-queue.ts`(100 条 / 24h TTL)。
 - REST 路径:`src/master/api/index.ts` 用 `registerXxxRoutes()` 装载。鉴权 permissive —— 本机 IP 直通(loopback trust),远程走老 token 路径(向后兼容)。
 - Worker 生命周期:`src/executor/index.ts` 启动 → 读 config(或 scanClis)→ 为每个 worker 拉起 `src/executor/worker.ts` → 通过 `src/executor/cli-executor.ts` 调度具体 backend。
-- Issue 抢单 / 审批 / slash command / usage / todo / prompt 组合器 / session / ask-bridge / scheduler / patrol:详见 `README.md` 和 `docs/`。
+- Issue 抢单 / 审批 / slash command / usage / todo / prompt 组合器 / session / ask-bridge / scheduler / patrol:详见 `README.md` 和 `packages/website/docs/`。
 
 ## Key Subsystems
 

@@ -1,0 +1,48 @@
+<!-- ============ {{N}} rotom 30 秒 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="rotom 30 秒">
+  <div class="topbar"><span class="brand">背景 · rotom 30 秒</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <h2>rotom 30 秒 · 架构 + 协议 + 子系统</h2>
+  <p class="lead">一页讲清 rotom 是什么 —— 后面所有场景都基于这套底盘。</p>
+  <div class="arch30" style="margin-top:14px">
+    <div class="arch-diag">       ┌────────────────────────────────────────┐
+       │  <span style="color:var(--acc)">MASTER</span>  :28800  HTTP/WS + Dashboard + SQLite  │
+       │  — 唯一中枢,所有 a2a 中转,WS Hub + Router │
+       └─────▲──────────▲──────────▲───────────────┘
+             │WS        │HTTP+Bearer│Browser cookie
+   ┌─────────┴────┐ ┌───┴──────┐ ┌──┴─────────┐
+   │  <span style="color:var(--acc2)">EXECUTOR</span>      │ │ <span style="color:var(--acc2)">rotom CLI</span> │ │  <span style="color:var(--acc2)">DASHBOARD</span>  │
+   │ 1 Worker    │ │ 借 token  │ │ React 18   │
+   │  = 1 Agent  │ │ 调 REST   │ │ + Vite SPA │
+   │  spawn CLI  │ └──────────┘ └────────────┘
+   │  claude /   │
+   │  codex /    │
+   │  hermes     │
+   └─────────────┘</div>
+    <div class="arch-meta">
+      <h4>数据主路径</h4>
+      Worker WS → connection → routing → conversation/sessions → SQLite → 推目标 / 离线队列
+      <h4>4 个最关键子系统</h4>
+      Scheduler(30s tick) · Patrol(自动巡检群) · Ask-bridge(5min 升级) · Session 持久化(agent_sessions 表)
+      <h4>鉴权</h4>
+      <code class="inline">mesh_xxx</code> token + JWT 7d · 自 migration 016 起明文存
+      <h4>限流 / 队列</h4>
+      60 msg/min/agent · 4 类豁免(heartbeat / a2a_reply_chunk / a2a_reply_end / issue_update)
+      <h4>离线 / 去重 / 审计</h4>
+      100 条 / 24h TTL · 5min 去重 · 500 条审计日志
+    </div>
+  </div>
+  <div class="protocol-mini">WS 协议速查(共 12 类,只列最常被问的 6 类)
+  ┌── C→M ─────────────┐    ┌── M→C(关键) ─────────────────┐
+  │ auth        10s 内  │    │ auth_ok + directory + config  │
+  │ heartbeat   10s 间隔│    │ a2a_message / route_result    │
+  │ a2a_send    requestId│   │ a2a_reply_chunk / _end  流式  │
+  │ a2a_reply   关联回复 │    │ issue_update / usage / todos  │
+  │ update_info 改描述  │    │ issue_approval_request  r_allow│
+  │ disconnect  优雅断  │    │ session_sync_push / snapshot  │
+  └─────────────────────┘    └───────────────────────────────┘
+  Close: 4001 / 4002 / 4400 / 4401 / 4429(契约,别改)</div>
+  <div class="row" style="margin-top:10px">
+    1 句话:rotom = <strong>WS + REST + 群 + Issue + Skill + Memory</strong> 的协议层,把人和 Agent 装进同一套协作语法。
+  </div>
+</section>

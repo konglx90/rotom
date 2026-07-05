@@ -1,0 +1,1257 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rotom V3 · 让专业 CLI Agent 变成数字员工</title>
+<style>
+  :root{
+    --bg:#0a0e14; --bg2:#0f141b; --panel:#11181f; --line:#1e2730;
+    --fg:#e6edf3; --fg2:#9aa6b2; --fg3:#5c6b78;
+    --acc:#5eead4; --acc2:#a78bfa; --warn:#fbbf24; --err:#f87171;
+    --code:#0b1118; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    overflow:hidden;-webkit-font-smoothing:antialiased}
+  .deck{position:relative;width:100vw;height:100vh;overflow:hidden}
+  .img-shot{cursor:zoom-in;transition:transform .2s,box-shadow .2s}
+  .img-shot:hover{transform:scale(1.01);box-shadow:0 4px 30px rgba(94,234,212,.25)}
+  .lightbox{position:fixed;inset:0;z-index:9999;background:rgba(5,8,12,.92);
+    display:none;align-items:center;justify-content:center;padding:40px;
+    animation:lb-fade .2s ease;cursor:zoom-out}
+  .lightbox.open{display:flex}
+  .lightbox img{max-width:96vw;max-height:94vh;object-fit:contain;
+    border-radius:8px;box-shadow:0 10px 60px rgba(0,0,0,.5);cursor:zoom-out}
+  .lightbox .lb-close{position:absolute;top:18px;right:22px;color:var(--fg);
+    font-family:var(--mono);font-size:12px;background:rgba(255,255,255,.06);
+    border:1px solid var(--line);padding:6px 12px;border-radius:6px;cursor:pointer}
+  .lightbox .lb-close:hover{background:rgba(94,234,212,.12);border-color:var(--acc)}
+  @keyframes lb-fade{from{opacity:0}to{opacity:1}}
+  .slide{position:absolute;inset:0;padding:60px 80px;display:none;flex-direction:column;
+    background:radial-gradient(1200px 600px at 80% -10%, rgba(94,234,212,.06), transparent 60%),
+               radial-gradient(800px 500px at -10% 110%, rgba(167,139,250,.05), transparent 60%),
+               var(--bg);min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  .slide::-webkit-scrollbar{width:8px}
+  .slide::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  .slide::-webkit-scrollbar-track{background:transparent}
+  .slide.active{display:flex;animation:fade .35s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .topbar{display:flex;align-items:center;justify-content:space-between;
+    font-family:var(--mono);font-size:12px;color:var(--fg3);
+    border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:28px;
+    letter-spacing:.12em;text-transform:uppercase}
+  .topbar .brand{color:var(--acc)}
+  .topbar .idx{color:var(--fg2)}
+  h1{font-size:62px;font-weight:800;letter-spacing:-.02em;line-height:1.1;
+    background:linear-gradient(180deg,#fff,#9aa6b2);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  h2{font-size:36px;font-weight:700;letter-spacing:-.01em;margin-bottom:20px}
+  .title-row{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  .title-row h2{margin-bottom:0}
+  .title-row .live-link{margin:0;padding:6px 12px;font-size:12px;flex-shrink:0}
+  h3{font-size:16px;font-weight:600;color:var(--fg2);text-transform:uppercase;
+    letter-spacing:.15em;margin-bottom:16px;font-family:var(--mono)}
+  p,li{font-size:18px;line-height:1.6;color:var(--fg2)}
+  ul{padding-left:1.4em}
+  li{margin-bottom:.5em}
+  .lead{font-size:20px;color:var(--fg);max-width:920px;margin-top:6px}
+  .grid{display:grid;gap:16px;margin-top:auto}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:20px 22px;transition:all .2s}
+  .card h4{font-size:14px;color:var(--acc);margin-bottom:8px;font-family:var(--mono);
+    letter-spacing:.05em;text-transform:uppercase}
+  .card p{font-size:14px;color:var(--fg2);line-height:1.55}
+  .card.lg{padding:26px 28px}
+  .card.lg h4{font-size:17px;margin-bottom:12px}
+  .card.lg p{font-size:15px}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;
+    font-family:var(--mono);background:rgba(94,234,212,.1);color:var(--acc);
+    border:1px solid rgba(94,234,212,.25);letter-spacing:.05em}
+  .pill.v{background:rgba(167,139,250,.1);color:var(--acc2);border-color:rgba(167,139,250,.25)}
+  .pill.w{background:rgba(251,191,36,.1);color:var(--warn);border-color:rgba(251,191,36,.25)}
+  .pill.e{background:rgba(248,113,113,.1);color:var(--err);border-color:rgba(248,113,113,.25)}
+  pre,code{font-family:var(--mono)}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;
+    padding:16px 20px;font-size:13px;line-height:1.6;color:var(--fg);
+    overflow-x:auto;white-space:pre}
+  code.inline{background:rgba(255,255,255,.06);padding:1px 7px;border-radius:4px;
+    font-size:.9em;color:var(--acc)}
+  .hero{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
+  .hero .eyebrow{font-family:var(--mono);font-size:13px;color:var(--acc);
+    letter-spacing:.3em;margin-bottom:24px;text-transform:uppercase}
+  .hero .tagline{font-size:24px;color:var(--fg);margin-top:20px;max-width:780px;
+    line-height:1.45;font-weight:300}
+  .meta{display:flex;gap:24px;margin-top:36px;font-family:var(--mono);font-size:13px;color:var(--fg3);flex-wrap:wrap}
+  .meta span strong{color:var(--acc);font-weight:500}
+  .arrow{position:absolute;top:50%;width:44px;height:44px;border-radius:50%;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);
+    color:var(--fg2);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:18px;transform:translateY(-50%);transition:all .2s;z-index:10;
+    user-select:none}
+  .arrow:hover{background:rgba(94,234,212,.1);border-color:var(--acc);color:var(--acc)}
+  .arrow.l{left:18px}.arrow.r{right:18px}
+  .progress{position:absolute;bottom:0;left:0;height:3px;
+    background:linear-gradient(90deg,var(--acc),var(--acc2));
+    transition:width .3s;z-index:20}
+  .footer{position:absolute;bottom:18px;left:80px;right:80px;display:flex;
+    justify-content:space-between;align-items:center;font-family:var(--mono);
+    font-size:11px;color:var(--fg3);letter-spacing:.1em;pointer-events:none}
+  .hint kbd{background:var(--panel);border:1px solid var(--line);
+    padding:2px 6px;border-radius:4px;font-family:var(--mono);font-size:10px;
+    color:var(--fg2);margin:0 2px}
+  .quote{border-left:3px solid var(--acc);padding:12px 20px;
+    background:rgba(94,234,212,.04);border-radius:0 8px 8px 0;
+    font-size:18px;color:var(--fg);font-style:italic;line-height:1.5;margin:16px 0}
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:10px 16px;font-family:var(--mono);font-size:13px;color:var(--fg)}
+  .step.acc{border-color:var(--acc);color:var(--acc)}
+  .step.v{border-color:var(--acc2);color:var(--acc2)}
+  .arrow-r{color:var(--fg3);font-family:var(--mono)}
+  .imgbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    overflow:hidden;display:flex;align-items:center;justify-content:center;
+    padding:12px;min-height:200px}
+  .imgbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
+  .img-placeholder{width:100%;min-height:280px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;background:repeating-linear-gradient(
+      45deg, rgba(255,255,255,.02), rgba(255,255,255,.02) 12px, rgba(255,255,255,.04) 12px, rgba(255,255,255,.04) 24px);
+    border:1px dashed var(--line);border-radius:10px;color:var(--fg3);
+    font-family:var(--mono);font-size:13px;text-align:center;padding:20px}
+  .img-placeholder .lbl{color:var(--acc);font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;margin-bottom:10px}
+  .img-placeholder .hint2{color:var(--fg3);font-size:11px;margin-top:10px}
+  .toc{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 36px;
+    font-size:18px;font-family:var(--mono);margin-top:24px}
+  .toc a{color:var(--fg2);text-decoration:none;padding:8px 0;
+    border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;
+    transition:color .15s;cursor:pointer}
+  .toc a:hover{color:var(--acc)}
+  .toc a .n{color:var(--fg3);width:32px;flex-shrink:0;font-size:14px}
+  .rotom-img{max-width:320px;border-radius:16px;border:1px solid var(--line);
+    box-shadow:0 20px 60px rgba(94,234,212,.15)}
+  .cover-flex{display:flex;align-items:center;justify-content:space-between;gap:60px}
+  .tag-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:24px}
+  .tag-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:16px 14px;text-align:center}
+  .tag-card .num{font-family:var(--mono);font-size:11px;color:var(--acc);
+    letter-spacing:.2em;margin-bottom:8px}
+  .tag-card .name{font-size:15px;color:var(--fg);font-weight:600;margin-bottom:6px}
+  .tag-card .sub{font-size:11px;color:var(--fg3);font-family:var(--mono);line-height:1.4}
+  .scenario{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:28px 32px;flex:1;display:flex;flex-direction:column}
+  .scenario .tag{font-family:var(--mono);font-size:11px;color:var(--acc);
+    letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px}
+  .scenario h3{font-size:24px;color:var(--fg);text-transform:none;letter-spacing:0;
+    font-family:inherit;margin-bottom:14px}
+  .scenario p{font-size:15px;line-height:1.6;margin-bottom:10px}
+  .scenario .points{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:auto}
+  .scenario .points .pt{background:rgba(255,255,255,.02);border:1px solid var(--line);
+    border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg2);
+    font-family:var(--mono);line-height:1.5}
+  .scenario .points .pt strong{color:var(--acc);display:block;font-size:11px;
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+  .case-deep{display:grid;grid-template-columns:1.1fr .9fr;gap:28px;flex:1;align-items:start}
+  .case-left h3{font-size:18px;color:var(--acc);text-transform:none;letter-spacing:0;
+    font-family:inherit;margin-bottom:12px}
+  .case-left p{font-size:15px;line-height:1.6;margin-bottom:10px}
+  .case-left .step-row{display:flex;align-items:center;gap:10px;margin:8px 0;
+    font-family:var(--mono);font-size:13px}
+  .case-left .step-row .n{background:var(--acc);color:#000;width:22px;height:22px;
+    border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:12px;flex-shrink:0}
+  .case-right{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px;display:flex;flex-direction:column}
+  .case-right .panel-title{font-family:var(--mono);font-size:11px;color:var(--fg3);
+    letter-spacing:.15em;text-transform:uppercase;margin-bottom:12px}
+  .timeline{position:relative;padding-left:24px}
+  .timeline::before{content:"";position:absolute;left:8px;top:6px;bottom:6px;
+    width:1px;background:var(--line)}
+  .timeline .ev{position:relative;padding:8px 0 14px 0;font-size:13px}
+  .timeline .ev::before{content:"";position:absolute;left:-19px;top:14px;
+    width:9px;height:9px;border-radius:50%;background:var(--acc);
+    box-shadow:0 0 0 3px rgba(94,234,212,.2)}
+  .timeline .ev .who{font-family:var(--mono);font-size:10px;color:var(--acc);
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+  .timeline .ev .what{color:var(--fg);line-height:1.5}
+  .timeline .ev .when{color:var(--fg3);font-size:11px;margin-top:2px;font-family:var(--mono)}
+  .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;text-align:left}
+  .kpi .v{font-size:30px;font-weight:800;line-height:1;background:linear-gradient(180deg,var(--acc),var(--acc2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .kpi .l{font-family:var(--mono);font-size:11px;color:var(--fg3);
+    text-transform:uppercase;letter-spacing:.15em;margin-top:8px}
+  .v3v4{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:20px;flex:1;display:flex;flex-direction:column;min-height:0}
+  .v3v4 .ver{font-family:var(--mono);font-size:11px;color:var(--acc);
+    letter-spacing:.2em;text-transform:uppercase;margin-bottom:6px}
+  .v3v4 h4{font-size:18px;color:var(--fg);margin-bottom:10px;font-weight:600}
+  .v3v4 .feat{font-size:13px;color:var(--fg2);line-height:1.5;margin-bottom:6px}
+  .v3v4 .feat::before{content:"·";color:var(--acc);margin-right:6px}
+  .closing{font-size:30px;color:var(--fg);font-weight:300;line-height:1.4;max-width:900px}
+  .closing strong{color:var(--acc);font-weight:600}
+  .warn-row{background:rgba(251,191,36,.06);border-left:3px solid var(--warn);
+    padding:10px 16px;border-radius:0 6px 6px 0;margin:8px 0;
+    font-size:14px;color:var(--fg)}
+  @media (max-width:900px){
+    .slide{padding:32px 24px}
+    h1{font-size:40px}
+    h2{font-size:24px}
+    p,li{font-size:14px}
+    .arrow{display:none}
+    .footer{left:24px;right:24px}
+    .cover-flex{flex-direction:column;align-items:flex-start}
+    .rotom-img{max-width:200px}
+    .tag-grid,.scenario .points{grid-template-columns:1fr 1fr}
+    .case-deep{grid-template-columns:1fr}
+  }
+
+  .arch30{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px 22px;display:grid;grid-template-columns:1.3fr 1fr;gap:22px;align-items:start}
+  .arch30 .arch-diag{background:var(--code);border:1px solid var(--line);
+    border-radius:9px;padding:14px 16px;font-family:var(--mono);font-size:11.5px;
+    line-height:1.55;color:var(--fg2);white-space:pre;overflow:auto}
+  .arch30 .arch-meta{font-size:12px;color:var(--fg2);line-height:1.6}
+  .arch30 .arch-meta h4{color:var(--acc);font-family:var(--mono);font-size:11px;
+    text-transform:uppercase;letter-spacing:.15em;margin:8px 0 4px 0}
+  .arch30 .arch-meta h4:first-child{margin-top:0}
+  .protocol-mini{background:var(--code);border:1px solid var(--line);border-radius:9px;
+    padding:14px 18px;font-family:var(--mono);font-size:11.5px;line-height:1.6;
+    color:var(--fg);white-space:pre;overflow:auto;margin-top:14px}
+  .ct-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:30px 32px;margin-top:18px}
+  .ct-card .ct-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .ct-card .ct-row .col h4{font-family:var(--mono);font-size:13px;color:var(--acc);
+    text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;font-weight:600}
+  .ct-card .ct-row .col p{font-size:15px;line-height:1.65;margin-bottom:10px}
+  .ct-card .ct-row .col ul li{font-size:13px;margin-bottom:4px;list-style:none}
+  .scenario{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:24px 28px;flex:1;display:flex;flex-direction:column}
+  .scenario .tag{font-family:var(--mono);font-size:10px;color:var(--acc);
+    letter-spacing:.2em;text-transform:uppercase;margin-bottom:8px}
+  .scenario h3{font-size:22px;color:var(--fg);text-transform:none;letter-spacing:0;
+    font-family:inherit;margin-bottom:12px}
+  .scenario p{font-size:14px;line-height:1.55;margin-bottom:8px}
+  .scenario .points{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:auto}
+  .scenario .points .pt{background:rgba(255,255,255,.02);border:1px solid var(--line);
+    border-radius:7px;padding:9px 11px;font-size:11.5px;color:var(--fg2);
+    font-family:var(--mono);line-height:1.5}
+  .scenario .points .pt strong{color:var(--acc);display:block;font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+  .deep{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;flex:1;min-height:0}
+  .deep-left{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .deep-left h3{font-size:17px;color:var(--acc);text-transform:none;letter-spacing:0;
+    font-family:inherit;margin-bottom:10px;flex-shrink:0}
+  .deep-left .step-list{flex:1;min-height:0;overflow-y:auto;padding-right:6px;
+    scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  .deep-left .step-list::-webkit-scrollbar{width:6px}
+  .deep-left .step-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .deep-left p{font-size:14px;line-height:1.55;margin-bottom:8px}
+  .deep-left .step-row{display:flex;align-items:center;gap:9px;margin:6px 0;
+    font-family:var(--mono);font-size:12px}
+  .deep-left .step-row .n{background:var(--acc);color:#000;width:20px;height:20px;
+    border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:11px;flex-shrink:0}
+  .deep-right{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+    padding:16px;display:flex;flex-direction:column;max-height:100%;min-height:0;overflow:hidden}
+  .deep-right .panel-title{flex-shrink:0;font-family:var(--mono);font-size:10px;color:var(--fg3);
+    letter-spacing:.15em;text-transform:uppercase;margin-bottom:10px}
+  .timeline{position:relative;padding-left:22px;flex:1;min-height:0;overflow-y:auto;
+    overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  .timeline::-webkit-scrollbar{width:6px}
+  .timeline::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .timeline::-webkit-scrollbar-track{background:transparent}
+  .timeline::before{content:"";position:absolute;left:7px;top:5px;bottom:5px;
+    width:1px;background:var(--line)}
+  .timeline .ev{position:relative;padding:6px 0 12px 0;font-size:12px}
+  .timeline .ev::before{content:"";position:absolute;left:-18px;top:12px;
+    width:8px;height:8px;border-radius:50%;background:var(--acc);
+    box-shadow:0 0 0 3px rgba(94,234,212,.2)}
+  .timeline .ev .who{font-family:var(--mono);font-size:9px;color:var(--acc);
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+  .timeline .ev .what{color:var(--fg);line-height:1.45}
+  .timeline .ev.placeholder::before{background:var(--fg3);box-shadow:0 0 0 3px rgba(92,107,120,.2)}
+  .timeline .ev.placeholder .who{color:var(--fg3)}
+  .timeline .ev .when{color:var(--fg3);font-size:10px;margin-top:1px;font-family:var(--mono)}
+  .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+    padding:14px 16px;text-align:left}
+  .kpi .v{font-size:28px;font-weight:800;line-height:1;background:linear-gradient(180deg,var(--acc),var(--acc2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .kpi .l{font-family:var(--mono);font-size:10px;color:var(--fg3);
+    text-transform:uppercase;letter-spacing:.15em;margin-top:6px}
+  .v3v4{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+    padding:18px;flex:1;display:flex;flex-direction:column;min-height:0}
+  .v3v4 .ver{font-family:var(--mono);font-size:10px;color:var(--acc);
+    letter-spacing:.2em;text-transform:uppercase;margin-bottom:5px}
+  .v3v4 h4{font-size:17px;color:var(--fg);margin-bottom:8px;font-weight:600}
+  .v3v4 .feat{font-size:12px;color:var(--fg2);line-height:1.45;margin-bottom:5px}
+  .v3v4 .feat::before{content:"·";color:var(--acc);margin-right:5px}
+  .gov-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:14px}
+  .gov-card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+    padding:18px 20px}
+  .gov-card h4{font-size:12px;color:var(--acc);font-family:var(--mono);
+    text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+  .gov-card p{font-size:13px;color:var(--fg2);line-height:1.5}
+  .cli-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
+  .cli-row .cli-card{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+    padding:12px 14px}
+  .cli-row .cli-card .h{font-family:var(--mono);font-size:10px;color:var(--acc);
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+  .cli-row .cli-card .b{font-family:var(--mono);font-size:11px;color:var(--fg2);line-height:1.5}
+  .img-placeholder{width:100%;min-height:200px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;background:repeating-linear-gradient(
+      45deg, rgba(255,255,255,.02), rgba(255,255,255,.02) 12px, rgba(255,255,255,.04) 12px, rgba(255,255,255,.04) 24px);
+    border:1px dashed var(--line);border-radius:9px;color:var(--fg3);
+    font-family:var(--mono);font-size:12px;text-align:center;padding:14px}
+  .img-placeholder .lbl{color:var(--acc);font-size:10px;letter-spacing:.2em;
+    text-transform:uppercase;margin-bottom:8px}
+  .img-placeholder .hint2{color:var(--fg3);font-size:10px;margin-top:8px}
+  .img-placeholder.compact{min-height:140px}
+  .toc{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 32px;
+    font-size:15px;font-family:var(--mono);margin-top:18px}
+  .toc a{color:var(--fg2);text-decoration:none;padding:6px 0;
+    border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;
+    transition:color .15s;cursor:pointer}
+  .toc a:hover{color:var(--acc)}
+  .toc a .n{color:var(--fg3);width:28px;flex-shrink:0;font-size:13px}
+  .toc a .tag-v3{color:var(--acc);font-size:9px;margin-left:auto;
+    letter-spacing:.15em;text-transform:uppercase}
+  .toc a .tag-bg{color:var(--fg3);font-size:9px;margin-left:auto;
+    letter-spacing:.15em;text-transform:uppercase}
+  .small{font-size:12px;color:var(--fg3);font-family:var(--mono);line-height:1.5}
+  .closing{font-size:24px;color:var(--fg);font-weight:300;line-height:1.4;max-width:900px}
+  .closing strong{color:var(--acc);font-weight:600}
+  .row{background:rgba(94,234,212,.04);border-left:3px solid var(--acc);
+    padding:9px 14px;border-radius:0 6px 6px 0;margin:7px 0;font-size:13px;color:var(--fg)}
+  .step-card{display:flex;align-items:flex-start;gap:10px;
+    background:rgba(94,234,212,.04);border:1px solid var(--line);
+    border-left:3px solid var(--acc);border-radius:6px;
+    padding:9px 12px;margin:6px 0;font-size:13px;line-height:1.5;color:var(--fg)}
+  .step-card.warn{background:rgba(251,191,36,.04);border-left-color:var(--warn)}
+  .step-card .step-title{font-family:var(--mono);font-size:12px;color:var(--acc);
+    font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+  .step-card .n{background:var(--acc);color:#000;width:20px;height:20px;
+    border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:11px;flex-shrink:0;font-family:var(--mono);margin-top:1px}
+  .step-card.warn .n{background:var(--warn);color:#000}
+  .step-card .t{flex:1}
+  .install-bar{display:flex;flex-direction:column;gap:8px;
+    background:rgba(94,234,212,.06);border:1px solid rgba(94,234,212,.3);border-left:3px solid var(--acc);
+    border-radius:8px;padding:10px 14px;margin-top:8px;font-size:13px}
+  .install-bar .ib-label{font-family:var(--mono);font-size:10px;color:var(--acc);
+    text-transform:uppercase;letter-spacing:.15em;font-weight:700}
+  .install-bar .ib-step{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .install-bar .ib-no{font-family:var(--mono);font-size:11px;color:var(--fg3);flex-shrink:0;min-width:18px}
+  .install-bar .ib-sep{color:var(--fg3);font-family:var(--mono);font-size:14px}
+  .install-bar .ib-hint{font-family:var(--mono);font-size:11px;color:var(--fg3)}
+  .install-bar code.inline{background:transparent;border:none;padding:0;color:var(--acc);font-size:13px;
+    white-space:pre-wrap;word-break:break-all}
+  .live-link{display:flex;align-items:center;gap:14px;
+    background:linear-gradient(90deg,rgba(94,234,212,.08),rgba(167,139,250,.06));
+    border:1px solid rgba(94,234,212,.3);border-left:3px solid var(--acc);
+    border-radius:8px;padding:12px 18px;margin:14px 0 10px 0;
+    text-decoration:none;color:var(--fg);transition:all .2s;cursor:pointer}
+  .live-link:hover{background:linear-gradient(90deg,rgba(94,234,212,.14),rgba(167,139,250,.1));
+    border-color:var(--acc);transform:translateX(2px);
+    box-shadow:0 4px 20px rgba(94,234,212,.2)}
+  .live-link .ll-tag{font-family:var(--mono);font-size:10px;color:var(--bg);
+    background:var(--acc);padding:3px 9px;border-radius:999px;
+    letter-spacing:.15em;text-transform:uppercase;font-weight:700;flex-shrink:0}
+  .live-link .ll-arrow{font-size:18px;color:var(--acc);font-weight:700;flex-shrink:0;
+    transition:transform .2s}
+  .live-link:hover .ll-arrow{transform:translate(2px,-2px)}
+  .live-link .ll-text{font-size:14px;line-height:1.5;color:var(--fg)}
+  .live-link .ll-text strong{color:var(--acc);font-family:var(--mono);font-size:13px}
+  .warn-row{background:rgba(251,191,36,.06);border-left:3px solid var(--warn);
+    padding:9px 14px;border-radius:0 6px 6px 0;margin:7px 0;
+    font-size:13px;color:var(--fg)}
+  .err-row{background:rgba(248,113,113,.06);border-left:3px solid var(--err);
+    padding:9px 14px;border-radius:0 6px 6px 0;margin:7px 0;
+    font-size:13px;color:var(--fg)}
+  .rotom-img{max-width:280px;border-radius:16px;border:1px solid var(--line);
+    box-shadow:0 20px 60px rgba(94,234,212,.15)}
+  .cover-flex{display:flex;align-items:center;justify-content:space-between;gap:50px}
+  .pill.x{background:rgba(255,255,255,.04);color:var(--fg3);border-color:var(--line)}
+  @media (max-width:900px){
+    .arch30,.deep,.gov-grid,.cli-row{grid-template-columns:1fr 1fr}
+    .ct-card .ct-row,.kpi-row,.scenario .points{grid-template-columns:1fr 1fr}
+    .cover-flex{flex-direction:column;align-items:flex-start}
+    .rotom-img{max-width:200px}
+  }
+</style>
+<body>
+<div class="deck" id="deck">
+<!-- ============ 1 COVER ============ -->
+
+<section class="slide active" data-n="1" data-title="封面">
+  <div class="topbar"><span class="brand">ROTOM · 让专业 CLI Agent 变成数字员工</span><span class="idx">01 / 18</span></div>
+  <div class="hero cover-flex" style="width:100%">
+    <div style="flex:1.2">
+      <div class="hero eyebrow">数字员工协作网络 · rotom</div>
+      <h1 style="font-size:48px;line-height:1.15">让专业 CLI Agent<br>变成<span style="background:linear-gradient(180deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent">可协作的数字员工</span></h1>
+      <p class="tagline" style="font-size:16px;line-height:1.7;margin-top:24px;max-width:780px">
+        Rotom 是一个<span style="color:var(--fg);font-weight:500">中心化的数字员工协作网络</span>。把 <code class="inline">claude / codex / openclaw / hermes</code> 等专业 CLI 工具封装成数字员工,
+        在浏览器里统一调度、派活、看进度。
+        员工自带<span style="color:var(--fg);font-weight:500">记忆和技能</span>,定时巡检主动认领任务 —— <span style="color:var(--fg);font-weight:500">你只管提需求,执行交给 Agents</span>。
+      </p>
+      <div style="display:flex;gap:10px;margin-top:28px;flex-wrap:wrap">
+        <span class="pill">claude</span>
+        <span class="pill">codex</span>
+        <span class="pill v">openclaw</span>
+        <span class="pill w">hermes</span>
+        <span class="pill x">+ 任意 CLI</span>
+      </div>
+    </div>
+    <img class="rotom-img" src="../rotom.jpeg" alt="rotom" style="max-width:340px">
+  </div>
+</section>
+<!-- ============ 2 AGENDA ============ -->
+
+<section class="slide" data-n="2" data-title="目录">
+  <div class="topbar"><span class="brand">AGENDA</span><span class="idx">02 / 18</span></div>
+  <h2>今天讲什么</h2>
+  <p class="lead">重点讲透 2 个能力 + 1 个真实案例 + 4 条方法论,其他点到为止。</p>
+  <div class="toc">
+    <a data-goto="3"><span class="n">03</span><span class="tag-bg">背景</span>rotom 30 秒</a>
+    <a data-goto="4"><span class="n">04</span><span class="tag-bg">背景</span>Dashboard 组件一览</a>
+    <a data-goto="5"><span class="n">05</span><span class="tag-bg">背景</span>群就是工作台 · 基础交互</a>
+    <a data-goto="6"><span class="n">06</span><span class="tag-v3">主线</span>外部集成 · 嵌入其他工作流</a>
+    <a data-goto="7"><span class="n">07</span><span class="tag-v3">主线</span>迭代 V3/V4</a>
+    <a data-goto="8"><span class="n">08</span><span class="tag-bg">背景</span>参照学习 · multica + ClaudeTag + MoA</a>
+    <a data-goto="9"><span class="n">09</span><span class="tag-v3">主线</span>能力 1 · 持续学习(记忆 + skill)</a>
+    <a data-goto="10"><span class="n">10</span><span class="tag-v3">主线</span>能力 1 续 · 端到端放出去就出活</a>
+    <a data-goto="11"><span class="n">11</span><span class="tag-v3">主线</span>能力 2 · 主动出击(issue 巡检)</a>
+    <a data-goto="12"><span class="n">12</span><span class="tag-v3">主线</span>能力 2 续 · 复用 群 + 定时任务 + Issue</a>
+    <a data-goto="13"><span class="n">13</span><span class="tag-bg">背景</span>治理一页清 · 写盘必挂 Issue</a>
+    <a data-goto="14"><span class="n">14</span><span class="tag-bg">背景</span>rotom CLI 一图流</a>
+    <a data-goto="15"><span class="n">15</span><span class="tag-v3">主线</span>真实问题 · 资产排查</a>
+    <a data-goto="16"><span class="n">16</span><span class="tag-v3">主线</span>深讲 · 排查过程</a>
+    <a data-goto="17"><span class="n">17</span><span class="tag-v3">主线</span>深讲 · 结果 &amp; 4 条设计原则</a>
+    <a data-goto="18"><span class="n">18</span><span class="tag-v3">主线</span>总结 + Q &amp; A</a>
+  </div>
+  <div class="small" style="margin-top:18px">
+    标签说明:<span class="pill">主线</span> = 重点讲透 · <span class="pill x">背景</span> = 翻到这页再讲
+  </div>
+</section>
+<!-- ============ 3 rotom 30 秒 ============ -->
+
+<section class="slide" data-n="3" data-title="rotom 30 秒">
+  <div class="topbar"><span class="brand">背景 · rotom 30 秒</span><span class="idx">03 / 18</span></div>
+  <h2>rotom 30 秒 · 架构 + 协议 + 子系统</h2>
+  <p class="lead">一页讲清 rotom 是什么 —— 后面所有场景都基于这套底盘。</p>
+  <div class="arch30" style="margin-top:14px">
+    <div class="arch-diag">       ┌────────────────────────────────────────┐
+       │  <span style="color:var(--acc)">MASTER</span>  :28800  HTTP/WS + Dashboard + SQLite  │
+       │  — 唯一中枢,所有 a2a 中转,WS Hub + Router │
+       └─────▲──────────▲──────────▲───────────────┘
+             │WS        │HTTP+Bearer│Browser cookie
+   ┌─────────┴────┐ ┌───┴──────┐ ┌──┴─────────┐
+   │  <span style="color:var(--acc2)">EXECUTOR</span>      │ │ <span style="color:var(--acc2)">rotom CLI</span> │ │  <span style="color:var(--acc2)">DASHBOARD</span>  │
+   │ 1 Worker    │ │ 借 token  │ │ React 18   │
+   │  = 1 Agent  │ │ 调 REST   │ │ + Vite SPA │
+   │  spawn CLI  │ └──────────┘ └────────────┘
+   │  claude /   │
+   │  codex /    │
+   │  hermes     │
+   └─────────────┘</div>
+    <div class="arch-meta">
+      <h4>数据主路径</h4>
+      Worker WS → connection → routing → conversation/sessions → SQLite → 推目标 / 离线队列
+      <h4>4 个最关键子系统</h4>
+      Scheduler(30s tick) · Patrol(自动巡检群) · Ask-bridge(5min 升级) · Session 持久化(agent_sessions 表)
+      <h4>鉴权</h4>
+      <code class="inline">mesh_xxx</code> token + JWT 7d · 自 migration 016 起明文存
+      <h4>限流 / 队列</h4>
+      60 msg/min/agent · 4 类豁免(heartbeat / a2a_reply_chunk / a2a_reply_end / issue_update)
+      <h4>离线 / 去重 / 审计</h4>
+      100 条 / 24h TTL · 5min 去重 · 500 条审计日志
+    </div>
+  </div>
+  <div class="protocol-mini">WS 协议速查(共 12 类,只列最常被问的 6 类)
+  ┌── C→M ─────────────┐    ┌── M→C(关键) ─────────────────┐
+  │ auth        10s 内  │    │ auth_ok + directory + config  │
+  │ heartbeat   10s 间隔│    │ a2a_message / route_result    │
+  │ a2a_send    requestId│   │ a2a_reply_chunk / _end  流式  │
+  │ a2a_reply   关联回复 │    │ issue_update / usage / todos  │
+  │ update_info 改描述  │    │ issue_approval_request  r_allow│
+  │ disconnect  优雅断  │    │ session_sync_push / snapshot  │
+  └─────────────────────┘    └───────────────────────────────┘
+  Close: 4001 / 4002 / 4400 / 4401 / 4429(契约,别改)</div>
+  <div class="row" style="margin-top:10px">
+    1 句话:rotom = <strong>WS + REST + 群 + Issue + Skill + Memory</strong> 的协议层,把人和 Agent 装进同一套协作语法。
+  </div>
+</section>
+<!-- ============ 4 Dashboard 组件 ============ -->
+<section class="slide" data-n="4" data-title="Dashboard 组件">
+  <div class="topbar"><span class="brand">背景 · Dashboard 组件</span><span class="idx">04 / 18</span></div>
+  <h2>Dashboard 组件一览 <span style="font-size:16px;color:var(--fg3);font-weight:400">/ 6 大块</span></h2>
+  <p class="lead">rotom Dashboard 不止聊天 —— 所有能力都装进同一个群下面。讲清楚这 6 块,后面所有场景都顺。</p>
+  <div class="grid g3" style="margin-top:18px;flex:1;align-items:stretch">
+        <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>群聊</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>协作入口。</strong>一切挂群里,@ 谁谁接活,#reply 触发桥接。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 3 页 rotom 30 秒 + 资产排查 3 页</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Issue</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>任务单位。</strong>写盘必挂 issue,可抢单 / 审批 / 中断 / 续跑。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 11-14 页 · 治理第 9 页</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Memory</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>长期记忆。</strong>Agent 干完活自动写一条,人 review 后 recall。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 5-6 页 持续学习</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Schedule</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>定时任务。</strong>30s tick 扫 · interval / once 两种,派 issue 或 message。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 7-8 页 巡检(基于 schedule)</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Artifacts</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>产物管理。</strong>群产物 + diff 预览 + 跨群可见,代码 / 报告都落这。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见 docs/INSTALL.md · /api/artifacts</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Skill</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>可复用流程。</strong>同一类问题第 3 次出现 → Agent 提议 skill create。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 5-6 页 持续学习 · 复用图谱</p>
+    </div>
+  </div>
+     <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Issue</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>任务单位。</strong>写盘必挂 issue,可抢单 / 审批 / 中断 / 续跑。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li>生命周期:open → in_progress → completed / failed</li>
+        <li>扩展:interrupt / append / continue</li>
+        <li>approval_policy:<code class="inline">r_allow</code> / <code class="inline">rw_allow</code></li>
+        <li>每次事件进 <code class="inline">issue_events</code>(可回放)</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 13 页治理 + 第 15-17 页资产排查</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Memory</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>长期记忆。</strong>Agent 干完活自动写一条,人 review 后 recall。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li>scope:group(本群) / global(全 mesh)</li>
+        <li>category:pitfall / decision / pattern / todo</li>
+        <li>promote 走 <code class="inline">/api/memory/:id/promote</code>(人审批)</li>
+        <li>prompt 注入走 <code class="inline">prompt-composer</code> 7 层组装</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 9-10 页持续学习</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Schedule</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>定时任务。</strong>30s tick 扫 · interval / once 两种,派 issue 或 message。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li><code class="inline">scheduled_tasks</code> 表 + 30s tick 调度</li>
+        <li>at-most-once:先 reschedule 再执行</li>
+        <li>两种 mode:agent(派 issue) / message(发群消息)</li>
+        <li>handler_key 走注册表(<code class="inline">ask-bridge-check</code> / <code class="inline">issue-patrol</code>)</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 11-12 页主动出击(基于 schedule)</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Artifacts</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>产物管理。</strong>群产物 + diff 预览 + 跨群可见,代码 / 报告都落这。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li><code class="inline">/api/artifacts</code> 列出群产物 + diff 预览</li>
+        <li>支持 <code class="inline">@alipay/pension-components</code> 这类 npm 产物</li>
+        <li>每 issue 关联 artifacts(在 issue_event 里可查)</li>
+        <li>terminal 可直接在 dashboard 跑</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见 docs/INSTALL.md · /api/artifacts</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Skill</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>可复用流程。</strong>同一类问题第 3 次出现 → Agent 提议 skill create。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li>skill 本身无可见性,靠 <code class="inline">/groups/:id/skills/:agent/bind</code> 绑</li>
+        <li>启动时把 <code class="inline">rotom-a2a-communicate</code> 写到 <code class="inline">~/.rotom/SKILL.md</code></li>
+        <li>已建:<code class="inline">issue-patrol-rules</code> / <code class="inline">test-skill</code></li>
+        <li>改规则 = 改 skill,不用动代码</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 9-10 页持续学习 · 复用图谱</p>
+    </div>
+  </div>
+     <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Issue</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>任务单位。</strong>写盘必挂 issue,可抢单 / 审批 / 中断 / 续跑。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 11-14 页 · 治理第 9 页</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Memory</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>长期记忆。</strong>Agent 干完活自动写一条,人 review 后 recall。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 5-6 页 持续学习</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Schedule</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>定时任务。</strong>30s tick 扫 · interval / once 两种,派 issue 或 message。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 7-8 页 巡检(基于 schedule)</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Artifacts</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>产物管理。</strong>群产物 + diff 预览 + 跨群可见,代码 / 报告都落这。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见 docs/INSTALL.md · /api/artifacts</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Skill</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>可复用流程。</strong>同一类问题第 3 次出现 → Agent 提议 skill create。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 5-6 页 持续学习 · 复用图谱</p>
+    </div>
+  </div>
+  <a class="live-link" href="http://localhost:3000/dashboard/groups/a9a72025-909c-4789-98a7-e4ea4cb688d0" target="_blank" rel="noopener">
+    <span class="ll-tag">现场实例</span>
+    <span class="ll-arrow">↗</span>
+    <span class="ll-text">看一个真实运行的群:<strong>群 a9a72025</strong> · 看看这个群挂载了哪些组件</span>
+  </a>
+  <div class="row" style="margin-top:14px">
+    1 句话:Dashboard = <strong>群聊 + Issue + Memory + Schedule + Artifacts + Skill</strong>,全挂在群下面,人 + Agent 共用同一套入口。
+  </div>
+</section>
+<!-- ============ 5 群就是工作台 ============ -->
+
+<section class="slide" data-n="5" data-title="群就是工作台 · 基础交互">
+  <div class="topbar"><span class="brand">背景 · 基础交互</span><span class="idx">05 / 18</span></div>
+  <h2>群就是工作台 · @ 交互 + 可以并发</h2>
+  <p class="lead">Dashboard 6 块都挂在群下面,那「群本身」就是工作台 —— 人和 Agent 怎么用它?三件事:@ 谁谁接活、#reply 触发桥接、多群并发。</p>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card lg">
+      <h4>@ 谁谁接活 · 路由到 worker</h4>
+      <p>群消息里 <code class="inline">@西花</code> / <code class="inline">@江德福</code> / <code class="inline">@瓦力</code> → Master <code class="inline">ws-hub/routing</code> 按 @ 解析目标 → 走 <code class="inline">router.ts</code> 派给对应 Worker(不是 broker,不直接 client→client)。<strong>Agent 之间互相 @ 也走同一路径</strong>(江德福 @ 瓦力接力 review 就是这条)。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:8px">代码:<code class="inline">src/master/ws-hub/routing.ts</code> + <code class="inline">src/master/router.ts</code></p>
+    </div>
+    <div class="card lg">
+      <h4>#reply 触发桥接 · 5min 不回自动升级</h4>
+      <p>A 在群里 <code class="inline">@B</code> + 内容里带 <code class="inline">#reply</code> 标记 → Master 自动建 ask-bridge(<code class="inline">ask_bridges</code> 表)。B @ 回复 A → mark answered;B 离线/不 @ 回复 → scheduler handler <code class="inline">ask-bridge-check</code>(20s tick)兜底 → 5min 仍无解 → 建 Issue 升级。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:8px">代码:<code class="inline">src/master/db/ask-bridges.ts</code> + <code class="inline">scheduler-handlers.ts</code></p>
+    </div>
+    <div class="card lg">
+      <h4>多群并发 · 人同时管多件事的体感</h4>
+      <p>Master 一个进程,接所有群的 WS 流量,谁在哪个群都无感。Issue 抢单 <code class="inline">maxConcurrent</code>(默认 2)限的是<strong>单 Agent 并发</strong>,不是全局 —— 西花在群 A 让江德福跑 issue,群 B 同时让瓦力跑 issue,两个 Agent 同时推进。同一群内多消息按群 <code class="inline">worker-chat</code> 串行队列。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:8px">代码:<code class="inline">src/executor/worker.ts</code> + <code class="inline">worker-chat.ts</code></p>
+    </div>
+    <div class="card lg">
+      <h4>Master 自己处理路由 / 排队 / 限流</h4>
+      <p>人不用关心并发:Master 做消息去重(<code class="inline">src/shared/dedup.ts</code>·5min TTL)、限流(默认 60 msg/min/agent · 豁免 chunk/heartbeat)、离线队列(100 条/24h TTL)。所有数字员工 <strong>不直连</strong>,全部经 Master 中转 —— 没有点对点连接。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:8px">代码:<code class="inline">src/master/offline-queue.ts</code> + <code class="inline">src/shared/dedup.ts</code></p>
+    </div>
+  </div>
+  <div class="flow" style="margin-top:18px">
+    <div class="step">西花 <code class="inline">@江德福</code> · 群 A</div>
+    <div class="arrow-r">→</div>
+    <div class="step">Master 路由 → 江德福 worker</div>
+    <div class="arrow-r">→</div>
+    <div class="step acc">江德福流式回复</div>
+    <div class="arrow-r">|</div>
+    <div class="step">同时 西花 <code class="inline">@瓦力</code> · 群 B</div>
+    <div class="arrow-r">→</div>
+    <div class="step">Master 路由 → 瓦力 worker</div>
+    <div class="arrow-r">→</div>
+    <div class="step v acc">瓦力并发 PR review</div>
+  </div>
+</section>
+<!-- ============ 6 外部集成 ============ -->
+
+<section class="slide" data-n="6" data-title="外部集成 · 嵌入其他工作流 + 与 mesh Agent 沟通">
+  <div class="topbar"><span class="brand">主线 · 外部集成</span><span class="idx">06 / 18</span></div>
+  <h2>外部集成 · 嵌入其他工作流 · 与 mesh Agent 沟通</h2>
+  <p class="lead">你的 codex / claude 在外面干别的活,中间卡了 —— 把 mesh 里的 agent 拉进来问一句就完事。前提:Master :28800 已跑 + token 在 <code class="inline">~/.rotom/executor.config.json</code>。</p>
+  <div class="install-bar">
+    <span class="ib-label">Client 端装一次(每台接入的机器)</span>
+    <div class="ib-step">
+      <span class="ib-no">①</span>
+      <code class="inline">tnpm install -g @alipay/rotom</code>
+    </div>
+    <div class="ib-step">
+      <span class="ib-no">②</span>
+      <code class="inline">rotom init --master 10.x.x.x:28800 --tools claude,codex,hermes,openclaw</code>
+    </div>
+    <div class="ib-step">
+      <span class="ib-no">③</span>
+      <span class="ib-hint">写 <code class="inline">~/.rotom/executor.config.json</code>(worker 启动参数 + mesh token + Master 地址)</span>
+    </div>
+  </div>
+  <div class="grid g2" style="margin-top:10px">
+    <div class="card lg">
+      <h4>两种群模式(按场景二选一)</h4>
+      <p><span class="pill">普通群</span> · 多 Agent 协作 · <code class="inline">@</code> 触发 worker 自动接话</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 8px 0">→ <code class="inline">rotom group create "&lt;需求&gt;" --agents a,b,c --message "@全体 ..."</code></p>
+      <p><span class="pill v">单播群 (--a2a-direct)</span> · 点对点 · 消息<strong>不广播</strong> · worker 不自动醒 · 只在 <code class="inline">--need-reply</code> 显式点名时起一手</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 0 0">→ <code class="inline">rotom group create "&lt;你和 B 的小窗口&gt;" --agents 你,B --a2a-direct</code></p>
+    </div>
+    <div class="card lg">
+      <h4>沟通循环 · 一问一答</h4>
+      <p><strong>提问</strong>:<code class="inline">rotom group send &lt;gid&gt; &lt;target&gt; "&lt;问题&gt;" --need-reply</code></p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin:2px 0 8px 0">master 自动补 <code class="inline">@target</code> + 登记 <code class="inline">requestId → asker</code>;对方回复时 master <strong>硬剥</strong> <code class="inline">@&lt;asker&gt;</code> 再入库,你的 worker 不被触发,不会来回聊</p>
+      <p><strong>等回复</strong>:<code class="inline">poll-replies.sh &lt;gid&gt; --as &lt;你&gt;</code> · 默认 10 轮 × 30s = 5min · 找到退出 0 · 超时退出 2</p>
+    </div>
+  </div>
+  <div class="flow" style="margin-top:10px">
+    <div class="step">外面 codex 卡</div>
+    <div class="arrow-r">→</div>
+    <div class="step"><code class="inline">group create --a2a-direct</code></div>
+    <div class="arrow-r">→</div>
+    <div class="step"><code class="inline">send --need-reply</code></div>
+    <div class="arrow-r">→</div>
+    <div class="step acc">江德福醒 + 回</div>
+    <div class="arrow-r">→</div>
+    <div class="step v acc">codex 拿到答案继续</div>
+  </div>
+  <div class="warn-row" style="margin-top:8px">
+    5 个反模式:<strong>轮询 &lt; 30s</strong> · <strong>不帶 <code class="inline">--need-reply</code> 直接 send</strong>(对方 SKIP,消息白发)· 明确任务塞群消息(用 issue)· 5+ 轮没收敛(升级 task issue)· 写盘没挂 issue · <strong style="color:var(--warn)">群消息异步,绝不能编造对方回答</strong>
+  </div>
+</section>
+<!-- ============ 7 V3/V4 迭代 ============ -->
+
+<section class="slide" data-n="7" data-title="迭代 V3/V4">
+  <div class="topbar"><span class="brand">主线 · 迭代</span><span class="idx">07 / 18</span></div>
+  <h2>迭代 V3 / V4 · rotom 优化方向 V3/V4 两个群</h2>
+  <p class="lead">V3/V4 不是新版本号 —— 是两个专门的群,功能就是<strong>在群里面迭代 rotom 本身</strong>:产品方向 / UI 反馈 / rotom 自己的 issue,全部丢这两个群让 Agent 干。</p>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="v3v4">
+      <div class="ver">V3 群 · rotom优化方向V3</div>
+      <a class="live-link" href="http://localhost:3000/dashboard/groups/f080e51e-82bc-4b91-8f73-350c4206bd74" target="_blank" rel="noopener" style="margin:0 0 10px 0">
+        <span class="ll-tag">实际群</span>
+        <span class="ll-arrow">↗</span>
+        <span class="ll-text">打开 rotom优化方向V3:<strong>群 f080e51e</strong></span>
+      </a>
+      <h4>产品方向 + UI 反馈</h4>
+      <div class="feat">Agent 昵称(西花-claude / 西花-codex 太长)· group sessions 位置 · 终端吸底</div>
+      <div class="feat">产物文件预览(head 对比 head 位置突出)· 群聊列表成员数量紧凑</div>
+      <div class="feat">可插拔 skill 管理(不同群不同 agent 加载不同 skill)· 群内角色设计</div>
+      <div class="feat" style="color:var(--fg3)">5 个 open issue 已迁到 V4 群(f080e51e → 54ab4777)</div>
+    </div>
+    <div class="v3v4">
+      <div class="ver">V4 群 · rotom优化V4</div>
+      <a class="live-link" href="http://localhost:3000/dashboard/groups/54ab4777-002f-4e4c-b045-b4892b6533cf" target="_blank" rel="noopener" style="margin:0 0 10px 0">
+        <span class="ll-tag">实际群</span>
+        <span class="ll-arrow">↗</span>
+        <span class="ll-text">打开 rotom优化V4:<strong>群 54ab4777</strong></span>
+      </a>
+      <h4>rotom 自身的 issue 执行</h4>
+      <div class="feat">Agent profile 精简 + 群级别覆盖(position / bio)</div>
+      <div class="feat">apply patch 后自动滚动影响阅读 · issue ESC 修复</div>
+      <div class="feat">多 Agent 协作设计(群内交付 + 超时重试)· MoA 试做</div>
+      <div class="feat">Artifacts 终端展开高度 · 群聊嵌入 codex 工作流(免 executor)</div>
+    </div>
+  </div>
+  <div class="quote" style="margin-top:14px">
+    两个群 7 个 Agent 一起干 rotom 自己的活 —— 西花提需求 / 阿甘建 issue / 西花-claude·codex·hermes 自动接活 / system push 进度。典型的「<strong style="color:var(--ok)">用 rotom 迭代 rotom 自身</strong>」。
+  </div>
+</section>
+<!-- ============ 8 参照学习 ============ -->
+
+<section class="slide" data-n="8" data-title="参照学习">
+  <div class="topbar"><span class="brand">背景 · 参照学习</span><span class="idx">08 / 18</span></div>
+  <h2>群聊之上：我们参照学习的三件事</h2>
+  <p class="lead">rotom 自己在做什么 + 我们重点学 ClaudeTag 的 2 个能力 + 借鉴 Hermes 的多 Agent 协作模式。</p>
+  <div class="ct-card">
+    <div class="ct-row">
+      <div class="col">
+        <h4>1 · multica CLI 变数字员工</h4>
+        <p>把 multica 这类专业 CLI 工具,通过 rotom 封装成可协作的数字员工 —— 1 Worker = 1 Agent,统一调度、派活、看进度。</p>
+        <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:10px 0 0 0">
+          <li>multica(codex / claude / hermes / openclaw)统一纳管</li>
+          <li>1 Worker = 1 Agent,token + WS 长连接</li>
+          <li>Master :28800 统一路由 / 限流 / 离线队列</li>
+          <li>Dashboard 集中看进度 + 派活</li>
+        </ul>
+        <p style="font-size:11px;color:var(--fg3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.15em;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">★ rotom 自己的底盘 · 贯穿全篇</p>
+      </div>
+      <div class="col">
+        <h4>2 · ClaudeTag 持续学习 + 主动出击</h4>
+        <p>两个核心能力 —— 是这次重点学的对象:</p>
+        <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:10px 0 0 0">
+          <li><strong>持续学习</strong>:干完活自动落 memory / skill · 沉淀到 rotom 内</li>
+          <li><strong>主动出击</strong>:Agent 不等派活,自动巡检 + 写 issue · 1h 跑一次</li>
+          <li>复用 rotom 已有:群 + 定时任务 + Issue · 不另搞一套</li>
+          <li>人 review 后 promote · 错误记忆有 reject 通道</li>
+        </ul>
+        <p style="font-size:11px;color:var(--acc);font-family:var(--mono);text-transform:uppercase;letter-spacing:.15em;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">★ 重点学 · 见第 9-12 页</p>
+      </div>
+      <div class="col">
+        <h4>3 · Hermes MoA · 三个臭皮匠讨论模式</h4>
+        <p>Mixture of Agents:1 个问题 → 3 个 Agent <strong>同时</strong>独立作答 → 第 4 个 Agent 做评委汇总 → 输出最优解。</p>
+        <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:10px 0 0 0">
+          <li>并发:3 个 worker 同时跑,不出第 4 个之前不汇总</li>
+          <li>分工:不是串行独干,是真·多视角</li>
+          <li>评委:汇总时再做去重 + 加权 + 排版</li>
+          <li>适合:架构选型 / 方案对比 / 关键决策</li>
+        </ul>
+        <p style="font-size:11px;color:var(--fg3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.15em;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">★ 借鉴思路 · rotom 群聊 + 并发天然适配</p>
+      </div>
+    </div>
+  </div>
+  <div class="warn-row" style="margin-top:14px">
+    重点:这次讲的是 <strong>2(持续学习 + 主动出击)</strong>。1 是 rotom 自己的底盘贯穿全篇,3 是 rotom 群聊 + 并发天然适配 MoA 思路。
+  </div>
+</section>
+<!-- ============ 9 能力 1 持续学习 ============ -->
+
+<section class="slide" data-n="9" data-title="能力 1 · 持续学习">
+  <div class="topbar"><span class="brand">主线 · 能力 1</span><span class="idx">09 / 18</span></div>
+  <h2>能力 1 · 持续学习 <span style="font-size:16px;color:var(--fg3);font-weight:400">/ 记忆 + skill</span></h2>
+  <div class="lr" style="margin-top:14px;flex:1;display:grid;grid-template-columns:1.4fr 1fr;gap:18px;align-items:stretch">
+    <div class="lr-left" style="display:flex;flex-direction:column;gap:10px;min-height:0">
+      <div class="scenario" style="flex:0 0 auto">
+        <div class="tag">LEARN-LOOP · 能力 1</div>
+        <h3>Agent 干完活,会自己变强</h3>
+        <p>每次 Issue 完成后自动摘要成 <code class="inline">memory</code>;重复出现的模式被 <code class="inline">skill create</code> 沉淀;人 review 后 promote。下一次同类任务自动召回。</p>
+        <div class="points" style="grid-template-columns:1fr;gap:8px;margin-top:12px">
+          <div class="step-card" style="background:rgba(94,234,212,.06)"><span class="n">1</span><div class="t"><div class="step-title">输入</div>完成态 issue + 关键决策点</div></div>
+          <div class="step-card" style="background:rgba(167,139,250,.06);border-left-color:var(--acc2)"><span class="n" style="background:var(--acc2);color:#fff">2</span><div class="t"><div class="step-title">加工</div>rotom memory add / skill create</div></div>
+          <div class="step-card"><span class="n">3</span><div class="t"><div class="step-title">输出</div>下次同类任务自动召回上下文</div></div>
+        </div>
+      </div>
+      <a class="live-link" href="http://localhost:3000/dashboard/groups/c211307e-79ae-405a-b69c-b7360f5d375e/issues/69cad764-89f0-43f6-9d79-4aa247ef85a1" target="_blank" rel="noopener" style="margin-top:auto">
+        <span class="ll-tag">实际案例</span>
+        <span class="ll-arrow">↗</span>
+        <span class="ll-text">点开看 1 个 issue 怎么走完 3 步:<strong>群 c211307e</strong> · <strong>issue 69cad764</strong></span>
+      </a>
+    </div>
+    <div class="lr-right" style="display:flex;flex-direction:column;min-height:0">
+      <div class="img-shot" style="flex:1;margin:0;min-height:0;background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+        <img src="https://mdn.alipayobjects.com/huamei_vaei4o/afts/img/o_wiRqm5nj8AAAAASWAAAAgAenEvAQFr/fmt.webp" alt="持续学习示意" style="max-width:100%;max-height:100%;object-fit:contain;display:block">
+      </div>
+    </div>
+  </div>
+  <!-- IMG: 记忆管理 / 技能绑定 截图 -->
+</section>
+<!-- ============ 10 能力 1 落地 ============ -->
+
+<section class="slide" data-n="10" data-title="能力 1 续 · 落地">
+  <div class="topbar"><span class="brand">主线 · 能力 1 落地</span><span class="idx">10 / 18</span></div>
+  <div class="title-row">
+  <h2>能力 1 续 · 端到端交付放出去就出活</h2>
+  <a class="live-link" href="http://localhost:3000/dashboard/groups/c211307e-79ae-405a-b69c-b7360f5d375e/issues/635c1c28-9047-4176-80b0-6a423f219904" target="_blank" rel="noopener">
+    <span class="ll-tag">实际 issue</span>
+    <span class="ll-arrow">↗</span>
+    <span class="ll-text">Codex 对话上报与卡点分析工具 · <strong>issue 69cad764 → 635c1c28</strong></span>
+  </a>
+  </div>
+  <p class="lead">背景:最近在实践端到端交付(E2ED),需要监控一下「其他同学」的执行卡点。所以临时做了一个 Codex 当日对话上报工具 —— 把本机 ~/.codex/sessions 当天所有会话增量上报到局域网一台机器,服务端还原对话展示并标注卡点。</p>
+  <div class="deep" style="margin-top:14px">
+    <div class="deep-left">
+      <h3>特点:放出去就没再管,又得到了 OK 的结果</h3>
+      <div class="step-card"><span class="n">1</span><div class="t">09:17 · 西花丢需求进群:<strong>"做一个 codex 当天对话上报的工具,上报到局域网"</strong> + 目标 IP <code class="inline">30.249.225.104</code></div></div>
+      <div class="step-card"><span class="n">2</span><div class="t">09:18 · 江德福先给初版设计 + 反问关键点(数据源 / 上报粒度 / 鉴权)</div></div>
+      <div class="step-card"><span class="n">3</span><div class="t">09:26 · 西花补需求:"<strong>服务端要还原对话展示,目的是发现卡点</strong>" → 江德福据此调整方案</div></div>
+      <div class="step-card"><span class="n">4</span><div class="t">09:27 · "行,你创建 issue 开始吧" → <strong>江德福自己建 issue + 自己接活</strong>(<code class="inline">69cad764</code> / priority high)</div></div>
+      <div class="step-card"><span class="n">5</span><div class="t">09:28 ~ 11:11 · <strong>西花去干别的了,没再管</strong>。系统 6 次 push 进度,江德福自己写完两个工具(采集端 + 服务端)+ 端到端验证 + 切浅色主题 + commit + push</div></div>
+      <div class="step-card ok"><span class="n">6</span><div class="t">11:13 · 西花回来看一眼:"<strong>做的不错 👍</strong>" 附截图(浅色主题 UI 跑通)</div></div>
+      <div class="step-card warn" style="margin-top:10px"><span class="n">+</span><div class="t">12:19 · 江德福自跑 <strong>[记忆提取] 子 issue</strong> <code class="inline">635c1c28</code>,沉淀 1 条 pitfall(Codex rollout user/assistant 消息写两遍)</div></div>
+    </div>
+    <div class="deep-right">
+      <div class="panel-title">群消息时间线(可滚动 · 实际可回放)</div>
+      <div class="timeline">
+        <div class="ev"><div class="who">西花</div><div class="what">@江德福 做一个 codex 当天对话上报的工具,上报到局域网一台机器,先看方案</div><div class="when">09:17 · 任务起点</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">理需求 + 给初版设计 + 反问关键点(数据源 / 上报粒度 / 鉴权)</div><div class="when">09:18</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">当天所有历史会话 + 目标 IP <code class="inline">30.249.225.104</code></div><div class="when">09:21</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">确认 sessions 路径 <code class="inline">~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl</code>(JSONL)</div><div class="when">09:22</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">全是 mac 机器</div><div class="when">09:25</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">launchd 统一部署方案 + 反问 3 点(语言/端口/上报字段)</div><div class="when">09:25</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">"Hono 是啥"</div><div class="when">09:25 · 反问</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">解释 Hono(类似 Express,多运行时,更快更小)</div><div class="when">09:26</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what"><strong>补需求</strong>:服务端要还原对话展示 → 目的是<strong>发现卡点</strong></div><div class="when">09:26 · 关键转折</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">"行,你创建 issue 开始吧"</div><div class="when">09:27 · 授权</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">issue <code class="inline">69cad764</code> · priority high · 派给自己 · dispatch 进工作目录</div><div class="when">09:28 · 进入写盘</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ Issue 已由 江德福 完成(turn 1)</div><div class="when">09:43 · 第 1 次 push</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 2)</div><div class="when">09:47</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 3)</div><div class="when">09:59</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 4)</div><div class="when">10:11</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 5)</div><div class="when">10:33</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 6) · <strong>整体用浅色背景,改完后 commit and push</strong></div><div class="when">11:00 · 用户中途追加需求</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 7) · <code class="inline">7ea77e8 style(collector): 切浅色主题</code></div><div class="when">11:11 · 收口</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what"><strong>"做的不错 👍"</strong> + 截图(浅色 UI 跑通)</div><div class="when">11:13 · 验收</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ [记忆提取] 子 issue <code class="inline">635c1c28</code> 已由 江德福 完成(1 条 pitfall)</div><div class="when">12:19 · 自我沉淀</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">"你搜下记忆有啥" → 江德福搜到 1 条群级 pitfall:Codex rollout user/assistant 写两遍</div><div class="when">13:20 · 验证沉淀</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ 11 能力 2 主动出击 ============ -->
+
+<section class="slide" data-n="11" data-title="能力 2 · 主动出击">
+  <div class="topbar"><span class="brand">主线 · 能力 2</span><span class="idx">11 / 18</span></div>
+  <h2>能力 2 · 主动出击 <span style="font-size:16px;color:var(--fg3);font-weight:400">/ 复用 群 + 定时任务 + Issue</span></h2>
+  <p class="lead">主动出击不是另搞一套 —— 复用 rotom 三个已有的能力(群 / 定时任务 / Issue)拼出来。建 1 个 <code class="inline">type=patrol</code> 群,挂 1 个每小时跑的定时任务,任务就是建 1 个 [巡检] issue 让巡检员自己判。</p>
+  <div class="deep" style="margin-top:14px">
+    <div class="deep-left">
+      <h3>三个已有能力怎么拼(没有新概念)</h3>
+      <div class="step-card"><span class="n">1</span><div class="t"><strong>复用「群」</strong> · 巡检群 = 普通群 + <code class="inline">type=patrol</code> 标记(<code class="inline">groups.type</code> 字段)· 限 1 个未归档 · 限 1 个巡检员 · 走群消息 + issue 完整流程,没有任何专用 UI</div></div>
+      <div class="step-card"><span class="n">2</span><div class="t"><strong>复用「定时任务」</strong> · 建群时 auto-bootstrap 1 个 <code class="inline">scheduled_tasks</code> 行(<code class="inline">handler_key=issue-patrol</code> · interval 3600s)· 共用 30s tick + at-most-once + grace window + dashboard 可见</div></div>
+      <div class="step-card"><span class="n">3</span><div class="t"><strong>复用「Issue」</strong> · handler 跑到点 → 派 1 个 <code class="inline">[巡检] YYYY-MM-DD HH:mm</code> issue 给巡检员(走 issue 抢单 / dispatch / 审批 / 终态全流程)· 巡检员用 LLM 判 ready 后用 result 字段回写</div></div>
+      <div class="step-card"><span class="n">4</span><div class="t"><strong>复用「Skill」</strong> · 巡检规则走 <code class="inline">issue-patrol-rules</code> skill 内容当 prompt 注入(同一个 skill 体系,不是新机制)· 想改规则 → 改 skill 就行</div></div>
+      <div class="step-card ok"><span class="n">+</span><div class="t"><strong>只多了 1 张表 + 1 个 handler</strong> · <code class="inline">issue_patrol_logs</code>(migrations/043)+ <code class="inline">scheduler-handlers.ts</code> 里 ~80 行 handler 代码 · 其他全是复用</div></div>
+    </div>
+    <div class="deep-right">
+      <div class="panel-title">当前实跑状态(看板)</div>
+      <div class="kpi-row" style="grid-template-columns:1fr 1fr;margin:0 0 10px 0">
+        <div class="kpi"><div class="v">1h</div><div class="l">interval · 3600s</div></div>
+        <div class="kpi"><div class="v">3</div><div class="l">throughputCap</div></div>
+      </div>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);line-height:1.7;margin:0 0 12px 0">
+        巡检群:<strong style="color:var(--acc)">全局issue巡检群</strong><br>
+        巡检员:<strong style="color:var(--acc)">阿甘</strong> · task #114 · enabled<br>
+        下次跑:<code class="inline">2026-07-01 23:38</code><br>
+        上次:<code class="inline">ok</code> · 候选 5 / ready 1
+      </p>
+      <div class="panel-title">复用关系图(全是 rotom 已有)</div>
+      <div class="timeline">
+        <div class="ev"><div class="who">群</div><div class="what"><code class="inline">groups.type=patrol</code> · 普通群 + 1 个标记字段</div><div class="when">→ 群消息 / 成员 / 设置 全复用</div></div>
+        <div class="ev"><div class="who">定时</div><div class="what"><code class="inline">scheduled_tasks</code> + <code class="inline">handler_key</code> 走注册表</div><div class="when">→ 30s tick / at-most-once 全复用</div></div>
+        <div class="ev"><div class="who">Issue</div><div class="what">handler 派 1 个 <code class="inline">[巡检]</code> issue · 巡检员接活</div><div class="when">→ 抢单 / dispatch / 审批 全复用</div></div>
+        <div class="ev"><div class="who">Skill</div><div class="what"><code class="inline">issue-patrol-rules</code> 注入 prompt 当规则</div><div class="when">→ 改规则 = 改 skill</div></div>
+        <div class="ev"><div class="who">Memory</div><div class="what">巡检员判完可 <code class="inline">rotom memory add</code> 沉淀</div><div class="when">→ 能力 1 持续学习 自然联动</div></div>
+        <div class="ev" style="border-left:2px solid var(--warn);padding-left:8px;margin-left:-10px"><div class="who">例外</div><div class="what"><code class="inline">issue_patrol_logs</code> 表 + handler ~80 行</div><div class="when">migration 043 · 唯一新增</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ 12 能力 2 落地 ============ -->
+
+<section class="slide" data-n="12" data-title="能力 2 续 · 落地">
+  <div class="topbar"><span class="brand">主线 · 能力 2 落地</span><span class="idx">12 / 18</span></div>
+  <div class="title-row">
+    <h2>能力 2 续 · 我们怎么落地的</h2>
+    <a class="live-link" href="http://localhost:3000/dashboard/toolbox/issue-patrol" target="_blank" rel="noopener">
+      <span class="ll-tag">看板</span>
+      <span class="ll-arrow">↗</span>
+      <span class="ll-text">toolbox / issue-patrol · 看实跑状态 + run 历史</span>
+    </a>
+  </div>
+  <p class="lead">不吹概念 —— 看现在实际跑出来的:1 个巡检群 + 1 个巡检员 + 1h 跑一次,每轮扫 5 个候选、命中 0~2 个 ready,error 路径有兜底。</p>
+  <div class="deep" style="margin-top:14px">
+    <div class="deep-left">
+      <h3>实跑数据(近 24h 抽样 · /api/issues-patrol/runs)</h3>
+      <div class="step-card"><span class="n">✓</span><div class="t"><strong>1 巡检群 / 1 巡检员</strong> · <code class="inline">全局issue巡检群</code>(<code class="inline">003ff00a</code>)· 巡检员 阿甘 · 跨所有群扫候选</div></div>
+      <div class="step-card"><span class="n">✓</span><div class="t"><strong>1h 跑一次 · 单次 30s 量级</strong> · interval 3600s · 30s tick 触发 handler · 单次 <code class="inline">candidates_scanned=5</code> · 耗时 ~30s(<code class="inline">started_at</code> → <code class="inline">finished_at</code>)</div></div>
+      <div class="step-card"><span class="n">✓</span><div class="t"><strong>判 ready 平均 0~2 / 轮</strong> · 24h 抽样 20 个 run,completed 中 ready=0 的 8 次 / ready=1 的 8 次 / ready=2 的 4 次 · 大多数不打扰人</div></div>
+      <div class="step-card"><span class="n">✓</span><div class="t"><strong>重叠跳过</strong> · 上一轮 [巡检] issue 还在 in_progress → 当轮 <code class="inline">skipped_overlap</code> · 24h 命中 2 次 · 防止巡检员被压垮</div></div>
+      <div class="step-card warn"><span class="n">!</span><div class="t"><strong>异常路径有兜底</strong> · 6/30 22:48 巡检员 result 输出非 JSON → 解析失败 → run 标 error(不静默)· issue 不被认领 · 下轮照常跑</div></div>
+    </div>
+    <div class="deep-right">
+      <div class="panel-title">24h 巡检 run 抽样(倒序)</div>
+      <div class="timeline">
+        <div class="ev"><div class="who">07-01 22:38</div><div class="what">scanned 5 / ready 1 · ok</div><div class="when">lastStatus: ok</div></div>
+        <div class="ev"><div class="who">07-01 21:38</div><div class="what">派 1 个 [巡检] issue → 阿甘</div><div class="when">dispatched · in_progress</div></div>
+        <div class="ev"><div class="who">07-01 19:18</div><div class="what">scanned 5 / ready 1 · completed</div><div class="when">耗时 3h42m(巡检员干到 22:00)</div></div>
+        <div class="ev"><div class="who">07-01 18:25</div><div class="what"><strong style="color:var(--warn)">skipped_overlap</strong> · 上一轮 patrol issue 还在 in_progress</div><div class="when">重叠保护</div></div>
+        <div class="ev"><div class="who">07-01 17:18</div><div class="what">scanned 5 / ready 1 · completed</div><div class="when">ok</div></div>
+        <div class="ev"><div class="who">07-01 15:41</div><div class="what">派 1 个 [巡检] issue → 阿甘</div><div class="when">dispatched</div></div>
+        <div class="ev"><div class="who">06-30 22:48</div><div class="what"><strong style="color:var(--err)">error: bad result JSON</strong> · 巡检员把结果写到了 <code class="inline">patrol-result.json</code> 而非直接输出 JSON</div><div class="when">解析失败 · issue 不认领</div></div>
+        <div class="ev"><div class="who">06-30 21:47</div><div class="what">scanned 5 / ready 0 · completed</div><div class="when">无 ready(都很成熟)</div></div>
+        <div class="ev"><div class="who">06-30 19:47</div><div class="what">scanned 5 / ready 2 · completed</div><div class="when">一次推 2 个候选给 review</div></div>
+        <div class="ev"><div class="who">06-30 18:48</div><div class="what">scanned 5 / ready 0 · completed</div><div class="when">ok</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ 13 治理一页清 ============ -->
+
+<section class="slide" data-n="13" data-title="治理一页清">
+  <div class="topbar"><span class="brand">背景 · 治理</span><span class="idx">13 / 18</span></div>
+  <h2>治理一页清 · 写盘必挂 Issue</h2>
+  <div class="quote">"Agent 在群里没 in_progress issue 时,只能 Read / Grep / Glob。遇到改动诉求,先 <code class="inline">rotom issue create</code> 或提示发起方建。"</div>
+  <div class="gov-grid">
+    <div class="gov-card">
+      <h4>审批四类</h4>
+      <p><span class="pill">exec</span> Bash · <span class="pill">file_change</span> 写文件 · <span class="pill">plan</span> 计划 · <span class="pill">ask</span> 反问</p>
+    </div>
+    <div class="gov-card">
+      <h4>approval_policy</h4>
+      <p><span class="pill v">rw_allow</span> 默认 · 本地直接 accept<br><span class="pill w">r_allow</span> PreToolUse 挂起 → WS 推 dashboard → Accept/Deny</p>
+    </div>
+    <div class="gov-card">
+      <h4>只读 Bash 白名单</h4>
+      <p><code class="inline">readonly-allowlist.ts</code>:<code class="inline">ls</code> / <code class="inline">cat</code> / <code class="inline">git log</code> / <code class="inline">rotom whoami</code> 静默 accept。<strong style="color:var(--warn)">fail-closed</strong>:管道 / 重定向 / <code class="inline">$()</code> / 前导 env 赋值一律不命中。</p>
+    </div>
+    <div class="gov-card">
+      <h4>category 过滤</h4>
+      <p><span class="pill v">category=Agent</span> 抢单 · <span class="pill">category=真人</span> 只占位</p>
+    </div>
+    <div class="gov-card">
+      <h4>Issue 状态机</h4>
+      <p><code class="inline">pending → in_progress → completed/failed</code><br>支持 <strong style="color:var(--warn)">interrupt 保留 session</strong> + <strong style="color:var(--warn)">append 续跑 pendingAppends</strong><br><strong style="color:var(--err)">interrupt ≠ cancel</strong>(cancel 才翻 cancelled 终态)</p>
+    </div>
+    <div class="gov-card">
+      <h4>Ask-bridge 5min 升级</h4>
+      <p>A 在群里 @B + <code class="inline">#reply</code> 标记 → master 自动建 bridge<br>20s tick 扫 bridge → 超时建 Issue 升级</p>
+    </div>
+  </div>
+  <div class="warn-row" style="margin-top:10px">私聊已下线,所有 a2a 走 <code class="inline">rotom group send &lt;groupId&gt; &lt;target&gt; ...</code> + @mention。</div>
+</section>
+<!-- ============ 14 rotom CLI 一图流 ============ -->
+
+<section class="slide" data-n="14" data-title="rotom CLI 一图流">
+  <div class="topbar"><span class="brand">背景 · CLI</span><span class="idx">14 / 18</span></div>
+  <h2>rotom CLI 一图流 · 17 个子命令</h2>
+  <p class="lead">身份解析:<code class="inline">ROTOM_AGENT</code> env > <code class="inline">--as &lt;name&gt;</code> > <code class="inline">defaultAgent</code> > executor.config 自动发现。<strong style="color:var(--err)">永远不接受 --from</strong>。</p>
+  <div class="cli-row">
+    <div class="cli-card"><div class="h">身份 / 启动</div><div class="b">init · whoami · status · config · master · executor</div></div>
+    <div class="cli-card"><div class="h">协作</div><div class="b">group list/members/history/send · issue * · ask</div></div>
+    <div class="cli-card"><div class="h">沉淀</div><div class="b">memory · skill · note · schedule · schedule-patterns</div></div>
+    <div class="cli-card"><div class="h">观测</div><div class="b">directory · audit · stats · share</div></div>
+  </div>
+  <pre style="margin-top:14px"><span style="color:var(--fg3)"># 最常用的 5 条(讲 1 遍就够)</span>
+rotom init                                  <span style="color:var(--fg3)"># 首次 bootstrap</span>
+rotom whoami
+rotom directory --pretty
+rotom group send &lt;groupId&gt; Claude·Agent "@Claude·Agent 帮我看下 #ISS-42 进度"
+rotom issue create &lt;groupId&gt; --title "..." --priority high</pre>
+  <div class="row" style="margin-top:10px">
+    Agent 在容器内通过 Bash 调 <code class="inline">rotom</code>(加载 <code class="inline">skill/rotom-a2a-communicate</code>),真人 / Claude Code 也能在 shell 手动用 —— <strong>同一套身份、同一个出口</strong>。
+  </div>
+</section>
+<!-- ============ 15 资产排查 开场 ============ -->
+
+<section class="slide" data-n="15" data-title="真实问题 · 资产排查">
+  <div class="topbar"><span class="brand">主线 · 真实问题</span><span class="idx">15 / 18</span></div>
+  <h2>真实问题 · 资产列表 label 排查 + PR review</h2>
+  <p class="lead">业务反馈线上资产列表第二列文案突然变了(原本「至 85 岁预估累计可领」变成「到期累计可领」),需要追到根因 —— 同时 review 一个去 desc 渲染的 PR,顺手做空值审计。</p>
+  <a class="live-link" href="http://localhost:3000/dashboard/groups/2fec433e-41e7-4ace-8dd5-d5fa0171d39a" target="_blank" rel="noopener">
+    <span class="ll-tag">实际群</span>
+    <span class="ll-arrow">↗</span>
+    <span class="ll-text">打开养老金资产排查的真实群:<strong>群 2fec433e</strong> · 看 44 条消息怎么把两个任务接力走完</span>
+  </a>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card lg">
+      <h4>任务 A · label 变了的根因追溯</h4>
+      <p>跨 <code class="inline">egg-united-wealth-insure</code> / <code class="inline">pension</code> / <code class="inline">pensionbff</code> 三个项目,定位第二列 label 数据来源 → 对比前后数据 → 找到核心代码 → 沉淀 memory + 建 issue</p>
+      <p class="meta" style="margin-top:6px;color:var(--fg3)">耗时 ~12 min · 6 轮对话 · 沉淀 1 memory + 1 issue</p>
+    </div>
+    <div class="card lg">
+      <h4>任务 B · PR review + 空值审计</h4>
+      <p>review <code class="inline">S090011757032</code> + 排查「去转入」按钮渲染位置 + 审改动会不会引入新的空值挂页点</p>
+      <p class="meta" style="margin-top:6px;color:var(--fg3)">耗时 ~1 h · 接力 7 轮 · 瓦力 ↔ 西花 4 次实测互检</p>
+    </div>
+  </div>
+  <div class="warn-row" style="margin-top:14px">
+    这一节讲三件事:<strong>1</strong> 群里两个任务怎么接力走完(江德福 → 瓦力);<strong>2</strong> Agent 也会犯错 + 怎么自己纠错(瓦力被西花实测反驳两次);<strong>3</strong> 这次真实沉淀的资产(memory / issue / 风险点)。
+  </div>
+</section>
+<!-- ============ 16 资产排查 过程 ============ -->
+
+<section class="slide" data-n="16" data-title="深讲 · 排查过程">
+  <div class="topbar"><span class="brand">主线 · 深讲</span><span class="idx">16 / 18</span></div>
+  <div class="title-row">
+  <h2>深讲 · 资产排查 · 群 2fec433e</h2>
+  <a class="live-link" href="http://localhost:3000/dashboard/groups/2fec433e-41e7-4ace-8dd5-d5fa0171d39a" target="_blank" rel="noopener">
+    <span class="ll-tag">实际群</span>
+    <span class="ll-arrow">↗</span>
+    <span class="ll-text">打开养老金资产排查的真实群:<strong>群 2fec433e</strong> · 看 44 条消息怎么把两个任务接力走完</span>
+  </a>
+  </div>
+  <div class="deep" style="margin-top:14px">
+    <div class="deep-left">
+      <h3>任务 A · 链路追溯 (西花 → 江德福)</h3>
+      <div class="step-list">
+      <div class="step-card"><span class="n">1</span><div class="t">西花发问:资产列表第二列 label 由什么决定?给接口 <code class="inline">com.alipay.pensionbff.asset.list</code></div></div>
+      <div class="step-card"><span class="n">2</span><div class="t"><strong>江德福</strong> 梳理 3 项目数据流:<code class="inline">AssetColunm/index.tsx:25-32</code> → <code class="inline">inventoryColumns</code> → <code class="inline">x.label</code> 渲染</div></div>
+      <div class="step-card"><span class="n">3</span><div class="t">对比 label/desc 前后数据:<code class="inline">"至85岁预估累计可领"</code> → <code class="inline">"到期累计可领"</code>,<strong style="color:var(--err)">desc 字段被移除</strong></div></div>
+      <div class="step-card"><span class="n">4</span><div class="t">定位核心代码 <code class="inline">unitedAssetInsure.ts:337 getInventoryColumns</code> + Loki <code class="inline">lifeProductCategory85Desc</code> 配置驱动</div></div>
+      <div class="step-card"><span class="n">5</span><div class="t">西花改方向:不配了改前端去 desc → 江德福重新定位到 <code class="inline">@alipay/pension-components</code> npm 包 <code class="inline">AssetColunm/index.js:59</code></div></div>
+      <div class="step-card"><span class="n">6</span><div class="t">记 memory <code class="inline">2273d7fd-...</code> + 建 issue <code class="inline">0e2f3f6d-...</code> 启动写盘</div></div>
+
+      <h3 style="margin-top:18px">任务 B · PR review (西花 → 瓦力)</h3>
+      <div class="step-card"><span class="n">1</span><div class="t">西花 @瓦力 review <code class="inline">PR S090011757032</code> + 追问「去转入」按钮渲染条件</div></div>
+      <div class="step-card"><span class="n">2</span><div class="t">西花指文件 <code class="inline">AccountAssetV2/index.tsx</code> → <strong style="color:var(--warn)">瓦力 grep 0 命中</strong> —— 该文件没「去转入」按钮</div></div>
+      <div class="step-card"><span class="n">3</span><div class="t">西花追问「会不会有空值挂页」 → 瓦力做空值审计 → 找到 1 中风险:<code class="inline">Guide.setRenderStep</code> destructure 无防御</div></div>
+      <div class="step-card"><span class="n">4</span><div class="t"><strong style="color:var(--ok)">Agent 也会互检</strong> · 西花实测反驳「数字字符串不报错」,瓦力认错重测;再反驳「null/undefined 浏览器不报错」,瓦力用 V8 实测纠错</div></div>
+      <div class="step-card"><span class="n">5</span><div class="t">三方证据汇总(类型契约 + 形态稳定 + V8 实测)→ <strong style="color:var(--ok)">R2 风险彻底关掉</strong>,改动本身不引入新挂页点</div></div>
+      </div>
+    </div>
+    <div class="deep-right">
+      <div class="panel-title">群聊时间线(可回放 · 5.5h)</div>
+      <div class="timeline">
+        <div class="ev"><div class="who">西花</div><div class="what">@江德福 看 baoxian 下三个项目,资产列表第二列 label 由什么决定的</div><div class="when">02:00 · 任务 A 起点</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">梳理三项目数据流:<code class="inline">AssetColunm:25-32</code> → <code class="inline">inventoryColumns</code> → <code class="inline">x.label</code></div><div class="when">02:02 · 链路 ↓</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">追问"是不是配置改了导致"</div><div class="when">02:05</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">对比前后数据 → <strong style="color:var(--err)">desc 字段被移除</strong>,后端下发字段变了</div><div class="when">02:17 · 定位根因</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">找到核心代码 <code class="inline">unitedAssetInsure.ts:337</code> + Loki 配置</div><div class="when">02:19</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">"记到 note" → memory <code class="inline">2273d7fd-...</code></div><div class="when">02:21 · 沉淀 memory</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">改方向:不配了,改前端去 desc 渲染</div><div class="when">02:40 · 方向调整</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">定位 desc 真实渲染在 <code class="inline">@alipay/pension-components</code> npm 包</div><div class="when">02:51 · 接力重定位</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">建 issue <code class="inline">0e2f3f6d-...</code> 启动写盘</div><div class="when">03:00 · 任务 A 收口</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">@瓦力 review <code class="inline">PR S090011757032</code> + 追问「去转入」渲染条件</div><div class="when">06:38 · 任务 B 起点</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">指文件 <code class="inline">AccountAssetV2/index.tsx</code></div><div class="when">07:04</div></div>
+        <div class="ev"><div class="who">瓦力</div><div class="what">grep 验证:<strong style="color:var(--warn)">该文件无「去转入」按钮</strong>(0 命中)</div><div class="when">07:05</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">"空值会不会让页面挂?"</div><div class="when">07:25</div></div>
+        <div class="ev"><div class="who">瓦力</div><div class="what">空值审计 → 1 中风险:<code class="inline">Guide.setRenderStep</code> destructure 无防御</div><div class="when">07:26 · 风险挖掘</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">实测反驳"数字字符串不报错" → 瓦力认错</div><div class="when">07:32 · 互检</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">再反驳"null/undefined 浏览器也不报错"</div><div class="when">07:33</div></div>
+        <div class="ev"><div class="who">瓦力</div><div class="what">V8 实测纠错 + 三方证据汇总 → <strong style="color:var(--ok)">R2 风险关掉</strong></div><div class="when">07:35 · 任务 B 收口</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ 17 资产排查 结果 ============ -->
+
+<section class="slide" data-n="17" data-title="深讲 · 结果 & 方法论">
+  <div class="topbar"><span class="brand">主线 · 深讲</span><span class="idx">17 / 18</span></div>
+  <h2>深讲 · 结果 & 方法论 · 4 条设计原则</h2>
+  <p class="lead">这一节把前面 17 页里的所有事 —— 1 个巡检群(3ff00a)· 1 个工具群(c211307e)· 1 个排查群(2fec433e)· 2 个 rotom 自迭代群(f080e51e / 54ab4777)· 1 个治理 + 1 个 CLI 演示 —— 收成 4 条设计原则。每条都有代码出处。</p>
+  <div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi"><div class="v">6 群</div><div class="l">5 业务 + 1 巡检</div></div>
+    <div class="kpi"><div class="v">44 + 23 + 6</div><div class="l">群消息(2fec / c211 / 3ff)</div></div>
+    <div class="kpi"><div class="v">2/2/1</div><div class="l">memory / skill / issue 沉淀</div></div>
+    <div class="kpi"><div class="v">2 任务</div><div class="l">接力 + 互检 4 次</div></div>
+  </div>
+  <div class="gov-card" style="margin-top:12px">
+    <div class="gov-num">设计原则 1 · rotom 不另搞一套 · 全部复用已有能力</div>
+    <ul class="gov-list">
+      <li><strong>群 = 普通群 + 一个标记</strong> · 巡检 = <code class="inline">groups.type=patrol</code>(<code class="inline">src/master/api/groups.ts</code>)· 跨机器部署 = <code class="inline">group_member_settings</code> 覆盖(<code class="inline">src/master/group-paths.ts</code>)· <strong>没有专用 UI,没有专用路由,没有专用协议</strong></li>
+      <li><strong>主动出击 = 定时任务派 issue</strong> · <code class="inline">scheduled_tasks.handler_key=issue-patrol</code>(<code class="inline">src/master/scheduler-handlers.ts</code>)· 共用 30s tick + at-most-once + grace window + dashboard 可见</li>
+      <li><strong>沉淀资产 = 已有 memory / skill / issue</strong> · 巡检规则走 <code class="inline">issue-patrol-rules</code> skill(rotom 内已建 · <code class="inline">/api/skills</code>);memory 走 <code class="inline">memory add</code>;产物走 <code class="inline">/api/artifacts</code> · 全部 rotom 已有</li>
+    </ul>
+  </div>
+  <div class="gov-card" style="margin-top:10px">
+    <div class="gov-num">设计原则 2 · 写盘必挂 issue · 让 audit trail 自然形成</div>
+    <ul class="gov-list">
+      <li><strong>硬规则写在 skill 里</strong> · <code class="inline">skill/rotom-a2a-communicate/SKILL.md</code> 写死"写盘必挂 issue",启动时写到 <code class="inline">~/.rotom/SKILL.md</code>(<code class="inline">src/shared/skill-md.ts</code>)· Agent 拿不到绕过</li>
+      <li><strong>所有写盘操作都进 <code class="inline">issue_events</code> 表</strong> · issue 创建 / 派发 / 审批 / 中断 / 完成 / 失败全留痕(<code class="inline">src/master/db/issues.ts</code> + <code class="inline">issue_events</code>)· dashboard 可回放</li>
+      <li><strong>审批粒度可选</strong> · <code class="inline">approval_policy ∈ {r_allow, rw_allow}</code>(migration 029)· <code class="inline">r_allow</code> 下写盘走 <code class="inline">PreToolUse</code> hook 挂 dashboard 审批 · 只读 Bash 走 <code class="inline">src/shared/readonly-allowlist.ts</code> 内置白名单(fail-closed)</li>
+    </ul>
+  </div>
+  <div class="gov-card" style="margin-top:10px">
+    <div class="gov-num">设计原则 3 · 群聊 = 工作台 · @ 路由 + 并发 + 自我纠错</div>
+    <ul class="gov-list">
+      <li><strong>@ 谁谁接活</strong> · <code class="inline">src/master/router.ts</code> + <code class="inline">ws-hub/routing.ts</code> · Agent 之间 @ 也走同一路径 · 2fec433e 群江德福@瓦力接力 review = 群消息驱动 agent 切换</li>
+      <li><strong>#reply 触发桥接 + 5min 升级</strong> · <code class="inline">ask_bridges</code> 表(<code class="inline">src/master/db/ask-bridges.ts</code>)+ <code class="inline">ask-bridge-check</code> handler(20s tick)· A @B + #reply → B 不回 5min 自动建 issue 升级</li>
+      <li><strong>多群并发 = 单 Agent <code class="inline">maxConcurrent</code>(默认 2),不是全局</strong> · <code class="inline">src/executor/worker.ts</code> · 西花同时在 c211307e 放任务 + 2fec433e 排查,江德福两边接活互不堵</li>
+      <li><strong>Agent 也会被实测打脸 + 用硬数据重做</strong> · 2fec433e 群:瓦力 07:26 判"非对象 TypeError",西花 07:32/07:33 两次实测反驳,瓦力用 V8 实测纠错 + 三方证据关掉 R2 风险 · <strong>单 Agent 给不出这种"被打脸后用硬数据重做"的回路</strong></li>
+    </ul>
+  </div>
+  <div class="gov-card" style="margin-top:10px">
+    <div class="gov-num">设计原则 4 · 持续学习 = 沉淀的资产在 rotom 里</div>
+    <ul class="gov-list">
+      <li><strong>memory 落 <code class="inline">memory</code> 表 · scope ∈ {group, global}</strong> · 2fec433e 群:<code class="inline">2273d7fd</code>(label/desc 根因 · 群级);c211307e 群:<code class="inline">6c046004</code>(Codex rollout 去重 · global)· <code class="inline">/api/memory/global</code> 可查</li>
+      <li><strong>skill 落 <code class="inline">skills</code> 表 · 可绑到 group+agent</strong> · 2 个 skill 已建:<code class="inline">issue-patrol-rules</code>(workflow · 2 views)· <code class="inline">test-skill</code>(test · 51 views)· 改规则 = 改 skill</li>
+      <li><strong>人 review 后 promote</strong> · <code class="inline">memory promote</code> 走 <code class="inline">/api/memory/:id/promote</code>,status pending → approved · 人未 review 不进下次 task prompt 注入(避免错误记忆污染)</li>
+      <li><strong>沉淀物直接喂回 rotom 自身</strong> · 4a9c1eaa / f080e51e / 54ab4777 三个 rotom 自迭代群:沉淀的 skill 回头用来优化 rotom 行为 · <strong>用 rotom 迭代 rotom 自身</strong></li>
+    </ul>
+  </div>
+  <div class="quote" style="margin-top:12px">这 4 条不是设计文档里写的 —— 是 6 个真实群 / 73 条群消息 / 1 个巡检 / 1 个工具交付 / 1 次 PR review 实际跑出来的。</div>
+</section>
+<!-- ============ 18 总结 + Q&A ============ -->
+
+<section class="slide" data-n="18" data-title="总结 + Q&A">
+  <div class="topbar"><span class="brand">主线 · 总结</span><span class="idx">18 / 18</span></div>
+  <div class="hero">
+    <div class="hero eyebrow">总结 + Q &amp; A</div>
+    <p class="closing">
+      <strong>让专业 CLI Agent 变成可协作的数字员工</strong><br><br>
+      ① 能力 1:持续学习(memory + skill)—— Agent 自己变强<br>
+      ② 能力 2:主动出击(issue 巡检)—— Agent 不等派活<br>
+      ③ 协议底盘—— WS + REST + 群 + Issue<br>
+      ④ 治理(写盘必挂 Issue)—— 可审计、可回滚
+    </p>
+    <div class="grid g3" style="margin-top:36px;width:100%;max-width:900px">
+      <div class="card">
+        <h4>代码</h4>
+        <p><code class="inline">/Users/kong/ai-work/rotom</code><br>AGENTS.md 入口<br>V1/V2/V3 deck</p>
+      </div>
+      <div class="card">
+        <h4>运行</h4>
+        <p>Master <code class="inline">:28800</code><br>Data <code class="inline">~/.rotom/</code><br>Demo <code class="inline">:28803</code></p>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ NAV ============ -->
+<div class="arrow l" id="prev">‹</div>
+<div class="arrow r" id="next">›</div>
+<div class="progress" id="progress"></div>
+<div class="footer">
+  <span id="curTitle">封面</span>
+  <span class="hint"><kbd>←</kbd><kbd>→</kbd> · 空格 · 数字键 · <kbd>Esc</kbd> 目录</span>
+  <span id="curNum">01 / 18</span>
+</div>
+
+<script>
+  (function(){
+    const slides = document.querySelectorAll('.slide');
+    const total = slides.length;
+    let cur = 0;
+    const $ = id => document.getElementById(id);
+    const progress = $('progress');
+    const curTitle = $('curTitle');
+    const curNum = $('curNum');
+
+    function show(n){
+      n = Math.max(0, Math.min(total-1, n));
+      slides.forEach((s,i)=>s.classList.toggle('active', i===n));
+      cur = n;
+      const s = slides[n];
+      curTitle.textContent = s.dataset.title || '';
+      curNum.textContent = String(n+1).padStart(2,'0') + ' / ' + String(total).padStart(2,'0');
+      progress.style.width = ((n+1)/total*100) + '%';
+      try{ localStorage.setItem('rotom-deck-v3-cur', String(n)); }catch(e){}
+    }
+    function next(){ show(cur+1); }
+    function prev(){ show(cur-1); }
+
+    document.addEventListener('keydown', e=>{
+      if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){ e.preventDefault(); next(); }
+      else if(e.key==='ArrowLeft'||e.key==='PageUp'){ e.preventDefault(); prev(); }
+      else if(e.key==='Home'){ e.preventDefault(); show(0); }
+      else if(e.key==='End'){ e.preventDefault(); show(total-1); }
+      else if(e.key==='Escape'){ e.preventDefault(); show(0); }
+      else if(/^[0-9]$/.test(e.key)){ const n=parseInt(e.key,10); if(n>=1&&n<=total) show(n-1); }
+    });
+    $('next').onclick = next;
+    $('prev').onclick = prev;
+
+    document.querySelectorAll('[data-goto]').forEach(a=>{
+      a.onclick = e=>{ e.preventDefault(); show(parseInt(a.dataset.goto,10)-1); };
+    });
+
+    document.body.addEventListener('click', e=>{
+      if(e.target.closest('a,button,code,kbd,pre,table,.arrow,.toc,.imgbox,.img-placeholder')) return;
+      if(e.clientX > window.innerWidth * 0.6) next();
+      else if(e.clientX < window.innerWidth * 0.4) prev();
+    });
+
+    try{
+      const saved = parseInt(localStorage.getItem('rotom-deck-v3-cur')||'0',10);
+      if(saved>=0&&saved<total) show(saved); else show(0);
+    }catch(e){ show(0); }
+  })();
+
+  // ── 图片 lightbox(点击放大) ─────────────────────────────────
+  (function(){
+    const lb = document.createElement('div');
+    lb.className = 'lightbox';
+    lb.innerHTML = '<button class="lb-close">ESC 关闭</button><img alt="">';
+    document.body.appendChild(lb);
+    const img = lb.querySelector('img');
+    function open(src, alt){
+      img.src = src; img.alt = alt || '';
+      lb.classList.add('open');
+    }
+    function close(){ lb.classList.remove('open'); img.src = ''; }
+    lb.addEventListener('click', close);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && lb.classList.contains('open')) close();
+    });
+    // 事件代理:所有 .img-shot 里的 img 点击放大
+    document.addEventListener('click', e => {
+      const t = e.target;
+      if (t && t.tagName === 'IMG' && t.closest('.img-shot')) {
+        e.stopPropagation();
+        open(t.src, t.alt);
+      }
+    });
+  })();
+</script>
+</div>
+</body>
+</html>

@@ -1,0 +1,114 @@
+---
+import type { TreeNode } from "../utils/docs";
+import { displayName, nodeUrl } from "../utils/docs";
+
+export interface Props {
+  tree: TreeNode[];
+  currentPath?: string;
+  lang?: "zh" | "en";
+}
+
+const { tree, currentPath, lang = "zh" } = Astro.props;
+
+function isActive(node: TreeNode): boolean {
+  return node.path === currentPath;
+}
+---
+<nav class="sidebar">
+  <div class="sidebar__header">
+    <a href={lang === "zh" ? "/" : "/en/"} class="sidebar__home sidebar__home--main">
+      {lang === "zh" ? "🏠 官网首页" : "🏠 Home"}
+    </a>
+    <a href={lang === "zh" ? "/docs/" : "/en/docs/"} class="sidebar__home">
+      {lang === "zh" ? "← 文档索引" : "← Docs Index"}
+    </a>
+  </div>
+  <div class="sidebar__tree">
+    {tree.map((dir) => (
+      <div class="sidebar-dir">
+        <span class="sidebar-dir__name">📁 {displayName(dir.name)}</span>
+        <div class="sidebar-dir__children">
+          {dir.children.map((item) => {
+            const active = isActive(item);
+            return (
+              <a
+                href={nodeUrl(item, lang as "zh" | "en")}
+                class={`sidebar-file${active ? " sidebar-file--active" : ""}`}
+              >
+                <span class="sidebar-file__name">{displayName(item.name)}</span>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+    ))}
+  </div>
+</nav>
+
+<style>
+  .sidebar__home--main {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text) !important;
+  }
+  .sidebar__home--main:hover {
+    color: var(--accent-2) !important;
+  }
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky;
+    top: 56px;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    padding: 20px 0;
+  }
+  .sidebar__header {
+    padding: 0 16px 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+  .sidebar__home {
+    font-size: 13px;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .sidebar__home:hover { color: var(--accent-2); }
+  .sidebar__tree { display: flex; flex-direction: column; gap: 16px; }
+  .sidebar-dir__name {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-mute);
+    padding: 0 16px;
+    margin-bottom: 4px;
+  }
+  .sidebar-dir__children { display: flex; flex-direction: column; gap: 1px; }
+  .sidebar-file {
+    display: block;
+    padding: 5px 16px 5px 24px;
+    font-size: 13px;
+    color: var(--text-dim);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+    line-height: 1.4;
+  }
+  .sidebar-file:hover {
+    background: rgba(159, 232, 112, 0.08);
+    color: var(--text);
+  }
+  .sidebar-file--active {
+    background: rgba(159, 232, 112, 0.10);
+    color: var(--accent-2);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+</style>

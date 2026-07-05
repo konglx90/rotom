@@ -1,0 +1,52 @@
+<!-- ============ {{N}} 能力 1 落地 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="能力 1 续 · 落地">
+  <div class="topbar"><span class="brand">主线 · 能力 1 落地</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <div class="title-row">
+  <h2>能力 1 续 · 端到端交付放出去就出活</h2>
+  <a class="live-link" href="http://localhost:3000/dashboard/groups/c211307e-79ae-405a-b69c-b7360f5d375e/issues/635c1c28-9047-4176-80b0-6a423f219904" target="_blank" rel="noopener">
+    <span class="ll-tag">实际 issue</span>
+    <span class="ll-arrow">↗</span>
+    <span class="ll-text">Codex 对话上报与卡点分析工具 · <strong>issue 69cad764 → 635c1c28</strong></span>
+  </a>
+  </div>
+  <p class="lead">背景:最近在实践端到端交付(E2ED),需要监控一下「其他同学」的执行卡点。所以临时做了一个 Codex 当日对话上报工具 —— 把本机 ~/.codex/sessions 当天所有会话增量上报到局域网一台机器,服务端还原对话展示并标注卡点。</p>
+  <div class="deep" style="margin-top:14px">
+    <div class="deep-left">
+      <h3>特点:放出去就没再管,又得到了 OK 的结果</h3>
+      <div class="step-card"><span class="n">1</span><div class="t">09:17 · 西花丢需求进群:<strong>"做一个 codex 当天对话上报的工具,上报到局域网"</strong> + 目标 IP <code class="inline">30.249.225.104</code></div></div>
+      <div class="step-card"><span class="n">2</span><div class="t">09:18 · 江德福先给初版设计 + 反问关键点(数据源 / 上报粒度 / 鉴权)</div></div>
+      <div class="step-card"><span class="n">3</span><div class="t">09:26 · 西花补需求:"<strong>服务端要还原对话展示,目的是发现卡点</strong>" → 江德福据此调整方案</div></div>
+      <div class="step-card"><span class="n">4</span><div class="t">09:27 · "行,你创建 issue 开始吧" → <strong>江德福自己建 issue + 自己接活</strong>(<code class="inline">69cad764</code> / priority high)</div></div>
+      <div class="step-card"><span class="n">5</span><div class="t">09:28 ~ 11:11 · <strong>西花去干别的了,没再管</strong>。系统 6 次 push 进度,江德福自己写完两个工具(采集端 + 服务端)+ 端到端验证 + 切浅色主题 + commit + push</div></div>
+      <div class="step-card ok"><span class="n">6</span><div class="t">11:13 · 西花回来看一眼:"<strong>做的不错 👍</strong>" 附截图(浅色主题 UI 跑通)</div></div>
+      <div class="step-card warn" style="margin-top:10px"><span class="n">+</span><div class="t">12:19 · 江德福自跑 <strong>[记忆提取] 子 issue</strong> <code class="inline">635c1c28</code>,沉淀 1 条 pitfall(Codex rollout user/assistant 消息写两遍)</div></div>
+    </div>
+    <div class="deep-right">
+      <div class="panel-title">群消息时间线(可滚动 · 实际可回放)</div>
+      <div class="timeline">
+        <div class="ev"><div class="who">西花</div><div class="what">@江德福 做一个 codex 当天对话上报的工具,上报到局域网一台机器,先看方案</div><div class="when">09:17 · 任务起点</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">理需求 + 给初版设计 + 反问关键点(数据源 / 上报粒度 / 鉴权)</div><div class="when">09:18</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">当天所有历史会话 + 目标 IP <code class="inline">30.249.225.104</code></div><div class="when">09:21</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">确认 sessions 路径 <code class="inline">~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl</code>(JSONL)</div><div class="when">09:22</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">全是 mac 机器</div><div class="when">09:25</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">launchd 统一部署方案 + 反问 3 点(语言/端口/上报字段)</div><div class="when">09:25</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">"Hono 是啥"</div><div class="when">09:25 · 反问</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">解释 Hono(类似 Express,多运行时,更快更小)</div><div class="when">09:26</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what"><strong>补需求</strong>:服务端要还原对话展示 → 目的是<strong>发现卡点</strong></div><div class="when">09:26 · 关键转折</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">"行,你创建 issue 开始吧"</div><div class="when">09:27 · 授权</div></div>
+        <div class="ev"><div class="who">江德福</div><div class="what">issue <code class="inline">69cad764</code> · priority high · 派给自己 · dispatch 进工作目录</div><div class="when">09:28 · 进入写盘</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ Issue 已由 江德福 完成(turn 1)</div><div class="when">09:43 · 第 1 次 push</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 2)</div><div class="when">09:47</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 3)</div><div class="when">09:59</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 4)</div><div class="when">10:11</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 5)</div><div class="when">10:33</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 6) · <strong>整体用浅色背景,改完后 commit and push</strong></div><div class="when">11:00 · 用户中途追加需求</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ 已由 江德福 完成(turn 7) · <code class="inline">7ea77e8 style(collector): 切浅色主题</code></div><div class="when">11:11 · 收口</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what"><strong>"做的不错 👍"</strong> + 截图(浅色 UI 跑通)</div><div class="when">11:13 · 验收</div></div>
+        <div class="ev"><div class="who">system</div><div class="what">✅ [记忆提取] 子 issue <code class="inline">635c1c28</code> 已由 江德福 完成(1 条 pitfall)</div><div class="when">12:19 · 自我沉淀</div></div>
+        <div class="ev"><div class="who">西花</div><div class="what">"你搜下记忆有啥" → 江德福搜到 1 条群级 pitfall:Codex rollout user/assistant 写两遍</div><div class="when">13:20 · 验证沉淀</div></div>
+      </div>
+    </div>
+  </div>
+</section>

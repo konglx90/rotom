@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rotom · 数字员工 Mesh</title>
+<style>
+  :root{
+    --bg:#0a0e14; --bg2:#0f141b; --panel:#11181f; --line:#1e2730;
+    --fg:#e6edf3; --fg2:#9aa6b2; --fg3:#5c6b78;
+    --acc:#5eead4; --acc2:#a78bfa; --warn:#fbbf24; --err:#f87171;
+    --code:#0b1118; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    overflow:hidden;-webkit-font-smoothing:antialiased}
+  .deck{position:relative;width:100vw;height:100vh;overflow:hidden}
+  .slide{position:absolute;inset:0;padding:64px 80px;display:none;flex-direction:column;
+    background:radial-gradient(1200px 600px at 80% -10%, rgba(94,234,212,.06), transparent 60%),
+               radial-gradient(800px 500px at -10% 110%, rgba(167,139,250,.05), transparent 60%),
+               var(--bg)}
+  .slide.active{display:flex;animation:fade .35s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .topbar{display:flex;align-items:center;justify-content:space-between;
+    font-family:var(--mono);font-size:12px;color:var(--fg3);
+    border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:32px;
+    letter-spacing:.12em;text-transform:uppercase}
+  .topbar .brand{color:var(--acc)}
+  .topbar .idx{color:var(--fg2)}
+  h1{font-size:64px;font-weight:800;letter-spacing:-.02em;line-height:1.1;
+    background:linear-gradient(180deg,#fff,#9aa6b2);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  h2{font-size:38px;font-weight:700;letter-spacing:-.01em;margin-bottom:24px}
+  h3{font-size:18px;font-weight:600;color:var(--fg2);text-transform:uppercase;
+    letter-spacing:.15em;margin-bottom:18px;font-family:var(--mono)}
+  p,li{font-size:18px;line-height:1.6;color:var(--fg2)}
+  ul{padding-left:1.4em}
+  li{margin-bottom:.55em}
+  .lead{font-size:22px;color:var(--fg);max-width:920px;margin-top:8px}
+  .grid{display:grid;gap:18px;margin-top:auto}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:22px 24px;transition:all .2s}
+  .card h4{font-size:15px;color:var(--acc);margin-bottom:8px;font-family:var(--mono);
+    letter-spacing:.05em;text-transform:uppercase}
+  .card p{font-size:15px;color:var(--fg2);line-height:1.55}
+  .card.lg{padding:28px 30px}
+  .card.lg h4{font-size:18px;margin-bottom:12px}
+  .card.lg p{font-size:16px}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;
+    font-family:var(--mono);background:rgba(94,234,212,.1);color:var(--acc);
+    border:1px solid rgba(94,234,212,.25);letter-spacing:.05em}
+  .pill.v{padding:3px 10px;border-radius:999px;font-size:11px;font-family:var(--mono);
+    background:rgba(167,139,250,.1);color:var(--acc2);
+    border:1px solid rgba(167,139,250,.25);letter-spacing:.05em}
+  .pill.w{background:rgba(251,191,36,.1);color:var(--warn);border-color:rgba(251,191,36,.25)}
+  .pill.e{background:rgba(248,113,113,.1);color:var(--err);border-color:rgba(248,113,113,.25)}
+  pre,code{font-family:var(--mono)}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;
+    padding:18px 22px;font-size:14px;line-height:1.6;color:var(--fg);
+    overflow-x:auto;white-space:pre}
+  code.inline{background:rgba(255,255,255,.06);padding:1px 7px;border-radius:4px;
+    font-size:.9em;color:var(--acc)}
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line)}
+  th{color:var(--fg3);font-weight:500;font-size:12px;text-transform:uppercase;
+    letter-spacing:.1em;font-family:var(--mono)}
+  td{color:var(--fg)}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  .hero{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
+  .hero .eyebrow{font-family:var(--mono);font-size:13px;color:var(--acc);
+    letter-spacing:.3em;margin-bottom:24px;text-transform:uppercase}
+  .hero .tagline{font-size:28px;color:var(--fg);margin-top:24px;max-width:780px;
+    line-height:1.4;font-weight:300}
+  .meta{display:flex;gap:24px;margin-top:40px;font-family:var(--mono);font-size:13px;color:var(--fg3)}
+  .meta span strong{color:var(--acc);font-weight:500}
+  .archbox{display:grid;grid-template-rows:auto 1fr;gap:24px;height:100%}
+  .arch-diagram{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:28px;font-family:var(--mono);font-size:13px;line-height:1.65;color:var(--fg2);
+    overflow:auto;white-space:pre}
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:32px;flex:1;align-items:start}
+  .bigstat{font-size:88px;font-weight:800;letter-spacing:-.03em;
+    background:linear-gradient(180deg,var(--acc),var(--acc2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;line-height:1}
+  .bigstat-label{font-family:var(--mono);font-size:13px;color:var(--fg3);
+    text-transform:uppercase;letter-spacing:.2em;margin-top:12px}
+  .imgbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;display:flex;align-items:center;justify-content:center;
+    padding:14px;height:100%}
+  .imgbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+  .arrow{position:absolute;top:50%;width:44px;height:44px;border-radius:50%;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);
+    color:var(--fg2);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:18px;transform:translateY(-50%);transition:all .2s;z-index:10;
+    user-select:none}
+  .arrow:hover{background:rgba(94,234,212,.1);border-color:var(--acc);color:var(--acc)}
+  .arrow.l{left:18px}.arrow.r{right:18px}
+  .progress{position:absolute;bottom:0;left:0;height:3px;
+    background:linear-gradient(90deg,var(--acc),var(--acc2));
+    transition:width .3s;z-index:20}
+  .toc{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 36px;
+    font-size:18px;font-family:var(--mono);margin-top:24px}
+  .toc a{color:var(--fg2);text-decoration:none;padding:8px 0;
+    border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;
+    transition:color .15s;cursor:pointer}
+  .toc a:hover{color:var(--acc)}
+  .toc a .n{color:var(--fg3);width:32px;flex-shrink:0;font-size:14px}
+  .footer{position:absolute;bottom:18px;left:80px;right:80px;display:flex;
+    justify-content:space-between;align-items:center;font-family:var(--mono);
+    font-size:11px;color:var(--fg3);letter-spacing:.1em;pointer-events:none}
+  .hint{color:var(--fg3)}
+  .hint kbd{background:var(--panel);border:1px solid var(--line);
+    padding:2px 6px;border-radius:4px;font-family:var(--mono);font-size:10px;
+    color:var(--fg2);margin:0 2px}
+  .quote{border-left:3px solid var(--acc);padding:14px 22px;
+    background:rgba(94,234,212,.04);border-radius:0 8px 8px 0;
+    font-size:20px;color:var(--fg);font-style:italic;line-height:1.5;margin:20px 0}
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:10px 16px;font-family:var(--mono);font-size:13px;color:var(--fg)}
+  .step.acc{border-color:var(--acc);color:var(--acc)}
+  .arrow-r{color:var(--fg3);font-family:var(--mono)}
+  .rotom-img{max-width:380px;border-radius:16px;border:1px solid var(--line);
+    box-shadow:0 20px 60px rgba(94,234,212,.15)}
+  .cover-flex{display:flex;align-items:center;justify-content:space-between;gap:60px}
+  .closing{font-size:32px;color:var(--fg);font-weight:300;line-height:1.4;max-width:900px}
+  .closing strong{color:var(--acc);font-weight:600}
+  .grid-tight{gap:10px}
+  .warn-row{background:rgba(251,191,36,.06);border-left:3px solid var(--warn);
+    padding:12px 18px;border-radius:0 6px 6px 0;margin:10px 0;
+    font-size:15px;color:var(--fg)}
+  .err-row{background:rgba(248,113,113,.06);border-left:3px solid var(--err);
+    padding:12px 18px;border-radius:0 6px 6px 0;margin:10px 0;
+    font-size:15px;color:var(--fg)}
+  @media (max-width:900px){
+    .slide{padding:36px 28px}
+    h1{font-size:42px}
+    h2{font-size:26px}
+    p,li{font-size:15px}
+    .arrow{display:none}
+    .footer{left:28px;right:28px}
+    .cover-flex{flex-direction:column;align-items:flex-start}
+    .rotom-img{max-width:240px}
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- ============ SLIDE 1: COVER ============ -->
+<section class="slide active" data-n="1" data-title="封面">
+  <div class="topbar"><span class="brand">ROTOM · A2A WORKSPACE</span><span class="idx">01 / 18</span></div>
+  <div class="hero cover-flex" style="width:100%">
+    <div style="flex:1">
+      <div class="hero eyebrow">数字员工 Mesh · 中心化 Agent 协作网络</div>
+      <h1>Rotom</h1>
+      <p class="tagline">一个中枢 · 多个 Worker · 真实 CLI 进程<br>让人和 Agent 在同一个群里把活干完</p>
+      <div class="meta">
+        <span>3 件套 <strong>Master / Executor / rotom CLI</strong></span>
+        <span>协议 <strong>WS + REST + token + JWT</strong></span>
+        <span>存储 <strong>SQLite WAL</strong></span>
+      </div>
+    </div>
+    <img class="rotom-img" src="../rotom.jpeg" alt="rotom">
+  </div>
+</section>
+
+<!-- ============ SLIDE 2: AGENDA ============ -->
+<section class="slide" data-n="2" data-title="目录">
+  <div class="topbar"><span class="brand">AGENDA</span><span class="idx">02 / 18</span></div>
+  <h2>今天讲什么</h2>
+  <p class="lead">18 页,30 分钟。最后 10 分钟 Demo。</p>
+  <div class="toc">
+    <a data-goto="3"><span class="n">03</span>为什么做 —— 痛点</a>
+    <a data-goto="4"><span class="n">04</span>三件套架构</a>
+    <a data-goto="5"><span class="n">05</span>数据主路径</a>
+    <a data-goto="6"><span class="n">06</span>WS 协议 + 心跳</a>
+    <a data-goto="7"><span class="n">07</span>关键子系统一览</a>
+    <a data-goto="8"><span class="n">08</span>协作治理:写盘必挂 Issue</a>
+    <a data-goto="9"><span class="n">09</span>Issue 生命周期:抢单 / 审批 / 中断</a>
+    <a data-goto="10"><span class="n">10</span>群聊 + Ask-bridge + 巡检</a>
+    <a data-goto="11"><span class="n">11</span>Session 持久化与多 Worker</a>
+    <a data-goto="12"><span class="n">12</span>Dashboard 演示</a>
+    <a data-goto="13"><span class="n">13</span>rotom CLI 一图流</a>
+    <a data-goto="14"><span class="n">14</span>REST API 全景</a>
+    <a data-goto="15"><span class="n">15</span>运维特性 + 已知约束</a>
+    <a data-goto="16"><span class="n">16</span>跟同类方案的差异</a>
+    <a data-goto="17"><span class="n">17</span>5 分钟跑通 Demo</a>
+    <a data-goto="18"><span class="n">18</span>Q &amp; A</a>
+  </div>
+</section>
+
+<!-- ============ SLIDE 3: WHY ============ -->
+<section class="slide" data-n="3" data-title="为什么做">
+  <div class="topbar"><span class="brand">PROBLEM</span><span class="idx">03 / 18</span></div>
+  <h2>为什么做这件事</h2>
+  <p class="lead">把 AI 装进 IM 群,问题不在模型,而在协作。</p>
+  <div class="grid g3" style="margin-top:40px">
+    <div class="card lg">
+      <h4>1. Agent 是孤岛</h4>
+      <p>每个 CLI 工具(claude / codex / hermes)各自跑在各自 terminal,没法和别的 Agent 或人协同完成一件事。</p>
+    </div>
+    <div class="card lg">
+      <h4>2. 写盘没审计</h4>
+      <p>Agent 改文件、改数据库,谁批的?改了啥?出问题怎么回滚?—— 团队里没人敢让 Agent 真干活。</p>
+    </div>
+    <div class="card lg">
+      <h4>3. 私聊没法追</h4>
+      <p>A 问 B 一个问题,B 没回 → 事情就丢了。需要超时升级 + 升级到 Issue 兜底。</p>
+    </div>
+  </div>
+  <div class="quote" style="margin-top:32px">Rotom 的目标:让 Agent <strong>在群里</strong>协作,所有行为 <strong>有 issue 挂靠</strong>,所有改动 <strong>有审计可回放</strong>。</div>
+</section>
+
+<!-- ============ SLIDE 4: ARCHITECTURE ============ -->
+<section class="slide" data-n="4" data-title="三件套架构">
+  <div class="topbar"><span class="brand">ARCHITECTURE</span><span class="idx">04 / 18</span></div>
+  <h2>三件套架构</h2>
+  <p class="lead">一个中枢 + 长连接 Worker + 统一 CLI。Agent 不直连 Master。</p>
+  <div class="arch-diagram" style="margin-top:24px;font-size:14px">
+       ┌──────────────────────────────────────────────────────────┐
+       │           <span style="color:var(--acc)">MASTER</span>  :28800  HTTP /api · WS /ws · Dashboard · SQLite   │
+       │           — 唯一中枢,所有 a2a 经此中转 —                  │
+       └──────▲──────────────────▲─────────────────▲──────────────┘
+              │ WS               │ HTTP+Bearer     │ Browser (cookie)
+              │                  │                 │
+   ┌──────────┴──────────┐  ┌────┴────────┐  ┌──────┴──────┐
+   │   <span style="color:var(--acc2)">EXECUTOR</span> 进程         │  │ <span style="color:var(--acc2)">rotom CLI</span> │  │  <span style="color:var(--acc2)">DASHBOARD</span>  │
+   │ ┌────────────────┐  │  │ 借 Agent   │  │ React 18     │
+   │ │ Worker N       │  │  │ token 调   │  │ + Vite SPA   │
+   │ │  1 Worker =    │  │  │ REST       │  │ 账号密码登录 │
+   │ │  1 Agent       │  │  └───────────┘  └─────────────┘
+   │ └────┬───────────┘  │
+   │      │ spawn        │
+   │ ┌────▼───────────┐  │
+   │ │ CLI 进程       │  │
+   │ │ claude / codex │  │
+   │ │ / openclaw /   │  │
+   │ │ hermes         │  │
+   │ │ ↓              │  │
+   │ │ 加载 skill     │  │
+   │ │ rotom-a2a-     │  │
+   │ │ communicate    │  │
+   │ │ ↓              │  │
+   │ │ Bash → rotom   │  │
+   │ └────────────────┘  │
+   └──────────────────────┘
+  </div>
+  <p style="margin-top:18px;font-size:14px;color:var(--fg3);font-family:var(--mono)">
+    关键:Agent 通过 Bash 调 <code class="inline">rotom</code> 走 HTTP 回路,而不是直连 Master —— <span style="color:var(--acc)">沙箱友好 / 部署简单 / 一致身份</span>
+  </p>
+</section>
+
+
+<!-- ============ SLIDE 5: DATA PATH ============ -->
+<section class="slide" data-n="5" data-title="数据主路径">
+  <div class="topbar"><span class="brand">DATA PATH</span><span class="idx">05 / 18</span></div>
+  <h2>数据主路径(一条消息的一生)</h2>
+  <p class="lead">所有数据流:WS 进 → 路由 → DB → 推送 / 离线队列</p>
+  <div class="flow" style="margin-top:30px">
+    <div class="step">Worker WS</div>
+    <div class="arrow-r">→</div>
+    <div class="step">ws-hub/connection</div>
+    <div class="arrow-r">→</div>
+    <div class="step acc">routing</div>
+    <div class="arrow-r">→</div>
+    <div class="step">conversation / sessions / directory</div>
+    <div class="arrow-r">→</div>
+    <div class="step acc">SQLite (WAL)</div>
+    <div class="arrow-r">→</div>
+    <div class="step">推目标 client</div>
+    <div class="arrow-r">/</div>
+    <div class="step">offline-queue</div>
+  </div>
+  <div class="grid g3" style="margin-top:36px">
+    <div class="card">
+      <h4>REST</h4>
+      <p><code class="inline">/api/*</code> 拆 20+ 模块,facade <code class="inline">api/index.ts</code> 装载。Dashboard cookie + CLI Bearer 都过 <code class="inline">auth.ts</code>。</p>
+    </div>
+    <div class="card">
+      <h4>DB</h4>
+      <p>15+ 领域文件,facade <code class="inline">db/index.ts</code> 用 <code class="inline">Object.assign</code> 组装。WAL + 43 个 migration。</p>
+    </div>
+    <div class="card">
+      <h4>WS Hub</h4>
+      <p>facade <code class="inline">ws-hub/index.ts</code> → 5 个子模块(connection / routing / directory / sessions / conversation)。</p>
+    </div>
+  </div>
+  <div class="warn-row" style="margin-top:24px">
+    离线队列 100 条 / 24h TTL,过期清空;重连时主推 → 离线补推,先去重(<code class="inline">src/shared/dedup.ts</code>,5min TTL)。
+  </div>
+</section>
+
+<!-- ============ SLIDE 6: WS PROTOCOL ============ -->
+<section class="slide" data-n="6" data-title="WS 协议">
+  <div class="topbar"><span class="brand">PROTOCOL</span><span class="idx">06 / 18</span></div>
+  <h2>WS 协议</h2>
+  <p class="lead">WebSocket 文本帧 + JSON,协议版本 2。心跳 10s / 超时 90s / 30s 扫一次。</p>
+  <div class="twocol" style="margin-top:18px">
+    <div>
+      <h3>Client → Master</h3>
+      <table>
+        <tr><th>类型</th><th>用途</th></tr>
+        <tr><td><code class="inline">auth</code></td><td>10s 内必须完成</td></tr>
+        <tr><td><code class="inline">heartbeat</code></td><td>10s 间隔,带 activeDispatches</td></tr>
+        <tr><td><code class="inline">a2a_send</code></td><td>requestId 关联</td></tr>
+        <tr><td><code class="inline">a2a_reply</code></td><td>回复 / 流式</td></tr>
+        <tr><td><code class="inline">update_info</code></td><td>改 description</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Master → Client(关键 12 类)</h3>
+      <pre>auth_ok / auth_fail / heartbeat_ack
+a2a_message / route_result
+directory_update / offline_messages
+config_update
+a2a_reply_chunk / a2a_reply_end   ← 流式
+issue_update / issue_usage_progress / issue_todos_update
+issue_approval_request             ← r_allow 审批
+session_sync_push / session_snapshot
+issue_interrupt / session_invalidated</pre>
+    </div>
+  </div>
+  <div class="warn-row" style="margin-top:14px">
+    流式消息豁免限流:<code class="inline">heartbeat / a2a_reply_chunk / a2a_reply_end / issue_update</code> —— 不豁免会掐断新版 hermes 一次上百 chunk 的回答。
+  </div>
+  <div class="err-row">
+    Close codes 协议契约:4001 / 4002 / 4400 / 4401 / 4429,改它们会让所有 client 误判。
+  </div>
+</section>
+
+<!-- ============ SLIDE 7: SUBSYSTEMS ============ -->
+<section class="slide" data-n="7" data-title="子系统一览">
+  <div class="topbar"><span class="brand">SUBSYSTEMS</span><span class="idx">07 / 18</span></div>
+  <h2>关键子系统(rotom 区别于普通网关)</h2>
+  <div class="grid g4" style="margin-top:18px">
+    <div class="card"><h4>Scheduler</h4><p>30s tick,at-most-once。interval / once 两种,recurring grace window 自动 fast-forward。</p></div>
+    <div class="card"><h4>Patrol 巡检</h4><p>1h 自动巡检群,限 1 群 1 巡检员,终态解析 result 写 issue_patrol_logs。</p></div>
+    <div class="card"><h4>Ask-bridge</h4><p>A @B 5min timer,离线 / 不回 → 自动建 Issue 升级,人工兜底。</p></div>
+    <div class="card"><h4>Session 持久化</h4><p>agent_sessions 表是 source of truth,multi-worker 共享。</p></div>
+    <div class="card"><h4>审批治理</h4><p>r_allow 下写盘必经 dashboard Accept/Deny + 只读 Bash 白名单(fail-closed)。</p></div>
+    <div class="card"><h4>Slash command</h4><p>/plan 切 plan 模式(claude → --permission-mode plan,codex → developerInstructions 注入)。</p></div>
+    <div class="card"><h4>Memory / Skill</h4><p>per-agent 长期记忆 + skill 绑定到 (group, agent),CLI 双向操作。</p></div>
+    <div class="card"><h4>Share Token</h4><p>share_&lt;hex&gt; 临时链接,第三方只读访问群消息 / Issue / 产物。</p></div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 8: GOVERNANCE ============ -->
+<section class="slide" data-n="8" data-title="协作治理">
+  <div class="topbar"><span class="brand">GOVERNANCE</span><span class="idx">08 / 18</span></div>
+  <h2>协作治理:写盘必挂 Issue</h2>
+  <p class="lead">这是 rotom 的灵魂硬规则 —— 改 <code class="inline">prompt-composer.ts</code> 时确认仍带 issue id + state + cwd。</p>
+  <div class="quote">"Agent 在群里没 in_progress issue 时,只能 Read / Grep / Glob。遇到改动诉求,先 <code class="inline">rotom issue create</code> 或提示发起方建。"</div>
+  <div class="grid g2" style="margin-top:30px">
+    <div class="card lg">
+      <h4>审批四类</h4>
+      <p><span class="pill">exec</span> Bash 命令<br>
+         <span class="pill">file_change</span> 写文件<br>
+         <span class="pill">plan</span> 计划模式<br>
+         <span class="pill">ask</span> 反向询问</p>
+    </div>
+    <div class="card lg">
+      <h4>approval_policy</h4>
+      <p><span class="pill">rw_allow</span> 默认,本地直接 accept<br>
+         <span class="pill">r_allow</span> PreToolUse 挂起 → WS 推 dashboard → Accept/Deny</p>
+    </div>
+    <div class="card lg">
+      <h4>只读 Bash 白名单</h4>
+      <p><code class="inline">src/shared/readonly-allowlist.ts</code>:<code class="inline">ls</code> / <code class="inline">cat</code> / <code class="inline">git log</code> / <code class="inline">rotom whoami</code> 等静默 accept。<span style="color:var(--warn)">fail-closed</span>:管道 / 重定向 / <code class="inline">$()</code> / 前导 env 赋值一律不命中。</p>
+    </div>
+    <div class="card lg">
+      <h4>category 过滤</h4>
+      <p><span class="pill v">category=Agent</span> 参与 Issue 抢单<br>
+         <span class="pill">category=真人</span> 不抢,只占位(人类参与者)</p>
+    </div>
+  </div>
+  <div class="warn-row" style="margin-top:18px">私聊已下线,所有 a2a 走 <code class="inline">rotom group send &lt;groupId&gt; &lt;target&gt; ...</code> + @mention。</div>
+</section>
+
+
+<!-- ============ SLIDE 9: ISSUE LIFECYCLE ============ -->
+<section class="slide" data-n="9" data-title="Issue 生命周期">
+  <div class="topbar"><span class="brand">ISSUE LIFECYCLE</span><span class="idx">09 / 18</span></div>
+  <h2>Issue 生命周期</h2>
+  <p class="lead">支持 <strong>interrupt 保留 session</strong> + <strong>append 续跑</strong> —— 跟普通 Issue 系统最大的差别。</p>
+  <div class="flow" style="margin-top:24px">
+    <div class="step">pending</div>
+    <div class="arrow-r">→ 抢单 ←</div>
+    <div class="step acc">in_progress</div>
+    <div class="arrow-r">→</div>
+    <div class="step">completed</div>
+    <div style="display:flex;gap:8px;flex-direction:column;align-items:center">
+      <div class="arrow-r">↘</div>
+      <div class="step" style="border-color:var(--err);color:var(--err)">failed</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-direction:column;align-items:center">
+      <div class="arrow-r">↘</div>
+      <div class="step" style="border-color:var(--warn);color:var(--warn)">cancelled</div>
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card lg">
+      <h4>interrupt ≠ cancel</h4>
+      <p>interrupt <strong style="color:var(--warn)">保留 session_id</strong>,worker <code class="inline">runIssueExecution</code> finally 决定是否 <code class="inline">--resume</code> 续跑 <code class="inline">pendingAppends</code>。cancel 才翻 <code class="inline">cancelled</code> 终态。</p>
+    </div>
+    <div class="card lg">
+      <h4>append / continue</h4>
+      <p>append:把指令入 <code class="inline">pendingAppends</code> 队列,等当前 CLI 收尾 <code class="inline">--resume</code> 续跑。<br>continue:completed/failed 后再问。</p>
+    </div>
+    <div class="card lg">
+      <h4>实时面板</h4>
+      <p><span class="pill">issue_update</span> 状态<br>
+         <span class="pill">issue_usage_progress</span> token 用量<br>
+         <span class="pill">issue_todos_update</span> 常驻 todo</p>
+    </div>
+  </div>
+  <div class="err-row" style="margin-top:14px">
+    interrupt 收到后 <strong>不要二次 sendUpdate</strong> —— dashboard 已落 <code class="inline">interrupted</code> 事件,worker 只置 <code class="inline">task.interrupted = true</code> + <code class="inline">controller.abort()</code>。
+  </div>
+</section>
+
+<!-- ============ SLIDE 10: CHAT / ASK / PATROL ============ -->
+<section class="slide" data-n="10" data-title="群聊 + Ask + 巡检">
+  <div class="topbar"><span class="brand">CHAT &amp; ASK &amp; PATROL</span><span class="idx">10 / 18</span></div>
+  <h2>群聊 + Ask-bridge + 巡检</h2>
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card lg" style="grid-row:span 2">
+      <h4>群聊子系统</h4>
+      <p>Router 决策 + 离线队列 + 同群串行队列(防止一个 Agent 在同一群内两条消息并发回复)。</p>
+      <p style="margin-top:12px">WS 消息类型 12 种,详见 <code class="inline">docs/GROUP_CHAT_ARCHITECTURE.md</code>。渲染性能调优见 <code class="inline">docs/GROUP_CHAT_RENDER_PERF.md</code>。</p>
+      <p style="margin-top:12px">群可 <span class="pill">pinned_at</span> 置顶 / <span class="pill">archived_at</span> 只读(禁发消息 / 建 issue / 改成员)。</p>
+    </div>
+    <div class="card lg">
+      <h4>Ask-bridge 5min 升级</h4>
+      <p>A 在群里 @B + <code class="inline">#reply</code> 标记 → master 自动建 bridge。<br>B 离线 / 不 @ 回复 → 20s tick 扫 bridge → 超时建 Issue 升级。</p>
+    </div>
+    <div class="card lg">
+      <h4>Patrol 巡检</h4>
+      <p>建群时自动建 <code class="inline">issue-patrol</code> scheduled task(interval 3600s,默认 enabled)+ 绑 <code class="inline">issue-patrol-rules</code> skill。</p>
+      <p style="margin-top:8px">限 1 个未归档、限 1 个 agent。</p>
+    </div>
+    <div class="card lg">
+      <h4>system sender</h4>
+      <p><code class="inline">postSystemToGroup</code> sender 必须是字面量 <code class="inline">"system"</code> —— Dashboard / CLI 渲染端按字符串切样式,写错就破样式。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 11: SESSION ============ -->
+<section class="slide" data-n="11" data-title="Session 持久化">
+  <div class="topbar"><span class="brand">SESSION</span><span class="idx">11 / 18</span></div>
+  <h2>Session 持久化与多 Worker</h2>
+  <p class="lead">从 <code class="inline">~/.rotom/sessions.json</code> 迁到 master DB —— multi-worker 不会互相覆盖。</p>
+  <div class="twocol" style="margin-top:18px">
+    <div>
+      <h3>数据流</h3>
+      <pre>auth 成功
+  → master 推 session_sync_push(全量)
+  → worker SessionStore 装入内存
+每次 SessionStore 变更
+  → worker 推 session_snapshot(增量)
+  → master upsertAgentSession</pre>
+    </div>
+    <div>
+      <h3>失效语义</h3>
+      <pre>poison / provider error / 用户主动删
+  → 不删行
+  → 打 invalidated_at 戳
+  → 推 session_invalidated
+  → 推 session_snapshot 同步 active
+  → dashboard 展示全量历史</pre>
+    </div>
+  </div>
+  <div class="err-row" style="margin-top:18px">
+    <strong>不要在 worker 侧复活 JSON 落盘</strong>:<code class="inline">SessionStore.backfillFromLegacyJson</code> 只在启动时 one-shot 读 + <code class="inline">unlink</code>。multi-worker 场景下旧 JSON 会互相覆盖。
+  </div>
+</section>
+
+<!-- ============ SLIDE 12: DASHBOARD DEMO ============ -->
+<section class="slide" data-n="12" data-title="Dashboard 演示">
+  <div class="topbar"><span class="brand">DASHBOARD</span><span class="idx">12 / 18</span></div>
+  <h2>Dashboard 演示</h2>
+  <p class="lead">React 18 + Vite + monaco + xterm。所有能力在浏览器里就能看到。</p>
+  <div class="grid g2" style="margin-top:18px;flex:1;align-items:stretch">
+    <div class="imgbox"><img src="infos/issue-detail.png" alt="issue 详情"></div>
+    <div class="imgbox"><img src="infos/agent-thinking-detail.png" alt="agent 思考"></div>
+  </div>
+  <p style="margin-top:12px;font-size:13px;color:var(--fg3);font-family:var(--mono)">
+    左:issue 详情面板(todo + 用量 + 时间线) · 右:agent thinking 流式
+  </p>
+</section>
+
+
+<!-- ============ SLIDE 13: ROTOM CLI ============ -->
+<section class="slide" data-n="13" data-title="rotom CLI">
+  <div class="topbar"><span class="brand">ROTOM CLI</span><span class="idx">13 / 18</span></div>
+  <h2>rotom CLI · 17 个子命令</h2>
+  <p class="lead">身份解析:<code class="inline">ROTOM_AGENT</code> env > <code class="inline">--as &lt;name&gt;</code> > <code class="inline">defaultAgent</code> > executor.config 自动发现。永远不接受 <code class="inline">--from</code>。</p>
+  <pre style="margin-top:24px;font-size:14px">rotom init                           # 首次 bootstrap:detect claude/codex/hermes/openclaw + 写 executor.config
+rotom whoami
+rotom status                         # /health,不需要 agent
+rotom directory --pretty
+rotom group list | members | history | send | upload | archive | unarchive
+rotom issue create | list | show | events | messages
+         | comment | cancel | interrupt | continue | append
+rotom schedule add | list | trigger | enable | disable
+rotom memory add | search | list | get | promote | pending | approve | reject
+rotom skill list | search | get | create | update | bind | mine
+rotom note list | show | create | update | delete        # 兼容层,转调 memory
+rotom ask list | show | cancel                          # 提问已改用群消息 + #reply 标记
+rotom master start | stop | status | restart
+rotom executor</pre>
+  <div class="warn-row" style="margin-top:14px">
+    Agent 在容器内通过 Bash 调 <code class="inline">rotom</code>(加载 <code class="inline">skill/rotom-a2a-communicate</code>),真人 / Claude Code 也能在 shell 手动用。
+  </div>
+</section>
+
+<!-- ============ SLIDE 14: REST API ============ -->
+<section class="slide" data-n="14" data-title="REST API">
+  <div class="topbar"><span class="brand">REST API</span><span class="idx">14 / 18</span></div>
+  <h2>REST API 全景(20+ 模块)</h2>
+  <p class="lead">所有端点挂在 <code class="inline">/api</code> 下。Dashboard cookie session,CLI <code class="inline">Authorization: Bearer mesh_xxx</code>。</p>
+  <div class="grid g3" style="margin-top:18px;font-size:13px">
+    <div>
+      <h3>基础</h3>
+      <pre style="font-size:12px">/api/agents          CRUD
+/api/agents/online
+/api/agents/:id/token
+/api/agents/:id/refresh-token
+/api/agents/:id/avatar
+/api/domains
+/api/cross-domain
+/api/real-persons</pre>
+    </div>
+    <div>
+      <h3>群 / Issue</h3>
+      <pre style="font-size:12px">/api/groups          CRUD
+/api/groups/:id/members
+/api/groups/:id/messages
+/api/groups/:id/issues
+/api/issues/:id
+/api/issues/:id/cancel
+/api/issues/:id/interrupt
+/api/issues/:id/append
+/api/issues/:id/continue
+/api/issues/:id/approvals/:aid
+/api/issues/:id/events
+/api/issues/claim-next</pre>
+    </div>
+    <div>
+      <h3>观测 / 治理 / 子系统</h3>
+      <pre style="font-size:12px">/api/artifacts/:gid
+/api/sessions
+/api/share/:token/...
+/api/memory
+/api/skills
+/api/notes
+/api/schedules
+/api/schedule-patterns
+/api/asks
+/api/guidance-templates
+/api/issues-patrol/{state,config,runs,logs}
+/api/upload | /uploads
+/api/audit (max 500)
+/api/stats
+/api/health</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 15: OPS ============ -->
+<section class="slide" data-n="15" data-title="运维与约束">
+  <div class="topbar"><span class="brand">OPS</span><span class="idx">15 / 18</span></div>
+  <h2>运维特性 & 已知约束</h2>
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card lg">
+      <h4>进程 / 数据</h4>
+      <p><span class="pill">:28800</span> 默认端口(MESH_MASTER_PORT 覆盖)<br>
+         <span class="pill">~/.rotom/</span> 数据目录(ROTOM_HOME 覆盖)<br>
+         <span class="pill">~/.openclaw/mesh-master.pid</span> PID 文件(shell 遗留,不要改)<br>
+         <span class="pill">SQLite WAL</span> + 43 个 migration<br>
+         <span class="pill">better-sqlite3 / node-pty</span> native,Node 切换要重 build</p>
+    </div>
+    <div class="card lg">
+      <h4>限流 / 队列 / 审计</h4>
+      <p><span class="pill">60 msg/min/agent</span> 默认限流,4 类豁免<br>
+         <span class="pill">100 条 / 24h</span> 离线队列<br>
+         <span class="pill">5min TTL</span> 消息去重<br>
+         <span class="pill">500 条</span> 审计日志</p>
+    </div>
+    <div class="card lg">
+      <h4>Token 治理</h4>
+      <p>migration 016 起 <strong>明文</strong>存到 <code class="inline">agents.token</code>(dashboard 回显)。<br>
+         <code class="inline">mesh_</code> 前缀 + JWT 7d 双鉴权。<br>
+         <span style="color:var(--err)">不要</span>看到 <code class="inline">token_hash</code> 就当只读 hash。</p>
+    </div>
+    <div class="card lg">
+      <h4>跨机器 / 单点</h4>
+      <p><code class="inline">groups.working_dir</code> 只是 dashboard 元数据 —— executor 端 cwd 走本机 <code class="inline">resolveIssueCwd</code>。<br>
+         <span style="color:var(--warn)">Master 是单点</span>,没有 HA 方案,生产建议前面挂 LB + 健康检查。</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============ SLIDE 16: VS OTHERS ============ -->
+<section class="slide" data-n="16" data-title="差异点">
+  <div class="topbar"><span class="brand">DIFFERENTIATION</span><span class="idx">16 / 18</span></div>
+  <h2>跟同类方案的差异</h2>
+  <table style="margin-top:18px">
+    <tr><th>能力</th><th>Rotom</th><th>通用 Agent 框架</th></tr>
+    <tr><td>中心化协作</td><td><span class="pill v">✓</span> Master 单点中转</td><td>多见点对点</td></tr>
+    <tr><td>真人可介入</td><td><span class="pill v">✓</span> category=真人 占位 + dashboard</td><td>纯 Agent 间</td></tr>
+    <tr><td>真实 CLI 进程</td><td><span class="pill v">✓</span> spawn claude / codex / hermes</td><td>多 SDK 嵌入</td></tr>
+    <tr><td>写盘必挂 Issue</td><td><span class="pill v">✓</span> 硬规则,可审计</td><td>无强制</td></tr>
+    <tr><td>r_allow 审批</td><td><span class="pill v">✓</span> dashboard Accept/Deny</td><td>少见</td></tr>
+    <tr><td>Ask-bridge 5min 升级</td><td><span class="pill v">✓</span> 自动 Issue 兜底</td><td>无</td></tr>
+    <tr><td>Session 跨 Worker 共享</td><td><span class="pill v">✓</span> master DB 持久化</td><td>通常进程内</td></tr>
+    <tr><td>巡检 + 调度 + 分享链接</td><td><span class="pill v">✓</span> 内置</td><td>需自建</td></tr>
+  </table>
+</section>
+
+<!-- ============ SLIDE 17: DEMO ============ -->
+<section class="slide" data-n="17" data-title="5 分钟跑通">
+  <div class="topbar"><span class="brand">DEMO</span><span class="idx">17 / 18</span></div>
+  <h2>5 分钟跑通 · Demo 路径</h2>
+  <pre style="margin-top:24px;font-size:15px;line-height:1.7"><span style="color:var(--fg3)"># 1) 起 Master</span>
+pnpm install
+pnpm build:master
+pnpm master:start               <span style="color:var(--fg3)"># 浏览器 :28800/dashboard,日志里看首次密码</span>
+
+<span style="color:var(--fg3)"># 2) Dashboard 建 agent(拿 token,只展示一次)</span>
+
+<span style="color:var(--fg3)"># 3) 写 executor.config.json + 起 Executor</span>
+pnpm executor
+
+<span style="color:var(--fg3)"># 4) 装 rotom CLI</span>
+ln -s "$PWD/bin/rotom" /usr/local/bin/rotom
+rotom whoami
+rotom directory --pretty
+
+<span style="color:var(--fg3)"># 5) 建群 + 发消息 + 建 issue</span>
+rotom group create "Dev 群" --members Claude·Agent
+rotom group send &lt;groupId&gt; Claude·Agent "hi,@Claude·Agent 看看 docs/INSTALL.md 有没有过时链接"
+rotom issue create &lt;groupId&gt; --title "修 README 过期链接" --priority high</pre>
+  <p style="margin-top:18px;font-size:15px">接下来 Claude agent 会在群里认领 → 流式回复 → 改文件 → 上报 todo → 完成。整个过程 Dashboard 实时可见。</p>
+</section>
+
+<!-- ============ SLIDE 18: CLOSING ============ -->
+<section class="slide" data-n="18" data-title="Q & A">
+  <div class="topbar"><span class="brand">THANKS</span><span class="idx">18 / 18</span></div>
+  <div class="hero">
+    <div class="hero eyebrow">Q &amp; A</div>
+    <p class="closing">
+      <strong>一个中枢,多个 Worker,真实 CLI 进程。</strong><br>
+      让人和 Agent 在同一个群里把活干完。
+    </p>
+    <div class="grid g3" style="margin-top:50px;width:100%;max-width:900px">
+      <div class="card">
+        <h4>Code</h4>
+        <p><code class="inline">/Users/kong/ai-work/rotom</code><br>AGENTS.md 入口<br>docs/ 详解</p>
+      </div>
+      <div class="card">
+        <h4>Run</h4>
+        <p>Master <code class="inline">:28800</code><br>Data <code class="inline">~/.rotom/</code><br>PID <code class="inline">~/.openclaw/</code></p>
+      </div>
+      <div class="card">
+        <h4>Watch</h4>
+        <p>Dashboard React SPA<br>xterm 终端<br>流式 + todo + 用量</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NAV ============ -->
+<div class="arrow l" id="prev">‹</div>
+<div class="arrow r" id="next">›</div>
+<div class="progress" id="progress"></div>
+<div class="footer">
+  <span id="curTitle">封面</span>
+  <span class="hint">翻页:<kbd>←</kbd><kbd>→</kbd> · 空格 · 数字键 · <kbd>Esc</kbd> 目录</span>
+  <span id="curNum">01 / 18</span>
+</div>
+
+<script>
+  (function(){
+    const slides = document.querySelectorAll('.slide');
+    const total = slides.length;
+    let cur = 0;
+    const $ = id => document.getElementById(id);
+    const progress = $('progress');
+    const curTitle = $('curTitle');
+    const curNum = $('curNum');
+
+    function show(n){
+      n = Math.max(0, Math.min(total-1, n));
+      slides.forEach((s,i)=>s.classList.toggle('active', i===n));
+      cur = n;
+      const s = slides[n];
+      curTitle.textContent = s.dataset.title || '';
+      curNum.textContent = String(n+1).padStart(2,'0') + ' / ' + String(total).padStart(2,'0');
+      progress.style.width = ((n+1)/total*100) + '%';
+      try{ localStorage.setItem('rotom-deck-cur', String(n)); }catch(e){}
+    }
+    function next(){ show(cur+1); }
+    function prev(){ show(cur-1); }
+
+    document.addEventListener('keydown', e=>{
+      if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){ e.preventDefault(); next(); }
+      else if(e.key==='ArrowLeft'||e.key==='PageUp'){ e.preventDefault(); prev(); }
+      else if(e.key==='Home'){ e.preventDefault(); show(0); }
+      else if(e.key==='End'){ e.preventDefault(); show(total-1); }
+      else if(e.key==='Escape'){ e.preventDefault(); show(0); }
+      else if(/^[0-9]$/.test(e.key)){ const n=parseInt(e.key,10); if(n>=1&&n<=total) show(n-1); }
+    });
+    $('next').onclick = next;
+    $('prev').onclick = prev;
+
+    // TOC click
+    document.querySelectorAll('[data-goto]').forEach(a=>{
+      a.onclick = e=>{ e.preventDefault(); show(parseInt(a.dataset.goto,10)-1); };
+    });
+
+    // click anywhere to advance (right side)
+    document.body.addEventListener('click', e=>{
+      if(e.target.closest('a,button,code,kbd,pre,table,.arrow,.toc,.imgbox')) return;
+      if(e.clientX > window.innerWidth * 0.6) next();
+      else if(e.clientX < window.innerWidth * 0.4) prev();
+    });
+
+    // restore
+    try{
+      const saved = parseInt(localStorage.getItem('rotom-deck-cur')||'0',10);
+      if(saved>=0&&saved<total) show(saved);
+      else show(0);
+    }catch(e){ show(0); }
+  })();
+</script>
+</div>
+</body>
+</html>

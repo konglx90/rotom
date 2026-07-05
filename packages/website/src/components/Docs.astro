@@ -6,17 +6,17 @@ const t = {
   zh: {
     eyebrow: "DOCS · 深入阅读",
     h2: "所有文档随仓库一同发布",
-    lead: `官网 <a href="/docs/">文档中心</a> 由仓库根 <code>/docs/*.md</code> 自动渲染,支持 mermaid 图表 / 表格 / 代码块。下面是精选入口。`,
+    lead: `官网 <a href="/docs/">文档中心</a> 由 <code>packages/website/docs/*.md</code> 自动渲染,支持 mermaid 图表 / 表格 / 代码块。下面是精选入口。`,
     featured: [
-      ["/docs/install/", "INSTALL", "完整安装手册 · 三件套构建与首次启动"],
-      ["/docs/federation/", "FEDERATION", "OPC + Federation 玩法 · 协调/member/standalone 三种角色"],
-      ["/docs/agent_user_guide/", "AGENT_USER_GUIDE", "Agent 协作用户指南 · 群聊 / Issue / Ask 全流程"],
-      ["/docs/agent_whitebox/", "AGENT_WHITEBOX", "Agent 白盒机制 · 任务可观察性设计"],
-      ["/docs/ask_bridge_guide/", "ASK_BRIDGE_GUIDE", "Ask Bridge 完整说明 · 一问一答 + 5min 超时兜底"],
-      ["/docs/group_chat_architecture/", "GROUP_CHAT_ARCHITECTURE", "群聊架构 · 消息路由 / 限流 / 已读 / 归档"],
-      ["/docs/group_chat_render_perf/", "GROUP_CHAT_RENDER_PERF", "群聊渲染性能优化 · 虚拟滚动与增量提交"],
-      ["/docs/dev_delivery_workflow/", "DEV_DELIVERY_WORKFLOW", "研发交付工作流 · Issue 全生命周期 SOP"],
-      ["/docs/quick_ref/", "QUICK_REF", "Issue / 协作 / 群消息 三种场景速查"],
+      ["/docs/user/get_started/", "INSTALL", "完整安装手册 · 三件套构建与首次启动"],
+      ["/docs/federation/federation/", "FEDERATION", "Federation 玩法 · 协调/member/standalone 三种角色"],
+      ["/docs/user/user_guide/", "AGENT_USER_GUIDE", "Agent 协作用户指南 · 群聊 / Issue / Ask 全流程"],
+      ["/docs/dev/agent_whitebox/", "AGENT_WHITEBOX", "Agent 白盒机制 · 任务可观察性设计"],
+      ["/docs/dev/ask_bridge_guide/", "ASK_BRIDGE_GUIDE", "Ask Bridge 完整说明 · 一问一答 + 5min 超时兜底"],
+      ["/docs/dev/group_chat_architecture/", "GROUP_CHAT_ARCHITECTURE", "群聊架构 · 消息路由 / 限流 / 已读 / 归档"],
+      ["/docs/dev/group_chat_render_perf/", "GROUP_CHAT_RENDER_PERF", "群聊渲染性能优化 · 虚拟滚动与增量提交"],
+      ["/docs/dev/dev_delivery_workflow/", "DEV_DELIVERY_WORKFLOW", "研发交付工作流 · Issue 全生命周期 SOP"],
+      ["/docs/user/user_guide/", "QUICK_REF", "Issue / 协作 / 群消息 三种场景速查"],
     ],
     allTitle: "全部文档 →",
     allDesc: "12+ 篇 · 文档索引页",
@@ -25,17 +25,17 @@ const t = {
   en: {
     eyebrow: "DOCS · DEEP DIVES",
     h2: "Docs ship with the repo",
-    lead: `The website <a href="/en/docs/">docs center</a> is auto-rendered from <code>/docs/en/*.md</code> in the repo — supports mermaid diagrams / tables / code blocks. Featured entries below.`,
+    lead: `The website <a href="/en/docs/">docs center</a> is auto-rendered from <code>packages/website/docs/en/*.md</code> in the repo — supports mermaid diagrams / tables / code blocks. Featured entries below.`,
     featured: [
-      ["/en/docs/install/", "INSTALL", "Full install manual — three-piece build & first launch"],
-      ["/en/docs/federation/", "FEDERATION", "OPC + Federation — coordinator/member/standalone roles"],
-      ["/en/docs/agent_user_guide/", "AGENT_USER_GUIDE", "Agent collaboration guide — group / Issue / Ask full flow"],
-      ["/en/docs/agent_whitebox/", "AGENT_WHITEBOX", "Agent white-box mechanism — task observability"],
-      ["/en/docs/ask_bridge_guide/", "ASK_BRIDGE_GUIDE", "Ask Bridge full spec — Q&A + 5min timeout fallback"],
-      ["/en/docs/group_chat_architecture/", "GROUP_CHAT_ARCHITECTURE", "Group chat architecture — routing / rate-limit / read / archive"],
-      ["/en/docs/group_chat_render_perf/", "GROUP_CHAT_RENDER_PERF", "Group chat render perf — virtual scroll + incremental commit"],
-      ["/en/docs/dev_delivery_workflow/", "DEV_DELIVERY_WORKFLOW", "Dev delivery workflow — Issue lifecycle SOP"],
-      ["/en/docs/quick_ref/", "QUICK_REF", "Issue / collab / group message — three scenarios cheat sheet"],
+      ["/en/docs/user/get_started/", "INSTALL", "Full install manual — three-piece build & first launch"],
+      ["/en/docs/federation/federation/", "FEDERATION", "Federation — coordinator/member/standalone roles"],
+      ["/en/docs/user/user_guide/", "AGENT_USER_GUIDE", "Agent collaboration guide — group / Issue / Ask full flow"],
+      ["/en/docs/dev/agent_whitebox/", "AGENT_WHITEBOX", "Agent white-box mechanism — task observability"],
+      ["/en/docs/dev/ask_bridge_guide/", "ASK_BRIDGE_GUIDE", "Ask Bridge full spec — Q&A + 5min timeout fallback"],
+      ["/en/docs/dev/group_chat_architecture/", "GROUP_CHAT_ARCHITECTURE", "Group chat architecture — routing / rate-limit / read / archive"],
+      ["/en/docs/dev/group_chat_render_perf/", "GROUP_CHAT_RENDER_PERF", "Group chat render perf — virtual scroll + incremental commit"],
+      ["/en/docs/dev/dev_delivery_workflow/", "DEV_DELIVERY_WORKFLOW", "Dev delivery workflow — Issue lifecycle SOP"],
+      ["/en/docs/user/user_guide/", "QUICK_REF", "Issue / collab / group message — three scenarios cheat sheet"],
     ],
     allTitle: "All docs →",
     allDesc: "12+ entries · docs index",
@@ -69,7 +69,7 @@ const indexPath = lang === "zh" ? "/docs/" : "/en/docs/";
 
 <style>
   .doc--index {
-    background: linear-gradient(135deg, rgba(124, 156, 255, 0.10), rgba(180, 131, 255, 0.06));
+    background: rgba(159, 232, 112, 0.08);
     border-color: var(--accent);
   }
 </style>

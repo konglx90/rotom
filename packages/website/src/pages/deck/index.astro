@@ -1,6 +1,6 @@
 ---
 // Rotom V3 deck · 集成进官网 /deck/ 路由
-// Build 时读 docs/rotom-deck-v3-template/{pages.json,head.html,nav.html,slides/*.html}
+// Build 时读 packages/website/docs/archive/presentations/rotom-deck-v3-template/{pages.json,head.html,nav.html,slides/*.html}
 // 1:1 复用现有 deck 模板,只把 {{N}} {{NN}} {{TOTAL}} {{TOC}} 占位符替换掉,
 // 并把相对图片路径(../rotom.jpeg / ../screenshots/...)改写成站内绝对路径
 
@@ -11,8 +11,8 @@ import path from "node:path";
 // 用 process.cwd() 找仓库根:build 脚本从 packages/website 启动,
 // cwd = packages/website,上级 ../.. 就是仓库根。
 const WEBSITE_ROOT = process.cwd();
-const REPO_ROOT = path.resolve(WEBSITE_ROOT, "../..");
-const TPL = path.join(REPO_ROOT, "docs", "rotom-deck-v3-template");
+
+const TPL = path.join(WEBSITE_ROOT, "docs", "archive", "presentations", "rotom-deck-v3-template");
 
 const pagesPath = path.join(TPL, "pages.json");
 const headPath = path.join(TPL, "head.html");

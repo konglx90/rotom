@@ -1,0 +1,128 @@
+<!-- ============ {{N}} Dashboard 组件 ============ -->
+<section class="slide" data-n="{{N}}" data-title="Dashboard 组件">
+  <div class="topbar"><span class="brand">背景 · Dashboard 组件</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <h2>Dashboard 组件一览 <span style="font-size:16px;color:var(--fg3);font-weight:400">/ 6 大块</span></h2>
+  <p class="lead">rotom Dashboard 不止聊天 —— 所有能力都装进同一个群下面。讲清楚这 6 块,后面所有场景都顺。</p>
+  <div class="grid g3" style="margin-top:18px;flex:1;align-items:stretch">
+        <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>群聊</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>协作入口。</strong>一切挂群里,@ 谁谁接活,#reply 触发桥接。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 3 页 rotom 30 秒 + 资产排查 3 页</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Issue</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>任务单位。</strong>写盘必挂 issue,可抢单 / 审批 / 中断 / 续跑。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 11-14 页 · 治理第 9 页</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Memory</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>长期记忆。</strong>Agent 干完活自动写一条,人 review 后 recall。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 5-6 页 持续学习</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Schedule</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>定时任务。</strong>30s tick 扫 · interval / once 两种,派 issue 或 message。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 7-8 页 巡检(基于 schedule)</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Artifacts</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>产物管理。</strong>群产物 + diff 预览 + 跨群可见,代码 / 报告都落这。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见 docs/INSTALL.md · /api/artifacts</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Skill</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>可复用流程。</strong>同一类问题第 3 次出现 → Agent 提议 skill create。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 5-6 页 持续学习 · 复用图谱</p>
+    </div>
+  </div>
+     <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Issue</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>任务单位。</strong>写盘必挂 issue,可抢单 / 审批 / 中断 / 续跑。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li>生命周期:open → in_progress → completed / failed</li>
+        <li>扩展:interrupt / append / continue</li>
+        <li>approval_policy:<code class="inline">r_allow</code> / <code class="inline">rw_allow</code></li>
+        <li>每次事件进 <code class="inline">issue_events</code>(可回放)</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 13 页治理 + 第 15-17 页资产排查</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Memory</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>长期记忆。</strong>Agent 干完活自动写一条,人 review 后 recall。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li>scope:group(本群) / global(全 mesh)</li>
+        <li>category:pitfall / decision / pattern / todo</li>
+        <li>promote 走 <code class="inline">/api/memory/:id/promote</code>(人审批)</li>
+        <li>prompt 注入走 <code class="inline">prompt-composer</code> 7 层组装</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 9-10 页持续学习</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Schedule</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>定时任务。</strong>30s tick 扫 · interval / once 两种,派 issue 或 message。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li><code class="inline">scheduled_tasks</code> 表 + 30s tick 调度</li>
+        <li>at-most-once:先 reschedule 再执行</li>
+        <li>两种 mode:agent(派 issue) / message(发群消息)</li>
+        <li>handler_key 走注册表(<code class="inline">ask-bridge-check</code> / <code class="inline">issue-patrol</code>)</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 11-12 页主动出击(基于 schedule)</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Artifacts</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>产物管理。</strong>群产物 + diff 预览 + 跨群可见,代码 / 报告都落这。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li><code class="inline">/api/artifacts</code> 列出群产物 + diff 预览</li>
+        <li>支持 <code class="inline">@alipay/pension-components</code> 这类 npm 产物</li>
+        <li>每 issue 关联 artifacts(在 issue_event 里可查)</li>
+        <li>terminal 可直接在 dashboard 跑</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见 docs/INSTALL.md · /api/artifacts</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Skill</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:8px"><strong>可复用流程。</strong>同一类问题第 3 次出现 → Agent 提议 skill create。</p>
+      <ul style="font-size:12px;color:var(--fg2);line-height:1.7;padding-left:18px;margin:0 0 8px 0">
+        <li>skill 本身无可见性,靠 <code class="inline">/groups/:id/skills/:agent/bind</code> 绑</li>
+        <li>启动时把 <code class="inline">rotom-a2a-communicate</code> 写到 <code class="inline">~/.rotom/SKILL.md</code></li>
+        <li>已建:<code class="inline">issue-patrol-rules</code> / <code class="inline">test-skill</code></li>
+        <li>改规则 = 改 skill,不用动代码</li>
+      </ul>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 9-10 页持续学习 · 复用图谱</p>
+    </div>
+  </div>
+     <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Issue</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>任务单位。</strong>写盘必挂 issue,可抢单 / 审批 / 中断 / 续跑。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 11-14 页 · 治理第 9 页</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Memory</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>长期记忆。</strong>Agent 干完活自动写一条,人 review 后 recall。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 5-6 页 持续学习</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Schedule</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>定时任务。</strong>30s tick 扫 · interval / once 两种,派 issue 或 message。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 7-8 页 巡检(基于 schedule)</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Artifacts</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>产物管理。</strong>群产物 + diff 预览 + 跨群可见,代码 / 报告都落这。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见 docs/INSTALL.md · /api/artifacts</p>
+    </div>
+    <div class="card lg" style="display:flex;flex-direction:column">
+      <h4>Skill</h4>
+      <p style="color:var(--fg);font-size:14px;line-height:1.5;margin-bottom:6px"><strong>可复用流程。</strong>同一类问题第 3 次出现 → Agent 提议 skill create。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">→ 见第 5-6 页 持续学习 · 复用图谱</p>
+    </div>
+  </div>
+  <a class="live-link" href="http://localhost:3000/dashboard/groups/a9a72025-909c-4789-98a7-e4ea4cb688d0" target="_blank" rel="noopener">
+    <span class="ll-tag">现场实例</span>
+    <span class="ll-arrow">↗</span>
+    <span class="ll-text">看一个真实运行的群:<strong>群 a9a72025</strong> · 看看这个群挂载了哪些组件</span>
+  </a>
+  <div class="row" style="margin-top:14px">
+    1 句话:Dashboard = <strong>群聊 + Issue + Memory + Schedule + Artifacts + Skill</strong>,全挂在群下面,人 + Agent 共用同一套入口。
+  </div>
+</section>

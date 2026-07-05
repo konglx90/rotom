@@ -1,0 +1,34 @@
+<!-- ============ {{N}} 治理一页清 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="治理一页清">
+  <div class="topbar"><span class="brand">背景 · 治理</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <h2>治理一页清 · 写盘必挂 Issue</h2>
+  <div class="quote">"Agent 在群里没 in_progress issue 时,只能 Read / Grep / Glob。遇到改动诉求,先 <code class="inline">rotom issue create</code> 或提示发起方建。"</div>
+  <div class="gov-grid">
+    <div class="gov-card">
+      <h4>审批四类</h4>
+      <p><span class="pill">exec</span> Bash · <span class="pill">file_change</span> 写文件 · <span class="pill">plan</span> 计划 · <span class="pill">ask</span> 反问</p>
+    </div>
+    <div class="gov-card">
+      <h4>approval_policy</h4>
+      <p><span class="pill v">rw_allow</span> 默认 · 本地直接 accept<br><span class="pill w">r_allow</span> PreToolUse 挂起 → WS 推 dashboard → Accept/Deny</p>
+    </div>
+    <div class="gov-card">
+      <h4>只读 Bash 白名单</h4>
+      <p><code class="inline">readonly-allowlist.ts</code>:<code class="inline">ls</code> / <code class="inline">cat</code> / <code class="inline">git log</code> / <code class="inline">rotom whoami</code> 静默 accept。<strong style="color:var(--warn)">fail-closed</strong>:管道 / 重定向 / <code class="inline">$()</code> / 前导 env 赋值一律不命中。</p>
+    </div>
+    <div class="gov-card">
+      <h4>category 过滤</h4>
+      <p><span class="pill v">category=Agent</span> 抢单 · <span class="pill">category=真人</span> 只占位</p>
+    </div>
+    <div class="gov-card">
+      <h4>Issue 状态机</h4>
+      <p><code class="inline">pending → in_progress → completed/failed</code><br>支持 <strong style="color:var(--warn)">interrupt 保留 session</strong> + <strong style="color:var(--warn)">append 续跑 pendingAppends</strong><br><strong style="color:var(--err)">interrupt ≠ cancel</strong>(cancel 才翻 cancelled 终态)</p>
+    </div>
+    <div class="gov-card">
+      <h4>Ask-bridge 5min 升级</h4>
+      <p>A 在群里 @B + <code class="inline">#reply</code> 标记 → master 自动建 bridge<br>20s tick 扫 bridge → 超时建 Issue 升级</p>
+    </div>
+  </div>
+  <div class="warn-row" style="margin-top:10px">私聊已下线,所有 a2a 走 <code class="inline">rotom group send &lt;groupId&gt; &lt;target&gt; ...</code> + @mention。</div>
+</section>

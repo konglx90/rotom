@@ -1,0 +1,42 @@
+<!-- ============ {{N}} 群就是工作台 ============ -->
+
+<section class="slide" data-n="{{N}}" data-title="群就是工作台 · 基础交互">
+  <div class="topbar"><span class="brand">背景 · 基础交互</span><span class="idx">{{NN}} / {{TOTAL}}</span></div>
+  <h2>群就是工作台 · @ 交互 + 可以并发</h2>
+  <p class="lead">Dashboard 6 块都挂在群下面,那「群本身」就是工作台 —— 人和 Agent 怎么用它?三件事:@ 谁谁接活、#reply 触发桥接、多群并发。</p>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card lg">
+      <h4>@ 谁谁接活 · 路由到 worker</h4>
+      <p>群消息里 <code class="inline">@西花</code> / <code class="inline">@江德福</code> / <code class="inline">@瓦力</code> → Master <code class="inline">ws-hub/routing</code> 按 @ 解析目标 → 走 <code class="inline">router.ts</code> 派给对应 Worker(不是 broker,不直接 client→client)。<strong>Agent 之间互相 @ 也走同一路径</strong>(江德福 @ 瓦力接力 review 就是这条)。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:8px">代码:<code class="inline">src/master/ws-hub/routing.ts</code> + <code class="inline">src/master/router.ts</code></p>
+    </div>
+    <div class="card lg">
+      <h4>#reply 触发桥接 · 5min 不回自动升级</h4>
+      <p>A 在群里 <code class="inline">@B</code> + 内容里带 <code class="inline">#reply</code> 标记 → Master 自动建 ask-bridge(<code class="inline">ask_bridges</code> 表)。B @ 回复 A → mark answered;B 离线/不 @ 回复 → scheduler handler <code class="inline">ask-bridge-check</code>(20s tick)兜底 → 5min 仍无解 → 建 Issue 升级。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:8px">代码:<code class="inline">src/master/db/ask-bridges.ts</code> + <code class="inline">scheduler-handlers.ts</code></p>
+    </div>
+    <div class="card lg">
+      <h4>多群并发 · 人同时管多件事的体感</h4>
+      <p>Master 一个进程,接所有群的 WS 流量,谁在哪个群都无感。Issue 抢单 <code class="inline">maxConcurrent</code>(默认 2)限的是<strong>单 Agent 并发</strong>,不是全局 —— 西花在群 A 让江德福跑 issue,群 B 同时让瓦力跑 issue,两个 Agent 同时推进。同一群内多消息按群 <code class="inline">worker-chat</code> 串行队列。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:8px">代码:<code class="inline">src/executor/worker.ts</code> + <code class="inline">worker-chat.ts</code></p>
+    </div>
+    <div class="card lg">
+      <h4>Master 自己处理路由 / 排队 / 限流</h4>
+      <p>人不用关心并发:Master 做消息去重(<code class="inline">src/shared/dedup.ts</code>·5min TTL)、限流(默认 60 msg/min/agent · 豁免 chunk/heartbeat)、离线队列(100 条/24h TTL)。所有数字员工 <strong>不直连</strong>,全部经 Master 中转 —— 没有点对点连接。</p>
+      <p style="font-size:12px;color:var(--fg3);font-family:var(--mono);margin-top:8px">代码:<code class="inline">src/master/offline-queue.ts</code> + <code class="inline">src/shared/dedup.ts</code></p>
+    </div>
+  </div>
+  <div class="flow" style="margin-top:18px">
+    <div class="step">西花 <code class="inline">@江德福</code> · 群 A</div>
+    <div class="arrow-r">→</div>
+    <div class="step">Master 路由 → 江德福 worker</div>
+    <div class="arrow-r">→</div>
+    <div class="step acc">江德福流式回复</div>
+    <div class="arrow-r">|</div>
+    <div class="step">同时 西花 <code class="inline">@瓦力</code> · 群 B</div>
+    <div class="arrow-r">→</div>
+    <div class="step">Master 路由 → 瓦力 worker</div>
+    <div class="arrow-r">→</div>
+    <div class="step v acc">瓦力并发 PR review</div>
+  </div>
+</section>
