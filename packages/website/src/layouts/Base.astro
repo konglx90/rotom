@@ -5,10 +5,13 @@ import Footer from "../components/Footer.astro";
 interface Props {
   title?: string;
   description?: string;
+  /** 是否加载 mermaid 客户端渲染(页面含 <pre class="mermaid"> 时开启) */
+  withMermaid?: boolean;
 }
 const {
   title = "Rotom · 数字员工 Mesh",
   description = "一个中心化的 Agent 协作网络。Master 中转 + Executor 抢单 + rotom CLI 调用,把 claude / codex / hermes / openclaw 等专业 CLI 工具封装成可协作的数字员工。",
+  withMermaid = false,
 } = Astro.props;
 ---
 <!doctype html>
@@ -32,13 +35,14 @@ const {
           <span class="brand__tag">A2A Workspace</span>
         </a>
         <div class="nav__links">
-          <a href="#features">特性</a>
-          <a href="#group-play">群指导</a>
-          <a href="#proactive">主动出击</a>
-          <a href="#architecture">架构</a>
-          <a href="#screenshots">截图</a>
-          <a href="#quickstart">快速开始</a>
-          <a href="#docs">文档</a>
+          <a href="/#features">特性</a>
+          <a href="/#federation">联邦</a>
+          <a href="/#proactive">主动出击</a>
+          <a href="/#architecture">架构</a>
+          <a href="/#cli-ref">CLI</a>
+          <a href="/#quickstart">快速开始</a>
+          <a href="/docs/">文档</a>
+          <a href="/deck/">幻灯片</a>
           <a href="https://code.alipay.com/cattery/rotom" class="nav__cta">GitHub</a>
         </div>
       </div>
@@ -49,5 +53,32 @@ const {
     </main>
 
     <Footer />
+
+    {withMermaid && (
+      <script type="module">
+        import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: "dark",
+          themeVariables: {
+            primaryColor: "#1a2244",
+            primaryTextColor: "#e8edf7",
+            primaryBorderColor: "#7c9cff",
+            lineColor: "#9aa7c7",
+            secondaryColor: "#131a32",
+            tertiaryColor: "#0a0f1f",
+            fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace",
+          },
+          flowchart: { htmlLabels: true, curve: "basis" },
+        });
+        const pres = document.querySelectorAll("pre.mermaid:not([data-mermaid-rendered])");
+        if (pres.length > 0) {
+          for (const el of pres) {
+            el.setAttribute("data-mermaid-rendered", "1");
+          }
+          await mermaid.run({ nodes: Array.from(pres) });
+        }
+      </script>
+    )}
   </body>
 </html>

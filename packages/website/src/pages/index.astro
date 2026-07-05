@@ -2,20 +2,26 @@
 import Base from "../layouts/Base.astro";
 import Hero from "../components/Hero.astro";
 import Features from "../components/Features.astro";
+import Federation from "../components/Federation.astro";
 import GroupPlay from "../components/GroupPlay.astro";
 import Proactive from "../components/Proactive.astro";
+import MemorySkill from "../components/MemorySkill.astro";
 import Architecture from "../components/Architecture.astro";
 import Screenshots from "../components/Screenshots.astro";
+import CliReference from "../components/CliReference.astro";
 import QuickStart from "../components/QuickStart.astro";
 import Docs from "../components/Docs.astro";
 ---
-<Base>
+<Base withMermaid>
   <Hero />
   <Features />
+  <Federation />
   <GroupPlay />
   <Proactive />
+  <MemorySkill />
   <Architecture />
   <Screenshots />
+  <CliReference />
   <QuickStart />
   <Docs />
 </Base>

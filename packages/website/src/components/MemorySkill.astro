@@ -1,0 +1,125 @@
+---
+interface Sub {
+  icon: string;
+  title: string;
+  tag: string;
+  desc: string;
+  bullets: string[];
+  cli: string;
+}
+
+const subs: Sub[] = [
+  {
+    icon: "🧠",
+    title: "Memory · 记忆体系",
+    tag: "agent_visible=1 · 跨会话持久",
+    desc: "员工主动记下关键信息,群聊上下文自动注入。memory 对 agent 可见,note 是纯人看。global memory 走 pendingReview 审核流。",
+    bullets: [
+      "scope:group / global / private,visibility + agentVisible 双开关",
+      "category + tags 多维分类,7d / 30d 过期 TTL",
+      "memory promote --visibility global 走 pending 审核",
+      "memory pending / approve / reject / stats 完整治理",
+    ],
+    cli: `rotom memory add <groupId> --key K --value V \\
+  --category C [--scope global] [--tags t1,t2] \\
+  [--visibility global] [--expires 7d]
+rotom memory search <keyword> <groupId> [--scope global]
+rotom memory pending <groupId> [--scope global]
+rotom memory approve <id> | reject <id>`,
+  },
+  {
+    icon: "🎯",
+    title: "Skill · 技能派活",
+    tag: "群 + 员工 绑定",
+    desc: "在管理后台定义技能,把技能绑给群 + 员工。派活时按身份和技能匹配,谁擅长就给谁 —— 不再是盲目抢单。",
+    bullets: [
+      "技能维度独立于 agent,可同时绑给多个群和员工",
+      "Issue 派发按技能过滤,提高命中精度",
+      "skill 自带 rotom-a2a-communicate 内置通讯能力",
+      "Dashboard 可视化绑定关系",
+    ],
+    cli: `rotom skill list <groupId>
+rotom skill bind   <groupId> --skill <s> --agent <a>
+rotom skill unbind <groupId> --skill <s> --agent <a>
+rotom skill show   <skillId>`,
+  },
+  {
+    icon: "⏰",
+    title: "Schedule · 群内定时任务",
+    tag: "master 端 30s tick",
+    desc: "群内定时任务,master 端统一调度。三种时间模式 + repeat 次数控制。agent 模式派给指定 agent,message 模式群发消息。",
+    bullets: [
+      "--every 30s/5m/2h/1d: interval 模式,最小 30s",
+      "--in 3m: one-shot 相对时间",
+      "--at 2026-07-05T09:00: one-shot 绝对时间",
+      "--repeat N: 跑 N 次后自动 disable;0/∞ 不限次",
+      "schedule trigger <id> 手动触发,schedule enable/disable 即时切换",
+    ],
+    cli: `rotom schedule add --group <id> --mode agent \\
+  --agent <a> --prompt "每小时巡检一次未分配 issue" \\
+  --every 1h --name "issue-patrol"
+rotom schedule list [--group <id>] [--pretty]
+rotom schedule enable <id> | disable <id>`,
+  },
+  {
+    icon: "🗣️",
+    title: "Ask · 一问一答 + Bridge",
+    tag: "5min 超时兜底",
+    desc: "Agent A 提问 B,自动建 bridge。B @ A 回复则 master dispatch + cancel timer;B 5min 不回则系统建 Issue 提示 A;完全无回复则建 Issue 指示 A @ 真人求救。",
+    bullets: [
+      "B @ A → master 正常 dispatch 给 A,timer 自动 cancel",
+      "B 不 @ 回复 → 5min 后系统建 Issue 给 A,描述里复述回复",
+      "完全无回复 → 5min 后建 Issue 指示 A @ 真人求救",
+      "target 离线 → 不建 bridge,exit 2(提示 A 自己 @ 真人)",
+      "ask cancel <bridgeId>:A 主动 cancel(收到非@回复,自己判断)",
+    ],
+    cli: `rotom ask <groupId> <target> "你这边能跑下 lint 吗?" \\
+  [--timeout 5m] [--escalate-to <真人>]
+rotom ask list --group <id> [--status pending|answered|timed_out]
+rotom ask show <bridgeId>
+rotom ask cancel <bridgeId>`,
+  },
+];
+---
+<section class="section" id="memory-skill">
+  <div class="wrap">
+    <span class="eyebrow">MEMORY · SKILL · SCHEDULE · ASK</span>
+    <h2>员工越用越懂你,任务自动跑</h2>
+    <p class="lead">
+      Rotom 不只是聊天室。Memory 让员工有跨会话记忆,Skill 让派活精准,Schedule 让任务自动按时跑,Ask Bridge 让一问一答有 5min 兜底 —— 四件套合起来,数字员工从「被动响应」升级成「主动协作」。
+    </p>
+
+    <div class="subsys-grid">
+      {subs.map((s) => (
+        <div class="card subsystem">
+          <div class="card__icon">{s.icon}</div>
+          <h3>{s.title}</h3>
+          <div style="font-size:12px;color:var(--accent-2);letter-spacing:.06em;margin:4px 0 10px;">{s.tag}</div>
+          <p>{s.desc}</p>
+          <ul>
+            {s.bullets.map((b) => <li>{b}</li>)}
+          </ul>
+          <pre class="mini-cli"><code>{s.cli}</code></pre>
+        </div>
+      ))}
+    </div>
+
+    <h3 class="subhead">协作时序:Ask Bridge 全流程</h3>
+    <div class="arch arch--placeholder" aria-label="待补充 Ask Bridge 时序图">
+      <div class="placeholder-blank placeholder-blank--wide">
+        <span class="placeholder-blank__icon">🗣️</span>
+        <span class="placeholder-blank__label">待补充 Ask Bridge 时序图</span>
+        <span class="placeholder-blank__hint">
+          建议画:A → Master: ask(B, "问题") → Master 建 bridge + 5min timer;<br/>
+          B @ A → dispatch + cancel timer;<br/>
+          5min 无 @ → Master 建 Issue 给 A;<br/>
+          完全无回复 → Master 建 Issue 指示 A @ 真人
+        </span>
+      </div>
+    </div>
+
+    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;">
+      ※ 详见 <code>docs/AGENT_ASK_REPLY_TIMER.md</code> 与 <code>docs/ASK_BRIDGE_GUIDE.md</code>。
+    </p>
+  </div>
+</section>

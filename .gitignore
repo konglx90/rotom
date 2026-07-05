@@ -11,3 +11,4 @@ mesh-data/
 .node
 package-lock.json
 src/executor/executor.config.json
+.astro/

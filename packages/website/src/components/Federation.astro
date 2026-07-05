@@ -1,0 +1,118 @@
+---
+const modes = [
+  {
+    icon: "🚀",
+    title: "OPC · 个人数字员工",
+    tag: "默认形态 · 每台机器",
+    desc: "一命令拉起 master + executor,自动建默认 agent + 默认 group,本机走 loopback 信任,免 mesh_token,断网可用。",
+    bullet: [
+      "masterId 持久稳定:8 字符 base36,换网络/改 IP 不影响身份",
+      "hostname 校验:拒绝 IP 字面量(移动电脑 IP 不稳定)",
+      "scanClis 自动注册:claude / codex / hermes / openclaw / pi 各起一个 agent",
+      "ROTOM_FEDERATION_DISABLED=1 可强制纯 standalone",
+    ],
+  },
+  {
+    icon: "🌐",
+    title: "Federation · 团队联邦",
+    tag: "可选叠加 · 星型拓扑",
+    desc: "协调 master(ROTOM_MASTER_ROLE=coordination)中转跨机消息,member master 主动 outbound 连接,数据归属本地,协调只持有路由元信息。",
+    bullet: [
+      "runtime join/leave:Dashboard「团队」页填地址即可加入,无需重启",
+      "移动电脑友好:member 是 outbound 主动连接,切网自动重连",
+      "跨机可见性:本机 agent 自动 publish 到协调 master,其他 member 可见",
+      "数据归属本地:agent / memory / issue 始终留在本地 master",
+    ],
+  },
+];
+
+const roles = [
+  { name: "standalone", desc: "默认 · 单机 OPC,无协调,数据完全本地", env: "(无需)" },
+  { name: "coordination", desc: "协调 master · 接收 member 连入、转发跨机消息", env: "ROTOM_MASTER_ROLE=coordination" },
+  { name: "member", desc: "成员 master · 主动连协调,本机数据保留,跨机可见性上推", env: "ROTOM_MASTER_ROLE=member" },
+];
+
+const coordCode = `rotom run federation
+# 等价 ROTOM_MASTER_ROLE=coordination pnpm start
+# 默认端口 28800,Dashboard → 团队页可看 join 请求`;
+
+const memberCode = `# 方式 A:Dashboard「团队」页填地址加入(runtime 切换)
+# 方式 B:写 ~/.rotom/team.json
+{
+  "id": "「协调 masterId,8 字符 base36」",
+  "name": "阿甘团队",
+  "coord_endpoints": ["ws://coord-host:28800"]
+}
+
+ROTOM_MASTER_ROLE=member pnpm start`;
+---
+<section class="section" id="federation">
+  <div class="wrap">
+    <span class="eyebrow">FEDERATION · 联邦玩法</span>
+    <h2>OPC 默认 + Federation 叠加</h2>
+    <p class="lead">
+      Rotom 的设计哲学:<strong>每台机器先自治,再联邦</strong>。默认形态是个人 OPC(开箱即用、免 token),
+      需要跨机协作时再 runtime 加入团队,无需重启、无需迁移数据。
+    </p>
+
+    <div class="grid2">
+      {modes.map((m) => (
+        <div class="card">
+          <div class="card__icon">{m.icon}</div>
+          <h3>{m.title}</h3>
+          <p>{m.desc}</p>
+          <div style="margin-top:12px;font-size:12px;color:var(--accent-2);letter-spacing:.06em;">{m.tag}</div>
+          <ul style="margin-top:10px;">
+            {m.bullet.map((b) => (
+              <li>{b}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+
+    <h3 class="subhead">星型拓扑</h3>
+    <div class="arch arch--placeholder" aria-label="待补充 Federation 拓扑图">
+      <div class="placeholder-blank placeholder-blank--wide">
+        <span class="placeholder-blank__icon">🌐</span>
+        <span class="placeholder-blank__label">待补充 Federation 星型拓扑图</span>
+        <span class="placeholder-blank__hint">
+          建议画:中心 Coordination Master,周围 3-4 个 Member Master 用 outbound 箭头连入;<br/>
+          每个 Member 下挂 1-2 个 Agent 节点;协调上方标 "路由元信息",Member 方框标 "数据归属本地"
+        </span>
+      </div>
+    </div>
+
+    <h3 class="subhead">三种 Master 角色</h3>
+    <div class="role-list">
+      <div class="role-row role-row--head">
+        <div class="role-row__name">角色</div>
+        <div class="role-row__desc">说明</div>
+        <div class="role-row__env">环境变量</div>
+      </div>
+      {roles.map((r) => (
+        <div class="role-row">
+          <div class="role-row__name"><code>{r.name}</code></div>
+          <div class="role-row__desc">{r.desc}</div>
+          <div class="role-row__env"><code>{r.env}</code></div>
+        </div>
+      ))}
+    </div>
+
+    <h3 class="subhead">一命令启动</h3>
+    <div class="grid2">
+      <div class="codeblock">
+        <div class="codeblock__head">协调 master(稳定地址机器)</div>
+        <pre><code>{coordCode}</code></pre>
+      </div>
+      <div class="codeblock">
+        <div class="codeblock__head">member master(移动电脑也行)</div>
+        <pre><code>{memberCode}</code></pre>
+      </div>
+    </div>
+
+    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;">
+      ※ 完整 Federation 协议见 <code>docs/FEDERATION.md</code>(新建中);REST 端点见 README 的 <em>Identity / Teams</em> 段。
+    </p>
+  </div>
+</section>

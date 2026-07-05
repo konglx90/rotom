@@ -1,0 +1,90 @@
+---
+// Rotom V3 deck · 集成进官网 /deck/ 路由
+// Build 时读 docs/rotom-deck-v3-template/{pages.json,head.html,nav.html,slides/*.html}
+// 1:1 复用现有 deck 模板,只把 {{N}} {{NN}} {{TOTAL}} {{TOC}} 占位符替换掉,
+// 并把相对图片路径(../rotom.jpeg / ../screenshots/...)改写成站内绝对路径
+
+import fs from "node:fs";
+import path from "node:path";
+
+// Astro build 在 dist/.prerender 里跑,__dirname 不可靠。
+// 用 process.cwd() 找仓库根:build 脚本从 packages/website 启动,
+// cwd = packages/website,上级 ../.. 就是仓库根。
+const WEBSITE_ROOT = process.cwd();
+const REPO_ROOT = path.resolve(WEBSITE_ROOT, "../..");
+const TPL = path.join(REPO_ROOT, "docs", "rotom-deck-v3-template");
+
+const pagesPath = path.join(TPL, "pages.json");
+const headPath = path.join(TPL, "head.html");
+const navPath = path.join(TPL, "nav.html");
+
+interface PageEntry {
+  file: string;
+  title: string;
+  tag?: string | null;
+  order?: number;
+}
+
+const pages: PageEntry[] = JSON.parse(fs.readFileSync(pagesPath, "utf-8"));
+const total = pages.length;
+const totalStr = String(total).padStart(2, "0");
+
+// TOC(agenda.html 用):跳过前 2 页(封面+目录本身)
+const tocHtml = pages
+  .map((p, i) => {
+    const n = i + 1;
+    if (n <= 2) return null;
+    const tag = p.tag;
+    const tagHtml =
+      tag === "背景"
+        ? '<span class="tag-bg">背景</span>'
+        : tag === "主线"
+        ? '<span class="tag-v3">主线</span>'
+        : "";
+    const nstr = String(n).padStart(2, "0");
+    return `    <a data-goto="${n}"><span class="n">${nstr}</span>${tagHtml}${p.title}</a>`;
+  })
+  .filter(Boolean)
+  .join("\n");
+
+// 改写相对图片路径
+function rewriteImg(s: string): string {
+  return s
+    .replace(/\.\.\/rotom\.jpeg/g, "/rotom.jpeg")
+    .replace(/\.\.\/screenshots\//g, "/screenshots/")
+    .replace(/"\.\.\/([^""]+)"/g, (_m, p1) => `"/${p1}"`);
+}
+
+// 替换占位符 —— slide 用(含 N/NN/TITLE)
+function replaceForSlide(s: string, n: number, title: string): string {
+  return s
+    .replace(/\{\{TOTAL\}\}/g, totalStr)
+    .replace(/\{\{N\}\}/g, String(n))
+    .replace(/\{\{NN\}\}/g, String(n).padStart(2, "0"))
+    .replace(/\{\{TOC\}\}/g, tocHtml)
+    .replace(/\{\{TITLE\}\}/g, title);
+}
+
+// 替换占位符 —— head/nav 用(只有 TOTAL)
+function replaceCommon(s: string): string {
+  return s.replace(/\{\{TOTAL\}\}/g, totalStr);
+}
+
+const slideHtml = pages
+  .map((p, i) => {
+    const n = i + 1;
+    const fp = path.join(TPL, "slides", p.file);
+    const raw = fs.readFileSync(fp, "utf-8");
+    return rewriteImg(replaceForSlide(raw, n, p.title));
+  })
+  .join("\n");
+
+const head = rewriteImg(replaceCommon(fs.readFileSync(headPath, "utf-8")));
+const nav = rewriteImg(replaceCommon(fs.readFileSync(navPath, "utf-8")));
+
+// head 末尾: <body><div class="deck" id="deck">
+// nav 末尾: </script></div></body></html>
+// 中间夹 slides
+const fullHtml = head + "\n" + slideHtml + "\n" + nav;
+---
+<Fragment set:html={fullHtml} />

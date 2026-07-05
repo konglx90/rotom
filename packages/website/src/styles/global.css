@@ -193,6 +193,13 @@ code, pre { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace
   margin: 0; background: transparent; color: var(--text);
   font-size: 13px; line-height: 1.55;
 }
+.arch pre.mermaid {
+  background: transparent;
+  text-align: center;
+  overflow-x: auto;
+  padding: 8px 0;
+}
+.arch pre.mermaid svg { max-width: 100%; height: auto; }
 .arch__legend {
   display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px;
   color: var(--text-mute); font-size: 13px;
@@ -325,8 +332,227 @@ code, pre { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace
   .hero__grid { grid-template-columns: 1fr; gap: 32px; }
   .hero__title { font-size: 38px; }
   .hero__stats { grid-template-columns: repeat(2, 1fr); }
-  .grid3, .shots, .docs { grid-template-columns: 1fr; }
+  .grid2, .grid3, .shots, .docs, .subsys-grid, .cli-grid { grid-template-columns: 1fr; }
   .steps { grid-template-columns: 1fr 1fr; }
   .section { padding: 64px 0; }
   .nav__links a:not(.nav__cta) { display: none; }
+}
+
+/* ─── 新增:2 列卡片网格 ───────────────────────────────────────── */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+/* ─── 新增:小标题 ──────────────────────────────────────────── */
+.subhead {
+  font-size: 20px;
+  margin: 36px 0 16px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* ─── 新增:表格 ─────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+}
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.tbl th, .tbl td {
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.tbl th {
+  background: var(--bg-elev2);
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.tbl tr:last-child td { border-bottom: none; }
+.tbl td code { font-size: 12.5px; }
+
+/* ─── 新增:代码块 ───────────────────────────────────────────── */
+.codeblock {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.codeblock__head {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev2);
+}
+.codeblock pre {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--code-bg);
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.codeblock pre code { color: var(--text); background: transparent; padding: 0; }
+
+/* ─── 新增:角色列表(替代 table) ───────────────────────────── */
+.role-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-elev);
+}
+.role-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 280px;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  align-items: center;
+}
+.role-row:last-child { border-bottom: none; }
+.role-row--head {
+  background: var(--bg-elev2);
+  font-weight: 600;
+  color: var(--text-dim);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.role-row__name code { font-size: 12.5px; }
+.role-row__env code { font-size: 12px; word-break: break-all; }
+@media (max-width: 720px) {
+  .role-row { grid-template-columns: 1fr; gap: 6px; }
+  .role-row--head { display: none; }
+}
+
+/* ─── 新增:子系统网格(Memory/Skill/Schedule/Ask) ──────────── */
+.subsys-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+.subsystem ul { font-size: 13.5px; }
+.mini-cli {
+  margin-top: 14px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+.mini-cli code { color: var(--accent-2); background: transparent; padding: 0; }
+
+/* ─── 新增:CLI 命令速查网格 ──────────────────────────────────── */
+.cli-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+.cli-list { list-style: none; padding: 0; margin: 0; }
+.cli-list li {
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cli-list li:last-child { border-bottom: none; }
+.cli-cmd {
+  font-size: 12.5px;
+  color: var(--accent-2);
+  background: var(--bg-elev2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+.cli-hint { font-size: 12.5px; color: var(--text-mute); }
+
+/* ─── 新增:图片留白占位 ─────────────────────────────────────── */
+.placeholder-blank {
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--text-mute);
+  padding: 24px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(148, 163, 184, 0.04) 0 12px,
+      transparent 12px 24px);
+}
+.placeholder-blank__icon { font-size: 32px; opacity: 0.7; }
+.placeholder-blank__label { font-size: 14px; color: var(--text-dim); font-weight: 600; }
+.placeholder-blank__hint {
+  font-size: 12.5px;
+  color: var(--text-mute);
+  max-width: 480px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.placeholder-blank--wide { min-height: 280px; }
+
+/* hero 主视觉留白 */
+.hero__shot--placeholder {
+  background: transparent;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* arch 留白 */
+.arch--placeholder {
+  padding: 0;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+.arch--placeholder .placeholder-blank { border: none; border-radius: 0; min-height: 280px; }
+
+/* shot 卡片留白 */
+.shot--placeholder { cursor: default; }
+.shot--placeholder:hover { transform: none; border-color: var(--border); }
+.shot__img--placeholder {
+  background: linear-gradient(135deg, #1a2244 0%, #131a32 100%);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+}
+.shot-card__placeholder {
+  aspect-ratio: 16/10;
+  background: linear-gradient(135deg, #1a2244 0%, #131a32 100%);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 1100px) {
+  .cli-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .cli-grid { grid-template-columns: 1fr; }
 }

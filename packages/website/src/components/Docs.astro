@@ -1,29 +1,45 @@
 ---
-const ghBase = "https://code.alipay.com/cattery/rotom/blob/master";
-const docs = [
-  { href: `${ghBase}/docs/INSTALL.md`, title: "INSTALL.md", desc: "完整安装手册 · 三件套" },
-  { href: `${ghBase}/docs/AGENT_USER_GUIDE.md`, title: "AGENT_USER_GUIDE.md", desc: "Agent 协作用户指南" },
-  { href: `${ghBase}/docs/AGENT_COLLABORATION_GUIDE.md`, title: "COLLABORATION_GUIDE.md", desc: "协作机制说明" },
-  { href: `${ghBase}/docs/GROUP_CHAT_ARCHITECTURE.md`, title: "GROUP_CHAT_ARCHITECTURE.md", desc: "群聊架构详解" },
-  { href: `${ghBase}/docs/QUICK_REF.md`, title: "QUICK_REF.md", desc: "Issue / 协作 / 群消息 三种场景速查" },
-  { href: `${ghBase}/README.md`, title: "README.md", desc: "项目总览与 REST / WS 协议文档" },
+// 站内文档页(由 Astro content collection 渲染 /docs/<id>/)
+// 这里展示官网首页"文档"区块的精选入口;完整列表见 /docs/
+const featured = [
+  { href: "/docs/install/", title: "INSTALL", desc: "完整安装手册 · 三件套构建与首次启动" },
+  { href: "/docs/federation/", title: "FEDERATION", desc: "OPC + Federation 玩法 · 协调/member/standalone 三种角色" },
+  { href: "/docs/agent_user_guide/", title: "AGENT_USER_GUIDE", desc: "Agent 协作用户指南 · 群聊 / Issue / Ask 全流程" },
+  { href: "/docs/agent_whitebox/", title: "AGENT_WHITEBOX", desc: "Agent 白盒机制 · 任务可观察性设计" },
+  { href: "/docs/ask_bridge_guide/", title: "ASK_BRIDGE_GUIDE", desc: "Ask Bridge 完整说明 · 一问一答 + 5min 超时兜底" },
+  { href: "/docs/group_chat_architecture/", title: "GROUP_CHAT_ARCHITECTURE", desc: "群聊架构 · 消息路由 / 限流 / 已读 / 归档" },
+  { href: "/docs/group_chat_render_perf/", title: "GROUP_CHAT_RENDER_PERF", desc: "群聊渲染性能优化 · 虚拟滚动与增量提交" },
+  { href: "/docs/dev_delivery_workflow/", title: "DEV_DELIVERY_WORKFLOW", desc: "研发交付工作流 · Issue 全生命周期 SOP" },
+  { href: "/docs/quick_ref/", title: "QUICK_REF", desc: "Issue / 协作 / 群消息 三种场景速查" },
 ];
 ---
 <section class="section" id="docs">
   <div class="wrap">
-    <span class="eyebrow">DOCS</span>
-    <h2>深入阅读</h2>
+    <span class="eyebrow">DOCS · 深入阅读</span>
+    <h2>所有文档随仓库一同发布</h2>
     <p class="lead">
-      所有文档随仓库一同发布,涵盖安装、协作机制、群聊架构与场景速查。
+      官网 <a href="/docs/">文档中心</a> 由仓库根 <code>/docs/*.md</code> 自动渲染,支持 mermaid 图表 / 表格 / 代码块。下面是精选入口。
     </p>
     <div class="docs">
-      {docs.map((d) => (
-        <a class="doc" href={d.href} target="_blank" rel="noreferrer">
+      {featured.map((d) => (
+        <a class="doc" href={d.href}>
           <h4>{d.title}</h4>
           <p>{d.desc}</p>
           <span class="doc__ext">查看文档 →</span>
         </a>
       ))}
+      <a class="doc doc--index" href="/docs/">
+        <h4>全部文档 →</h4>
+        <p>18+ 篇 · 文档索引页</p>
+        <span class="doc__ext">进入文档中心 →</span>
+      </a>
     </div>
   </div>
 </section>
+
+<style>
+  .doc--index {
+    background: linear-gradient(135deg, rgba(124, 156, 255, 0.10), rgba(180, 131, 255, 0.06));
+    border-color: var(--accent);
+  }
+</style>

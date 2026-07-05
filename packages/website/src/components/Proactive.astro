@@ -1,30 +1,35 @@
 ---
 interface Shot {
-  src: string;
+  src: string | null;  // null = 留白占位,等用户补充截图
   title: string;
   desc: string;
+  placeholderHint: string;
 }
 
 const cards: Shot[] = [
   {
-    src: "/screenshots/scheduler.svg",
+    src: null,
     title: "定时器 · 自动派发",
     desc: "每 30 秒扫一次到期任务,先改期再执行,绝不重复跑。支持按固定间隔循环和定时一次性两种模式。",
+    placeholderHint: "建议截图:schedule list --pretty 输出 + Dashboard 定时任务页",
   },
   {
-    src: "/screenshots/memory.svg",
+    src: null,
     title: "记忆 · 越用越懂你",
     desc: "员工主动记下关键信息,群聊上下文自动注入。跨任务、跨会话持久,不用每次从头说起。",
+    placeholderHint: "建议截图:memory list --pretty 输出 + Dashboard 记忆页",
   },
   {
-    src: "/screenshots/skill.svg",
+    src: null,
     title: "技能 · 精准派活",
     desc: "在管理后台定义技能,把技能绑给群 + 员工。派活时按身份和技能匹配,谁擅长就给谁。",
+    placeholderHint: "建议截图:skill list 输出 + Dashboard 技能绑定页",
   },
   {
-    src: "/screenshots/patrol.svg",
+    src: null,
     title: "Issue 巡检 · 主动出击",
     desc: "巡检群每小时自动扫一遍未分配任务,识别可认领的就派发执行,跑完写回巡检日志。",
+    placeholderHint: "建议截图:issue_patrol_logs 表内容 + Dashboard 巡检日志页",
   },
 ];
 
@@ -50,10 +55,20 @@ const flow = `flowchart LR
       <pre class="mermaid">{flow}</pre>
     </div>
 
-    <div class="grid3" style="margin-top: 36px;">
+    <div class="grid2" style="margin-top: 36px;">
       {cards.map((c) => (
-        <div class="card">
-          <div class="card__icon">★</div>
+        <div class="card shot-card">
+          {c.src ? (
+            <div class="shot-card__img">
+              <img src={c.src} alt={c.title} />
+            </div>
+          ) : (
+            <div class="shot-card__placeholder" aria-label={`待补充截图:${c.title}`}>
+              <span class="placeholder-blank__icon">🖼️</span>
+              <span class="placeholder-blank__label">待补充截图</span>
+              <span class="placeholder-blank__hint">{c.placeholderHint}</span>
+            </div>
+          )}
           <h3>{c.title}</h3>
           <p>{c.desc}</p>
         </div>

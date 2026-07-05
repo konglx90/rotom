@@ -1,0 +1,137 @@
+---
+interface CmdGroup {
+  icon: string;
+  title: string;
+  desc: string;
+  cmds: { name: string; hint: string; }[];
+}
+
+const groups: CmdGroup[] = [
+  {
+    icon: "🚀",
+    title: "Process · 进程控制",
+    desc: "Master / Executor / 一站式启动,无需 agent 身份",
+    cmds: [
+      { name: "run opc", hint: "启动 master + 自动 spawn executor(OPC 默认)" },
+      { name: "run federation", hint: "启动协调 master(注入 ROTOM_MASTER_ROLE=coordination)" },
+      { name: "master <start|stop|restart|status>", hint: "Master 生命周期(支持 colon 别名 master:start)" },
+      { name: "executor [--config <path>]", hint: "起 executor workers,默认读 ~/.rotom/executor.config.json" },
+      { name: "status", hint: "Master health check(无需 agent)" },
+    ],
+  },
+  {
+    icon: "🧩",
+    title: "Bootstrap · 首次接入",
+    desc: "一台机器一个 CLI 一个 agent",
+    cmds: [
+      { name: "init", hint: "探测 claude/codex/hermes,问名字+master IP,写 executor.config.json" },
+      { name: "join <host:port> --name <n> --domain <d> --cli-tool <t>", hint: "首次申请 token 落盘(本地交互式 CLI 用)" },
+    ],
+  },
+  {
+    icon: "👤",
+    title: "Identity · 身份与配置",
+    desc: "多身份切换 + 配置管理",
+    cmds: [
+      { name: "whoami", hint: "当前解析到的 agent" },
+      { name: "config show | init | use <name>", hint: "查看 / 初始化 / 设默认 agent" },
+      { name: "config add-openclaw <name> <json>", hint: "注册 OpenClaw-hosted agent" },
+      { name: "config add-executor <name> <json>", hint: "注册 executor worker" },
+      { name: "config remove <name>", hint: "移除 agent 配置" },
+    ],
+  },
+  {
+    icon: "💬",
+    title: "Group · 群聊",
+    desc: "建群 / 拉人 / 发消息 / 历史",
+    cmds: [
+      { name: "group create <title> --agents a,b [--a2a-direct]", hint: "一键建群+拉人,默认加载群指导模板" },
+      { name: "group list | members <id> | history <id>", hint: "群列表 / 成员 / 历史" },
+      { name: "group new-messages <id> --since <ISO>", hint: "轮询:某时间点之后的新消息" },
+      { name: "group send <id> <target> <msg...> [--need-reply]", hint: "发消息;--need-reply 一问一答" },
+      { name: "group archive <id> | unarchive <id>", hint: "归档 / 取消归档" },
+    ],
+  },
+  {
+    icon: "📋",
+    title: "Issue · 任务派发",
+    desc: "任务型 / 协作型 Issue,创建即派发",
+    cmds: [
+      { name: "issue create <groupId> --description D [--title T] [--priority P] [--assignee A] [--run]", hint: "创建并可选立即派发(--run 必须 --assignee)" },
+      { name: "issue update <id> [--title T] [--description D] [--status S] [--assignee A|--unassign]", hint: "局部更新字段" },
+      { name: "issue cancel <id> | delete <id>", hint: "取消 / 删除" },
+      { name: "issue list <groupId> [--status S] [--type task]", hint: "群内 Issue 列表" },
+      { name: "issue show <id> | events <id> | messages <id>", hint: "详情 / 时间线 / 关联消息" },
+      { name: "issue comment <id> --message M [--reply-to <eventId>]", hint: "评论(可回复特定事件)" },
+    ],
+  },
+  {
+    icon: "🧠",
+    title: "Memory · 记忆治理",
+    desc: "note=纯人看 / memory=agent 可见,global 走审核",
+    cmds: [
+      { name: "memory add <groupId> --key K --value V --category C [--scope global] [--visibility V]", hint: "新增记忆" },
+      { name: "memory search <kw> <groupId> [--scope g|global] [--category C]", hint: "关键词检索" },
+      { name: "memory list <groupId> [--scope global] [--type note|memory|all] [--tags t1,t2]", hint: "列表(可过滤)" },
+      { name: "memory promote <id> --visibility global", hint: "提升到 global(进 pendingReview)" },
+      { name: "memory pending <groupId> [--scope global] | approve <id> | reject <id>", hint: "审核流" },
+      { name: "memory stats <groupId> [--scope global]", hint: "记忆统计" },
+    ],
+  },
+  {
+    icon: "🎯",
+    title: "Skill / Schedule / Ask",
+    desc: "技能派活 + 群内定时 + 一问一答",
+    cmds: [
+      { name: "skill list <groupId> | bind <groupId> --skill S --agent A | unbind ...", hint: "技能绑定管理" },
+      { name: "schedule add --group <id> --mode agent|message --prompt P (--every D|--in D|--at ISO)", hint: "建定时任务" },
+      { name: "schedule update <id> | enable <id> | disable <id> | trigger <id> | remove <id>", hint: "调度控制" },
+      { name: "ask <groupId> <target> <question...> [--timeout 5m] [--escalate-to <真人>]", hint: "提问 + 自动建 bridge" },
+      { name: "ask list --group <id> [--status S] | show <id> | cancel <id>", hint: "Ask 查询 / 取消" },
+    ],
+  },
+  {
+    icon: "📦",
+    title: "Repo · Worktree 缓存",
+    desc: "本机 FS 操作,不需要 agent",
+    cmds: [
+      { name: "repo list", hint: "列出 ~/.rotom/repos/ 下所有 bare clone + worktree 数 + 磁盘占用" },
+      { name: "repo prune [--remove-orphans]", hint: "清理孤儿 worktree 元数据,可选删除无引用 30 天未 fetch 的 bare clone" },
+      { name: "repo fetch <repo-id> | remove <repo-id>", hint: "显式 fetch / 删除 bare clone" },
+    ],
+  },
+];
+---
+<section class="section" id="cli-ref">
+  <div class="wrap">
+    <span class="eyebrow">CLI REFERENCE · 命令速查</span>
+    <h2>rotom CLI 一图流</h2>
+    <p class="lead">
+      <code>rotom [--as &lt;agent&gt;] [--pretty] &lt;command&gt; [args]</code>。Agent 选择优先级:
+      <code>ROTOM_AGENT</code> &gt; <code>--as</code> &gt; <code>~/.rotom/config.json#defaultAgent</code>;
+      都没解析到则拒跑(防止误用他人 token)。
+    </p>
+
+    <div class="cli-grid">
+      {groups.map((g) => (
+        <div class="card cli-card">
+          <div class="card__icon">{g.icon}</div>
+          <h3>{g.title}</h3>
+          <p style="margin:0 0 12px;color:var(--text-mute);font-size:13px;">{g.desc}</p>
+          <ul class="cli-list">
+            {g.cmds.map((c) => (
+              <li>
+                <code class="cli-cmd">{c.name}</code>
+                <span class="cli-hint">{c.hint}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+
+    <p style="margin-top:24px;color:var(--text-mute);font-size:13px;">
+      ※ 完整命令文档见 <code>src/cli/rotom.ts</code> 顶部 HELP;运行 <code>rotom help</code> 可直接查看。
+    </p>
+  </div>
+</section>

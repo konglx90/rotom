@@ -1,11 +1,16 @@
 ---
-// 截图来自 chrome-devtools MCP 截取的 dashboard 界面
-// 文件位于 public/screenshots/*.png
+// 已有截图:public/screenshots/*.png(由 chrome-devtools MCP 截取)
+// 缺失位置用 placeholder-blank 留白,等用户补充
 const shots = [
   { src: "/screenshots/agents.png", title: "员工管理", desc: "新建 agent · 填名字 / 域 / 岗位 / 技能,拿到 mesh token · 在线 / 离线 / 收发统计" },
   { src: "/screenshots/group.png", title: "群聊 · 实时消息", desc: "群组 + 群消息,mention 语义保留,限流 60 msg/min,含已归档 39 群" },
   { src: "/screenshots/issue.png", title: "Issue 看板", desc: "任务型 / 协作型 Issue 看板,进度与输出实时回传,按身份分组抢单" },
   { src: "/screenshots/audit.png", title: "工具箱 · 审计与统计", desc: "全局消息日志 · 按 peer 聚合的会话 · 每 agent 消息指标 · 审计日志(max 500)" },
+  // 待补充截图(留白占位)
+  { src: null, title: "团队页 · Federation", desc: "协调 master 视角:已加入的 member 列表 + 加入请求表单", hint: "建议截图:Dashboard「团队」页 + join 表单" },
+  { src: null, title: "记忆治理", desc: "global pending 列表 + approve / reject 审核流", hint: "建议截图:Dashboard「记忆」页 pending 视图" },
+  { src: null, title: "定时任务", desc: "schedule list · interval / one-shot · enable/disable", hint: "建议截图:Dashboard「定时」页" },
+  { src: null, title: "Ask Bridge", desc: "pending / answered / timed_out 状态切换", hint: "建议截图:Dashboard「Ask」页或 CLI 输出" },
 ];
 ---
 <section class="section" id="screenshots">
@@ -13,23 +18,37 @@ const shots = [
     <span class="eyebrow">SCREENSHOTS</span>
     <h2>Dashboard 长什么样</h2>
     <p class="lead">
-      打开浏览器就是你的数字员工指挥中心:发群消息、派任务、看进度、审产物,一目了然。
+      打开浏览器就是你的数字员工指挥中心:发群消息、派任务、看进度、审产物,一目了然。下面前 4 张已有,后 4 张待补充。
     </p>
     <div class="shots">
       {shots.map((s) => (
-        <button class="shot" data-zoom={s.src} aria-label={`放大查看 ${s.title}`}>
-          <div class="shot__img">
-            <img src={s.src} alt={s.title} />
+        s.src ? (
+          <button class="shot" data-zoom={s.src} aria-label={`放大查看 ${s.title}`}>
+            <div class="shot__img">
+              <img src={s.src} alt={s.title} />
+            </div>
+            <div class="shot__cap">
+              <h4>{s.title}</h4>
+              <p>{s.desc}</p>
+            </div>
+          </button>
+        ) : (
+          <div class="shot shot--placeholder" aria-label={`待补充截图:${s.title}`}>
+            <div class="shot__img shot__img--placeholder">
+              <span class="placeholder-blank__icon">🖼️</span>
+              <span class="placeholder-blank__label">待补充:{s.title}</span>
+              <span class="placeholder-blank__hint">{s.hint}</span>
+            </div>
+            <div class="shot__cap">
+              <h4>{s.title}</h4>
+              <p>{s.desc}</p>
+            </div>
           </div>
-          <div class="shot__cap">
-            <h4>{s.title}</h4>
-            <p>{s.desc}</p>
-          </div>
-        </button>
+        )
       ))}
     </div>
     <p style="margin-top:18px;color:var(--text-mute);font-size:13px;">
-      ※ 截图由 chrome-devtools MCP 本地截取,文件位于 packages/website/public/screenshots/。
+      ※ 已有截图位于 <code>packages/website/public/screenshots/</code>;待补充位置已留白,补图后替换对应 <code>src</code> 即可。
     </p>
   </div>
 
