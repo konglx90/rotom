@@ -37,7 +37,7 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
   const sub = rest[0];
   if (sub === "create") {
     const title = rest[1];
-    if (!title) usage("group create", "<title> --agents <a,b[,c...]> [--message M] [--note D] [--note-file F] [--cwd PATH] [--no-template] [--a2a-direct]");
+    if (!title) usage("group create", "<title> --agents <a,b[,c...]> [--message M] [--note D] [--note-file F] [--cwd PATH] [--no-template]");
     const agentsFlag = requireFlag(flags, "agents");
     const agents = agentsFlag.split(",").map((s) => s.trim()).filter(Boolean);
     if (agents.length === 0) fail("--agents must list at least one agent name (comma-separated)");
@@ -47,15 +47,6 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     if (noteInline && noteFile) fail("--note and --note-file are mutually exclusive");
     const cwd = flagStr(flags, "cwd");
     const noTemplate = flags["no-template"] === true;
-    const a2aDirect = flags["a2a-direct"] === true;
-    // 单播群(unicast):消息不广播、worker 不被消息自动唤醒,只通过 CLI --need-reply
-    // 显式点名叫醒对方。≥2 成员,后续可追加。
-    if (a2aDirect && agents.length < 2) {
-      fail("单播群(--a2a-direct)至少需要 2 个成员: rotom group create <title> --agents a,b[,c...] --a2a-direct");
-    }
-    if (a2aDirect && new Set(agents).size !== agents.length) {
-      fail("单播群(--a2a-direct)成员不能重复");
-    }
 
     // 预检:校验 --agents 名字都已注册,未注册 → fail 不建群
     const allAgents = await api(agent, "GET", "/agents") as any[];
@@ -71,7 +62,6 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
     // 建群 + 拉人(一次 API 调用,master 内部 addGroupMembers)
     const createBody: Record<string, unknown> = { name: title, memberNames: agents };
     if (cwd) createBody.workingDir = cwd;
-    if (a2aDirect) createBody.type = "a2a_direct";
     const created = await api(agent, "POST", "/groups", createBody) as { id: string; name: string; working_dir: string; type?: string | null };
     const groupId = created.id;
 
@@ -120,14 +110,12 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
       id: groupId,
       name: created.name,
       working_dir: created.working_dir,
-      type: created.type ?? (a2aDirect ? "a2a_direct" : "chat"),
+      type: created.type ?? "chat",
       memberCount: agents.length,
       guidanceTemplate,
       messagePosted,
       noteId,
-      hint: a2aDirect
-        ? `单播群(unicast):消息只入库,不广播。叫醒对方: rotom --as=<你> group send ${groupId} <对方> "<问题>" --need-reply。轮询回复: bash skill/rotom-bus-host/scripts/poll-replies.sh ${groupId} --as <你>`
-        : `验证: rotom group members ${groupId}   |   rotom group history ${groupId} --limit 20`,
+      hint: `验证: rotom group members ${groupId}   |   rotom group history ${groupId} --limit 20`,
     });
     return;
   }
@@ -234,10 +222,9 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
   }
   if (sub === "send") {
     const groupId = rest[1]; const target = rest[2]; const message = rest.slice(3).join(" ");
-    if (!groupId || !target || !message) usage("group send", "<groupId> <target> <message...> [--no-dispatch] [--need-reply]");
+    if (!groupId || !target || !message) usage("group send", "<groupId> <target> <message...> [--no-dispatch]");
     const body: Record<string, unknown> = { target, message };
     if (flags["no-dispatch"] === true) body.noDispatch = true;
-    if (flags["need-reply"] === true) body.needReply = true;
     const data = await api(agent, "POST", route("/cli/groups/:groupId/send", groupId), body);
     printJson(data);
     return;

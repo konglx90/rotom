@@ -156,7 +156,10 @@ export async function startLinkServer(opts: LinkServerOpts): Promise<void> {
     if (req.method === "POST" && pathname === "/fed/ask") {
       try {
         const body = await readBody(req);
-        const { to, message, from } = body as { to: string; message: string; from?: string };
+        const { to, message, from, mode, timeoutMs, escalateTo } = body as {
+          to: string; message: string; from?: string;
+          mode?: "sync" | "async"; timeoutMs?: number; escalateTo?: string | null;
+        };
         if (!to || !message) {
           res.statusCode = 400;
           res.end(JSON.stringify({ ok: false, error: "to and message are required" }));
@@ -179,7 +182,23 @@ export async function startLinkServer(opts: LinkServerOpts): Promise<void> {
         const fromRef: FedAgentRef = { hostname: config.hostname, name: fromName };
         const requestId = crypto.randomUUID();
         const { promise } = pending.register(requestId);
-        const ok = fedClient.route(requestId, fromRef, toRef, { message });
+        // `rotom ask` 联邦路径:携带 bridge 字段让协调 master 建群+bridge
+        const bridgeMode: "sync" | "async" = mode === "async" ? "async" : "sync";
+        const bridgeTimeout = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 5 * 60_000;
+        const ok = fedClient.route(
+          requestId,
+          fromRef,
+          toRef,
+          { message },
+          undefined,
+          {
+            mode: bridgeMode,
+            asker: fromName,
+            target: toName,
+            timeoutMs: bridgeTimeout,
+            escalateTo: escalateTo ?? null,
+          },
+        );
         if (!ok) {
           pending.reject(requestId, new Error("fed route failed (client not connected)"));
           res.statusCode = 503;

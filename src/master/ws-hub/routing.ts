@@ -94,6 +94,7 @@ export const routingMethods = {
     this.logger.info(`[mesh] postSystemToGroup groupId=${groupId} exclude=${JSON.stringify(excludeAgentNames)} ensure=${JSON.stringify(ensureRecipientNames)}`);
     const mentions = extractMentions(content);
     this.db.addGroupMessage(groupId, "system", content, mentions);
+    this.db.bumpGroupActivity(groupId);
 
     const excludeAgentIds = excludeAgentNames
       .map((name) => this.db.getAgentByName(name)?.id)

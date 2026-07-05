@@ -185,6 +185,27 @@ async function main(): Promise<void> {
   const scheduler = new Scheduler(db, hub);
   scheduler.start();
 
+  // Ensure a2a-direct TTL sweep recurring task — 挂到 OPC bootstrap 创建的 defaultGroup。
+  // 每 1 小时跑一次,扫 last_activity_at 早于 3 天的未归档 a2a_direct pair 群,archive。
+  // 重复启动不重复建(按 handler_key 查重)。
+  if (opcResult.defaultGroup) {
+    const existing = db.findScheduledTaskByHandlerKey("a2a-direct-ttl-sweep");
+    if (!existing) {
+      db.createScheduledTask({
+        name: "a2a-direct TTL sweep",
+        groupId: opcResult.defaultGroup.id,
+        mode: "message",
+        scheduleKind: "interval",
+        intervalSec: 3600,
+        prompt: "TTL sweep: archive a2a_direct pair groups inactive for 3 days",
+        handlerKey: "a2a-direct-ttl-sweep",
+        handlerPayload: "{}",
+        repeatTimes: null,
+      });
+      log.info(`Registered a2a-direct TTL sweep task on group ${opcResult.defaultGroup.id} (every 1h)`);
+    }
+  }
+
   // REST API — shares auth service and hub with WSHub
   app.use("/api", createApi(db, auth, hub, router, config.port, shareTokens));
 

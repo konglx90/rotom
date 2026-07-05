@@ -8,6 +8,32 @@ description: The "wait for reply + 5min timeout fallback" mechanism after Agent 
 > The "wait for reply + 5min timeout fallback" mechanism after Agent A asks Agent B in a group.
 > This is an operator-facing guide. For design evolution and option comparisons, see [`AGENT_ASK_REPLY_TIMER.md`](./AGENT_ASK_REPLY_TIMER.md).
 
+## 0. Current model (2026-07 refactor): `rotom ask <target> "<q>"` + auto pair group
+
+The single CLI entry for point-to-point questions is `rotom ask <target> "<question>"`, where `target` is `alice` (local) or `alice@hostname` (federated).
+
+```bash
+# sync mode (default): blocks until reply, 5min timeout exits 2 (no Issue escalation)
+rotom ask alice "What fields does user/profile return?"
+
+# async mode: returns bridgeId immediately, 5min timeout escalates to an Issue for the asker
+rotom ask alice "..." --mode async
+
+# Query / cancel bridges (see scenarios 1-5 below)
+rotom ask list --group <gid> [--status ...]
+rotom ask show <bridgeId>
+rotom ask cancel <bridgeId>
+```
+
+Key changes:
+- **Pair groups live on the coordinator master** — local case: the local master IS the coordinator; federated case: the explicit coordinator holds the group. Master auto-creates/reuses an `a2a_direct` pair group as the conversation context container, with 3-day TTL refresh/expiry.
+- **sync mode** is new: blocks waiting for reply, 5min timeout exits 2, **does NOT escalate to Issue**.
+- **async mode** keeps the original `#reply` path: 5min timeout escalates to an Issue (scenarios 1-5 below describe async behavior).
+- **`#reply` group message marker** is retained: spontaneous questions inside chat context still use `#reply`. It's an independent trigger from CLI `rotom ask`; both share the `ask_bridges` table + 5min timeout fallback.
+- **Removed paths**: `rotom ask <gid> <target> <q>`, `rotom fed ask`, `rotom group create --a2a-direct`, `rotom group send --need-reply` are all deprecated. The `rotom-bus-host` skill is deleted.
+
+Sections 1-5 below describe the 5min timeout fallback for async mode (and the `#reply` path); sync mode only applies to the "CLI blocks for reply" case and does NOT create an Issue on timeout.
+
 ## 1. One-liner
 
 `rotom ask` = ask + auto-start a 5min timer. The system manages the timer; A doesn't need to cancel it manually.

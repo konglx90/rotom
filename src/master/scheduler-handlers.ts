@@ -112,6 +112,13 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
 
   // 2. 超时(5min 到,无回复)→ 创建升级 Issue + disable task
   if (bridge.expires_at < now) {
+    // sync 模式不升级 Issue——CLI 端阻塞轮询自己处理超时,只标记 timed_out + disable task
+    if (bridge.mode === "sync") {
+      ctx.db.markBridgeTimedOut(bridge.id, null, null);
+      cancelBridgeTask(ctx, bridge.id);
+      log.info(`bridge #${bridge.id} timed_out (sync mode, no escalation)`);
+      return { status: "ok" };
+    }
     const issueId = randomUUID();
     const questionContent = ctx.db.getGroupMessageContent(bridge.question_msg_id) || "(原问题已删除)";
     const qSnippet = questionContent.slice(0, 200);
@@ -611,3 +618,26 @@ function resolveEscalateTo(ctx: HandlerContext, bridge: { group_id: string; esca
   if (humans.length === 0) return null;
   return humans.join(" 或 ");
 }
+
+// ── a2a-direct-ttl-sweep handler ────────────────────────────────────────────
+
+/**
+ * a2a_direct pair 群 TTL 清扫。每小时跑一次。
+ *
+ * `rotom ask` 触发的 pair 群 last_activity_at 3 天无活动 → archive。
+ * 普通群(chat)、巡检群(patrol/patrol-link)不扫。
+ */
+registerSchedulerHandler("a2a-direct-ttl-sweep", async (_payload, ctx) => {
+  const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+  const stale = ctx.db.listStalePairGroups(cutoff);
+  let archived = 0;
+  for (const g of stale) {
+    ctx.db.archiveGroup(g.id);
+    archived++;
+    log.info(`a2a-direct TTL sweep: archived group ${g.id} "${g.name}" (inactive since ${toBeijing(g.last_activity_at ?? 0)})`);
+  }
+  if (archived > 0) {
+    log.info(`a2a-direct TTL sweep: ${archived} group(s) archived (cutoff=${toBeijing(cutoff)})`);
+  }
+  return { status: "ok", archived };
+});

@@ -9,6 +9,19 @@ description: Design doc for the "wait for reply + timeout fallback" mechanism af
 > This doc captures several options that came up in discussion, their trade-offs, and the currently recommended direction.
 > Implementation status is authoritative in code; this is a design snapshot.
 
+## 0. Current implementation (2026-07 refactor)
+
+`rotom ask <target> "<q>"` is the single CLI entry for point-to-point questions, where `target` is `alice` (local) or `alice@hostname` (federated). Two modes:
+
+- **sync (default)**: blocks waiting for reply, 5min timeout exits 2, **does NOT escalate to Issue**. CLI polls `bridge.status` every 200ms; scheduler `ask-bridge-check` handler does reply detection every 20s as a fallback.
+- **async**: returns `bridgeId` immediately, 5min timeout escalates to an Issue for the asker (keeps the #reply path; see sections below).
+
+Pair groups always live on the coordinator master (local case: the local master IS the coordinator; federated case: the explicit coordinator holds the group). Master auto-creates/reuses an `a2a_direct` pair group as the conversation context container, with `last_activity_at` 3-day TTL refresh/expiry (scheduler `a2a-direct-ttl-sweep` handler runs hourly).
+
+The `#reply` group message marker is retained — spontaneous questions inside chat context still use `#reply`. It's an independent trigger from CLI `rotom ask`; both share the `ask_bridges` table + 5min timeout fallback. Bridges triggered via `#reply` are always async.
+
+Legacy paths (`rotom ask <gid> <target> <q>`, `rotom fed ask`, `rotom group create --a2a-direct`, `rotom group send --need-reply`) are all deprecated; `skill/rotom-bus-host` is deleted. See sections below.
+
 ## 1. Problem background
 
 ### 1.1 Current gap

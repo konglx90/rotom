@@ -1,4 +1,5 @@
 import { nowBeijing, shiftBeijing } from "../../shared/time.js";
+import { randomUUID } from "node:crypto";
 /**
  * Groups — group CRUD, member management, per-member working_dir overrides,
  * and the chat log (group_messages + composed_prompt snapshots).
@@ -33,6 +34,8 @@ export interface GroupRow {
   extra_repos: string | null;
   /** worktree 模式(migration 052):'group'=群共享一个 worktree;'issue'=每 issue 独立。NULL='group'。 */
   worktree_mode: string | null;
+  /** 群最近活动时间(毫秒时间戳);每次写消息/收回复更新。a2a_direct pair 群用做 3 天 TTL 续命。NULL=未跟踪(老群或非 pair 群)。 */
+  last_activity_at: number | null;
 }
 
 export interface GroupMemberRow {
@@ -510,5 +513,63 @@ export const groupMethods = {
       groupId,
       sinceIso,
     );
+  },
+
+  /** 按 (asker, target) 找活跃 a2a_direct pair 群(3 天内有活动,未归档)。
+   *  用于 `rotom ask` 自动复用对话上下文容器。成员顺序双向匹配——
+   *  (A,B) 与 (B,A) 视为同一个 pair 群(由 asker → target 触发,但群本身
+   *  无方向性)。返回 last_activity_at DESC 排序的第一条。 */
+  findActivePairGroup(this: MeshDbSelf, asker: string, target: string): GroupRow | undefined {
+    const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    return this.db.prepare(`
+      SELECT g.*
+      FROM groups g
+      WHERE g.type = 'a2a_direct'
+        AND g.archived_at IS NULL
+        AND (g.last_activity_at IS NOT NULL AND g.last_activity_at > ?)
+        AND EXISTS (SELECT 1 FROM group_members gm WHERE gm.group_id = g.id AND gm.agent_name = ?)
+        AND EXISTS (SELECT 1 FROM group_members gm WHERE gm.group_id = g.id AND gm.agent_name = ?)
+      ORDER BY g.last_activity_at DESC
+      LIMIT 1
+    `).get(cutoff, asker, target) as GroupRow | undefined;
+  },
+
+  /** 建 a2a_direct pair 群(2 成员)。复用 createGroupTyped + addGroupMembers。
+   *  群名形如 "A↔B",由 asker 与 target 名拼接而成。 */
+  createPairGroup(this: MeshDbSelf, asker: string, target: string): GroupRow {
+    const id = randomUUID();
+    const name = `${asker}↔${target}`;
+    this.db.prepare(
+      "INSERT INTO groups (id, name, created_by, type, metadata, last_activity_at) VALUES (?, ?, ?, 'a2a_direct', '{}', ?)",
+    ).run(id, name, asker, Date.now());
+    this.db.prepare(
+      "INSERT INTO group_members (group_id, agent_name) VALUES (?, ?), (?, ?)",
+    ).run(id, asker, id, target);
+    return this.db.prepare("SELECT * FROM groups WHERE id = ?").get(id) as GroupRow;
+  },
+
+  /** 更新群最近活动时间(毫秒时间戳)。每次写群消息(asker 提问 / target 回复)调一次。
+   *  用于 a2a_direct pair 群的 3 天 TTL 续命。普通群(chat)也可调,但 TTL sweep 只扫 a2a_direct。 */
+  bumpGroupActivity(this: MeshDbSelf, groupId: string): void {
+    this.db.prepare("UPDATE groups SET last_activity_at = ? WHERE id = ?")
+      .run(Date.now(), groupId);
+  },
+
+  /** 列出 last_activity_at 早于 cutoff 的未归档 a2a_direct 群。TTL sweep 用。 */
+  listStalePairGroups(this: MeshDbSelf, cutoff: number): GroupRow[] {
+    return this.db.prepare(`
+      SELECT * FROM groups
+      WHERE type = 'a2a_direct'
+        AND archived_at IS NULL
+        AND last_activity_at IS NOT NULL
+        AND last_activity_at < ?
+      ORDER BY last_activity_at ASC
+    `).all(cutoff) as GroupRow[];
+  },
+
+  /** 归档群(archived_at 设为当前北京时间字符串)。TTL sweep 用。 */
+  archiveGroup(this: MeshDbSelf, groupId: string): void {
+    this.db.prepare("UPDATE groups SET archived_at = ? WHERE id = ?")
+      .run(nowBeijing(), groupId);
   },
 };

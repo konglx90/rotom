@@ -106,6 +106,13 @@ export class FedClient {
     to: FedAgentRef,
     payload: { message: string; files?: FedFileRef[] },
     conversation?: FedConversationRef,
+    bridge?: {
+      mode: "sync" | "async";
+      asker: string;
+      target: string;
+      timeoutMs: number;
+      escalateTo?: string | null;
+    },
   ): boolean {
     return this.send({
       type: "fed_route",
@@ -115,6 +122,7 @@ export class FedClient {
       to,
       payload,
       conversation,
+      bridge,
     });
   }
 

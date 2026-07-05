@@ -149,8 +149,13 @@ CREATE TABLE IF NOT EXISTS groups (
   repo_url            TEXT,
   repo_default_branch TEXT,
   extra_repos         TEXT,
-  worktree_mode       TEXT
+  worktree_mode       TEXT,
+  last_activity_at    INTEGER
 );
+
+CREATE INDEX IF NOT EXISTS idx_groups_pair_activity
+  ON groups(type, last_activity_at)
+  WHERE type = 'a2a_direct' AND archived_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS group_members (
   group_id    TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -316,7 +321,9 @@ CREATE TABLE IF NOT EXISTS ask_bridges (
   reply_msg_id    INTEGER REFERENCES group_messages(id) ON DELETE SET NULL,
   resolved_at     INTEGER,
   issue_id        TEXT REFERENCES issues(id) ON DELETE SET NULL,
-  CHECK (status IN ('pending','answered','timed_out','cancelled'))
+  mode            TEXT NOT NULL DEFAULT 'async',
+  CHECK (status IN ('pending','answered','timed_out','cancelled')),
+  CHECK (mode IN ('sync','async'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_ask_bridges_pending ON ask_bridges(expires_at) WHERE status = 'pending';

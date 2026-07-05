@@ -86,7 +86,7 @@ Master 默认监听 `0.0.0.0:28800`(`MESH_MASTER_PORT` 可覆盖);数据目录 `
 - `packages/website/docs/INSTALL.md`:Master / Executor / rotom CLI 三件套完整安装手册
 - `packages/website/docs/AGENT_USER_GUIDE.md`:Agent 协作用户指南
 - `packages/website/docs/AGENT_ASK_REPLY_TIMER.md`:A → B 提问的 5min timer + 升级 Issue 兜底
-- `packages/website/docs/ASK_BRIDGE_GUIDE.md`:ask-bridge 创建 / 取消 / 升级路径
+- `packages/website/docs/ASK_BRIDGE_GUIDE.md`:`rotom ask` sync/async 模式 + ask-bridge 创建/取消/升级路径
 - `packages/website/docs/DEV_DELIVERY_WORKFLOW.md`:E2ED 端到端需求交付 pipeline
 - `packages/website/docs/GROUP_CHAT_ARCHITECTURE.md`:群聊子系统、Router 决策、离线队列
 - `packages/website/docs/GROUP_CHAT_RENDER_PERF.md`:群聊渲染性能调优记录
@@ -132,7 +132,7 @@ Master 默认监听 `0.0.0.0:28800`(`MESH_MASTER_PORT` 可覆盖);数据目录 `
 | Federation client | `src/master/federation/client.ts` | member role |
 | Federation publisher | `src/master/federation/publisher.ts` | member 连上协调后 |
 | Scheduler + Patrol | `src/master/scheduler.ts` + `scheduler-handlers.ts` + `patrol-terminal.ts` | 30s tick / issue 终态 |
-| Ask-bridge | `src/master/db/ask-bridges.ts` + `scheduler-handlers.ts` | 群 @ + `#reply` / 5min 超时 |
+| Ask-bridge | `src/master/db/ask-bridges.ts` + `scheduler-handlers.ts` + `src/master/api/groups.ts` `POST /asks` | `rotom ask <target> "<q>"` (sync/async) / 群 `#reply` / 5min 超时 / 自动 a2a_direct pair 群 3 天 TTL |
 | Memory & Skill | `src/master/api/{memory,skills}.ts` + `src/master/db/{memory,skills}.ts` | agent add / 群上下文 |
 | Session | `src/executor/session-store.ts` + `src/master/db/agent-sessions.ts` | auth 后双向同步 |
 | Issue approval | `src/shared/readonly-allowlist.ts` + `src/executor/cli-executor.ts` | cli hook / dashboard |
@@ -218,7 +218,9 @@ Master 默认监听 `0.0.0.0:28800`(`MESH_MASTER_PORT` 可覆盖);数据目录 `
 - 不要恢复 mesh_token 必填(OPC 模式本机信任,免 token 是核心特性)。
 - 不要把"团队"(federation team)和"分组"(老 Domain)混淆:team = 跨机协作;Domain = 本机内分组(UI 已改"分组",DB 表名 domains 保留)。
 - 不要把 Dashboard 重新写成 Vue。已经是 React 18 + Vite。
-- 不要把私聊(`direct` a2a 通道)加回来。所有点对点交流走 `rotom group send`。
+- 不要把私聊(`direct` a2a 通道)加回来。所有点对点提问走 `rotom ask <target> "<q>"`(自动维护 a2a_direct pair 群,3 天 TTL)。
+- 不要把 `rotom ask <gid> <target> <q>` / `rotom fed ask` / `rotom group create --a2a-direct` / `rotom group send --need-reply` 加回来。已统一收敛到 `rotom ask <target> "<q>" [--mode sync|async]`,本地/联邦由 target 格式(`name` vs `name@hostname`)自动路由。
+- 不要把 `skill/rotom-bus-host/` 加回来。轮询脚本 `poll-replies.sh` 已废弃——sync 模式阻塞等回复、async 模式靠 ask-bridge 超时升级 Issue,两条路径都不需要 agent 自己 poll。
 - 不要在 worker 侧复活 `~/.rotom/sessions.json` 落盘(已迁 master DB)。
 - 不要在 CLI 加 `--from` 旋钮(身份伪造风险)。
 - 不要用 IP 做 master 标识(移动电脑 IP 会变,用 hostname/masterId)。
