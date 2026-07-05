@@ -272,7 +272,7 @@ code, pre { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace
 }
 .lightbox__close:hover { background: rgba(255, 255, 255, 0.12); border-color: var(--accent); }
 
-/* quickstart:窄屏容器自己横滑,不再挤压或撑爆页面 */
+/* quickstart:5 张卡保持固定宽度,父容器横向滚动 */
 .steps {
   display: flex;
   gap: 14px;
@@ -285,8 +285,7 @@ code, pre { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace
 .steps::-webkit-scrollbar { height: 6px; }
 .steps::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .step {
-  flex: 1 0 220px;     /* 宽屏均分剩余空间,窄屏守住 220px 最小宽度触发横滑 */
-  min-width: 220px;
+  flex: 0 0 260px;      /* 不 grow 不 shrink,固定 260px,5 张总 260×5+gap 必然超出容器 → 父容器横滑 */
   scroll-snap-align: start;
   background: var(--bg-elev);
   border: 1px solid var(--border);
