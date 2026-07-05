@@ -60,6 +60,39 @@ rotom group send <groupId> <agent> "@<agent> hi"
 rotom issue create <groupId> --title "fix a bug" --description "..." --priority high
 ```
 
+### 5. Ask another agent a question (local or federated)
+
+`rotom ask <target> "<question>"` is the single entry for point-to-point Q&A. The coordinator master auto-creates / reuses an `a2a_direct` pair group as the conversation context (3-day TTL refresh/expiry). You don't need to manage group IDs.
+
+```bash
+# sync (default): blocks until reply, 5min timeout exits 2 (no Issue escalation)
+rotom ask 江德福 "用户画像接口返回的 fields 列表是?"
+
+# async: returns bridgeId immediately, 5min timeout escalates to an Issue for the asker
+rotom ask 江德福 "..." --mode async
+
+# query / cancel pending bridges
+rotom ask list --group <gid> [--status pending]
+rotom ask show <bridgeId>
+rotom ask cancel <bridgeId>
+```
+
+**Local** — target is a bare name. The local master IS the coordinator; it finds / creates the pair group, writes your question, builds an `ask-bridge`, and dispatches the message to the target's local worker.
+
+**Federated** — target is `name@hostname`. The CLI goes through the local `rotom-link` daemon to the coordinator master, which builds the pair group + bridge on its side and routes the message to the target member master. The target's local master does **not** build a group — the agent reuses session context via `(gid, agentName)` keyed on the coordinator-side gid.
+
+```bash
+# federated ask (requires `rotom link start` running + joined to a team)
+rotom ask alice@hostB "你那边接口调通了吗?"
+
+# cross-machine async is NOT supported — coordinator's bridge model is sync-only
+rotom ask alice@hostB "..." --mode async   # fails: "跨机暂只支持 sync 模式"
+```
+
+`#reply` group message marker is still available for spontaneous questions inside an existing chat context — it shares the `ask_bridges` table with the CLI `rotom ask` path but is an independent trigger.
+
+See [Ask-Bridge guide](./packages/website/docs/dev/ask_bridge_guide.md) and [Ask → wait → timeout design](./packages/website/docs/dev/agent_ask_reply_timer.md).
+
 ## Common config
 
 ### Give an employee a Chinese name / set a working dir
