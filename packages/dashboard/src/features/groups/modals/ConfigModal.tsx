@@ -12,13 +12,15 @@ interface Props {
 }
 
 /**
- * 选择「我的身份」modal —— OPC 模式下从 agent 列表里挑一个即可,无需 token。
- * 老的「粘贴 mesh_token 绑定身份」流程已废除(本机/局域网走 loopback 信任)。
+ * 选择「我的身份」modal —— Dashboard 这边必须绑真人(category="真人")。
+ * 列表里真人置顶并标记「默认」,非真人项可点但会提示"建议选真人"。
+ * 没真人时显示「请先去员工管理创建一个真人 agent」引导。
  */
 export function ConfigModal({ open, onConfigured, onClose }: Props) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const currentName = typeof window !== 'undefined' ? localStorage.getItem('chat_agent_name') ?? '' : ''
 
   useEffect(() => {
     if (!open) return
@@ -31,6 +33,9 @@ export function ConfigModal({ open, onConfigured, onClose }: Props) {
       .finally(() => setLoading(false))
   }, [open])
 
+  const realPeople = agents.filter(a => a.profile?.category === '真人')
+  const sorted = [...realPeople, ...agents.filter(a => a.profile?.category !== '真人')]
+
   return (
     <Modal
       open={open}
@@ -42,20 +47,28 @@ export function ConfigModal({ open, onConfigured, onClose }: Props) {
       }
     >
       <p style={{ color: 'var(--color-slate)', fontSize: 14, marginBottom: 16 }}>
-        Dashboard 这边的你是「真人」。挑一个员工作为你的操作身份 —— 本机/局域网免 token,直接绑定。
+        Dashboard 这边的你是「真人」。挑一个真人 agent 作为操作身份 —— 本机/局域网免 token,直接绑定。
       </p>
 
       {loading && <div style={{ fontSize: 13, color: 'var(--color-slate)' }}>加载中…</div>}
       {error && <div style={{ fontSize: 13, color: 'var(--color-danger, #dc2626)' }}>{error}</div>}
 
-      {!loading && !error && agents.length === 0 && (
-        <div style={{ fontSize: 13, color: 'var(--color-slate)' }}>
-          暂无员工。先在「员工管理」页添加一个。
+      {!loading && !error && realPeople.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--color-danger, #dc2626)', padding: '12px', background: 'var(--color-danger-bg, #fef2f2)', borderRadius: 6 }}>
+          团队里还没有「真人」agent。请先到「员工管理」页创建一个 category=真人的 agent,再回来选身份。
+        </div>
+      )}
+
+      {!loading && !error && realPeople.length > 0 && agents.length > realPeople.length && (
+        <div style={{ fontSize: 12, color: 'var(--color-slate)', marginBottom: 8, padding: '6px 10px', background: 'var(--color-tag-bg)', borderRadius: 4 }}>
+          建议选真人(置顶带 ● 标)。选非真人可能与 executor worker 共用 WS,导致连接互相挤掉。
         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 360, overflowY: 'auto' }}>
-        {agents.map(a => (
+        {sorted.map(a => {
+          const isReal = a.profile?.category === '真人'
+          return (
           <button
             key={a.id}
             onClick={() => {
@@ -65,16 +78,21 @@ export function ConfigModal({ open, onConfigured, onClose }: Props) {
             style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '8px 10px',
-              background: 'var(--color-surface)',
+              background: isReal ? 'var(--color-success-bg, #f0fdf4)' : 'var(--color-surface)',
               border: '1px solid var(--color-border)',
               borderRadius: 6,
               cursor: 'pointer',
               textAlign: 'left',
+              opacity: isReal ? 1 : 0.7,
             }}
           >
             <Avatar name={a.name} src={a.avatar_url ?? undefined} size={28} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 500, fontSize: 13 }}>{a.name}</div>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>
+                {isReal && <span style={{ color: 'var(--color-success, #16a34a)', marginRight: 4 }}>●</span>}
+                {a.name}
+                {a.name === currentName && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--color-text-tertiary)' }}>· 当前</span>}
+              </div>
               <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
                 {a.profile?.position || a.description || a.status}
               </div>
@@ -89,7 +107,8 @@ export function ConfigModal({ open, onConfigured, onClose }: Props) {
               {a.status === 'online' ? '在线' : '离线'}
             </span>
           </button>
-        ))}
+          )
+        })}
       </div>
     </Modal>
   )

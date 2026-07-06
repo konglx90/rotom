@@ -111,15 +111,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await agentsApi.list()
       setAgents(data)
-      // OPC 模式自动绑定身份:无 myAgentName 时优先绑定真人 agent(如"西花"),
-      // 没有真人则 fallback 第一个。本机/局域网走 loopback 信任,无需 token。
-      // 避免每次刷新都弹「匿名访问」横条让用户手动选。
+      // Dashboard 身份必须真人:已绑定的若不是真人(或已被删),自动覆盖成真人。
+      // 没真人时清空绑定,由 ConfigModal 引导用户去创建一个真人 agent。
       setMyAgentName((current) => {
-        if (current) return current // 已绑定,保留
-        if (data.length === 0) return '' // 还没 agent,等用户建
-        // 优先真人(category="真人"),fallback 第一个
-        const realPerson = data.find(a => a.profile?.category === '真人')
-        const picked = realPerson ?? data[0]
+        const realPeople = data.filter(a => a.profile?.category === '真人')
+        if (realPeople.length === 0) {
+          // 没真人:清掉任何非真人绑定,让 UI 弹"请创建真人"modal
+          if (current) {
+            localStorage.removeItem('chat_agent_name')
+            return ''
+          }
+          return ''
+        }
+        // 已绑定且仍是真人,保留
+        const stillReal = current && realPeople.some(a => a.name === current)
+        if (stillReal) return current
+        // 否则默认绑第一个真人(覆盖缓存)
+        const picked = realPeople[0]
         localStorage.setItem('chat_agent_name', picked.name)
         return picked.name
       })
