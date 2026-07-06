@@ -564,6 +564,24 @@ export class FedServer {
       this.broadcastReply(msg);
       return;
     }
+    // 协调 master 本机 agent 回复(`rotom ask` 跨机场景,目标在 coord 本机)→
+    // 不会走 peers 的 fed_reply 入口(那是给远端 member 回来的 reply 用的),
+    // 所以这里要显式触发 onBridgeReply 写 pair 群 + resolve bridge,否则
+    // bridge 永远 pending、群消息只有提问没有回复。
+    if (entry.bridge && this.handlers.onBridgeReply) {
+      try {
+        this.handlers.onBridgeReply(
+          requestId,
+          entry.bridge.bridgeId,
+          entry.bridge.groupId,
+          entry.bridge.asker,
+          entry.bridge.target,
+          msg.payload.message,
+        );
+      } catch (e) {
+        log.warn(`[fed-server] onBridgeReply failed for requestId=${requestId}: ${(e as Error).message}`);
+      }
+    }
     const ok = this.sendToMember(entry.sourceMasterId, msg);
     if (!ok) {
       log.warn(`[fed-server] sendReply to source ${entry.sourceMasterId} failed (offline?) requestId=${requestId}`);
