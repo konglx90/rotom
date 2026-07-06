@@ -121,15 +121,13 @@ export function registerAgentRoutes(
       return;
     }
 
-    if (!domain || typeof domain !== "string") {
-      res.status(400).json({ error: "domain is required" });
-      return;
-    }
-
-    const domainRow = db.getDomainByName(domain);
-    if (!domainRow) {
-      res.status(400).json({ error: `Domain "${domain}" does not exist. Create it first.` });
-      return;
+    // 个人 OPC 模式下域概念已去除 —— domain 可省,缺省落 null。
+    if (domain && typeof domain === "string") {
+      const domainRow = db.getDomainByName(domain);
+      if (!domainRow) {
+        res.status(400).json({ error: `Domain "${domain}" does not exist. Create it first.` });
+        return;
+      }
     }
 
     const existing = db.getAgentByName(name);

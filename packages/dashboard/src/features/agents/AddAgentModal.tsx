@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import type { Domain } from '../../api/types';
+import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
@@ -9,30 +8,21 @@ import styles from './AddAgentModal.module.css';
 interface AddAgentModalProps {
   open: boolean;
   onClose: () => void;
-  domains: Domain[];
   onSuccess: () => void;
-  defaultDomain?: string;
 }
 
-export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain }: AddAgentModalProps) {
+export function AddAgentModal({ open, onClose, onSuccess }: AddAgentModalProps) {
   const [name, setName] = useState('');
-  const [domain, setDomain] = useState(defaultDomain ?? '');
   const [category, setCategory] = useState('');
   const [position, setPosition] = useState('');
   const [bio, setBio] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; error?: string } | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      setDomain(defaultDomain ?? '');
-    }
-  }, [open, defaultDomain]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !domain) {
-      setResult({ success: false, error: '请填写完整信息' });
+    if (!name.trim()) {
+      setResult({ success: false, error: '请填写节点名称' });
       return;
     }
 
@@ -48,7 +38,6 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          domain,
           ...(Object.keys(profileObj).length > 0 ? { profile: profileObj } : {}),
         })
       });
@@ -72,7 +61,6 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
 
   const handleClose = () => {
     setName('');
-    setDomain('');
     setCategory('');
     setPosition('');
     setBio('');
@@ -87,12 +75,6 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
       onClose={handleClose}
       size="md"
     >
-      {domains.length === 0 && (
-        <div className={styles.warning}>
-          请先在「分组」中创建至少一个域。
-        </div>
-      )}
-
       {!result ? (
         <form onSubmit={handleSubmit}>
           <div className={styles.field}>
@@ -103,23 +85,6 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
               onChange={(e) => setName(e.target.value)}
               placeholder="如：小七"
               disabled={loading}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <Select
-              label="所属域"
-              required
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              disabled={loading || domains.length === 0}
-              options={[
-                { value: '', label: '选择域' },
-                ...domains.map((d) => ({
-                  value: d.name,
-                  label: d.description ? `${d.name} — ${d.description}` : d.name,
-                })),
-              ]}
             />
           </div>
 
@@ -164,7 +129,7 @@ export function AddAgentModal({ open, onClose, domains, onSuccess, defaultDomain
               type="submit"
               variant="primary"
               size="md"
-              disabled={loading || domains.length === 0}
+              disabled={loading}
             >
               {loading ? '添加中...' : '添加员工'}
             </Button>

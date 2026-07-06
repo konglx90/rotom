@@ -202,15 +202,11 @@ CREATE INDEX IF NOT EXISTS idx_gms_agent ON group_member_settings(agent_name);
 -- ====================================================================
 
 CREATE TABLE IF NOT EXISTS chat_message_prompts (
-  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  group_message_id INTEGER NOT NULL REFERENCES group_messages(id) ON DELETE CASCADE,
-  agent_name      TEXT NOT NULL,
-  full_prompt     TEXT NOT NULL,
-  system_prompt   TEXT NOT NULL,
-  user_prompt     TEXT NOT NULL,
-  prompt_tokens   INTEGER,
-  created_at      TEXT DEFAULT (datetime('now')),
-  UNIQUE(group_message_id, agent_name)
+  group_message_id INTEGER PRIMARY KEY REFERENCES group_messages(id) ON DELETE CASCADE,
+  layers           TEXT NOT NULL,
+  final            TEXT NOT NULL,
+  generated_at     TEXT NOT NULL,
+  prompt_version   TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_cmp_msg ON chat_message_prompts(group_message_id);

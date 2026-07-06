@@ -21,6 +21,7 @@ import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import type { Router } from "../router.js";
 import type { MasterIdentity } from "./identity.js";
+import { coordHttpUrl, normalizeCoordEndpoint } from "./identity.js";
 import { FedServer } from "./server.js";
 import { FedClient } from "./client.js";
 import { FedPublisher } from "./publisher.js";
@@ -71,8 +72,10 @@ export class FederationManager {
     }
     const { identity, db, hub, router, rotomHome } = this.opts;
 
+    const coordEndpoint = normalizeCoordEndpoint(input.coordEndpoint);
+
     // 1. 连协调 master,握手拿 teamId(协调的 masterId)
-    const teamId = await this.fetchCoordIdentity(input.coordEndpoint);
+    const teamId = await this.fetchCoordIdentity(coordEndpoint);
     const teamName = input.teamName || `团队@${identity.hostname}`;
 
     // 2. 写 team.json
@@ -82,7 +85,7 @@ export class FederationManager {
       JSON.stringify({
         id: teamId,
         name: teamName,
-        coord_endpoints: [input.coordEndpoint],
+        coord_endpoints: [coordEndpoint],
       }, null, 2) + "\n",
       "utf-8",
     );
@@ -93,12 +96,12 @@ export class FederationManager {
         id: teamId,
         name: teamName,
         my_role: "member",
-        coord_endpoints: input.coordEndpoint,
+        coord_endpoints: coordEndpoint,
       });
     }
 
     // 4. 启动 fedClient + fedPublisher
-    this.startMember({ id: teamId, name: teamName, coord_endpoints: [input.coordEndpoint] });
+    this.startMember({ id: teamId, name: teamName, coord_endpoints: [coordEndpoint] });
 
     return { teamId, teamName };
   }
@@ -147,10 +150,7 @@ export class FederationManager {
 
   /** 拉协调 master 的 /api/identity 拿 masterId(作 teamId) */
   private async fetchCoordIdentity(coordEndpoint: string): Promise<string> {
-    const httpUrl = coordEndpoint
-      .replace(/^wss:/, "https:")
-      .replace(/^ws:/, "http:")
-      .replace(/\/$/, "");
+    const httpUrl = coordHttpUrl(coordEndpoint);
     const res = await fetch(`${httpUrl}/api/identity`);
     if (!res.ok) {
       throw new Error(`Failed to fetch coord identity: ${res.status} ${res.statusText}`);

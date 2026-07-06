@@ -171,3 +171,21 @@ function writeStoredIdentity(p: string, identity: StoredIdentity): void {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, JSON.stringify(identity, null, 2) + "\n", "utf-8");
 }
+
+/**
+ * 规范化 coord endpoint:去掉尾斜杠;若无 scheme,默认补 `ws://`。
+ * 用户在 CLI 里常写 `192.168.1.5:28800`(漏 scheme),这里兜底成 `ws://192.168.1.5:28800`,
+ * 否则后续 fetch / new WebSocket 都会因 "Invalid URL" 直接挂。
+ */
+export function normalizeCoordEndpoint(endpoint: string): string {
+  const trimmed = endpoint.trim().replace(/\/+$/, "");
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  return `ws://${trimmed}`;
+}
+
+/** 把 coord endpoint(ws/wss)转成 http/https,用于 REST 探活(如 /api/identity)。 */
+export function coordHttpUrl(endpoint: string): string {
+  return normalizeCoordEndpoint(endpoint)
+    .replace(/^wss:/, "https:")
+    .replace(/^ws:/, "http:");
+}

@@ -21,7 +21,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { URL } from "node:url";
 import { FedClient } from "../master/federation/client.js";
-import { generateMasterId } from "../master/federation/identity.js";
+import { generateMasterId, coordHttpUrl, normalizeCoordEndpoint } from "../master/federation/identity.js";
 import { InMemoryVisibilityStore } from "./visibility-store.js";
 import { PendingRequests } from "./pending-requests.js";
 import { parseAgentRef, formatAgentRef, type FedAgentRef } from "../shared/protocol/federation.js";
@@ -67,11 +67,9 @@ function writeLinkConfig(cfg: LinkConfig): void {
 
 /** CLI 调:rotom link join <coordEndpoint> --hostname <name> */
 export async function linkJoin(coordEndpoint: string, hostname: string): Promise<void> {
+  const normalized = normalizeCoordEndpoint(coordEndpoint);
   // 1. probe coord /api/identity 拿 teamId(coord 的 masterId)
-  const httpUrl = coordEndpoint
-    .replace(/^wss:/, "https:")
-    .replace(/^ws:/, "http:")
-    .replace(/\/$/, "");
+  const httpUrl = coordHttpUrl(coordEndpoint);
   const res = await fetch(`${httpUrl}/api/identity`);
   if (!res.ok) {
     throw new Error(`Failed to fetch coord identity: ${res.status} ${res.statusText}`);
@@ -86,12 +84,12 @@ export async function linkJoin(coordEndpoint: string, hostname: string): Promise
   const cfg: LinkConfig = {
     masterId,
     hostname,
-    coordEndpoint,
+    coordEndpoint: normalized,
     teamId: data.id,
     teamName: data.teamName ?? `${data.hostname} 团队`,
   };
   writeLinkConfig(cfg);
-  log.info(`[rotom-link] joined team ${cfg.teamId} as ${cfg.masterId}/${cfg.hostname}`);
+  log.info(`[rotom-link] joined team ${cfg.teamId} as ${cfg.masterId}/${cfg.hostname} (coord=${normalized})`);
 }
 
 interface LinkServerOpts {

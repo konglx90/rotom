@@ -168,9 +168,6 @@ function AgentsViewBody({
     setRightView('rules')
   }
 
-  const defaultDomainForAdd =
-    filters.domainFilter !== 'all' && filters.domainFilter ? filters.domainFilter : undefined
-
   return (
     <div className={styles.layout}>
       <div className={styles.content}>
@@ -226,8 +223,6 @@ function AgentsViewBody({
       <AddAgentModal
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
-        domains={allDomains}
-        defaultDomain={defaultDomainForAdd}
         onSuccess={() => {
           refetch()
           fetchDomains()
