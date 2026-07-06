@@ -6,7 +6,8 @@
  *
  * Node 在 IPv4-only 监听上会给出 `127.0.0.1`;
  * 双栈监听上 IPv4 连接会给出 IPv4-mapped 形式 `::ffff:127.0.0.1`。
- * 局域网段:192.168.0.0/16 / 10.0.0.0/8 / 172.16.0.0/12(含 IPv4-mapped 形式)。
+ * 局域网段:192.168.0.0/16 / 10.0.0.0/8 / 172.16.0.0/12(含 IPv4-mapped 形式)
+ * + 公司内网 30.0.0.0/8(蚂蚁 30.249/30.250 段等,等同 RFC1918 信任)。
  */
 export function isLoopback(addr: string | undefined | null): boolean {
   if (!addr) return false;
@@ -33,6 +34,8 @@ export function isLocalNetwork(addr: string | undefined | null): boolean {
     const second = parseInt(m172[1], 10);
     if (second >= 16 && second <= 31) return true;
   }
+  // 公司内网 30.x.x.x(蚂蚁 30.249/30.250 段等),同 RFC1918 处理
+  if (/^30\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(v4)) return true;
   return false;
 }
 
