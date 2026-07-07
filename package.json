@@ -1,6 +1,6 @@
 {
   "name": "@konglx/rotom",
-  "version": "3.0.6",
+  "version": "3.0.7",
   "type": "module",
   "description": "Digital Employee Mesh — Enterprise agent collaboration network (rotom CLI)",
   "bin": {
