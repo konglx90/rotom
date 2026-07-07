@@ -60,7 +60,7 @@ pnpm test                        # node --import tsx --test tests/*.test.ts
 rotom whoami
 rotom directory --pretty
 rotom group list | members | history | send
-rotom issue create | list | show | events | comment | cancel | interrupt | continue | append
+rotom issue create | list | show | events | comment | cancel | delete
 rotom schedule add | list | trigger | enable | disable
 rotom memory add | search | list | get | promote | pending | approve | reject
 rotom skill list | search | get | create | update | bind | mine
@@ -82,7 +82,7 @@ Master 默认监听 `0.0.0.0:28800`(`MESH_MASTER_PORT` 可覆盖);数据目录 `
 
 ## Read These Docs
 
-- `README.md`:架构图、特性、快速开始、REST API 总表、WS 协议、close codes
+- `README.md`:架构图、特性、快速开始(REST API 总表 / WS 协议 / close codes 见 `packages/website/docs/`)
 - `packages/website/docs/INSTALL.md`:Master / Executor / rotom CLI 三件套完整安装手册
 - `packages/website/docs/AGENT_USER_GUIDE.md`:Agent 协作用户指南
 - `packages/website/docs/AGENT_ASK_REPLY_TIMER.md`:A → B 提问的 5min timer + 升级 Issue 兜底
