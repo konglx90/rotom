@@ -14,7 +14,6 @@
  *   npx tsx src/executor/index.ts --config /path/to/config.json  # 显式指定
  */
 
-import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -28,6 +27,7 @@ import { ExecutorWorker, type WorkerConfig } from "./worker.js";
 import { SessionStore } from "./session-store.js";
 import { ensureRotomSkillMd } from "../shared/skill-md.js";
 import { createLogger } from "../shared/logger.js";
+import { detectCliTool, detectInstalledClis } from "../shared/cli-detect.js";
 
 const log = createLogger("mesh-executor", { stream: "stderr" });
 
@@ -148,34 +148,7 @@ function loadConfig(): ExecutorConfig {
 
 // ── CLI tool detection ──────────────────────────────────────────────────
 
-const CLI_PRIORITY = ["claude", "openclaw", "codex", "pi"];
-const ALL_KNOWN_CLIS = ["claude", "openclaw", "codex", "hermes", "pi"];
-
-function detectCliTool(): string {
-  for (const tool of CLI_PRIORITY) {
-    try {
-      execSync(`which ${tool}`, { stdio: "pipe" });
-      return tool;
-    } catch { /* not found */ }
-  }
-  return "claude";
-}
-
-/**
- * 扫描本机已安装的 CLI,返回数组。OPC 模式下若无 executor.config.json,
- * 为每个已安装的 CLI 自动注册一个 agent(name 默认 = CLI 名,可通过后续
- * 配置覆盖)。这是"每台机器 = 一个真人 + 多个 CLI agent"语义的关键。
- */
-function detectInstalledClis(): string[] {
-  const found: string[] = [];
-  for (const tool of ALL_KNOWN_CLIS) {
-    try {
-      execSync(`which ${tool}`, { stdio: "pipe" });
-      found.push(tool);
-    } catch { /* not installed */ }
-  }
-  return found;
-}
+// detectCliTool / detectInstalledClis 已抽到 src/shared/cli-detect.ts,CLI 侧 resolveAgent 也共用。
 
 function createExecutor(tool: string): CliExecutor {
   switch (tool) {

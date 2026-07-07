@@ -12,7 +12,9 @@
  * The agent's master URL + mesh token come from one of:
  *   - "openclaw":  channels['a2a-gateway'].{master,token,name}  in openclaw.json
  *   - "executor":  matching `workers[].name` in executor.config.json
- *   - Auto-discovery: ~/.rotom/executor.config.json (shared with `executor`
+ *   - Auto-discovery (OPC): ~/.rotom/.auto-executor.json (master 在 OPC 模式下自动
+ *     生成,scanClis 模式为本机每个已装 CLI 注册一个 agent)。
+ *   - Auto-discovery (manual): ~/.rotom/executor.config.json (shared with `executor`
  *     worker process). No explicit `rotom config add-executor` needed.
  *   - Env fallback: ROTOM_MASTER + ROTOM_TOKEN (set by worker child spawns).
  *
@@ -58,8 +60,10 @@ Agent selection:
   --as <name>           override which registered agent to act as
   ROTOM_AGENT env       same, via env (takes priority over --as)
   defaultAgent (config) fallback
-  Auto-discovery: workers in ~/.rotom/executor.config.json resolve
-  by name without needing 'rotom config add-executor' first.
+  Auto-discovery (OPC):    ~/.rotom/.auto-executor.json (master auto-generated,
+                           scanClis mode registers one agent per installed CLI)
+  Auto-discovery (manual): ~/.rotom/executor.config.json workers resolve
+                           by name without needing 'rotom config add-executor' first.
 
 Config:
   config show

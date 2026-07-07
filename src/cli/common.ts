@@ -8,6 +8,7 @@ import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createLogger } from "../shared/logger.js";
+import { isCliInstalled } from "../shared/cli-detect.js";
 
 const log = createLogger("mesh-cli", { stream: "stderr" });
 
@@ -16,6 +17,7 @@ const log = createLogger("mesh-cli", { stream: "stderr" });
 export const ROTOM_HOME = process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom");
 export const ROTOM_CONFIG = path.join(ROTOM_HOME, "config.json");
 export const DEFAULT_EXECUTOR_CONFIG = path.join(ROTOM_HOME, "executor.config.json");
+export const AUTO_EXECUTOR_CONFIG = path.join(ROTOM_HOME, ".auto-executor.json");
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -114,6 +116,55 @@ export function listExecutorWorkers(configPath: string): string[] {
   } catch { return []; }
 }
 
+/**
+ * 读 `.auto-executor.json`(master 在 OPC 模式下自动生成,见 src/master/opc-bootstrap.ts)。
+ * 与 `resolveFromExecutorConfig` 的区别:这个文件 `token` 可能为 null —— 本机 loopback
+ * 信任模式,master 端走 `authenticateLocal` 不需要 mesh_ token。CLI 侧拿空 token 调 HTTP,
+ * 靠 loopback + body.asker 兜底(见 src/master/api/groups.ts 的 asker 模式)。
+ *
+ * 两种形态:
+ *   1. scanClis=true → 验证 chosen 是本机已装 CLI 之一即可放行
+ *   2. defaultAgent 指定 → 仅当 chosen === defaultAgent.name 时放行
+ */
+export function resolveFromAutoExecutorConfig(name: string, autoPath: string): ResolvedAgent | null {
+  if (!fs.existsSync(autoPath)) return null;
+  let raw: any;
+  try { raw = JSON.parse(fs.readFileSync(autoPath, "utf-8")); }
+  catch { return null; }
+  const master = raw?.master;
+  if (!master || typeof master !== "string") return null;
+
+  if (raw?.scanClis === true) {
+    // scanClis 模式:agent 名 == CLI 工具名;只要本机装了这个 CLI 就放行
+    if (!isCliInstalled(name)) return null;
+    return {
+      name,
+      master,
+      token: raw?.token ?? "",
+      kind: "executor",
+      configPath: autoPath,
+      cliTool: name,
+      ...(raw?.workingDir ? { workingDir: raw.workingDir } : {}),
+    };
+  }
+
+  const da = raw?.defaultAgent;
+  if (da && typeof da === "object" && da.name === name) {
+    return {
+      name,
+      master,
+      token: raw?.token ?? "",
+      kind: "executor",
+      configPath: autoPath,
+      ...(da.cliTool ? { cliTool: da.cliTool } : {}),
+      ...(raw?.workingDir ? { workingDir: raw.workingDir } : {}),
+      ...(da.profile ? { profile: da.profile } : {}),
+    };
+  }
+
+  return null;
+}
+
 export function resolveAgentFromEntry(name: string, entry: RotomAgentEntry): ResolvedAgent {
   const p = expandHome(entry.configPath);
   if (!fs.existsSync(p)) fail(`config not found for agent "${name}": ${p}`);
@@ -165,6 +216,7 @@ export function resolveAgent(asFlag?: string): ResolvedAgent {
     if (lines.length === 0) {
       lines.push(
         `No agents registered yet. Either:`,
+        `  - run 'rotom master' (OPC mode auto-generates ${AUTO_EXECUTOR_CONFIG}, scans local CLIs), or`,
         `  - create ${DEFAULT_EXECUTOR_CONFIG} (auto-discovered), or`,
         `  - rotom config add-openclaw <name> <path-to-openclaw.json>`,
         `  - rotom config add-executor <name> <path-to-executor.config.json>`,
@@ -179,6 +231,10 @@ export function resolveAgent(asFlag?: string): ResolvedAgent {
 
   const fromExecutor = resolveFromExecutorConfig(chosen, DEFAULT_EXECUTOR_CONFIG);
   if (fromExecutor) return fromExecutor;
+
+  // OPC 模式兜底:master 自动生成的 .auto-executor.json(scanClis 或 defaultAgent)
+  const fromAuto = resolveFromAutoExecutorConfig(chosen, AUTO_EXECUTOR_CONFIG);
+  if (fromAuto) return fromAuto;
 
   const master = process.env.ROTOM_MASTER;
   const token = process.env.ROTOM_TOKEN;
