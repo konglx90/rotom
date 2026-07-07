@@ -9,7 +9,7 @@
  *   5. 巡检 runs + 选中 run 的 logs(双列表格)
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
@@ -35,10 +35,58 @@ function formatTime(ts: string | number | null | undefined): string {
   return new Date(n).toLocaleString('zh-CN', { hour12: false })
 }
 
+// ── runs/logs/links 卡片共用样式(对齐 ManagementTab 的 .card 风格)─────────
+const panelCardStyle: CSSProperties = {
+  border: '1px solid rgba(0,0,0,0.08)',
+  borderRadius: 10,
+  padding: '14px 16px',
+  background: '#fff',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+}
+
+const panelHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'baseline',
+  justifyContent: 'space-between',
+  gap: 8,
+}
+
+const thStyle: CSSProperties = {
+  padding: '6px 8px',
+  textTransform: 'uppercase',
+  letterSpacing: '0.4px',
+  fontSize: 11,
+  color: '#888',
+  fontWeight: 700,
+}
+
+function Pagination({ page, pageSize, total, onChange }: {
+  page: number
+  pageSize: number
+  total: number
+  onChange: (p: number) => void
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const canPrev = page > 0
+  const canNext = page + 1 < totalPages
+  if (total === 0) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', fontSize: 12, color: '#666' }}>
+      <Button size="sm" variant="secondary" disabled={!canPrev} onClick={() => canPrev && onChange(page - 1)}>‹ 上一页</Button>
+      <span>第 {page + 1} / {totalPages} 页</span>
+      <Button size="sm" variant="secondary" disabled={!canNext} onClick={() => canNext && onChange(page + 1)}>下一页 ›</Button>
+    </div>
+  )
+}
+
 export function LinkPatrolTab() {
   const [state, setState] = useState<LinkPatrolState | null>(null)
   const [stats, setStats] = useState<LinkPatrolStats | null>(null)
   const [runs, setRuns] = useState<LinkPatrolRun[]>([])
+  const [runsTotal, setRunsTotal] = useState(0)
+  const [runsPage, setRunsPage] = useState(0)
   const [links, setLinks] = useState<LinkItem[]>([])
   const [linksTotal, setLinksTotal] = useState(0)
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -47,6 +95,8 @@ export function LinkPatrolTab() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const RUNS_PAGE_SIZE = 20
 
   // 节流参数
   const [scanBatch, setScanBatch] = useState(20)
@@ -64,29 +114,29 @@ export function LinkPatrolTab() {
   const [editTitle, setEditTitle] = useState('')
   const [editTagsText, setEditTagsText] = useState('')
 
-  const reload = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const loadState = useCallback(async () => {
     try {
-      const [s, st, rs] = await Promise.all([
-        linksPatrolApi.state(),
-        linksPatrolApi.stats(),
-        linksPatrolApi.listRuns(50),
-      ])
+      const [s, st] = await Promise.all([linksPatrolApi.state(), linksPatrolApi.stats()])
       setState(s)
       setStats(st)
-      setRuns(rs)
       if (s.scanBatch) setScanBatch(s.scanBatch)
       if (s.intervalSec) setIntervalSec(s.intervalSec)
-      if (!selectedRunId && rs.length > 0) {
-        setSelectedRunId(rs[0].run_id)
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
     }
-  }, [selectedRunId])
+  }, [])
+
+  const loadRuns = useCallback(async (page: number) => {
+    setError(null)
+    try {
+      const rs = await linksPatrolApi.listRuns({ limit: RUNS_PAGE_SIZE, offset: page * RUNS_PAGE_SIZE })
+      setRuns(rs.runs)
+      setRunsTotal(rs.total)
+      setRunsPage(page)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
 
   const reloadLinks = useCallback(async () => {
     try {
@@ -105,12 +155,14 @@ export function LinkPatrolTab() {
   }, [filterCategory, filterTag, filterSearch, filterHost])
 
   useEffect(() => {
-    reload()
-  }, [reload])
+    setLoading(true)
+    Promise.all([loadState(), loadRuns(0), reloadLinks()]).finally(() => setLoading(false))
+  }, [loadState, loadRuns, reloadLinks])
 
+  // 首次拿到 runs 时默认选中最新一轮;之后翻页/切 run 不改选中
   useEffect(() => {
-    reloadLinks()
-  }, [reloadLinks])
+    if (!selectedRunId && runs.length > 0) setSelectedRunId(runs[0].run_id)
+  }, [runs, selectedRunId])
 
   useEffect(() => {
     if (!selectedRunId) {
@@ -135,7 +187,7 @@ export function LinkPatrolTab() {
     try {
       const next = !state.enabled
       await linksPatrolApi.updateConfig({ enabled: next })
-      await reload()
+      await loadState()
       setSuccess(next ? '已开启分类' : '已关闭分类')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -149,7 +201,7 @@ export function LinkPatrolTab() {
     setBusy(true)
     try {
       await linksPatrolApi.trigger(state.taskId)
-      await reload()
+      await Promise.all([loadState(), loadRuns(0)])
       setSuccess('已触发立即巡检,稍后刷新查看结果')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -162,7 +214,7 @@ export function LinkPatrolTab() {
     setBusy(true)
     try {
       await linksPatrolApi.updateConfig({ scanBatch, intervalSec })
-      await reload()
+      await loadState()
       setSuccess('参数已保存')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -303,16 +355,14 @@ export function LinkPatrolTab() {
         </div>
         <div style={{ padding: 16, background: 'rgba(0,0,0,0.03)', borderRadius: 8 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700 }}>节流参数</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-            <label>
-              每轮扫描上限 scanBatch:{' '}
-              <Input type="number" min={1} max={100} size="sm" value={scanBatch}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', alignItems: 'center', fontSize: 13 }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              每轮扫描上限 <Input type="number" min={1} max={100} size="sm" value={scanBatch}
                 onChange={(e) => setScanBatch(Number(e.target.value) || 20)}
                 style={{ width: 60 }} />
             </label>
-            <label>
-              间隔 intervalSec:{' '}
-              <Input type="number" min={60} size="sm" value={intervalSec}
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              间隔(秒) <Input type="number" min={60} size="sm" value={intervalSec}
                 onChange={(e) => setIntervalSec(Number(e.target.value) || 3600)}
                 style={{ width: 80 }} />
             </label>
@@ -322,11 +372,12 @@ export function LinkPatrolTab() {
       </div>
 
       {/* 链接列表 */}
-      <div>
-        <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>
-          链接列表({linksTotal} 条,展示前 {links.length})
-        </h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8, fontSize: 12 }}>
+      <div style={panelCardStyle}>
+        <div style={panelHeaderStyle}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>链接列表</h3>
+          <span style={{ fontSize: 11, color: '#888' }}>共 {linksTotal} 条 · 展示前 {links.length}</span>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 12 }}>
           <label>
             分类:
             <Select size="sm" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
@@ -355,7 +406,7 @@ export function LinkPatrolTab() {
         </div>
 
         {editingLink && (
-          <div style={{ padding: 12, background: 'rgba(99,102,241,0.06)', borderRadius: 8, marginBottom: 8, fontSize: 13 }}>
+          <div style={{ padding: 12, background: 'rgba(99,102,241,0.06)', borderRadius: 8, fontSize: 13 }}>
             <div style={{ marginBottom: 8, fontWeight: 700 }}>编辑: {editingLink.url_raw}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               <label>
@@ -383,17 +434,13 @@ export function LinkPatrolTab() {
           </div>
         )}
 
-        <div style={{ overflowX: 'auto', maxHeight: '50vh', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}>
+        <div style={{ overflowX: 'auto', maxHeight: 420, overflowY: 'auto', borderRadius: 8 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.1)' }}>
-                <th style={{ padding: '6px 8px' }}>host</th>
-                <th style={{ padding: '6px 8px' }}>url</th>
-                <th style={{ padding: '6px 8px' }}>category</th>
-                <th style={{ padding: '6px 8px' }}>tags</th>
-                <th style={{ padding: '6px 8px' }}>title</th>
-                <th style={{ padding: '6px 8px' }}>last_seen</th>
-                <th style={{ padding: '6px 8px' }}></th>
+                {['host', 'url', 'category', 'tags', 'title', 'last_seen', ''].map((h, i) => (
+                  <th key={i} style={thStyle}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -432,19 +479,21 @@ export function LinkPatrolTab() {
         </div>
       </div>
 
-      {/* runs + logs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: 16, alignItems: 'start' }}>
-        <div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>最近巡检</h3>
-          <div style={{ overflowX: 'auto', maxHeight: '50vh', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}>
+      {/* runs + logs:竖向堆叠 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* runs 卡片 */}
+        <div style={panelCardStyle}>
+          <div style={panelHeaderStyle}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>最近巡检</h3>
+            <span style={{ fontSize: 11, color: '#888' }}>共 {runsTotal} 条</span>
+          </div>
+          <div style={{ overflowX: 'auto', maxHeight: 380, overflowY: 'auto', borderRadius: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.1)' }}>
-                  <th style={{ padding: '6px 8px' }}>开始</th>
-                  <th style={{ padding: '6px 8px' }}>状态</th>
-                  <th style={{ padding: '6px 8px' }}>扫描</th>
-                  <th style={{ padding: '6px 8px' }}>分类</th>
-                  <th style={{ padding: '6px 8px' }}>备注</th>
+                  {['开始', '状态', '扫描', '分类', '备注'].map((h) => (
+                    <th key={h} style={thStyle}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -473,27 +522,35 @@ export function LinkPatrolTab() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={runsPage}
+            pageSize={RUNS_PAGE_SIZE}
+            total={runsTotal}
+            onChange={loadRuns}
+          />
         </div>
 
-        <div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>
-            日志 {selectedRunId ? `· 选中 run ${selectedRunId.slice(0, 8)}` : ''}
-          </h3>
-          <div style={{ overflowX: 'auto', maxHeight: '50vh', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}>
+        {/* logs 卡片 */}
+        <div style={panelCardStyle}>
+          <div style={panelHeaderStyle}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
+              日志{selectedRunId ? ` · run ${selectedRunId.slice(0, 8)}` : ''}
+            </h3>
+            <span style={{ fontSize: 11, color: '#888' }}>{logs.length} 条</span>
+          </div>
+          <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto', borderRadius: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.1)' }}>
-                  <th style={{ padding: '6px 8px' }}>时间</th>
-                  <th style={{ padding: '6px 8px' }}>category</th>
-                  <th style={{ padding: '6px 8px' }}>tags</th>
-                  <th style={{ padding: '6px 8px' }}>title</th>
-                  <th style={{ padding: '6px 8px' }}>rationale</th>
+                  {['时间', 'category', 'tags', 'title', 'rationale'].map((h) => (
+                    <th key={h} style={thStyle}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {logs.length === 0 && (
                   <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: '#888' }}>
-                    {selectedRunId ? '该轮无日志' : '请选择左侧某次巡检'}
+                    {selectedRunId ? '该轮无日志' : '请选择上方某次巡检'}
                   </td></tr>
                 )}
                 {logs.map((l) => {

@@ -6,7 +6,7 @@
  * enabled/interval_sec/handler_payload,以及展示巡检 runs/logs。
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -36,15 +36,65 @@ function formatTime(ts: string | number | null | undefined): string {
   return new Date(n).toLocaleString('zh-CN', { hour12: false })
 }
 
+// ── runs/logs 卡片共用样式(对齐 ManagementTab 的 .card 风格)──────────────
+const panelCardStyle: CSSProperties = {
+  border: '1px solid rgba(0,0,0,0.08)',
+  borderRadius: 10,
+  padding: '14px 16px',
+  background: '#fff',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+}
+
+const panelHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'baseline',
+  justifyContent: 'space-between',
+  gap: 8,
+}
+
+const thStyle: CSSProperties = {
+  padding: '6px 8px',
+  textTransform: 'uppercase',
+  letterSpacing: '0.4px',
+  fontSize: 11,
+  color: '#888',
+  fontWeight: 700,
+}
+
+function Pagination({ page, pageSize, total, onChange }: {
+  page: number
+  pageSize: number
+  total: number
+  onChange: (p: number) => void
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const canPrev = page > 0
+  const canNext = page + 1 < totalPages
+  if (total === 0) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', fontSize: 12, color: '#666' }}>
+      <Button size="sm" variant="secondary" disabled={!canPrev} onClick={() => canPrev && onChange(page - 1)}>‹ 上一页</Button>
+      <span>第 {page + 1} / {totalPages} 页</span>
+      <Button size="sm" variant="secondary" disabled={!canNext} onClick={() => canNext && onChange(page + 1)}>下一页 ›</Button>
+    </div>
+  )
+}
+
 export function IssuePatrolTab() {
   const navigate = useNavigate()
   const [state, setState] = useState<PatrolState | null>(null)
   const [runs, setRuns] = useState<PatrolRun[]>([])
+  const [runsTotal, setRunsTotal] = useState(0)
+  const [runsPage, setRunsPage] = useState(0)
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [logs, setLogs] = useState<PatrolLog[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const RUNS_PAGE_SIZE = 20
 
   // 编辑中的节流参数(独立保存按钮)
   const [throughputCap, setThroughputCap] = useState(3)
@@ -52,30 +102,40 @@ export function IssuePatrolTab() {
   const [scanBatch, setScanBatch] = useState(10)
   const [intervalSec, setIntervalSec] = useState(7200)
 
-  const reload = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const loadState = useCallback(async () => {
     try {
-      const [s, rs] = await Promise.all([issuesPatrolApi.state(), issuesPatrolApi.listRuns(50)])
+      const s = await issuesPatrolApi.state()
       setState(s)
-      setRuns(rs)
       if (s.throughputCap) setThroughputCap(s.throughputCap)
       if (s.candidateCap) setCandidateCap(s.candidateCap)
       if (s.scanBatch) setScanBatch(s.scanBatch)
       if (s.intervalSec) setIntervalSec(s.intervalSec)
-      if (!selectedRunId && rs.length > 0) {
-        setSelectedRunId(rs[0].run_id)
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
     }
-  }, [selectedRunId])
+  }, [])
+
+  const loadRuns = useCallback(async (page: number) => {
+    setError(null)
+    try {
+      const rs = await issuesPatrolApi.listRuns({ limit: RUNS_PAGE_SIZE, offset: page * RUNS_PAGE_SIZE })
+      setRuns(rs.runs)
+      setRunsTotal(rs.total)
+      setRunsPage(page)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
 
   useEffect(() => {
-    reload()
-  }, [reload])
+    setLoading(true)
+    Promise.all([loadState(), loadRuns(0)]).finally(() => setLoading(false))
+  }, [loadState, loadRuns])
+
+  // 首次拿到 runs 时默认选中最新一轮;之后翻页/切 run 不改选中
+  useEffect(() => {
+    if (!selectedRunId && runs.length > 0) setSelectedRunId(runs[0].run_id)
+  }, [runs, selectedRunId])
 
   useEffect(() => {
     if (!selectedRunId) {
@@ -94,7 +154,7 @@ export function IssuePatrolTab() {
     try {
       const next = !state.enabled
       await issuesPatrolApi.updateConfig({ enabled: next })
-      await reload()
+      await loadState()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -107,7 +167,7 @@ export function IssuePatrolTab() {
     setBusy(true)
     try {
       await issuesPatrolApi.trigger(state.taskId)
-      await reload()
+      await Promise.all([loadState(), loadRuns(0)])
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -119,7 +179,7 @@ export function IssuePatrolTab() {
     setBusy(true)
     try {
       await issuesPatrolApi.updateConfig({ throughputCap, candidateCap, scanBatch, intervalSec })
-      await reload()
+      await loadState()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -200,28 +260,24 @@ export function IssuePatrolTab() {
         </div>
         <div style={{ padding: 16, background: 'rgba(0,0,0,0.03)', borderRadius: 8 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700 }}>节流参数</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-            <label>
-              吞吐上限 throughputCap:{' '}
-              <Input type="number" min={1} max={20} size="sm" value={throughputCap}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', alignItems: 'center', fontSize: 13 }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              吞吐上限 <Input type="number" min={1} max={20} size="sm" value={throughputCap}
                 onChange={(e) => setThroughputCap(Number(e.target.value) || 3)}
                 style={{ width: 60 }} />
             </label>
-            <label>
-              候选上限 candidateCap:{' '}
-              <Input type="number" min={1} max={20} size="sm" value={candidateCap}
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              候选上限 <Input type="number" min={1} max={20} size="sm" value={candidateCap}
                 onChange={(e) => setCandidateCap(Number(e.target.value) || 3)}
                 style={{ width: 60 }} />
             </label>
-            <label>
-              扫描批大小 scanBatch:{' '}
-              <Input type="number" min={1} max={50} size="sm" value={scanBatch}
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              扫描批大小 <Input type="number" min={1} max={50} size="sm" value={scanBatch}
                 onChange={(e) => setScanBatch(Number(e.target.value) || 10)}
                 style={{ width: 60 }} />
             </label>
-            <label>
-              间隔 intervalSec:{' '}
-              <Input type="number" min={60} size="sm" value={intervalSec}
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              间隔(秒) <Input type="number" min={60} size="sm" value={intervalSec}
                 onChange={(e) => setIntervalSec(Number(e.target.value) || 7200)}
                 style={{ width: 80 }} />
             </label>
@@ -230,19 +286,21 @@ export function IssuePatrolTab() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: 16, alignItems: 'start' }}>
-        <div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>最近巡检</h3>
-          <div style={{ overflowX: 'auto', maxHeight: '60vh', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}>
+      {/* runs + logs:竖向堆叠,runs 在上、logs 在下,各自包成卡片 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* runs 卡片 */}
+        <div style={panelCardStyle}>
+          <div style={panelHeaderStyle}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>最近巡检</h3>
+            <span style={{ fontSize: 11, color: '#888' }}>共 {runsTotal} 条</span>
+          </div>
+          <div style={{ overflowX: 'auto', maxHeight: 380, overflowY: 'auto', borderRadius: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.1)' }}>
-                  <th style={{ padding: '6px 8px' }}>开始时间</th>
-                  <th style={{ padding: '6px 8px' }}>状态</th>
-                  <th style={{ padding: '6px 8px' }}>in_progress</th>
-                  <th style={{ padding: '6px 8px' }}>扫描</th>
-                  <th style={{ padding: '6px 8px' }}>可认领</th>
-                  <th style={{ padding: '6px 8px' }}>备注</th>
+                  {['开始时间', '状态', 'in_progress', '扫描', '可认领', '备注'].map((h) => (
+                    <th key={h} style={thStyle}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -272,27 +330,35 @@ export function IssuePatrolTab() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={runsPage}
+            pageSize={RUNS_PAGE_SIZE}
+            total={runsTotal}
+            onChange={loadRuns}
+          />
         </div>
 
-        <div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>
-            日志 {selectedRunId ? `· 选中 run ${selectedRunId.slice(0, 8)}` : ''}
-          </h3>
-          <div style={{ overflowX: 'auto', maxHeight: '60vh', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}>
+        {/* logs 卡片 */}
+        <div style={panelCardStyle}>
+          <div style={panelHeaderStyle}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
+              日志{selectedRunId ? ` · run ${selectedRunId.slice(0, 8)}` : ''}
+            </h3>
+            <span style={{ fontSize: 11, color: '#888' }}>{logs.length} 条</span>
+          </div>
+          <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto', borderRadius: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.1)' }}>
-                  <th style={{ padding: '6px 8px' }}>时间</th>
-                  <th style={{ padding: '6px 8px' }}>verdict</th>
-                  <th style={{ padding: '6px 8px' }}>issue</th>
-                  <th style={{ padding: '6px 8px' }}>命中规则</th>
-                  <th style={{ padding: '6px 8px' }}>理由</th>
+                  {['时间', 'verdict', 'issue', '命中规则', '理由'].map((h) => (
+                    <th key={h} style={thStyle}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {logs.length === 0 && (
                   <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: '#888' }}>
-                    {selectedRunId ? '该轮无日志' : '请选择左侧某次巡检'}
+                    {selectedRunId ? '该轮无日志' : '请选择上方某次巡检'}
                   </td></tr>
                 )}
                 {logs.map((l) => {

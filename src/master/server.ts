@@ -23,7 +23,7 @@ import { createApi } from "./api/index.js";
 import { TerminalHub } from "./terminal-hub.js";
 import { Scheduler } from "./scheduler.js";
 import { ShareTokenStore } from "./share-tokens.js";
-import { handleIssuePatrolTerminal, handleLinkPatrolIssueTerminal } from "./patrol-terminal.js";
+import { dispatchPatrolTerminal } from "./patrol-terminal.js";
 import { DEFAULT_MASTER_PORT, DEFAULT_MASTER_HOST } from "../shared/constants.js";
 import os from "node:os";
 import { createLogger, enableFileLogging, closeFileLogging } from "../shared/logger.js";
@@ -97,18 +97,15 @@ async function main(): Promise<void> {
   const identity = getMasterIdentity({ rotomHome: config.dataDir });
   const opcResult = runOpcBootstrap(db, identity);
 
-  // Patrol auto-sync: when an issue reaches terminal state, advance patrol state
+  // Patrol auto-sync: when an issue reaches terminal state, advance patrol state.
+  // 统一走 dispatchPatrolTerminal —— 它按 issueId 反查 link_patrol_runs 决定走
+  // link 分类流程还是 issue 巡检流程(见 patrol-terminal.ts)。
   db._onIssueTerminal = (issueId: string) => {
     const issue = db.getIssueById(issueId);
     if (!issue) return;
     const group = db.getGroupByIdFull(issue.group_id);
-    if (group?.type === "patrol") {
-      handleIssuePatrolTerminal(db, issue);
-      return;
-    }
-    if (group?.type === "patrol-link") {
-      handleLinkPatrolIssueTerminal(db, issue);
-      return;
+    if (group?.type === "patrol" || group?.type === "patrol-link") {
+      dispatchPatrolTerminal(db, issue);
     }
   };
 

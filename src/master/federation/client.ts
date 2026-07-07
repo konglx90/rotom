@@ -61,6 +61,7 @@ export class FedClient {
   private connected = false;
   private handshakeAccepted = false;
   private stopped = false;
+  private reconnectAttempt = 0;
   private handlers: FedClientHandlers = {};
 
   constructor(
@@ -70,6 +71,7 @@ export class FedClient {
 
   start(): void {
     this.stopped = false;
+    this.reconnectAttempt = 0;
     this.connect();
   }
 
@@ -82,6 +84,7 @@ export class FedClient {
     }
     this.connected = false;
     this.handshakeAccepted = false;
+    this.reconnectAttempt = 0;
   }
 
   setHandlers(handlers: FedClientHandlers): void {
@@ -275,6 +278,7 @@ export class FedClient {
       return;
     }
     this.handshakeAccepted = true;
+    this.reconnectAttempt = 0;
     log.info(`[fed-client] joined team ${msg.teamId} (coord=${msg.serverMasterId}/${msg.serverHostname})`);
   }
 
@@ -337,6 +341,22 @@ export class FedClient {
   private scheduleReconnect(): void {
     if (this.stopped) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = setTimeout(() => this.connect(), 3_000);
+    // 指数退避:3s → 6 → 12 → 24 → 30(封顶),连上后 handshakeAck 处归零。
+    const delay = computeFedReconnectDelay(this.reconnectAttempt);
+    this.reconnectAttempt += 1;
+    log.info(`[fed-client] reconnect in ${delay}ms (attempt ${this.reconnectAttempt})`);
+    this.reconnectTimer = setTimeout(() => this.connect(), delay);
   }
+}
+
+/**
+ * Federation client 重连退避时长(纯函数,便于单测)。
+ *
+ * 3s 起步,每次失败翻倍,30s 封顶:
+ *   attempt 0 → 3000, 1 → 6000, 2 → 12000, 3 → 24000, 4+ → 30000
+ * 连上后调用方应把 reconnectAttempt 清零(`handleHandshakeAck` / `stop` 已做)。
+ */
+export function computeFedReconnectDelay(attempt: number): number {
+  const a = attempt < 0 ? 0 : Math.floor(attempt);
+  return Math.min(30_000, 3_000 * 2 ** a);
 }

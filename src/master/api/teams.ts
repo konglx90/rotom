@@ -1,15 +1,15 @@
 /**
  * Federation / Team REST API。
  *
- * Phase 2 MVP 只做 GET(读):
+ * 读:
  *   GET /api/identity                  → 本机 master_node 信息(含 teamName)
  *   GET /api/teams                     → 已加入的团队列表(本机视角)
  *   GET /api/teams/:id/members         → 团队内 agent_visibility 联合视图
  *   GET /api/teams/:id/peers           → 团队内 peer master 列表
  *
- * Runtime join/leave(POST)留给 Phase 3 —— 那需要把 fedClient/fedPublisher
- * 从 server.ts main 的局部变量提取成模块级单例,以便 API 层访问。
- * Phase 2 用户通过 ~/.rotom/team.json + 重启 master 切换 federation 状态。
+ * 运行时入/退团(写):走模块级单例 getFederationManager()。
+ *   POST /api/teams/join               → 运行时加入团队(无需重启 master)
+ *   POST /api/teams/leave               → 运行时退出当前团队
  *
  * 历史命名:Phase 2 叫 department,migration 058 改名 team。API 路径同步改。
  */

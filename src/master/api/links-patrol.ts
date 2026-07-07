@@ -133,13 +133,16 @@ export function registerLinkPatrolRoutes(apiRouter: ExpressRouter, db: MeshDb): 
 
   // ── runs ──────────────────────────────────────────────────────────────────
   apiRouter.get("/links-patrol/runs", (req, res) => {
-    const limit = parseLimit(req.query.limit, 50);
+    const limit = parseLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const patrol = findLinkPatrolGroup(db);
-    const runs = db.listLinkPatrolRuns({
-      patrolGroupId: patrol?.groupId,
-      limit,
-    });
-    res.json({ runs });
+    const [runs, total] = patrol
+      ? [
+          db.listLinkPatrolRuns({ patrolGroupId: patrol.groupId, limit, offset }),
+          db.countLinkPatrolRuns({ patrolGroupId: patrol.groupId }),
+        ]
+      : [[], 0];
+    res.json({ runs, total });
   });
 
   apiRouter.get("/links-patrol/runs/:runId/logs", (req, res) => {
@@ -181,5 +184,11 @@ export function registerLinkPatrolRoutes(apiRouter: ExpressRouter, db: MeshDb): 
 function parseLimit(v: unknown, fallback: number): number {
   const n = typeof v === "string" ? parseInt(v, 10) : Number(v);
   if (!Number.isFinite(n) || n <= 0) return fallback;
-  return Math.min(n, 1000);
+  return Math.min(n, 200);
+}
+
+function parseOffset(v: unknown): number {
+  const n = typeof v === "string" ? parseInt(v, 10) : Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
 }

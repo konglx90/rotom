@@ -341,8 +341,9 @@ export const linkMethods = {
     ).get(runId) as LinkPatrolRunRow | undefined;
   },
 
-  listLinkPatrolRuns(this: MeshDbSelf, opts?: { patrolGroupId?: string; limit?: number }): LinkPatrolRunRow[] {
-    const limit = Math.min(opts?.limit ?? 50, 500);
+  listLinkPatrolRuns(this: MeshDbSelf, opts?: { patrolGroupId?: string; limit?: number; offset?: number }): LinkPatrolRunRow[] {
+    const limit = Math.min(opts?.limit ?? 50, 200);
+    const offset = Math.max(opts?.offset ?? 0, 0);
     const where: string[] = [];
     const params: unknown[] = [];
     if (opts?.patrolGroupId) {
@@ -350,10 +351,24 @@ export const linkMethods = {
       params.push(opts.patrolGroupId);
     }
     const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
-    params.push(limit);
+    params.push(limit, offset);
     return this.db.prepare(
-      `SELECT * FROM link_patrol_runs ${whereClause} ORDER BY started_at DESC LIMIT ?`,
+      `SELECT * FROM link_patrol_runs ${whereClause} ORDER BY started_at DESC LIMIT ? OFFSET ?`,
     ).all(...params) as LinkPatrolRunRow[];
+  },
+
+  countLinkPatrolRuns(this: MeshDbSelf, opts?: { patrolGroupId?: string }): number {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    if (opts?.patrolGroupId) {
+      where.push("patrol_group_id = ?");
+      params.push(opts.patrolGroupId);
+    }
+    const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+    const row = this.db.prepare(
+      `SELECT COUNT(*) as n FROM link_patrol_runs ${whereClause}`,
+    ).get(...params) as { n: number };
+    return row?.n ?? 0;
   },
 
   insertLinkPatrolLog(

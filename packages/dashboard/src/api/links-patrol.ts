@@ -112,9 +112,12 @@ export const linksPatrolApi = {
     return api.get<LinkPatrolStats>('/links-patrol/stats')
   },
 
-  async listRuns(limit = 50): Promise<LinkPatrolRun[]> {
-    const res = await api.get<{ runs: LinkPatrolRun[] }>(`/links-patrol/runs?limit=${limit}`)
-    return res.runs
+  async listRuns(opts?: { limit?: number; offset?: number }): Promise<{ runs: LinkPatrolRun[]; total: number }> {
+    const params = new URLSearchParams()
+    if (opts?.limit) params.set('limit', String(opts.limit))
+    if (opts?.offset) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return api.get<{ runs: LinkPatrolRun[]; total: number }>(`/links-patrol/runs${qs ? `?${qs}` : ''}`)
   },
 
   async listRunLogs(runId: string): Promise<LinkPatrolLog[]> {

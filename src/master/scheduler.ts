@@ -17,7 +17,7 @@ import { toBeijing } from "../shared/time.js";
  *      - mode='agent': 创建 Issue + hub.pushIssueAssignment(group_id, agent_name),
  *        agent 离线或上一轮 Issue 仍 in_progress 就跳过,但 next_run_at 仍推进。
  *      - mode='message': 直接调 hub.postSystemToGroup(group_id, prompt),无需 agent。
- *  - 串行 tick:30s 一次,无需并行池;Issue 在 worker 进程跑,不阻塞 scheduler。
+ *  - 串行 tick:20s 一次(TICK_MS),无需并行池;Issue 在 worker 进程跑,不阻塞 scheduler。
  *
  * 不在本期:
  *  - tryClaimNextIssue 的 poller(plan 已选 push 路径)

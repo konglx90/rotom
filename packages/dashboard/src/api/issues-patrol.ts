@@ -72,9 +72,12 @@ export const issuesPatrolApi = {
     return api.patch('/issues-patrol/config', patch)
   },
 
-  async listRuns(limit = 50): Promise<PatrolRun[]> {
-    const res = await api.get<{ runs: PatrolRun[] }>(`/issues-patrol/runs?limit=${limit}`)
-    return res.runs
+  async listRuns(opts?: { limit?: number; offset?: number }): Promise<{ runs: PatrolRun[]; total: number }> {
+    const params = new URLSearchParams()
+    if (opts?.limit) params.set('limit', String(opts.limit))
+    if (opts?.offset) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return api.get<{ runs: PatrolRun[]; total: number }>(`/issues-patrol/runs${qs ? `?${qs}` : ''}`)
   },
 
   async listRunLogs(runId: string): Promise<PatrolLog[]> {
