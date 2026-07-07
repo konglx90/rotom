@@ -22,12 +22,15 @@
  * makes sense; everywhere else it pretty-prints the same JSON.
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { ensureRotomSkillMd } from "../shared/skill-md.js";
 import {
   parseArgs,
   setPretty,
   resolveAgent,
   flagStr,
+  installRoot,
 
   fail,
 } from "./common.js";
@@ -55,6 +58,8 @@ import { cmdFed } from "./fed.js";
 const HELP = `rotom — Mesh CLI
 
 Usage: rotom [--as <agent>] [--pretty] <command> [args]
+
+  rotom / rotom --version   print version and exit
 
 Agent selection:
   --as <name>           override which registered agent to act as
@@ -237,6 +242,17 @@ async function main(): Promise<void> {
 
   const { positional, flags } = parseArgs(process.argv.slice(2));
   setPretty(flags.pretty === true);
+
+  if (flags.version === true || positional[0] === "version") {
+    const pkgPath = path.join(installRoot(), "package.json");
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      process.stdout.write(`${pkg.name} ${pkg.version}\n`);
+    } catch (e) {
+      fail(`cannot read ${pkgPath}: ${(e as Error).message}`);
+    }
+    return;
+  }
 
   if (positional.length === 0 || flags.help === true || positional[0] === "help") {
     process.stdout.write(HELP);
