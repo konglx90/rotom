@@ -199,8 +199,14 @@ export function resolveAgentFromEntry(name: string, entry: RotomAgentEntry): Res
   }
 
   const resolved = resolveFromExecutorConfig(name, p);
-  if (!resolved) fail(`executor config ${p} has no worker named "${name}"`);
-  return resolved;
+  if (resolved) return resolved;
+  // configPath 指向 .auto-executor.json(scanClis / defaultAgent 模式,非 workers[] 结构)
+  // 时 fallback 到 auto-executor 解析,避免误报 "no worker named"。
+  if (p === AUTO_EXECUTOR_CONFIG) {
+    const auto = resolveFromAutoExecutorConfig(name, p);
+    if (auto) return auto;
+  }
+  fail(`executor config ${p} has no worker named "${name}"`);
 }
 
 export function resolveAgent(asFlag?: string): ResolvedAgent {

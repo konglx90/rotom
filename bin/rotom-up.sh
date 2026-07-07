@@ -210,11 +210,21 @@ EOF
 
 # 若 `rotom` 不在 PATH 中，尝试用 pnpm link --global 让它全局可用
 ensure_rotom_on_path() {
+  local expected="$SCRIPT_DIR/bin/rotom"
   if command -v rotom &>/dev/null; then
     local current; current=$(command -v rotom)
-    local target;  target=$(readlink "$current" 2>/dev/null || echo "$current")
-    # 同一仓库的 bin/rotom，无需重复链接
-    if [ "$target" = "$SCRIPT_DIR/bin/rotom" ] || [ "$current" = "$SCRIPT_DIR/bin/rotom" ]; then
+    # 递归解析 symlink 到绝对路径(BSD readlink 不支持 -f,手动展开)
+    local resolved="$current"
+    while [ -L "$resolved" ]; do
+      local dir; dir=$(cd "$(dirname "$resolved")" && pwd)
+      local link; link=$(readlink "$resolved")
+      case "$link" in
+        /*) resolved="$link" ;;
+        *)  resolved="$dir/$link" ;;
+      esac
+    done
+    # 解析后仍是当前仓库的 bin/rotom(或当前本身就是),无需重复链接
+    if [ "$resolved" = "$expected" ] || [ "$current" = "$expected" ]; then
       return 0
     fi
   fi
