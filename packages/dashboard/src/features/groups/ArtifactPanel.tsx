@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import { artifactsApi, type ArtifactRefs } from '../../api/artifacts'
+import { artifactsApi, type ArtifactRefs, type BranchDiffFile, type BranchDiffResponse } from '../../api/artifacts'
+import { reposApi, type GroupWorktreeInfo } from '../../api/repos'
 import type { ArtifactFile, ArtifactContent, ArtifactOriginal } from '../../api/types'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -264,6 +265,88 @@ function FileTreeNode({
   )
 }
 
+/** 从 repo url 提取展示名(`https://gitlab.xxx/GroupName/kael-trade-h5.git` →
+ *  `kael-trade-h4`)。和后端 repoNameFor 算法一致,前端不引后端代码,这里
+ *  几行复刻一下。 */
+function repoDisplayName(url: string): string {
+  let u = url.trim()
+  if (u.endsWith('.git')) u = u.slice(0, -4)
+  u = u.split('?')[0].split('#')[0].replace(/\/$/, '')
+  const last = u.split('/').pop() || 'repo'
+  return last || 'repo'
+}
+
+/** 分支对比文件列表的状态徽标。颜色用内联 style,避免为 5 个状态单独加 CSS。 */
+const STATUS_LABEL: Record<string, string> = {
+  A: '新增',
+  M: '修改',
+  D: '删除',
+  R: '重命名',
+  C: '复制',
+  U: '未合并',
+  T: '类型变',
+}
+const STATUS_COLOR: Record<string, string> = {
+  A: '#2f7a2f',
+  M: '#b8860b',
+  D: '#c0392b',
+  R: '#6c757d',
+  C: '#6c757d',
+  U: '#c0392b',
+  T: '#6c757d',
+}
+
+/** 单个 input + datalist 实现的可输入下拉(HTML5 原生 combobox)。既能
+ *  从下拉里选常用 ref(分支/tag/HEAD),也能直接手输 commit/tag。比 Select+Input
+ *  双控件省一半空间,且只显示一次当前值,不会出现"Select 显示一次 + Input
+ *  又显示一次"的重复。datalist 原生不支持 optgroup,这里把 tag 加 `tags/`
+ *  前缀扁平化列出,和后端 ref 接受的格式一致。 */
+function RefSelector({
+  value,
+  onChange,
+  onEnter,
+  refs,
+  placeholder,
+  title,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onEnter?: () => void
+  refs: ArtifactRefs | null
+  placeholder?: string
+  title?: string
+}) {
+  // datalist id 必须全局唯一,多个 RefSelector 共存时不能撞。
+  const listId = useMemo(() => `rotom-ref-list-${Math.random().toString(36).slice(2, 10)}`, [])
+  return (
+    <>
+      <Input
+        className={styles.diffBaseInput}
+        size="sm"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') onEnter?.() }}
+        placeholder={placeholder || 'commit / 分支 / tag'}
+        title={title || 'git ref / commit / 分支,回车发起对比;可从下拉选常用 ref'}
+        list={listId}
+        autoComplete="off"
+        spellCheck={false}
+      />
+      <datalist id={listId}>
+        {/* 空值代表 HEAD;datalist 的 option 没有"value + label"分离,空 value
+            会在下拉里显示为空白条,这里改用 "HEAD" 字面量作为可选项。 */}
+        <option value="HEAD">HEAD(默认)</option>
+        {refs?.heads.map((r) => (
+          <option key={r} value={r} label={r === refs.head ? `${r} (当前)` : r} />
+        ))}
+        {refs?.tags.map((t) => (
+          <option key={`tags/${t}`} value={`tags/${t}`} label={`tag · ${t}`} />
+        ))}
+      </datalist>
+    </>
+  )
+}
+
 export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: ArtifactPanelProps) {
   const [root, setRoot] = useState<string | null>(null)
   const [files, setFiles] = useState<ArtifactFile[]>([])
@@ -277,7 +360,7 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
   const [refs, setRefs] = useState<ArtifactRefs | null>(null)
   const [search, setSearch] = useState('')
   const [copiedHint, setCopiedHint] = useState(false)
-  const [mode, setMode] = useState<'view' | 'diff'>('view')
+  const [mode, setMode] = useState<'view' | 'diff' | 'branchDiff'>('view')
   // 文件树折叠态:折叠后只剩窄条(图标列),把空间让给预览。预览全屏看代码时有用。
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   // 文件树宽度:可拖拽分隔条调整,持久化到 localStorage。深目录默认 260,
@@ -293,6 +376,28 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
   })
   const [treeDragging, setTreeDragging] = useState(false)
   const treeDragStartRef = useRef<{ x: number; w: number } | null>(null)
+
+  // ─── 分支对比模式 state ───────────────────────────────────────────────
+  // 独立于单文件 diff(mode='diff')的单文件 → DiffEditor 流程,这里走的是
+  // 「选 repo + base ref + head ref → 整段分支 diff」的分支级流程。
+  const [groupWorktree, setGroupWorktree] = useState<GroupWorktreeInfo | null>(null)
+  const [branchDiffRepo, setBranchDiffRepo] = useState<string>('primary')
+  const [branchDiffBase, setBranchDiffBase] = useState<string>('')
+  const [branchDiffHead, setBranchDiffHead] = useState<string>('')
+  // 选中的 repo 对应的 refs(切 repo 时重新拉,base/head 下拉要用)。
+  const [branchDiffRefs, setBranchDiffRefs] = useState<ArtifactRefs | null>(null)
+  const [branchDiffRefsLoading, setBranchDiffRefsLoading] = useState(false)
+  // base..head 之间的变更文件清单 + 统计。
+  const [branchDiffResult, setBranchDiffResult] = useState<BranchDiffResponse | null>(null)
+  const [branchDiffLoading, setBranchDiffLoading] = useState(false)
+  const [branchDiffError, setBranchDiffError] = useState<string | null>(null)
+  // 当前选中的变更文件(branchDiffResult.files 里的一项)。
+  const [branchDiffSelected, setBranchDiffSelected] = useState<BranchDiffFile | null>(null)
+  // 选中文件 base 侧 / head 侧的内容(并行调 content-at-ref 取)。
+  const [branchDiffOriginal, setBranchDiffOriginal] = useState<string | null>(null)
+  const [branchDiffModified, setBranchDiffModified] = useState<string | null>(null)
+  const [branchDiffFileLoading, setBranchDiffFileLoading] = useState(false)
+  const [branchDiffFileError, setBranchDiffFileError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!treeDragging) return
@@ -343,6 +448,16 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
     setContent(null)
     setOriginal(null)
     setMode('view')
+    // 切群时清空分支对比状态(都是群特定数据)
+    setGroupWorktree(null)
+    setBranchDiffRepo('primary')
+    setBranchDiffBase('')
+    setBranchDiffHead('')
+    setBranchDiffRefs(null)
+    setBranchDiffResult(null)
+    setBranchDiffSelected(null)
+    setBranchDiffOriginal(null)
+    setBranchDiffModified(null)
     // refs 加载失败不阻塞主流程,下拉退化为只剩 HEAD 选项
     artifactsApi.listRefs(groupId).then(setRefs).catch(() => setRefs(null))
   }, [groupId, loadFiles])
@@ -423,6 +538,121 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
     }
   }
 
+  // ─── 分支对比 handlers ───────────────────────────────────────────────
+  // repo 列表从 reposApi.getGroupWorktree 拿(primary + extras),每次进
+  // branchDiff 模式时刷新一次,保证 extras 增删及时反映。切 repo 时重拉
+  // 该 repo 的 refs,base/head 默认值也跟着重置(repo.branch 作 base、HEAD 作 head)。
+  const loadBranchDiffRefs = useCallback(async (repo: string) => {
+    setBranchDiffRefsLoading(true)
+    setBranchDiffRefs(null)
+    try {
+      const data = await artifactsApi.listRefs(groupId, repo)
+      setBranchDiffRefs(data)
+      // 首次进入或切 repo 时,base 默认用 group 配的 default branch(master/main),
+      // head 默认用该 repo 当前 checkout 的分支(refs.head)。空值留作 HEAD。
+      setBranchDiffBase((prev) => {
+        if (prev !== '') return prev
+        // primary 用 groupWorktree.branch;extras 用 extra 自己的 branch 字段
+        if (repo === 'primary') return groupWorktree?.branch || ''
+        const extra = groupWorktree?.extras.find((e) => e.id === repo)
+        return extra?.branch || ''
+      })
+      setBranchDiffHead((prev) => (prev !== '' ? prev : data.head || ''))
+    } catch (err) {
+      console.error('Failed to load refs for repo:', repo, err)
+      setBranchDiffRefs(null)
+    } finally {
+      setBranchDiffRefsLoading(false)
+    }
+  }, [groupId, groupWorktree])
+
+  const enterBranchDiff = useCallback(async () => {
+    setMode('branchDiff')
+    setBranchDiffResult(null)
+    setBranchDiffSelected(null)
+    setBranchDiffOriginal(null)
+    setBranchDiffModified(null)
+    setBranchDiffError(null)
+    setBranchDiffFileError(null)
+    // 拉 groupWorktree(若已拉过则复用,避免每次进入都打接口)
+    if (!groupWorktree) {
+      try {
+        const data = await reposApi.getGroupWorktree(groupId)
+        setGroupWorktree(data)
+      } catch (err) {
+        console.error('Failed to load group worktree info:', err)
+      }
+    }
+    void loadBranchDiffRefs(branchDiffRepo)
+  }, [groupId, groupWorktree, branchDiffRepo, loadBranchDiffRefs])
+
+  // 切 repo:重置 base/head/result/选中文件,并重拉 refs。
+  const handleBranchDiffRepoChange = useCallback((repo: string) => {
+    setBranchDiffRepo(repo)
+    setBranchDiffBase('')
+    setBranchDiffHead('')
+    setBranchDiffResult(null)
+    setBranchDiffSelected(null)
+    setBranchDiffOriginal(null)
+    setBranchDiffModified(null)
+    setBranchDiffError(null)
+    setBranchDiffFileError(null)
+    void loadBranchDiffRefs(repo)
+  }, [loadBranchDiffRefs])
+
+  const handleBranchDiff = useCallback(async () => {
+    setBranchDiffLoading(true)
+    setBranchDiffError(null)
+    setBranchDiffResult(null)
+    setBranchDiffSelected(null)
+    setBranchDiffOriginal(null)
+    setBranchDiffModified(null)
+    setBranchDiffFileError(null)
+    try {
+      const data = await artifactsApi.branchDiff(
+        groupId,
+        branchDiffRepo,
+        branchDiffBase || 'HEAD',
+        branchDiffHead || 'HEAD',
+      )
+      setBranchDiffResult(data)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('Failed to load branch diff:', err)
+      setBranchDiffError(msg)
+    } finally {
+      setBranchDiffLoading(false)
+    }
+  }, [groupId, branchDiffRepo, branchDiffBase, branchDiffHead])
+
+  const handleSelectBranchDiffFile = useCallback(async (file: BranchDiffFile) => {
+    if (!branchDiffResult) return
+    setBranchDiffSelected(file)
+    setBranchDiffOriginal(null)
+    setBranchDiffModified(null)
+    setBranchDiffFileError(null)
+    setBranchDiffFileLoading(true)
+    const baseRef = branchDiffBase || 'HEAD'
+    const headRef = branchDiffHead || 'HEAD'
+    // 用 fromPath(重命名场景)作为 base 侧路径,新路径作为 head 侧路径。
+    // 对 M/A 文件 fromPath 不存在,两侧都用 path。
+    const basePath = file.fromPath || file.path
+    try {
+      const [baseContent, headContent] = await Promise.all([
+        artifactsApi.getContentAtRef(groupId, branchDiffRepo, basePath, baseRef),
+        artifactsApi.getContentAtRef(groupId, branchDiffRepo, file.path, headRef),
+      ])
+      setBranchDiffOriginal(baseContent.content)
+      setBranchDiffModified(headContent.content)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('Failed to load branch diff file content:', err)
+      setBranchDiffFileError(msg)
+    } finally {
+      setBranchDiffFileLoading(false)
+    }
+  }, [groupId, branchDiffRepo, branchDiffBase, branchDiffHead, branchDiffResult])
+
   const language = useMemo(
     () => (selectedFile ? detectLanguage(selectedFile.path) : 'plaintext'),
     [selectedFile],
@@ -445,19 +675,40 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
   return (
     <div className={styles.artifactPanel}>
       <div className={styles.artifactHeader}>
-        <h3 className={styles.artifactTitle}>{'\u{1F4E6}'} Artifacts & repos</h3>
+        <h3 className={styles.artifactTitle}>{'\u{1F4E6}'} Artifacts & Repos</h3>
         <div className={styles.previewActions}>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setTreeCollapsed((v) => !v)}
-            title={treeCollapsed ? '展开文件树' : '收起文件树(让位给预览)'}
-          >
-            {treeCollapsed ? '\u{25B6}' : '\u{25C0}'}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={loadFiles}>
-            刷新
-          </Button>
+          {mode === 'branchDiff' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMode('view')}
+              title="回到查看模式"
+            >
+              返回查看
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setTreeCollapsed((v) => !v)}
+                title={treeCollapsed ? '展开文件树' : '收起文件树(让位给预览)'}
+              >
+                {treeCollapsed ? '\u{25B6}' : '\u{25C0}'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={enterBranchDiff}
+                title="对比两个 ref 之间的所有变更文件(支持 primary 与各 extra repo)"
+              >
+                分支对比
+              </Button>
+              <Button variant="ghost" size="sm" onClick={loadFiles}>
+                刷新
+              </Button>
+            </>
+          )}
         </div>
       </div>
       {root && (
@@ -488,8 +739,196 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
         </div>
       )}
 
-      {/* 左右分栏:左文件树(可拖拽宽度),右预览(flex:1)。两者各拿全高,
-          避免纵向挤。窄面板下文件树可折叠成只显示图标。 */}
+      {/* 分支对比模式:顶部 repo + base + head 选择器,左变更文件列表,
+          右 DiffEditor 展示 base..head 的单文件 diff。和单文件 diff(mode='diff')
+          独立,不复用 selectedFile/content/original 这套状态。 */}
+      {mode === 'branchDiff' ? (
+        <div className={styles.splitLayout}>
+          <div
+            className={styles.treePane}
+            style={{ width: `${treeWidth}px`, flex: `0 0 ${treeWidth}px` }}
+          >
+            {/* toolbar 行 1:repo 选择器 */}
+            <div className={styles.searchRow} style={{ flexWrap: 'wrap', gap: 4 }}>
+              <Select
+                className={styles.diffBaseSelect}
+                size="sm"
+                value={branchDiffRepo}
+                onChange={(e) => handleBranchDiffRepoChange(e.target.value)}
+                title="选择仓库(primary 或 extra repos)"
+                disabled={!groupWorktree}
+              >
+                {!groupWorktree && <option value="">加载中…</option>}
+                {groupWorktree && (
+                  <option value="primary">
+                    primary · {repoDisplayName(groupWorktree.url)}{groupWorktree.primaryExists ? '' : ' (未创建)'}
+                  </option>
+                )}
+                {groupWorktree?.extras.map((e) => (
+                  <option key={e.id} value={e.id} disabled={!e.exists}>
+                    {e.id} · {repoDisplayName(e.url)}{e.exists ? '' : ' (未创建)'}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {/* toolbar 行 2:base + head ref 选择器 + 对比按钮 */}
+            <div className={styles.searchRow} style={{ flexWrap: 'wrap', gap: 4, paddingTop: 4 }}>
+              <RefSelector
+                value={branchDiffBase}
+                onChange={setBranchDiffBase}
+                onEnter={handleBranchDiff}
+                refs={branchDiffRefs}
+                placeholder="base: 分支/tag/commit"
+                title="base ref(通常是 master/main)"
+              />
+              <RefSelector
+                value={branchDiffHead}
+                onChange={setBranchDiffHead}
+                onEnter={handleBranchDiff}
+                refs={branchDiffRefs}
+                placeholder="head: 分支/tag/commit"
+                title="head ref(待 review 的迭代分支)"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleBranchDiff}
+                disabled={branchDiffLoading || branchDiffRefsLoading}
+              >
+                {branchDiffLoading ? '加载中...' : '对比'}
+              </Button>
+            </div>
+            {/* 变更文件列表 */}
+            {branchDiffLoading ? (
+              <div className={styles.loadingText}>加载中...</div>
+            ) : branchDiffError ? (
+              <div className={styles.diffNote}>对比失败: {branchDiffError}</div>
+            ) : !branchDiffResult ? (
+              <div className={styles.artifactEmpty}>
+                <div>
+                  <p>选择 base / head 后点「对比」</p>
+                  <p style={{ fontSize: 12, marginTop: 4 }}>
+                    {branchDiffRefsLoading ? '正在加载 refs…' : ''}
+                  </p>
+                </div>
+              </div>
+            ) : branchDiffResult.files.length === 0 ? (
+              <div className={styles.artifactEmpty}>
+                <p><code>{branchDiffResult.base}</code> → <code>{branchDiffResult.head}</code> 之间无变更</p>
+              </div>
+            ) : (
+              <>
+                <div className={styles.searchRow} style={{ color: 'var(--color-slate)', paddingTop: 4 }}>
+                  {branchDiffResult.stats.filesChanged} 文件 / +{branchDiffResult.stats.additions} -{branchDiffResult.stats.deletions}
+                  {branchDiffResult.truncated && <span style={{ color: 'var(--color-amber, #b8860b)' }}> · 已截断前 500</span>}
+                </div>
+                <ul className={styles.fileTree}>
+                  {branchDiffResult.files.map((f) => {
+                    const active = branchDiffSelected?.path === f.path
+                    const label = f.fromPath ? `${f.fromPath} → ${f.path}` : f.path
+                    const fileName = label.split('/').pop() || label
+                    const dirPart = label.slice(0, label.length - fileName.length)
+                    return (
+                      <li key={`${f.status}:${f.path}`}>
+                        <div
+                          className={`${styles.fileItem} ${active ? styles.active : ''}`}
+                          title={label}
+                          onClick={() => handleSelectBranchDiffFile(f)}
+                        >
+                          <span
+                            className={styles.fileIcon}
+                            style={{
+                              color: STATUS_COLOR[f.status] || '#666',
+                              fontWeight: 700,
+                              fontSize: 11,
+                              minWidth: 14,
+                              textAlign: 'center',
+                            }}
+                            title={STATUS_LABEL[f.status] || f.status}
+                          >
+                            {f.status}
+                          </span>
+                          <span className={styles.fileName}>
+                            {dirPart && <span style={{ opacity: 0.55 }}>{dirPart}</span>}
+                            {fileName}
+                          </span>
+                          <span className={styles.fileSize}>+{f.additions} -{f.deletions}</span>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </>
+            )}
+          </div>
+          <div
+            className={`${styles.treeResizer} ${treeDragging ? styles.treeResizerActive : ''}`}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              treeDragStartRef.current = { x: e.clientX, w: treeWidth }
+              setTreeDragging(true)
+            }}
+            onDoubleClick={() => {
+              setTreeWidth(TREE_WIDTH_DEFAULT)
+              try { localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(TREE_WIDTH_DEFAULT)) } catch { /* ignore */ }
+            }}
+            title="拖拽调整宽度,双击恢复默认"
+          />
+          {/* 右:DiffEditor 展示 base vs head */}
+          <div className={styles.previewPane}>
+            {branchDiffSelected ? (
+              <div className={styles.previewSection}>
+                <div className={styles.previewHeader}>
+                  <div className={styles.previewHeaderBottom}>
+                    <div className={styles.diffHeader}>
+                      <code>{branchDiffSelected.path}</code>
+                      {' · '}
+                      <code>{branchDiffBase || 'HEAD'}</code> → <code>{branchDiffHead || 'HEAD'}</code>
+                      {branchDiffSelected.fromPath && (
+                        <span className={styles.diffRepo}> (renamed from {branchDiffSelected.fromPath})</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {branchDiffFileLoading ? (
+                  <div className={styles.loadingText}>加载中...</div>
+                ) : branchDiffFileError ? (
+                  <div className={styles.diffNote}>加载文件内容失败: {branchDiffFileError}</div>
+                ) : !monacoReady ? (
+                  <div className={styles.loadingText}>编辑器加载中...</div>
+                ) : (
+                  <div className={styles.editorWrap}>
+                    <DiffEditor
+                      height="100%"
+                      language={detectLanguage(branchDiffSelected.path)}
+                      original={branchDiffOriginal ?? ''}
+                      modified={branchDiffModified ?? ''}
+                      theme="vs"
+                      options={{
+                        readOnly: true,
+                        minimap: { enabled: false },
+                        fontSize: 12,
+                        renderSideBySide: true,
+                        scrollBeyondLastLine: false,
+                        automaticLayout: true,
+                        wordWrap: 'on',
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className={styles.previewEmpty}>
+                <div className={styles.previewEmptyIcon}>{'\u{1F50D}'}</div>
+                <p>从左侧选择变更文件查看 diff</p>
+                <p className={styles.previewEmptyHint}>
+                  选择 repo + base + head 后点「对比」,再从变更列表选文件
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
       <div className={styles.splitLayout}>
         <div
           className={`${styles.treePane} ${treeCollapsed ? styles.treePaneCollapsed : ''}`}
@@ -730,6 +1169,7 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
       )}
         </div>
       </div>
+      )}
 
       <TerminalPane groupId={groupId} />
     </div>

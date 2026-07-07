@@ -20,6 +20,38 @@ export interface ArtifactRefs {
   /** 当前 HEAD 分支名(可能为空)。 */
   head: string
   repoRoot?: string | null
+  /** 当请求带了 repo 参数时,回显的 repo 标签("primary" 或 extras.id)。 */
+  repo?: string
+  note?: string
+}
+
+/** 「分支对比」模式:`base..head` 之间的变更文件清单 + 统计。 */
+export interface BranchDiffFile {
+  path: string
+  /** 单字符状态:A / M / D / R / C 等(已剥离 score)。 */
+  status: string
+  additions: number
+  deletions: number
+  /** rename/copy 的源路径,仅 status 为 R/C 时有值。 */
+  fromPath?: string
+}
+
+export interface BranchDiffResponse {
+  repo: string
+  base: string
+  head: string
+  files: BranchDiffFile[]
+  stats: { filesChanged: number; additions: number; deletions: number }
+  truncated: boolean
+  repoRoot?: string | null
+  note?: string
+}
+
+/** 任意 ref 下某文件的内容(`git show <ref>:<path>`)。 */
+export interface ContentAtRef {
+  path: string
+  ref: string
+  content: string
   note?: string
 }
 
@@ -44,7 +76,28 @@ export const artifactsApi = {
     )
   },
 
-  async listRefs(groupId: string): Promise<ArtifactRefs> {
-    return api.get<ArtifactRefs>(`/artifacts/${groupId}/refs`)
+  async listRefs(groupId: string, repo?: string): Promise<ArtifactRefs> {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : ''
+    return api.get<ArtifactRefs>(`/artifacts/${groupId}/refs${qs}`)
+  },
+
+  async branchDiff(
+    groupId: string,
+    repo: string,
+    base: string,
+    head: string,
+  ): Promise<BranchDiffResponse> {
+    const qs = `?repo=${encodeURIComponent(repo)}&base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`
+    return api.get<BranchDiffResponse>(`/artifacts/${groupId}/branch-diff${qs}`)
+  },
+
+  async getContentAtRef(
+    groupId: string,
+    repo: string,
+    filePath: string,
+    ref: string,
+  ): Promise<ContentAtRef> {
+    const qs = `?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(filePath)}&ref=${encodeURIComponent(ref)}`
+    return api.get<ContentAtRef>(`/artifacts/${groupId}/content-at-ref${qs}`)
   },
 }

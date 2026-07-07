@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useMatch } from 'react-router-dom'
 import { Avatar } from '../../ui/Avatar'
@@ -100,6 +100,8 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   const tabBarRef = useRef<HTMLDivElement | null>(null)
   const [tabBarHasMore, setTabBarHasMore] = useState(false)
   const [moreMenuPos, setMoreMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const moreBtnRectRef = useRef<{ top: number; bottom: number; right: number } | null>(null)
+  const moreDropdownRef = useRef<HTMLDivElement | null>(null)
   const [settingsGroupId, setSettingsGroupId] = useState<string | null>(null)
   const startStateRef = useRef<{ x: number; w: number } | null>(null)
   const [activeTab, setActiveTab] = useState<GroupTab>('normal')
@@ -150,6 +152,21 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
       window.removeEventListener('scroll', close, true)
       window.removeEventListener('resize', close)
     }
+  }, [moreMenuGroup])
+
+  // 弹窗挂载后测量高度:下方空间不足时翻转为向上展开,避免末尾「删除」被视口下边裁掉。
+  useLayoutEffect(() => {
+    const el = moreDropdownRef.current
+    const rect = moreBtnRectRef.current
+    if (!el || !rect || !moreMenuGroup) return
+    const height = el.offsetHeight
+    const viewportH = window.innerHeight
+    let top = rect.bottom + 4
+    if (top + height > viewportH - 8) {
+      top = rect.top - height - 4
+    }
+    if (top < 8) top = 8
+    setMoreMenuPos((prev) => prev && Math.abs(prev.top - top) < 0.5 ? prev : { top, left: prev?.left ?? Math.max(8, rect.right - 140) })
   }, [moreMenuGroup])
   const toggleNavCompact = () => {
     setNavCompact((v) => {
@@ -431,6 +448,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                               const btn = moreBtnRefs.current[group.id]
                               if (btn) {
                                 const rect = btn.getBoundingClientRect()
+                                moreBtnRectRef.current = { top: rect.top, bottom: rect.bottom, right: rect.right }
                                 setMoreMenuPos({
                                   top: rect.bottom + 4,
                                   left: Math.max(8, rect.right - 140),
@@ -444,6 +462,7 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
                           </button>
                           {moreMenuGroup === group.id && moreMenuPos && createPortal(
                             <div
+                              ref={moreDropdownRef}
                               className={styles.moreDropdown}
                               style={{
                                 position: 'fixed',
