@@ -334,17 +334,38 @@ export function fail(msg: string): never {
 }
 
 export function failKind(kind: "network" | "partial-response" | "http" | "generic", ...args: unknown[]): never {
-  const prefix = kind === "network"
-    ? "rotom network"
-    : kind === "partial-response"
-    ? "rotom partial-response"
-    : kind === "http"
-    ? "rotom http"
-    : "rotom";
-  process.stderr.write(`${prefix}: ${args.map((a) => String(a)).join(" ")}\n`);
-  const code = kind === "network" || kind === "partial-response" ? 75 :
-    kind === "http" ? 69 : 1;
-  process.exit(code);
+  // args 约定(由 api() 调用方保证):
+  //   network:          [url, reason, code]
+  //   partial-response: [url, reason, status]
+  //   http:             [url, status, method, route, detail]
+  //
+  // 三类错误的措辞是有意为之 —— 给消费 rotom 的 LLM(claude/codex)明确的分类信号,
+  // 避免把"业务错(HTTP 4xx/5xx)"误读成"master 没启动"。详见 tests/rotom-cli-errors.test.ts。
+  if (kind === "network") {
+    const [url, reason] = args as [string, string];
+    process.stderr.write(
+      `rotom: network error talking to master at ${url}: ${reason}\n` +
+      `  run \`rotom status\` to verify reachability; request may have reached master — avoid blindly retrying non-idempotent operations.\n`,
+    );
+    process.exit(75);
+  }
+  if (kind === "partial-response") {
+    const [url, , status] = args as [string, string, number];
+    process.stderr.write(
+      `rotom: response from master was interrupted at ${url} (status ${status}, body stream was cut off)\n` +
+      `  Do NOT blindly retry non-idempotent operations — master likely already processed the request.\n`,
+    );
+    process.exit(75);
+  }
+  if (kind === "http") {
+    const [url, status, , , detail] = args as [string, number, string, string, string];
+    process.stderr.write(
+      `rotom: command failed: HTTP ${status}${detail ? ` — ${detail}` : ""}${url ? ` at ${url}` : ""} (this is a command error, master is up)\n`,
+    );
+    process.exit(1);
+  }
+  process.stderr.write(`rotom: ${args.map((a) => String(a)).join(" ")}\n`);
+  process.exit(1);
 }
 
 // ── CLI arg parsing ───────────────────────────────────────────────────────
@@ -357,16 +378,32 @@ export interface ParsedArgs {
 export function parseArgs(argv: string[]): ParsedArgs {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
-  for (const a of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
     if (a.startsWith("--")) {
       const eq = a.indexOf("=");
       if (eq !== -1) {
         const k = a.slice(2, eq);
         const v = a.slice(eq + 1);
         flags[k] = v === "" ? true : v;
+        continue;
+      }
+      if (a.startsWith("--no-")) { flags[a.slice(5)] = false; continue; }
+      const k = a.slice(2);
+      // 布尔 flag 不消费下一个 token;值 flag(--as / --status / --group …)消费下一个
+      // 非 "-" 开头的 token 作为值,并推进 i,使其不进入 positional。
+      // 旧实现的 pass-2 只把值写进 flags 却不从 positional 移除,导致
+      // `rotom --as test-orphan issue …` 里 "test-orphan" 被当成命令(unknown command)。
+      if (BOOLEAN_FLAGS.has(k)) {
+        flags[k] = true;
       } else {
-        if (a.startsWith("--no-")) { flags[a.slice(5)] = false; continue; }
-        flags[a.slice(2)] = true;
+        const next = argv[i + 1];
+        if (next !== undefined && !next.startsWith("-")) {
+          flags[k] = next;
+          i++;
+        } else {
+          flags[k] = true;
+        }
       }
     } else if (a.startsWith("-") && a.length === 2) {
       flags[a[1]] = true;
@@ -374,23 +411,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
       positional.push(a);
     }
   }
-  for (const key of Object.keys(flags)) {
-    if (flags[key] !== true) continue;
-    const idx = argv.indexOf(`--${key}`);
-    if (idx === -1 && key.length === 1) continue;
-    if (idx === -1) continue;
-    const valIdx = idx + 1;
-    if (valIdx < argv.length && !argv[valIdx].startsWith("-")) {
-      const m = argv[valIdx].match(/^-?\d+(\.\d+)?$/);
-      if (m) {
-        flags[key] = m[0];
-      } else {
-        flags[key] = argv[valIdx];
-      }
-    }
-  }
   return { positional, flags };
 }
+
+/** 已知布尔 flag —— 这些 flag 永不消费下一个 token。
+ *  其余 `--key` 视为值 flag,会消费下一个非 "-" token(无下一个或下一个是 flag 则退化为布尔)。 */
+const BOOLEAN_FLAGS = new Set([
+  "daemon", "dev", "force", "help", "markdown", "online",
+  "pretty", "run", "unassign", "version", "y", "yes",
+]);
 
 export function requireFlag(flags: Record<string, string | boolean>, name: string): string {
   const v = flags[name];

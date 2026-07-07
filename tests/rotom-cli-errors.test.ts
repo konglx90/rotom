@@ -100,7 +100,8 @@ describe("rotom CLI 错误分类", () => {
     try {
       const r = await runRotom(["status"], { ROTOM_MASTER: `ws://127.0.0.1:${fakePort}` });
       assert.strictEqual(r.exitCode, 0, `expected exit 0, got ${r.exitCode}, stderr=${r.stderr}`);
-      assert.match(r.stdout, /"reachable":\s*true/);
+      // 健康信号:status="ok"(旧 schema 用 reachable:true;现 schema 用 status 字段)
+      assert.match(r.stdout, /"status":\s*"ok"/);
       assert.match(r.stdout, /"online":\s*2/);
       assert.match(r.stdout, /"total":\s*3/);
     } finally {

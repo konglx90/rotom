@@ -1,4 +1,3 @@
-import { nowBeijing } from "./time.js";
 /**
  * Prompt 组合器 —— 把"喂给 CLI agent 的 prompt"分层组装,每层标数据源。
  *
@@ -224,7 +223,7 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
   return {
     layers,
     final: layers.map((l) => l.content).join("\n"),
-    generatedAt: nowBeijing(),
+    generatedAt: new Date().toISOString(),
     promptVersion: ROTOM_CLI_PROMPT_VERSION,
   };
 }

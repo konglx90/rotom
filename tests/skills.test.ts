@@ -147,7 +147,8 @@ describe("Skills (agent_skills + bindings)", () => {
     db.addMemory({
       id: memId, scope: "global", groupId: null, category: "playbook",
       key: "deploy-flow", value: "完整发布步骤长文", summary: "发布流程摘要",
-      agentVisible: true, createdBy: "AgentA",
+      // 全局 + agent 可见须走 pending review(addMemory 硬约束);promote 只读 value/key/summary,可见性无关。
+      agentVisible: false, createdBy: "AgentA",
     });
     const { skillId, name } = db.promoteMemoryToSkill(memId, { createdBy: "西花" });
     assert.equal(name, "deploy-flow");

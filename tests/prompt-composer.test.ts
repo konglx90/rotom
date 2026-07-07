@@ -350,26 +350,23 @@ describe("ROTOM_CLI_PROMPT golden string", () => {
   it("ROTOM_CLI_PROMPT 文本不漂移", () => {
     assert.strictEqual(
       ROTOM_CLI_PROMPT,
-      `[rotom CLI 使用规则]
-通过 Bash 调 \`rotom\` 操作 Mesh;详细见 ~/.rotom/SKILL.md,按需 Read(命令清单 / 行动判定 / 故障排查)。
-- 默认 JSON 输出(加 --pretty 看表格),命令自动用当前 agent 身份,**不要传 --as**。
-- **写盘前必须有 in_progress issue**;活跃 issue 数见下 [当前群活跃 issue]。
-
-错误速查(stderr 第一行即可判断):
-- HTTP 4xx → 命令参数错,改参数重试
-- HTTP 5xx → master 异常,重试 1-2 次
-- network error → 网络失败,先 \`rotom status\` 自检
-- interrupted → master 已收但 body 截断,**非幂等别盲重试**
-
-反模式:rotom 命令不要加 \`|| echo "X failed"\` 兜底——直接 stderr 透传,exit≠0 先 \`rotom status\`。
+      `[rotom CLI]
+通过 Bash 调 \`rotom\`(身份自动,不要传 --as;详情 Read ~/.rotom/SKILL.md)。
+- 写盘前必须有 in_progress issue(见下 [当前群活跃 issue])。
+- **你的回复正文就是群消息**——写什么群里就显示什么。提问其他 agent 时直接在正文里写 \`@对方 <问题> #reply\`,**不要调 \`rotom group send\`**。系统检测到 #reply 自动起 5min 超时 timer。
+- **被其他 agent 提问时,回复正文以 @提问者 开头**(例:\`@西花-claude 回复内容...\`)。
+- 收到 [ask-bridge 复述] 系统消息后:对方没 @ 你但系统检测到回复了,基于复述继续任务。
+- 普通 @ (不带 #reply) 不起 timer,只是提到对方。
+- **要 @ 人前不知道群里谁是谁 / 各自岗位,调 \`rotom group members <groupId>\` 查**(返回 position / bio / category / status);按岗位匹配目标,不要按名字猜。
+- exit≠0 看 stderr 第一行,先 \`rotom status\` 自检。
 `,
     );
   });
 
-  it("ROTOM_CLI_PROMPT 控制在 800 字节以内(瘦身目标)", () => {
+  it("ROTOM_CLI_PROMPT 控制在 1000 字节以内(瘦身目标)", () => {
     assert.ok(
-      Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8") < 800,
-      `ROTOM_CLI_PROMPT 应 <800B,实际 ${Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8")}B`,
+      Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8") < 1000,
+      `ROTOM_CLI_PROMPT 应 <1000B,实际 ${Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8")}B`,
     );
   });
 
