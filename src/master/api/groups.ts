@@ -379,6 +379,18 @@ export function registerGroupRoutes(
     }
   });
 
+  // 单条消息回查:CLI `rotom group message <groupId> <msgId>` 调用,
+  // 让 agent 在 history 截断后单独拉某条消息的完整 content(含工具标签)。
+  apiRouter.get("/groups/:id/messages/:msgId", (req, res) => {
+    const group = db.getGroupById(req.params.id);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    const msgId = parseInt(req.params.msgId);
+    if (!Number.isFinite(msgId)) { res.status(400).json({ error: "Invalid msgId" }); return; }
+    const row = db.getGroupMessageById(req.params.id, msgId);
+    if (!row) { res.status(404).json({ error: "Message not found" }); return; }
+    res.json(row);
+  });
+
   apiRouter.post("/groups/:id/messages", (req, res) => {
     const group = db.getGroupById(req.params.id);
     if (!group) {

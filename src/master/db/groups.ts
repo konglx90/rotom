@@ -504,6 +504,17 @@ export const groupMethods = {
     return [...head, marker, ...tail];
   },
 
+  /** 按 (groupId, msgId) 取单条群消息完整 row(含 composed_prompt)。
+   *  CLI `rotom group message <groupId> <msgId>` 回查被截断的历史用。 */
+  getGroupMessageById(this: MeshDbSelf, groupId: string, msgId: number): GroupMessageRow | undefined {
+    return fetchGroupMessageRows(
+      this.db,
+      "WHERE m.group_id = ? AND m.id = ? LIMIT 1",
+      groupId,
+      msgId,
+    )[0];
+  },
+
   /** 按 since 时间过滤群消息(UTC ISO 或北京时间字符串都行,字符串字典序比较)。
    *  不走 head/tail 截断——轮询用,只看新增量。返回 ASC 排序。 */
   getGroupMessagesSince(this: MeshDbSelf, groupId: string, sinceIso: string): GroupMessageRow[] {

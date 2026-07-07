@@ -164,7 +164,10 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
   if (sub === "history") {
     const groupId = rest[1]; if (!groupId) usage("group history", "<groupId>");
     const limit = flagInt(flags, "limit") ?? 50;
-    const contentLen = flagInt(flags, "content-len") ?? 200;
+    // 默认 800:能装下一条长思路主体(用户场景:agent 看群里其他 agent 的思路被
+    // 200 截断后无法回查)。截断时 agent 走 `rotom group message <groupId> <msgId>`
+    // 单独拉完整 content;history 输出带 id 列让 agent 拿得到 msgId。
+    const contentLen = flagInt(flags, "content-len") ?? 800;
     const hideExec = flags["no-exec"] === true;
     const clean = flags["clean"] !== false;
     const data = await api(agent, "GET", `${route("/groups/:groupId/messages", groupId)}${qs({ limit })}`);
@@ -185,12 +188,31 @@ export async function cmdGroup(agent: ResolvedAgent, rest: string[], flags: Reco
             .trim();
         }
         return {
+          id: m.id,
           time: m.created_at,
           sender: m.sender,
           content: content.slice(0, contentLen),
         };
       }),
-      ["time", "sender", "content"],
+      ["id", "time", "sender", "content"],
+    );
+    return;
+  }
+  if (sub === "message") {
+    const groupId = rest[1]; const msgId = rest[2];
+    if (!groupId || !msgId) usage("group message", "<groupId> <msgId> [--no-clean]");
+    const clean = flags["no-clean"] !== true; // 默认 clean=true,与 history 一致;--no-clean 保留工具标签
+    const data = await api(agent, "GET", route("/groups/:groupId/messages/:msgId", groupId, msgId));
+    let content = (data.content || "").replace(/\s+/g, " ");
+    if (clean) {
+      content = content
+        .replace(/\[(\w[\w-]*(?::\w[\w-]*)?)\].*?\[\/\1\]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    printTable(
+      [{ id: data.id, time: data.created_at, sender: data.sender, content }],
+      ["id", "time", "sender", "content"],
     );
     return;
   }

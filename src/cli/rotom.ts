@@ -122,6 +122,7 @@ Read:
   group members <groupId>
   group history <groupId> [--limit N]
   group new-messages <groupId> --since <ISO>     只看某个时间点之后的新消息(轮询用)
+  group message <groupId> <msgId>                单条消息完整内容(回查被截断的历史,默认 --clean)
   group archive <groupId>
   group unarchive <groupId>
   issue list <groupId> [--status S] [--type task]

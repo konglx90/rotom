@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IssueRow, ScheduledTaskRow } from "./types.js";
-import type { GroupRow } from "./groups.js";
+import type { GroupRow, GroupMessageRow } from "./groups.js";
 import type { GuidanceTemplateRow } from "./guidance-templates.js";
 import type { SchedulePatternRow } from "./schedule-patterns.js";
 
@@ -61,6 +61,8 @@ export interface MeshDbSelf {
   getAskBridge(id: string): unknown;
   /** 取 group_messages.content;scheduler 创建超时 Issue 时复述原问题用。 */
   getGroupMessageContent(msgId: number): string | undefined;
+  /** 按 (groupId, msgId) 取单条群消息完整 row(含 composed_prompt)。CLI 回查用。 */
+  getGroupMessageById(groupId: string, msgId: number): GroupMessageRow | undefined;
 }
 
 export class MeshDbCore {
