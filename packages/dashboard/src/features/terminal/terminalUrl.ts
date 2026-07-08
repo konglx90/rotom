@@ -1,15 +1,12 @@
 /**
- * URL builders for the master's /api/terminal WebSocket. Mirrors the
- * dev/prod host logic in SocketContext: in dev (vite:3000) the master still
- * listens on :28800, in prod the dashboard is served from the same origin.
+ * URL builders for the master's /api/terminal WebSocket. 走同源:与 SocketContext
+ * 一致 —— dev 下由 vite 代理 /api(含 ws 升级)到 master:28800,prod 下同源直连。
+ * 这样从 Pad/局域网访问时只需打通加载页面的那一个端口。
  */
 
 function terminalBaseUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.hostname === 'localhost'
-    ? 'localhost:28800'
-    : `${window.location.hostname}:28800`
-  return `${proto}//${host}/api/terminal`
+  return `${proto}//${window.location.host}/api/terminal`
 }
 
 export function groupTerminalUrl(groupId: string): string {

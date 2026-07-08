@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { Search, Square } from 'lucide-react'
 import { Avatar } from '../../components/ui/Avatar'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
@@ -20,9 +20,10 @@ interface DirectChatAreaProps {
   /** 中断某个 agent 的在飞 chat 流。requestId 是 master/worker 侧的原始 id
    *  (即 bubble.id 去掉 `stream_` 前缀);agentName 是响应方名字。 */
   onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
+  /** pad 模式下渲染在输入框上方的图标工具条(豆包风:开抽屉 / 动作入口)。
+   *  宽屏不传 → 不渲染,PC 0 影响。 */
+  inputToolbar?: ReactNode
 }
-
-// Extract the last [status:thinking]...[/status:thinking] tag from message
 // content. Mirrors MessageRow.extractMessageStatus — kept local rather than
 // shared because the only other call site is MessageRow, and extracting a
 // one-liner regex helper into a shared module would be more indirection than
@@ -45,6 +46,7 @@ export function DirectChatArea({
   connectionStatus,
   onSendMessage,
   onCancelStream,
+  inputToolbar,
 }: DirectChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -234,6 +236,10 @@ export function DirectChatArea({
         composedPrompt={composedPromptFor?.composedPrompt ?? { layers: [], final: '', generated_at: '', prompt_version: '' }}
         onClose={() => setComposedPromptFor(null)}
       />
+
+      {inputToolbar && (
+        <div className={styles.inputToolbar}>{inputToolbar}</div>
+      )}
 
       <div className={styles.inputArea}>
         <textarea ref={textareaRef} rows={1} value={message}

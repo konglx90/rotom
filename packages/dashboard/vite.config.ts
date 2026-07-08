@@ -18,7 +18,17 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:28800',
         changeOrigin: true,
-      }
+        // /api/terminal 是 WebSocket,需要同时代理 ws 升级。
+        ws: true,
+      },
+      // WebSocket 也走 vite 代理:前端连"同源 /ws"(见 SocketContext),
+      // vite 转发到 master:28800。这样从 Pad/局域网访问 dev 时,
+      // 客户端只需打通 :3000,不必直连 :28800。
+      '/ws': {
+        target: 'http://localhost:28800',
+        changeOrigin: true,
+        ws: true,
+      },
     }
   },
   build: {

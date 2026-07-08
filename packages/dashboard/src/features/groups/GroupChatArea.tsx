@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback, type ReactNode } from 'react'
 import type { Agent, Group, Issue, Note, Schedule } from '../../api/types'
 import { useVisitorMode } from '../../context/VisitorContext'
 import type { ChatMessage } from './types'
@@ -34,6 +34,9 @@ interface GroupChatAreaProps {
   onSendMessage: (text: string) => void
   /** 中断某个 agent 的在飞 chat 流。透传给 MessageRow 的 ⏹ 按钮。 */
   onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
+  /** pad 模式下渲染在输入框上方的图标工具条(豆包风:开抽屉 / 动作入口)。
+   *  宽屏不传 → 不渲染,PC 0 影响。 */
+  inputToolbar?: ReactNode
 }
 
 export function GroupChatArea({
@@ -44,6 +47,7 @@ export function GroupChatArea({
   connectionStatus,
   onSendMessage,
   onCancelStream,
+  inputToolbar,
 }: GroupChatAreaProps) {
   const messagesAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -524,6 +528,10 @@ export function GroupChatArea({
           </div>
         )}
       </div>
+
+      {inputToolbar && (
+        <div className={styles.inputToolbar}>{inputToolbar}</div>
+      )}
 
       {!isVisitor && (
         <div className={styles.inputArea}>

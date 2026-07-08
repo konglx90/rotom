@@ -112,10 +112,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     if (!myAgentName) return
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsHost = window.location.hostname === 'localhost'
-      ? 'localhost:28800'
-      : `${window.location.hostname}:28800`
-    const wsUrl = `${wsProtocol}//${wsHost}/ws`
+    // 同源 /ws:WS 走"加载页面的那个 host:port"。
+    //   - prod:master 自己在同源(:28800)提供 /ws,直连即可。
+    //   - dev :页面在 vite(:3000),由 vite 把 /ws 代理到 master(:28800,见
+    //     vite.config 的 proxy '/ws' + ws:true)。
+    // 这样从 Pad/局域网访问时,客户端只需打通它已经能开页面的那一个端口,
+    // 不再被要求直连 :28800(否则跨子网/防火墙会一直"等待连接")。
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws`
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws

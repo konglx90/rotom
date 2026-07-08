@@ -356,6 +356,183 @@
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   pad 模式(平板/窄屏,≤ useIsPad 断点):对话区撑满,左右面板收为抽屉,
+   开关入口在输入框上方的豆包风工具条(.padToolbar,样式见文末)。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 抽屉遮罩:任一抽屉打开时铺满,点击关闭。复用 kanban 同款。 */
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 15, 12, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 900;
+  animation: padFadeIn 0.18s ease-out;
+}
+
+/* 抽屉面板:常驻挂载 + transform 滑入/出,保留内部状态与滚动位置。 */
+.drawerPanel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: min(320px, 85vw);
+  background: var(--color-canvas-elevated);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  z-index: 901;
+  overflow: hidden;
+  transition: transform 0.24s var(--ease-out, ease);
+}
+
+.drawerLeft {
+  left: 0;
+  border-right: 1px solid var(--border-color);
+  transform: translateX(-100%);
+}
+
+/* 右抽屉装过程/产物列表,给宽一点。 */
+.drawerRight {
+  right: 0;
+  width: min(440px, 92vw);
+  border-left: 1px solid var(--border-color);
+  transform: translateX(100%);
+}
+
+.drawerOpen {
+  transform: translateX(0);
+}
+
+.drawerClose {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: rgba(22, 51, 0, 0.06);
+  border-radius: var(--radius-pill, 999px);
+  font-size: 14px;
+  color: var(--color-ink);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.drawerClose:hover {
+  background: rgba(159, 232, 112, 0.32);
+  transform: rotate(90deg);
+}
+
+/* 右抽屉头部:过程 sub-tabs 或产物标题 + 关闭按钮。 */
+.drawerHead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding-right: 46px; /* 给绝对定位的关闭按钮留位 */
+  border-bottom: 1px solid var(--border-color-light);
+  background: var(--color-canvas-elevated);
+}
+
+.drawerHead .processTabs {
+  flex: 1;
+  min-height: 40px;
+  padding: 0 6px;
+}
+
+.drawerTitle {
+  flex: 1;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.drawerBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── 豆包风:输入框上方工具条 ── */
+.padToolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--border-color-light);
+  background: var(--color-canvas-elevated);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.padToolbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 连接状态 dot(颜色复用上方 .modeStatus_* 系列) */
+.padStatusDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin: 0 6px 0 4px;
+  flex-shrink: 0;
+}
+
+.padToolBtn {
+  flex: 0 0 auto;
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px 8px;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--color-warm-dark);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out);
+}
+
+.padToolBtn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-ink);
+}
+
+.padToolBtnActive {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+  border-color: rgba(22, 51, 0, 0.16);
+}
+
+.padToolBtnActive:hover {
+  background: var(--color-mint);
+  color: var(--color-dark-green);
+}
+
+.padToolDivider {
+  flex: 0 0 auto;
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 6px;
+  background: var(--border-color-light);
+}
+
+@keyframes padFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* 横屏 iPad(1024–1366px):panel min 之和可能超过可用宽度,
    允许横向滚动兜底,避免最后一个 panel 被 overflow:hidden 截掉。 */
 @media (max-width: 1100px) {

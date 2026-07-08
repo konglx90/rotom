@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useZenMode } from '../../../context/ZenModeContext'
 import { useChatContext } from '../../../context/ChatContext'
 import { useVisitorMode } from '../../../context/VisitorContext'
+import { useIsPad } from '../../../hooks/useIsPad'
 import { AppSidebar } from '../AppSidebar/AppSidebar'
 import { VisitorBanner } from '../VisitorBanner'
 import styles from './AppShell.module.css'
@@ -19,11 +20,15 @@ export function AppShell({ children }: AppShellProps) {
   const { myAgentName, openConfigModal } = useChatContext()
   const { isVisitor } = useVisitorMode()
   const location = useLocation()
+  const isPad = useIsPad()
   const isFullBleed = location.pathname.startsWith('/dashboard/groups')
   const isToolboxRoute = location.pathname.startsWith('/dashboard/toolbox')
-  const hideSidebar = /^\/dashboard\/groups\/[^/]+\/issues-single(\/|$)/.test(
-    location.pathname,
-  )
+  // pad 模式 + 群聊页:把 in-flow 侧栏交给 GroupChatView 当左抽屉渲染,
+  // 避免重复挂载。其它窄屏页(agents/kanban…)侧栏维持原样。
+  const hideSidebar =
+    isPad && isFullBleed
+      ? true
+      : /^\/dashboard\/groups\/[^/]+\/issues-single(\/|$)/.test(location.pathname)
   const widthStorageKey = zenMode ? 'sidebar_width_zen' : 'sidebar_width_normal'
 
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {

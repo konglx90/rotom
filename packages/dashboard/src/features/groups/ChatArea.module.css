@@ -586,6 +586,12 @@
   background: var(--color-canvas-elevated);
 }
 
+/* pad 模式:输入框正上方的工具条容器(豆包风入口,内容由 GroupChatView 透传)。
+   宽屏不渲染 inputToolbar,本规则不生效。 */
+.inputToolbar {
+  flex: 0 0 auto;
+}
+
 .messageInput {
   flex: 1;
   padding: 10px 14px;

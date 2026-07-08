@@ -37,6 +37,9 @@ function isFunctionalGroup(g: { type?: string | null }): boolean {
 interface AppSidebarProps {
   width: number
   onWidthChange: (w: number) => void
+  // 'rail'(默认):桌面常驻侧栏,带拖拽 resizer / zen 切换。
+  // 'drawer':pad 模式下在抽屉里渲染 —— 固定宽度、无 resizer/zen,撑满抽屉容器。
+  variant?: 'rail' | 'drawer'
 }
 // Tab 维度:4 个分类筛选,替代原"普通/功能/标记/已归档"4 段堆叠布局。
 // - 普通:日常对话(排除 functional / starred / archived)
@@ -58,8 +61,9 @@ const TAB_EMPTY_HINT: Record<GroupTab, string> = {
   starred: '暂无标记群',
   archived: '暂无已归档对话',
 }
-export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
+export function AppSidebar({ width, onWidthChange, variant = 'rail' }: AppSidebarProps) {
   const { zenMode, toggleZenMode } = useZenMode()
+  const isDrawer = variant === 'drawer'
   // AppSidebar is rendered above <Routes>, so useParams() can't see the route
   // params. Match the URL directly to discover the active group id.
   const groupMatch = useMatch('/dashboard/groups/:groupId/*')
@@ -252,10 +256,13 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
   }, [dragging, isZen, onWidthChange])
   const defaultWidth = isZen ? ZEN_WIDTH : NORMAL_DEFAULT
   return (
-    <div className={styles.sidebarWrap} style={{ width: `${width}px` }}>
+    <div
+      className={`${styles.sidebarWrap} ${isDrawer ? styles.sidebarDrawer : ''}`}
+      style={isDrawer ? undefined : { width: `${width}px` }}
+    >
       <aside
         className={`${styles.sidebar} ${isZen ? styles.sidebarZen : ''}`}
-        style={{ width: `${width}px` }}
+        style={isDrawer ? undefined : { width: `${width}px` }}
       >
         <div className={styles.topBar}>
           {!isZen && myAgentName ? (
@@ -273,13 +280,15 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
               {!isZen && <span className={styles.logoText}>Rotom</span>}
             </div>
           )}
-          <button
-            className={styles.zenBtn}
-            onClick={toggleZenMode}
-            title={isZen ? '展开侧边栏' : '禅模式'}
-          >
-            {isZen ? '▶' : '◀'}
-          </button>
+          {!isDrawer && (
+            <button
+              className={styles.zenBtn}
+              onClick={toggleZenMode}
+              title={isZen ? '展开侧边栏' : '禅模式'}
+            >
+              {isZen ? '▶' : '◀'}
+            </button>
+          )}
         </div>
         <nav
           className={`${styles.nav} ${!isZen && navCompact ? styles.navCompact : ''}`}
@@ -568,15 +577,17 @@ export function AppSidebar({ width, onWidthChange }: AppSidebarProps) {
           />
         )
       })()}
-      <div
-        className={`${styles.resizer} ${dragging ? styles.resizerActive : ''}`}
-        onMouseDown={(e) => {
-          startStateRef.current = { x: e.clientX, w: width }
-          setDragging(true)
-        }}
-        onDoubleClick={() => onWidthChange(defaultWidth)}
-        title="拖拽调整宽度,双击恢复默认"
-      />
+      {!isDrawer && (
+        <div
+          className={`${styles.resizer} ${dragging ? styles.resizerActive : ''}`}
+          onMouseDown={(e) => {
+            startStateRef.current = { x: e.clientX, w: width }
+            setDragging(true)
+          }}
+          onDoubleClick={() => onWidthChange(defaultWidth)}
+          title="拖拽调整宽度,双击恢复默认"
+        />
+      )}
     </div>
   )
 }

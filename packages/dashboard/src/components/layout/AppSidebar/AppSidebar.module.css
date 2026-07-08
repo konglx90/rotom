@@ -18,6 +18,22 @@
   height: 100vh;
 }
 
+/* pad 模式抽屉内渲染(variant='drawer'):撑满抽屉容器,
+   去掉 sticky / 100vh / 右边框 —— 抽屉容器已是 fixed + 满高。 */
+.sidebarDrawer {
+  position: static;
+  top: auto;
+  height: 100%;
+  width: 100%;
+  z-index: auto;
+}
+
+.sidebarDrawer .sidebar {
+  width: 100%;
+  height: 100%;
+  border-right: none;
+}
+
 .resizer {
   position: absolute;
   top: 0;
