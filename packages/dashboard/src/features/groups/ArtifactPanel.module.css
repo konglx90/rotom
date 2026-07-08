@@ -235,6 +235,8 @@
   background: var(--border-color-light);
   cursor: col-resize;
   position: relative;
+  /* treePane 靠右 → resizer 居中(preview 与 tree 之间)。 */
+  order: 1;
   transition: background var(--duration-fast) var(--ease-out);
   /* 扩大可点击区域:1px 不好抓 */
 }
@@ -258,7 +260,9 @@
 }
 
 /* ── 左右分栏 ───────────────────────────────────────────
-   左 treePane 固定宽度 + 全高;右 previewPane 拿剩余宽度 + 全高。
+   目录树(treePane)靠右、预览(previewPane)靠左;treePane 固定宽度 + 全高,
+   previewPane 拿剩余宽度 + 全高。视觉顺序由 CSS order 控制,
+   JSX 仍保持 tree→resizer→preview 的书写顺序(参考 codex,产物树放右侧)。
    两端各自独立滚动,互不挤占垂直空间。 */
 .splitLayout {
   flex: 1 1 auto;
@@ -273,9 +277,11 @@
   flex: 0 0 240px;
   width: 240px;
   min-width: 0;
+  /* 靠右:分隔线画在左侧(与 previewPane 之间)。 */
+  order: 2;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border-color-light);
+  border-left: 1px solid var(--border-color-light);
   background: var(--color-canvas-elevated);
   overflow: hidden;
 }
@@ -285,13 +291,14 @@
 .treePaneCollapsed {
   flex: 0 0 0;
   width: 0;
-  border-right: none;
+  border-left: none;
 }
 
 .previewPane {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
+  order: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;

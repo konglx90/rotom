@@ -404,9 +404,10 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
     const onMove = (e: MouseEvent) => {
       const start = treeDragStartRef.current
       if (!start) return
+      // 目录树靠右:向左拖(.clientX 减小)才应让树变宽,故 delta 取反。
       const next = Math.max(
         TREE_WIDTH_MIN,
-        Math.min(TREE_WIDTH_MAX, start.w + (e.clientX - start.x)),
+        Math.min(TREE_WIDTH_MAX, start.w - (e.clientX - start.x)),
       )
       setTreeWidth(next)
       // 同步写盘:localStorage 单 key 写很快,不必搞 debounce
@@ -694,7 +695,7 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
                 onClick={() => setTreeCollapsed((v) => !v)}
                 title={treeCollapsed ? '展开文件树' : '收起文件树(让位给预览)'}
               >
-                {treeCollapsed ? '\u{25B6}' : '\u{25C0}'}
+                {treeCollapsed ? '\u{25C0}' : '\u{25B6}'}
               </Button>
               <Button
                 variant="ghost"
@@ -739,8 +740,8 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
         </div>
       )}
 
-      {/* 分支对比模式:顶部 repo + base + head 选择器,左变更文件列表,
-          右 DiffEditor 展示 base..head 的单文件 diff。和单文件 diff(mode='diff')
+      {/* 分支对比模式:顶部 repo + base + head 选择器,右变更文件列表,
+          左 DiffEditor 展示 base..head 的单文件 diff。和单文件 diff(mode='diff')
           独立,不复用 selectedFile/content/original 这套状态。 */}
       {mode === 'branchDiff' ? (
         <div className={styles.splitLayout}>
@@ -874,7 +875,7 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
             }}
             title="拖拽调整宽度,双击恢复默认"
           />
-          {/* 右:DiffEditor 展示 base vs head */}
+          {/* 左:DiffEditor 展示 base vs head */}
           <div className={styles.previewPane}>
             {branchDiffSelected ? (
               <div className={styles.previewSection}>
@@ -920,7 +921,7 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
             ) : (
               <div className={styles.previewEmpty}>
                 <div className={styles.previewEmptyIcon}>{'\u{1F50D}'}</div>
-                <p>从左侧选择变更文件查看 diff</p>
+                <p>从右侧选择变更文件查看 diff</p>
                 <p className={styles.previewEmptyHint}>
                   选择 repo + base + head 后点「对比」,再从变更列表选文件
                 </p>
@@ -1161,7 +1162,7 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
       {!selectedFile && (
         <div className={styles.previewEmpty}>
           <div className={styles.previewEmptyIcon}>{'\u{1F4C4}'}</div>
-          <p>从左侧选择文件预览</p>
+          <p>从右侧选择文件预览</p>
           <p className={styles.previewEmptyHint}>
             支持 .md 渲染、图片直接预览、Monaco 代码高亮、diff 对比
           </p>
