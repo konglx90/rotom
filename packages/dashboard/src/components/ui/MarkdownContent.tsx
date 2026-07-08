@@ -417,7 +417,6 @@ export const MarkdownContent = memo(function MarkdownContent({
     const hasMembers = !!mentionMembers && mentionMembers.length > 0
     // #reply 标记需要无条件渲染成胶囊,即使没有群成员列表也要启用 transformer。
     const hasReply = content.includes('#reply')
-    if (!hasMembers && !hasReply) return undefined
     const memberSet = new Set(mentionMembers ?? [])
     const isMember = (name: string) => memberSet.has(name)
     const replyClassName = styles.replyTag
@@ -429,6 +428,18 @@ export const MarkdownContent = memo(function MarkdownContent({
           transformMentionChildren(children, isMember, mentionClassName, replyClassName),
         )
       }
+    // 对话里的链接一律在新标签打开;若启用了 @mention/#reply 高亮,链接文本里的标记仍需转换。
+    const link = function LinkRenderer({ children, node: _node, ...rest }: any) {
+      return createElement(
+        'a',
+        { ...rest, target: '_blank', rel: 'noopener noreferrer' },
+        hasMembers || hasReply
+          ? transformMentionChildren(children, isMember, mentionClassName, replyClassName)
+          : children,
+      )
+    }
+    // 没有需要高亮的 @mention / #reply 时,只接管 <a>(新标签打开),其余元素沿用 react-markdown 默认渲染。
+    if (!hasMembers && !hasReply) return { a: link } as Components
     // Cover text-containing markdown elements. <code>/<pre> are explicitly
     // skipped inside the transformer so package paths like `@types/react`
     // are not mis-highlighted.
@@ -437,7 +448,7 @@ export const MarkdownContent = memo(function MarkdownContent({
       li: wrap('li'),
       em: wrap('em'),
       strong: wrap('strong'),
-      a: wrap('a'),
+      a: link,
       td: wrap('td'),
       th: wrap('th'),
       h1: wrap('h1'),
