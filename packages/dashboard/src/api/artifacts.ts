@@ -100,4 +100,19 @@ export const artifactsApi = {
     const qs = `?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(filePath)}&ref=${encodeURIComponent(ref)}`
     return api.get<ContentAtRef>(`/artifacts/${groupId}/content-at-ref${qs}`)
   },
+
+  /** 调起 master 本机的 VSCode 打开文件或目录。master spawn `code <path>`
+   *  (detached),不阻塞 HTTP 调用。path 留空 → 打开 group artifacts 根目录;
+   *  path 以 `__repos/` 开头 → 后端自动切到 primary worktree 并剥前缀。
+   *  visitor(share token)模式下走 GET,POST 会被 share 路由 404,调用方
+   *  应在 visitor 模式下隐藏入口。 */
+  async openVscode(groupId: string, path?: string, repo?: string): Promise<{ ok: boolean; path: string; editor: string }> {
+    const qs = new URLSearchParams()
+    if (path) qs.set('path', path)
+    if (repo) qs.set('repo', repo)
+    const query = qs.toString()
+    return api.post<{ ok: boolean; path: string; editor: string }>(
+      `/artifacts/${groupId}/open-vscode${query ? `?${query}` : ''}`,
+    )
+  },
 }

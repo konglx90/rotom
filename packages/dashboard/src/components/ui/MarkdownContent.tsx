@@ -855,12 +855,15 @@ function AskBlock({
 
 // Inline image with click-to-expand lightbox. The CSS already gives `<img>`
 // `cursor: zoom-in`, so we honor that affordance by opening a fullscreen
-// overlay on click. ESC or backdrop click closes.
+// overlay on click. ESC or backdrop click closes. Right-click copies the
+// image's absolute URL to the clipboard (relative src resolved against
+// window.location.origin, matching ImageGalleryTab's behavior).
 function ImgRenderer({ src, alt }: { src?: string; alt?: string }) {
   // react-markdown v10 sometimes passes src as a string array; ignore that and
   // only honour the plain-string form (covers all real-world cases).
   const url = typeof src === 'string' ? src : undefined
   const [expanded, setExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (!expanded) return
@@ -876,6 +879,24 @@ function ImgRenderer({ src, alt }: { src?: string; alt?: string }) {
     }
   }, [expanded])
 
+  useEffect(() => {
+    if (!copied) return
+    const t = setTimeout(() => setCopied(false), 1500)
+    return () => clearTimeout(t)
+  }, [copied])
+
+  const handleContextMenu = (e: ReactMouseEvent) => {
+    if (!url) return
+    e.preventDefault()
+    const absolute = /^https?:\/\//i.test(url) || url.startsWith('//')
+      ? url
+      : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`
+    navigator.clipboard?.writeText(absolute).then(
+      () => setCopied(true),
+      () => setCopied(true),
+    )
+  }
+
   return (
     <>
       <img
@@ -883,7 +904,11 @@ function ImgRenderer({ src, alt }: { src?: string; alt?: string }) {
         alt={alt ?? ''}
         loading="lazy"
         onClick={() => url && setExpanded(true)}
+        onContextMenu={handleContextMenu}
       />
+      {copied && (
+        <span className={styles.copyHint} role="status">已复制链接 ✓</span>
+      )}
       {expanded && url && createPortal(
         <div
           className={styles.lightbox}

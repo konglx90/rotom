@@ -5,9 +5,10 @@
  *
  * chip 是纯本地草稿,ContinueInputBar 提交时 push,不发 /append。两条 flush
  * 路径都会把草稿真正发给 worker 触发 --resume 续跑:
- *   • 用户按 ESC / 点「■ 中断」—— IssueDetailHeader.handleInterrupt 先逐条
- *     /append flush,再 /interrupt,worker abort + finally 块(worker.ts:964-998)
- *     消费 pendingAppends。IssueDetail 在 onInterrupted 回调里 clearPending。
+ *   • 用户按 ESC / 点「■ 中断」—— IssueDetailBody.handleInterrupt 先逐条
+ *     /append flush(chip + textarea 当前草稿),再 /interrupt,worker abort +
+ *     finally 块(worker-issue.ts:217-256)消费 pendingAppends。flush 完成后
+ *     handleInterrupt 自己清空 chip + 草稿。
  *   • 用户不按 ESC、worker 自然跑完 —— IssueDetail 的 status 监听 effect
  *     自动 /continue(completed/failed)或 /append(paused),合并 chip 为一次
  *     prompt,worker 用 session_id --resume 起新轮。对齐 codex "steers persist

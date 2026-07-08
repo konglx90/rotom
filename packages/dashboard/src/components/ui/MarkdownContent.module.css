@@ -161,6 +161,16 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
+.copyHint {
+  display: inline-block;
+  margin: 2px 0 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #1f8a4c;
+  background: rgba(31, 138, 76, 0.12);
+  border-radius: 6px;
+}
+
 .cursor {
   display: inline-block;
   animation: blink 0.8s step-end infinite;

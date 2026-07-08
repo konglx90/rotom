@@ -11,7 +11,7 @@ import styles from './IssueStatusBar.module.css'
 // 侧状态点会呼吸 + 文案变成「执行中」,一眼能感知。
 //
 // 左:状态点 + 状态文案(优先用 activity.statusLabel,降级到 issue.status 默认) +
-//      agent 名 + 「Xs 前」活动指示(in_progress 时)
+//      agent 名 + 「Xs/Xm Ys 前」活动指示(in_progress 时,5 分钟内带秒)
 // 右:model + ↑输入/↓输出 tokens + cost + ⏱耗时(in_progress 时每秒 tick)
 interface IssueStatusBarProps {
   issue: Issue
@@ -20,6 +20,10 @@ interface IssueStatusBarProps {
   /** 从 events 派生的活动指示:最后一条 progress 事件的时间戳 + 状态文案。
    *  用来显示「思考中 · 3s 前」这种实时活动信号,让用户判断 CLI 是否卡住。 */
   activity?: IssueActivity | null
+  /** 已提交状态翻转动作,正在等 worker 把 issue 挑到 in_progress。
+   *  这期间 status 通常还是 open/paused,但前端要主动展示「启动中」视觉,
+   *  否则用户点了开始任务 / 继续执行后看不到任何反馈。 */
+  pendingStart?: boolean
 }
 
 interface StatusVisual {
@@ -39,10 +43,16 @@ function getStatusVisual(status: Issue['status']): StatusVisual {
   }
 }
 
-export function IssueStatusBar({ issue, liveUsage, activity }: IssueStatusBarProps) {
+export function IssueStatusBar({ issue, liveUsage, activity, pendingStart = false }: IssueStatusBarProps) {
   const elapsedMs = useIssueElapsed(issue.started_at, issue.completed_at)
   const elapsedLabel = elapsedMs == null ? '—' : formatDurationCompact(elapsedMs)
-  const visual = getStatusVisual(issue.status)
+  const baseVisual = getStatusVisual(issue.status)
+  // pendingStart 期间强制 spinner + 「启动中」:覆盖 open/paused 那种静态的
+  // 「待处理 / 待继续」文案,让用户看到「点了之后在动」。一旦 issue.status
+  // 真翻到 in_progress,父组件会清掉 pendingStart,visual 自动回到「执行中」。
+  const visual = pendingStart
+    ? { label: '启动中', dotClass: 'running', spin: true }
+    : baseVisual
 
   // 活动指示:in_progress / paused 时每秒本地 tick,算「距上次活动 Xs」。
   // events 通过 issue_changed reload 拿,CLI 持续输出时 activity.lastAt 实时
@@ -62,9 +72,11 @@ export function IssueStatusBar({ issue, liveUsage, activity }: IssueStatusBarPro
         ? styles.activityWarn
         : styles.activityFresh
 
-  // 状态文案:优先用 activity.statusLabel(从 events 提取的具体状态,如「思考中」
-  // 「执行命令」),降级到 issue.status 的默认文案(「执行中」「待继续」)。
-  const statusLabel = isActive && activity?.statusLabel ? activity.statusLabel : visual.label
+  // 状态文案:pendingStart 强制显「启动中」(对应 visual.label 已被覆盖);
+  // 否则按 activity.statusLabel → visual.label 优先级降级。
+  const statusLabel = pendingStart
+    ? visual.label
+    : (isActive && activity?.statusLabel ? activity.statusLabel : visual.label)
 
   const persistedUsage = useMemo<TokenUsage | null>(() => {
     if (!issue.usage) return null
@@ -117,6 +129,17 @@ export function IssueStatusBar({ issue, liveUsage, activity }: IssueStatusBarPro
             <span className={styles.sep}>·</span>
             <span className={`${styles.activity} ${activityClass}`} title={`距上次 CLI 输出: ${activityLabel}\n> 30s 疑似卡住,> 60s 建议中断检查`}>
               {activityLabel}
+            </span>
+          </>
+        )}
+        {pendingStart && (
+          <>
+            <span className={styles.sep}>·</span>
+            <span
+              className={`${styles.activity} ${styles.activityFresh}`}
+              title="已发送指令,正在等 worker 拉仓库 / spawn CLI 把 issue 挑到 in_progress。通常 30-60s,卡 60s 以上会自动结束 loading 让你重试。"
+            >
+              正在唤起 Agent…
             </span>
           </>
         )}
@@ -202,10 +225,19 @@ function shortModel(model: string): string {
 // 跟 useIssueElapsed 同样的模式,但不区分 completed(活动指示只关心「距上次
 // 输出多久」,不关心总耗时)。组件卸载自动 clearInterval。
 // (重复定义已清理,实际函数在上方)
+//
+// 粒度:5 分钟内带秒,让 1s tick 每秒都能在 UI 上看到变化,避免用户误以为
+// 界面卡死;超过 5 分钟秒级粒度失去意义(用户不再盯着),回到「Xm 前 / Xh 前」。
+//   - 45s        → "45s 前"
+//   - 1m 10s     → "1m 10s 前"
+//   - 4m 59s     → "4m 59s 前"
+//   - 5m / 12m   → "5m 前" / "12m 前"
+//   - 1h 5m      → "1h 前"
 function formatActivityAgo(ms: number): string {
   const s = Math.floor(ms / 1000)
   if (s < 60) return `${s}s 前`
   const m = Math.floor(s / 60)
+  if (m < 5) return `${m}m ${s % 60}s 前`
   if (m < 60) return `${m}m 前`
   const h = Math.floor(m / 60)
   return `${h}h 前`

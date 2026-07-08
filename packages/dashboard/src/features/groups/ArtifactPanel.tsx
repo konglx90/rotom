@@ -10,6 +10,7 @@ import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import { Select } from '../../components/ui/Select'
 import { TerminalPane } from './TerminalPane'
 import { useMonaco } from '../../hooks/useMonaco'
+import { useVisitorMode } from '../../context/VisitorContext'
 import styles from './ArtifactPanel.module.css'
 
 interface ArtifactPanelProps {
@@ -377,6 +378,34 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
   const [treeDragging, setTreeDragging] = useState(false)
   const treeDragStartRef = useRef<{ x: number; w: number } | null>(null)
 
+  // VSCode 调起态:loading 防双击,error 展示 master 侧 spawn 失败原因
+  // (主要是 `code` 不在 PATH)。visitor 模式下 POST 走不通,直接隐藏入口。
+  const { isVisitor } = useVisitorMode()
+  const [vscodeLoading, setVscodeLoading] = useState(false)
+  const [vscodeError, setVscodeError] = useState<string | null>(null)
+  // header「VSCode」按钮的下拉菜单:让用户选开产物目录还是某个仓库 worktree。
+  // 仓库目录往往比产物目录更重要(agent 改代码改的是仓库),所以做成下拉让用户挑。
+  const [vscodeMenuOpen, setVscodeMenuOpen] = useState(false)
+  const vscodeMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!vscodeMenuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (vscodeMenuRef.current && !vscodeMenuRef.current.contains(e.target as Node)) {
+        setVscodeMenuOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setVscodeMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [vscodeMenuOpen])
+
   // ─── 分支对比模式 state ───────────────────────────────────────────────
   // 独立于单文件 diff(mode='diff')的单文件 → DiffEditor 流程,这里走的是
   // 「选 repo + base ref + head ref → 整段分支 diff」的分支级流程。
@@ -461,6 +490,9 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
     setBranchDiffModified(null)
     // refs 加载失败不阻塞主流程,下拉退化为只剩 HEAD 选项
     artifactsApi.listRefs(groupId).then(setRefs).catch(() => setRefs(null))
+    // groupWorktree 给 header 的「VSCode 打开」下拉用(列出 primary + extras
+    // 各仓库目录)。失败不阻塞,下拉里只显示「产物目录」一项。
+    reposApi.getGroupWorktree(groupId).then(setGroupWorktree).catch(() => setGroupWorktree(null))
   }, [groupId, loadFiles])
 
   const handleSelect = useCallback(async (file: ArtifactFile) => {
@@ -519,6 +551,22 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
       setCopiedHint(false)
     }
   }, [selectedFile, absolutePath])
+
+  // 调起 master 本机 VSCode。传 selectedFile.path(虚拟路径,后端自识别
+  // `__repos/` 前缀);不传 path 则打开 group artifacts 根目录。
+  // repo 参数把 base 切到对应 worktree(用于 header 下拉里"开仓库目录")。
+  const handleOpenVscode = useCallback(async (filePath?: string, repo?: string) => {
+    if (vscodeLoading) return
+    setVscodeLoading(true)
+    setVscodeError(null)
+    try {
+      await artifactsApi.openVscode(groupId, filePath, repo)
+    } catch (err) {
+      setVscodeError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setVscodeLoading(false)
+    }
+  }, [groupId, vscodeLoading])
 
   const handleDiff = async () => {
     if (!selectedFile) return
@@ -705,6 +753,77 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
               >
                 分支对比
               </Button>
+              {!isVisitor && (
+                <div className={styles.vscodeDropdown} ref={vscodeMenuRef}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setVscodeMenuOpen((v) => !v)}
+                    disabled={vscodeLoading}
+                    title="在 master 本机用 VSCode 打开:产物目录或某个仓库 worktree"
+                    aria-haspopup="menu"
+                    aria-expanded={vscodeMenuOpen}
+                  >
+                    {vscodeLoading ? 'VSCode…' : 'VSCode'}{'\u{25BE}'}
+                  </Button>
+                  {vscodeMenuOpen && (
+                    <div className={styles.vscodeMenu} role="menu">
+                      <button
+                        type="button"
+                        className={styles.vscodeMenuItem}
+                        onClick={() => {
+                          setVscodeMenuOpen(false)
+                          void handleOpenVscode()
+                        }}
+                        title={`产物目录 · ${root || ''}`}
+                      >
+                        <span className={styles.vscodeMenuIcon}>{'\u{1F4E6}'}</span>
+                        <span className={styles.vscodeMenuLabel}>产物目录</span>
+                      </button>
+                      {groupWorktree && (
+                        <>
+                          <div className={styles.vscodeMenuSeparator} />
+                          <button
+                            type="button"
+                            className={styles.vscodeMenuItem}
+                            disabled={!groupWorktree.primaryExists}
+                            onClick={() => {
+                              setVscodeMenuOpen(false)
+                              void handleOpenVscode(undefined, 'primary')
+                            }}
+                            title={groupWorktree.primaryPath}
+                          >
+                            <span className={styles.vscodeMenuIcon}>{'\u{1F4C1}'}</span>
+                            <span className={styles.vscodeMenuLabel}>
+                              primary · {repoDisplayName(groupWorktree.url)}
+                              {!groupWorktree.primaryExists && ' (未创建)'}
+                            </span>
+                          </button>
+                          {groupWorktree.extras.map((e) => (
+                            <button
+                              key={e.id}
+                              type="button"
+                              className={styles.vscodeMenuItem}
+                              disabled={!e.exists}
+                              onClick={() => {
+                                setVscodeMenuOpen(false)
+                                void handleOpenVscode(undefined, e.id)
+                              }}
+                              title={e.path}
+                            >
+                              <span className={styles.vscodeMenuIcon}>{'\u{1F4C1}'}</span>
+                              <span className={styles.vscodeMenuLabel}>
+                                {e.id} · {repoDisplayName(e.url)}
+                                {!e.exists && ' (未创建)'}
+                              </span>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <Button variant="ghost" size="sm" onClick={loadFiles}>
                 刷新
               </Button>
@@ -719,6 +838,20 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
           </span>
           {selectedFile && (
             <div className={styles.pathBarActions}>
+              {vscodeError && (
+                <span className={styles.vscodeError} title={vscodeError}>{vscodeError}</span>
+              )}
+              {!isVisitor && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleOpenVscode(selectedFile.path)}
+                  disabled={vscodeLoading}
+                  title="在 master 本机用 VSCode 打开该文件"
+                >
+                  {vscodeLoading ? 'VSCode…' : 'VSCode'}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

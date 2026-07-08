@@ -4,6 +4,7 @@ import type { Agent, Issue } from '../../../api/types'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Select } from '../../../components/ui/Select'
+import { useIsPad } from '../../../hooks/useIsPad'
 import styles from './IssueDetailHeader.module.css'
 import type { IssueEditState } from './useIssueEdit'
 import { displayTitle } from '../createIssueTitle'
@@ -18,13 +19,12 @@ interface IssueDetailHeaderProps {
   onComplete: () => void
   onCancel: () => void
   onDelete: () => void
-  /** 中断成功后触发(IssueDetail 用来清空 pendingQueue —— flush 已经把 chip
-   *  通过 /append 推给 worker,worker abort 时 finally 块会消费队列)。 */
-  onInterrupted?: () => void
-  /** in_progress 期间用户已发送的本地草稿队列(chip 列表)。中断前会逐条
-   *  flush 给 worker(走 /append 进 pendingAppends),对齐 codex CLI 的
-   *  Enter 入队 / Esc flush 交互。空数组或 undefined 时跳过 flush。 */
-  pendingQueue?: string[]
+  /** 触发中断 —— 由 IssueDetailBody 实现:flush pendingQueue + textarea 草稿,
+   *  再 POST /interrupt。flush 在父组件做是为了让 textarea 草稿(chip 入队
+   *  前的纯文本)也能被一并发出,对齐 placeholder 承诺的「Esc 统一发送并中断」。 */
+  onInterrupt: () => void
+  /** 中断进行中标记(父组件维护,去重按钮和快捷键)。 */
+  interrupting: boolean
   /** 访客模式:隐藏中断、完成、取消、删除、指派、编辑、approval_policy 等按钮。 */
   readOnly?: boolean
 }
@@ -36,14 +36,17 @@ const APPROVAL_POLICY_OPTIONS: Array<{ value: ApprovalPolicy; label: string }> =
   { value: 'r_allow', label: '读默认通过' },
 ]
 
-export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete, onInterrupted, pendingQueue, readOnly = false }: IssueDetailHeaderProps) {
+export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, reload, onComplete, onCancel, onDelete, onInterrupt, interrupting, readOnly = false }: IssueDetailHeaderProps) {
   const [pendingAssignee, setPendingAssignee] = useState<string | null>(null)
   const [assigning, setAssigning] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [savingPolicy, setSavingPolicy] = useState(false)
   const [copiedId, setCopiedId] = useState(false)
   const [copiedSession, setCopiedSession] = useState(false)
-  const [interrupting, setInterrupting] = useState(false)
+  // Pad 上没物理 ESC:中断入口靠这个按钮本身(不再依赖快捷键),所以按钮
+  // 要更显眼(size sm 而非 xs,触屏好按)+ title 去掉 ESC 文案。
+  // 对齐 issue #f291053d 的 Pad 适配。
+  const isPad = useIsPad()
 
   const isFinalState = issue.status === 'completed' || issue.status === 'failed' || issue.status === 'cancelled'
   // active = 还能继续操作的(issue 执行 / append 续跑 / 取消 / 完成)。paused(待继续)
@@ -53,39 +56,16 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
   // 快捷键和「中断」按钮在 paused 下都不显示 —— 没有活跃步骤可中断。
   const isInProgress = issue.status === 'in_progress'
 
-  // 中断当前步骤(对齐 codex CLI 的 ESC + flush steers):POST /issues/:id/append
-  // 把 pendingQueue 里的草稿逐条 flush 给 worker → POST /issues/:id/interrupt →
-  // worker abort 当前 CLI → runIssueExecution finally 块(worker.ts:964-998)
-  // 消费 pendingAppends 用 --resume 续跑。chip 一直只是本地草稿,到这里才真正
-  // 落到 worker 队列里。逐条 await 保证 worker.pendingAppends 顺序与 chip 一致,
-  // 时间线上的「追加指令」气泡顺序也对得上。
-  const handleInterrupt = async () => {
-    if (interrupting) return
-    setInterrupting(true)
-    try {
-      if (pendingQueue && pendingQueue.length > 0) {
-        for (const text of pendingQueue) {
-          await issuesApi.append(issue.id, text, issue.created_by)
-        }
-      }
-      await issuesApi.interrupt(issue.id, issue.created_by)
-      onInterrupted?.()
-      await reload()
-    } catch (err) {
-      console.error('Failed to interrupt issue:', err)
-    } finally {
-      setInterrupting(false)
-    }
-  }
-
   // 全局 ESC 监听(对齐 codex CLI 的 ESC + flush steers 与编辑取消):
   //   - 编辑态(edit.editing):取消编辑,退出 textarea,不触发中断。
-  //   - in_progress:中断当前步骤 + flush pendingQueue。即使 ContinueInputBar
-  //     textarea 聚焦也触发 —— placeholder 明确告知用户「Esc 统一发送并中断
-  //     当前步骤」,旧实现把 textarea 一律 return 掉,导致 ESC 在输入框里失效。
+  //   - in_progress:调父组件的 onInterrupt —— flush pendingQueue + textarea
+  //     草稿 + POST /interrupt,worker abort + finally 块用 --resume 续跑。
+  //     即使 ContinueInputBar textarea 聚焦也触发:placeholder 已告知用户
+  //     「Esc 统一发送并中断当前步骤」,且父组件会把 textarea 当前文本一并
+  //     flush,避免「裸中断」丢用户输入。
   //   - open / paused / 终态且未编辑:无 ESC 行为(没活跃步骤可中断,也没编辑可取消)。
   // 旧实现 `if (!isInProgress) return` 让 listener 只在 in_progress 挂载,
-  // 结果非 in_progress 态下编辑描述时 ESC 完全无反应(本 issue 修复点)。
+  // 结果非 in_progress 态下编辑描述时 ESC 完全无反应(早期 issue 修复点)。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -96,18 +76,14 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
       }
       if (!isInProgress) return
       e.preventDefault()
-      void handleInterrupt()
+      onInterrupt()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // handleInterrupt 依赖 issue.id / created_by / interrupting / pendingQueue,
-    // 但中断进行中的去重由 setInterrupting + 早 return 保证。pendingQueue
-    // 必须放依赖:否则用户加 chip 后按 ESC,监听闭包里的 handleInterrupt 还是
-    // 旧 render 的(空队列),chip 不会被 flush。pendingQueue 只在 chip 增删
-    // 时换引用,重绑频率很低。edit.editing 必须放依赖:进入/退出编辑时
-    // 重绑 listener,确保 ESC 走对应分支。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [edit.editing, isInProgress, issue.id, pendingQueue])
+    // onInterrupt 是父组件 useCallback,依赖 issue.id/created_by/reload,
+    // 稳定性足够。edit.editing / isInProgress 必须放依赖:进入/退出编辑或
+    // 状态翻进/翻出 in_progress 时重绑 listener,确保 ESC 走对应分支。
+  }, [edit.editing, isInProgress, onInterrupt])
 
   // 候选指派对象 = 群成员 ∩ 非真人 agent（真人不参与抢单执行）。
   const memberSet = new Set(groupMembers)
@@ -170,10 +146,12 @@ export function IssueDetailHeader({ issue, agents, groupMembers, onBack, edit, r
             <Button
               variant="danger"
               outline
-              size="xs"
-              onClick={handleInterrupt}
+              size={isPad ? 'sm' : 'xs'}
+              onClick={onInterrupt}
               disabled={interrupting}
-              title="中断当前步骤(快捷键:ESC)。保留 session,队列消息会自动续跑。"
+              title={isPad
+                ? '中断当前步骤。保留 session,队列消息与输入框草稿会一并 flush 给 worker 续跑。'
+                : '中断当前步骤(快捷键:ESC)。保留 session,队列消息与输入框草稿会一并 flush 给 worker 续跑。'}
             >
               {interrupting ? '中断中…' : '■ 中断'}
             </Button>

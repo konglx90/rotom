@@ -112,16 +112,16 @@ function IssueDetailBody({
 
   // 从 events 派生活动指示:最后一条 progress 事件的 created_at + 从 content
   // 提取的最后状态文案(Working/Running/Patching/...)。配合 IssueStatusBar 的
-  // 本地 1s tick 显示「状态 · Xs 前」,让用户一眼判断 CLI 是否还在动:
-  //   - 思考中 · 3s 前  → 流式输出中,正常
-  //   - 思考中 · 90s 前 → 等流式请求,可能 API 慢
-  //   - 执行命令 · 60s 前 → 长命令跑着,没挂
+  // 本地 1s tick 显示「状态 · Xs/Xm Ys 前」,让用户一眼判断 CLI 是否还在动:
+  //   - 思考中 · 3s 前       → 流式输出中,正常
+  //   - 思考中 · 1m 30s 前   → 等流式请求,可能 API 慢
+  //   - 执行命令 · 1m 0s 前  → 长命令跑着,没挂
   // events 通过 issue_changed reload 拿,CLI 持续输出时实时刷新;CLI 卡住时
   // events 不更新,但本地 tick 仍能算 elapsed 增长——这正是「疑似卡住」信号。
   const activity = useMemo(() => extractActivity(events), [events])
 
   // in_progress 期间用户已发送但 worker 还没消费的追加指令(chip 列表)。
-  // 提升到 IssueDetail 层,让 ContinueInputBar(push)和 IssueDetailHeader
+  // 提升到 IssueDetail 层,让 ContinueInputBar(push)和 handleInterrupt
   // (中断时 flush + clear)都能访问。issue 翻终态时按下面 effect 处理。
   const [pendingQueue, setPendingQueue] = useState<string[]>([])
   const prevStatusRef = useRef<Issue['status'] | undefined>(undefined)
@@ -131,6 +131,66 @@ function IssueDetailBody({
   // 否则 reload 触发的二次渲染可能重入),所以走 ref 同步。
   const pendingQueueRef = useRef<string[]>([])
   pendingQueueRef.current = pendingQueue
+
+  // 输入框当前草稿。也提升到这一层,让 ESC 中断时能把「还没按 Enter 入队的
+  // textarea 文本」一并 flush 给 worker —— 对齐 ContinueInputBar placeholder
+  // 承诺的「Esc 统一发送并中断当前步骤」。旧实现里 prompt 是 ContinueInputBar
+  // 的内部 state,IssueDetailHeader 的 ESC 监听拿不到,只能 flush chip 队列;
+  // 用户在 textarea 里写一半的指令会被「裸中断」丢进 paused 态,没有 resume。
+  const [promptDraft, setPromptDraft] = useState('')
+  const promptDraftRef = useRef('')
+  promptDraftRef.current = promptDraft
+
+  // 中断进行中标记。同样提升到这一层,IssueDetailHeader 的「■ 中断」按钮和
+  // 全局 ESC 监听都用同一个状态去重,避免按钮和快捷键各自维护闭包。
+  const [interrupting, setInterrupting] = useState(false)
+  const interruptingRef = useRef(false)
+
+  // 「已提交状态翻转动作,正在等 worker 接单」标记。提交 /append(start /
+  // paused)或 /continue(completed/failed)HTTP 返回 200 后,worker 实际
+  // 还要做 git fetch + spawn CLI,要 30-90s 才把 issue.status 真正翻到
+  // in_progress。这期间前端按返回看不到任何变化,用户会以为没点上、重复点。
+  // 挂上 pendingStart 后:ContinueInputBar 按钮显「启动中…」+ 禁用,
+  // IssueStatusBar 状态点转起来 + 文案显「启动中」,撑到 reload 看到 status
+  // 真翻转再清。chip 入队(in_progress Enter)不走这里:它本就是即时的。
+  const [pendingStart, setPendingStart] = useState(false)
+
+  // 中断当前步骤(对齐 codex CLI 的 ESC + flush steers)。把 pendingQueue
+  // 里的草稿逐条 flush 给 worker,再 POST /interrupt → worker abort 当前
+  // CLI → runIssueExecution finally 块消费 pendingAppends 用 --resume 续跑。
+  // 关键修复:textarea 里还没入队的草稿也一起 flush,避免「裸中断」把用户
+  // 正在编辑的指令丢进 paused 态而没有 resume。
+  const handleInterrupt = useCallback(async () => {
+    if (interruptingRef.current) return
+    interruptingRef.current = true
+    setInterrupting(true)
+    try {
+      const queued = pendingQueueRef.current
+      const draft = promptDraftRef.current.trim()
+      // 顺序:先 chip 队列(用户已 Enter 入队的),最后是当前 textarea 草稿。
+      // 时间线上的「追加指令」气泡顺序与用户输入一致。
+      const allTexts = draft ? [...queued, draft] : queued
+      for (const text of allTexts) {
+        await issuesApi.append(issue.id, text, issue.created_by)
+      }
+      await issuesApi.interrupt(issue.id, issue.created_by)
+      // 先把本地 chip + 草稿清掉,避免 reload 期间旧内容闪一帧。
+      if (queued.length > 0) {
+        setPendingQueue([])
+        pendingQueueRef.current = []
+      }
+      if (draft) {
+        setPromptDraft('')
+        promptDraftRef.current = ''
+      }
+      await reload()
+    } catch (err) {
+      console.error('Failed to interrupt issue:', err)
+    } finally {
+      interruptingRef.current = false
+      setInterrupting(false)
+    }
+  }, [issue.id, issue.created_by, reload])
 
   useEffect(() => {
     const prev = prevStatusRef.current
@@ -173,7 +233,6 @@ function IssueDetailBody({
   const removePending = useCallback((idx: number) => {
     setPendingQueue(q => q.filter((_, i) => i !== idx))
   }, [])
-  const clearPending = useCallback(() => setPendingQueue([]), [])
 
   // 把所有 status='pending' 的 approval_request 提取出来,渲染成悬浮在底部
   // 按钮上方的快捷确认条。信息流里的 ApprovalCard 同步保留,既能看到上下文
@@ -257,10 +316,35 @@ function IssueDetailBody({
     return () => ro.disconnect()
   }, [standalone, pendingApprovals.length, issue?.status])
 
-  const handleSubmitted = useCallback(async () => {
+  const handleSubmitted = useCallback(async (action: 'start' | 'chip' | 'append' | 'continue') => {
+    // 状态翻转动作(start / append / continue)挂 pendingStart:HTTP 已 200,
+    // 但 worker 还没把 issue.status 真正挑到 in_progress,这期间要给用户
+    // loading 视觉。chip 是 in_progress 下 Enter 入队,本就是即时的,不挂。
+    if (action !== 'chip') setPendingStart(true)
     await reload()
     scrollToBottom()
   }, [reload, scrollToBottom])
+
+  // pendingStart 清除时机:
+  //   1. issue.status 翻进 in_progress(正常路径:worker 把任务挑起来了)或
+  //      任一终态(completed/failed/cancelled —— 异常路径:worker 拒单 / 用户
+  //      在别处取消)。open/paused 不清,因为那正是 worker 还没接单的状态。
+  //   2. 60s 兜底:网络挂了 / worker 卡死 / git fetch 超时,status 一直不
+  //      变,不能让用户永远看着「启动中…」。日志里见过 git fetch 超时
+  //      卡 75s,所以兜底放到 60s 之后。
+  // 两条路都走 setPendingStart(false),幂等。
+  useEffect(() => {
+    if (!pendingStart) return
+    if (issue?.status === 'in_progress' || issue?.status === 'completed' || issue?.status === 'failed' || issue?.status === 'cancelled') {
+      setPendingStart(false)
+    }
+  }, [issue?.status, pendingStart])
+
+  useEffect(() => {
+    if (!pendingStart) return
+    const id = setTimeout(() => setPendingStart(false), 60_000)
+    return () => clearTimeout(id)
+  }, [pendingStart])
 
   const artifacts: string[] = (() => {
     try { return JSON.parse(issue.artifacts || '[]') } catch { return [] }
@@ -311,8 +395,8 @@ function IssueDetailBody({
         onComplete={handleComplete}
         onCancel={handleCancel}
         onDelete={handleDelete}
-        onInterrupted={clearPending}
-        pendingQueue={pendingQueue}
+        onInterrupt={handleInterrupt}
+        interrupting={interrupting}
         readOnly={readOnly}
       />
 
@@ -396,7 +480,7 @@ function IssueDetailBody({
           ref={dockRef}
           className={`${styles.bottomDock} ${standalone ? styles.bottomDockFixed : ''}`}
         >
-          <IssueStatusBar issue={issue} liveUsage={liveUsage} activity={activity} />
+          <IssueStatusBar issue={issue} liveUsage={liveUsage} activity={activity} pendingStart={pendingStart} />
           <ContinueInputBar
             issueId={issueId}
             continuedBy={issue.created_by}
@@ -407,6 +491,9 @@ function IssueDetailBody({
             pendingQueue={pendingQueue}
             onPushPending={pushPending}
             onRemovePending={removePending}
+            prompt={promptDraft}
+            onPromptChange={setPromptDraft}
+            pendingStart={pendingStart}
           />
         </div>
       ) : null)}

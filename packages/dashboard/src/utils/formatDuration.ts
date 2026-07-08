@@ -13,11 +13,13 @@ export function formatDuration(ms: number): string {
   return `${d} 天 ${h % 24} 小时`
 }
 
-// 紧凑版(本期默认不启用,留给窄列/移动端备用):m:ss 或 h:mm:ss。
+// 紧凑版(IssueStatusBar ⏱ 用):m:ss 或 h:mm:ss。每个区间都带秒,
+// 配合 useIssueElapsed 的 1s tick,让用户每秒都能看到数字变化,避免长任务
+// (≥1h)误以为界面卡住。
 export function formatDurationCompact(ms: number): string {
   const s = Math.floor(ms / 1000)
   if (s < 60) return `${s} 秒`
   const m = Math.floor(s / 60)
   if (m < 60) return `${m}:${String(s % 60).padStart(2, '0')}`
-  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }

@@ -107,6 +107,82 @@
   flex-shrink: 0;
 }
 
+/* VSCode 调起失败提示:常见原因是 master 机器上 `code` 不在 PATH。
+   红字 + 截断,鼠标悬停看完整信息。 */
+.vscodeError {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #c0392b;
+  background: rgba(192, 57, 43, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* header「VSCode」按钮的下拉包裹:relative 锚定菜单。 */
+.vscodeDropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 下拉菜单:absolute 贴在按钮右下,z-index 压过文件树/预览。 */
+.vscodeMenu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  min-width: 200px;
+  max-width: 320px;
+  background: var(--color-canvas, #fff);
+  border: 1px solid var(--border-color-light, #e5e7eb);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  z-index: 50;
+}
+
+.vscodeMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-text, #1f2937);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vscodeMenuItem:hover:not(:disabled) {
+  background: var(--color-canvas-hover, #f3f4f6);
+}
+
+.vscodeMenuItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vscodeMenuIcon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.vscodeMenuLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vscodeMenuSeparator {
+  height: 1px;
+  background: var(--border-color-light, #e5e7eb);
+  margin: 4px 0;
+}
+
 .searchRow {
   display: flex;
   align-items: center;

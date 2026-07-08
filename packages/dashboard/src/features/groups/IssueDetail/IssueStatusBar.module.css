@@ -58,7 +58,7 @@
   white-space: nowrap;
 }
 
-/* 活动指示「Xs 前」:跟在状态文案 + agent 名后面。三态颜色:
+/* 活动指示「Xs 前 / Xm Ys 前」:跟在状态文案 + agent 名后面。三态颜色:
  *   fresh(<30s) 绿,正常输出中
  *   warn(30-60s) 琥珀,疑似等 API / 长命令
  *   danger(>60s) 红,建议中断检查

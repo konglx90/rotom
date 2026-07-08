@@ -1,9 +1,10 @@
 import { type Router as ExpressRouter } from "express";
 import path from "node:path";
+import os from "node:os";
 import fs from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import type { MeshDb } from "../db.js";
-import { resolveGroupArtifactRoot } from "../group-paths.js";
+import { resolveGroupArtifactRoot, ARTIFACTS_ROOT } from "../group-paths.js";
 import { resolveGroupWorktreeInfo } from "../repo-scan.js";
 import { readFileSafely, walkDir, type FileEntry } from "../util/fs.js";
 import { toBeijing } from "../../shared/time.js";
@@ -537,4 +538,131 @@ export function registerArtifactRoutes(
     }
     res.json({ path: filePath, ref, content: result.stdout });
   });
+
+  // ── 调起 VSCode ───────────────────────────────────────────────────────
+  // 给 dashboard 上"在 VSCode 中打开"按钮用:human 点击 → POST 这个接口 →
+  // master 在本机 spawn `code <path>`(detached,不阻塞 HTTP 调用)。
+  //
+  // 路径解析优先级:
+  //   1. body.path / query.path 给绝对路径或相对 groupDir 的路径
+  //   2. ?repo=<id> 切到对应 worktree(primary 或 extras 之一)作 base
+  //   3. 都不给 → groupDir 自身(打开整个 artifacts 目录)
+  //
+  // 安全校验:解析后的绝对路径必须落在 ~/.rotom/artifacts/ 或 ~/.rotom/repos/
+  // 之下,否则 403。这避免 dashboard 把任意路径(如 /etc)塞进来在 master
+  // 机器上开编辑器。
+  apiRouter.post("/artifacts/:groupId/open-vscode", (req, res) => {
+    const rawPath = typeof req.query.path === "string"
+      ? req.query.path
+      : (typeof req.body?.path === "string" ? req.body.path : "");
+    const repoParam = typeof req.query.repo === "string"
+      ? req.query.repo
+      : (typeof req.body?.repo === "string" ? req.body.repo : "");
+
+    const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
+
+    // 选 base:repo 参数优先,落到对应 worktree;否则用 groupDir。
+    // path 以 `__repos/` 开头时,和 /content 接口一致 —— 自动切到 primary
+    // worktree 作 base,并剥掉前缀。这样前端直接传 selectedFile.path 即可,
+    // 不用自己识别虚拟节点。
+    let baseDir = groupDir;
+    let normalizedPath = rawPath;
+    if (normalizedPath.startsWith("__repos/")) {
+      const wtInfo = resolveGroupWorktreeInfo(db, req.params.groupId);
+      if (!wtInfo || !wtInfo.primaryExists) {
+        res.status(400).json({ error: "primary worktree 未创建,无法定位 __repos 下文件。" });
+        return;
+      }
+      baseDir = wtInfo.primaryPath;
+      normalizedPath = normalizedPath.slice("__repos/".length);
+    }
+    if (repoParam && repoParam.trim()) {
+      const resolved = resolveRepoWorktree(db, req.params.groupId, repoParam);
+      if ("error" in resolved) {
+        res.status(resolved.status).json({ error: resolved.error });
+        return;
+      }
+      baseDir = resolved.worktreePath;
+    }
+
+    // 没传 path → 开 baseDir 自身。
+    if (!normalizedPath || !normalizedPath.trim()) {
+      void launchVscode(baseDir, baseDir, (err) => {
+        if (err) {
+          res.status(500).json({ error: err.message });
+          return;
+        }
+        res.json({ ok: true, path: baseDir, editor: "code" });
+      });
+      return;
+    }
+
+    // 传了 path:相对 baseDir 解析(也接受绝对路径,但要在白名单根下)。
+    const candidate = path.isAbsolute(normalizedPath)
+      ? normalizedPath
+      : path.resolve(baseDir, normalizedPath);
+    const REPOS_ROOT = path.join(os.homedir(), ".rotom", "repos");
+    const allowedRoots = [ARTIFACTS_ROOT, REPOS_ROOT];
+    const inside = allowedRoots.some((root) => {
+      const rel = path.relative(root, candidate);
+      return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+    });
+    if (!inside) {
+      res.status(403).json({
+        error: "路径不在 ~/.rotom/artifacts 或 ~/.rotom/repos 下,拒绝调起 VSCode",
+      });
+      return;
+    }
+    // 不要求文件已存在(agent 可能想开一个还没生成的路径),但目录必须存在。
+    if (!fs.existsSync(candidate)) {
+      res.status(404).json({ error: `路径不存在: ${candidate}` });
+      return;
+    }
+    void launchVscode(candidate, baseDir, (err) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      res.json({ ok: true, path: candidate, editor: "code" });
+    });
+  });
+}
+
+/** detached spawn `code <path>`。stdio 全部 ignored,master 不等 VSCode 退出。
+ *  成功 spawn → 立即 cb();失败(主要:code 不在 PATH)→ cb(err)。
+ *  用 `spawn` 事件而不是 setTimeout 等待 —— Node 在子进程真正 fork 出来后
+ *  才发 spawn,ENOENT 之前会先发 error。
+ *  `cwd` 仅作 VSCode 启动工作目录(影响最近打开的 workspace 记忆等),不影响 target 解析。 */
+function launchVscode(target: string, cwd: string, cb: (err?: Error) => void): void {
+  let child;
+  try {
+    child = spawn("code", [target], {
+      stdio: "ignore",
+      detached: true,
+      cwd,
+    });
+  } catch (err) {
+    cb(err as Error);
+    return;
+  }
+  let settled = false;
+  const done = (err?: Error): void => {
+    if (settled) return;
+    settled = true;
+    cb(err);
+  };
+  child.on("error", (err) => {
+    // ENOENT = `code` 不在 PATH。给一个可读的错误信息。
+    const msg = (err as NodeJS.ErrnoException).code === "ENOENT"
+      ? "未找到 `code` 命令,请先在 VSCode 里执行「Install 'code' command in PATH」(命令面板 → 输入 shell command)"
+      : (err as Error).message;
+    done(new Error(msg));
+  });
+  child.on("spawn", () => {
+    // detached 后立即 unref,父进程退出不影响 VSCode。
+    child.unref();
+    done();
+  });
+  // 兜底:5s 没动静也算失败(防卡死 HTTP 请求)。
+  setTimeout(() => done(new Error("spawn `code` 超时")), 5000);
 }
