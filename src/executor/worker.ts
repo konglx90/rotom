@@ -607,7 +607,9 @@ export class ExecutorWorker {
 
     // Chat message reply
     if (msg.type === "a2a_message") {
-      const { requestId, from, payload, conversation, agentProfile, cwd: overrideCwd, repoUrl, repoBranch, extraRepos, worktreeMode } = msg as any;
+      // chat 不走 worktree:仅取 repoUrl 用于 prompt 提示 repo 子目录位置,
+      // 不再传 repoCtx 给 resolveIssueCwd(不触发 worktree)。cwd 落产物根。
+      const { requestId, from, payload, conversation, agentProfile, cwd: overrideCwd, repoUrl } = msg as any;
       if (agentProfile) this.setAgentProfile(agentProfile as AgentProfile);
       const content = payload?.message || "";
       const fromName = from?.name || "unknown";
@@ -620,11 +622,11 @@ export class ExecutorWorker {
       const qaMode = (msg as any).qaMode === true;
       log.info(this.tag, `a2a_message from ${fromName} requestId=${requestId} isGroup=${isGroup} isMentioned=${isMentioned} qaMode=${qaMode} contentLen=${content.length} contentHead=${JSON.stringify(content.slice(0, 60))}`);
       if (repoUrl) {
-        log.info(this.tag, `repoCtx: url=${repoUrl} branch=${repoBranch} mode=${worktreeMode} extras=${extraRepos ? JSON.stringify((extraRepos as any[]).map(e => e.id)) : "(none)"}`);
+        log.info(this.tag, `chat repoUrl=${repoUrl} (prompt hint only, no worktree)`);
       }
       if (!isGroup || isMentioned || qaMode) {
         log.info(this.tag, `Chat from ${fromName}: ${content.slice(0, 80)}...`);
-        this.chat.handleChatReply(requestId, content, fromName, conversation, overrideCwd, { issueId: "chat", repoUrl, repoBranch, extraRepos, worktreeMode });
+        this.chat.handleChatReply(requestId, content, fromName, conversation, overrideCwd, repoUrl);
       } else {
         log.info(this.tag, `SKIP group message from ${fromName}: not @mentioned (looking for @${this.config.name})`);
       }

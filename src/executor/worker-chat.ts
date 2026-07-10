@@ -8,18 +8,19 @@
 import { composePrompt } from "../shared/prompt-composer.js";
 import type { ExecutorWorker } from "./worker.js";
 import { createLogger } from "../shared/logger.js";
+import { repoNameFor } from "./repo-cache.js";
 
 const log = createLogger("mesh-executor-worker-chat", { stream: "stderr" });
 
 export class ChatHandler {
   /** 同群 chat 队列:groupId → 待处理消息队列。同群串行,保证 session 不丢。 */
-  private groupChatQueues: Map<string, Array<{ requestId: string; content: string; fromName: string; conversation: any; cwdOverride?: string; repoCtx?: { issueId?: string; repoUrl?: string; repoBranch?: string; extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[]; worktreeMode?: string } }>> = new Map();
+  private groupChatQueues: Map<string, Array<{ requestId: string; content: string; fromName: string; conversation: any; cwdOverride?: string; repoUrl?: string }>> = new Map();
   private groupChatActive: Set<string> = new Set();
 
   constructor(private readonly worker: ExecutorWorker) {}
 
   async handleChatReply(requestId: string, content: string, fromName: string, conversation: any, cwdOverride?: string,
-    repoCtx?: { issueId?: string; repoUrl?: string; repoBranch?: string; extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[]; worktreeMode?: string },
+    repoUrl?: string,
   ): Promise<void> {
     const taskKey = `chat:${requestId}`;
     if (this.worker.activeTasks.has(taskKey)) return;
@@ -30,13 +31,13 @@ export class ChatHandler {
     // 避免新 chat 开新 session 丢失上下文(ask-bridge 复述到达时 A 的原始 turn 可能还没结束)。
     if (groupId && this.groupChatActive.has(groupId)) {
       const queue = this.groupChatQueues.get(groupId) ?? [];
-      queue.push({ requestId, content, fromName, conversation, cwdOverride, repoCtx });
+      queue.push({ requestId, content, fromName, conversation, cwdOverride, repoUrl });
       this.groupChatQueues.set(groupId, queue);
       log.info(this.worker.tag, `Chat from ${fromName} queued for group ${groupId} (queue=${queue.length})`);
       return;
     }
 
-    await this.runChatReply(requestId, content, fromName, conversation, cwdOverride, groupId, undefined, repoCtx);
+    await this.runChatReply(requestId, content, fromName, conversation, cwdOverride, groupId, undefined, repoUrl);
   }
 
   private async runChatReply(
@@ -47,15 +48,15 @@ export class ChatHandler {
     cwdOverride: string | undefined,
     groupId: string,
     mergedSiblings?: Array<{ requestId: string; conversation: any }>,
-    repoCtx?: { issueId?: string; repoUrl?: string; repoBranch?: string; extraRepos?: { id: string; url: string; branch?: string; mountPath: string }[]; worktreeMode?: string },
+    repoUrl?: string,
   ): Promise<void> {
     const taskKey = `chat:${requestId}`;
-    // cwd 优先用 master 推送(Dashboard 群工作目录 / per-agent override);
-    // 本机不存在或未推送时回落本地派生(<workingDirMap[groupId]> 或 <base>/<groupId>)。
-    // 旧的 conversation.workingDir 仍忽略(那是展示元数据,与 spawn 无关)。
-    // group 配了 repo 且同机时 master 在 a2a_message 里下发 repoCtx,这里走 group 模式
-    // 共享 worktree(<groupDir>/repos/primary/),让 chat 也能查 repo 代码。
-    const resolveChatCwd = async (): Promise<string> => this.worker.resolveIssueCwd(groupId || undefined, cwdOverride, repoCtx);
+    // chat 不走 worktree:cwd 落产物根(~/.rotom/artifacts/<groupId>),master 推送的
+    // override(Dashboard 群工作目录 / per-agent override)本机存在则优先,否则回落
+    // 本地派生。repo 已在产物根的 __repos/<repoName>/ 子目录下,agent 只读访问即可
+    // (prompt cwd 层会提示 repo 子目录位置)。issue 路径才起 worktree,互不影响。
+    // 旧的 conversation.workingDir 仍忽略(展示元数据,与 spawn 无关)。
+    const resolveChatCwd = async (): Promise<string> => this.worker.resolveIssueCwd(groupId || undefined, cwdOverride);
 
     if (this.worker.activeTasks.size >= this.worker.maxConcurrent) {
       this.worker.sendChatEnd(requestId, `[系统] 当前任务繁忙，请稍后再试`, conversation, await resolveChatCwd());
@@ -101,6 +102,7 @@ export class ChatHandler {
       cwd,
       fromName: fromName || null,
       body,
+      repoName: repoUrl ? repoNameFor(repoUrl) : undefined,
     });
 
     log.info(this.worker.tag, `Session lookup: cliTool=${this.worker.cliTool}, groupId=${groupId}, sessionId=${sessionId ?? "(none)"}, conversation=${JSON.stringify(conversation)}`);
@@ -260,7 +262,7 @@ export class ChatHandler {
     if (batch.length === 1) {
       const n = batch[0];
       log.info(this.worker.tag, `Dequeue chat from ${n.fromName} for group ${groupId} (remaining=${queue.length})`);
-      this.runChatReply(n.requestId, n.content, n.fromName, n.conversation, n.cwdOverride, groupId, undefined, n.repoCtx).catch((err) => {
+      this.runChatReply(n.requestId, n.content, n.fromName, n.conversation, n.cwdOverride, groupId, undefined, n.repoUrl).catch((err) => {
         log.error(this.worker.tag, "Dequeued chat error:", err.message);
       });
       return;
@@ -278,7 +280,7 @@ export class ChatHandler {
       .map((b) => `[from=${b.fromName}]\n${b.content.replace(mentionTag, "").trim()}`)
       .join("\n\n---\n\n");
     log.info(this.worker.tag, `Dequeue merged chat for group ${groupId} (merged=${batch.length}, from=[${mergedNames}], remaining=${queue.length})`);
-    this.runChatReply(primary.requestId, mergedBody, null, primary.conversation, primary.cwdOverride, groupId, siblings, primary.repoCtx).catch((err) => {
+    this.runChatReply(primary.requestId, mergedBody, null, primary.conversation, primary.cwdOverride, groupId, siblings, primary.repoUrl).catch((err) => {
       log.error(this.worker.tag, "Dequeued merged chat error:", err.message);
     });
   }

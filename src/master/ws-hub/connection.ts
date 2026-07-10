@@ -361,8 +361,9 @@ export const connectionMethods = {
 
         if (result.targetAgentId) {
           const enrichedConversation = this.enrichGroupConversation(msg.conversation, result.targetName);
-          // chat 路径也走 worktree:group 配了 repo 且 target agent 同机时,注入 repoCtx。
-          // worker 收到后在 resolveChatCwd 里走 group 模式共享 worktree,可查 repo 代码。
+          // chat 不走 worktree:cwd 落产物根(repo 作 __repos/<repoName>/ 子目录只读访问)。
+          // 仅下发 repoUrl 供 worker 算 prompt 提示名,不再下发 branch/extra/mode(那些
+          // 是 worktree 用的)。issue 路径的 repoCtx 注入在 routing.ts,互不影响。
           const groupIdForRepo = enrichedConversation?.groupId;
           const repo = groupIdForRepo && result.targetName
             ? resolveGroupRepoCtxLocalOnly(this.db, groupIdForRepo, result.targetName)
@@ -374,7 +375,7 @@ export const connectionMethods = {
             payload: msg.payload,
             routeType,
             conversation: enrichedConversation,
-            ...(repo ? { repoUrl: repo.repoUrl, repoBranch: repo.repoBranch, extraRepos: repo.extraRepos, worktreeMode: repo.worktreeMode } : {}),
+            ...(repo?.repoUrl ? { repoUrl: repo.repoUrl } : {}),
           } as ServerMessage, result.targetName, enrichedConversation?.groupId);
           delivered = this.sendToAgent(result.targetAgentId, outMsg);
 

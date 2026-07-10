@@ -52,6 +52,10 @@ export interface ComposeContext {
    * 挂住,等用户在 dashboard 上 Accept/Deny),'rw_allow' 写盘直接放行。
    */
   approvalPolicy?: "r_allow" | "rw_allow";
+  /** chat 模式:群配了 repo 时填仓库名(repoNameFor(repoUrl)),用于在 cwd 层
+   *  提示 repo 检出在 __repos/<repoName>/ 子目录(chat 不走 worktree,agent 在
+   *  产物根只读访问 repo)。issue 模式 agent 已在 worktree 内,不传。 */
+  repoName?: string;
 }
 
 // ── Layer builders ──────────────────────────────────────────────────────
@@ -117,7 +121,7 @@ function renderActiveIssues(issues: ActiveIssueRef[] | undefined): string {
   return `[当前群活跃 issue] ${status}\n`;
 }
 
-function buildCwdLayer(cwd: string | null, mode: ComposeContext["mode"], approvalPolicy?: "r_allow" | "rw_allow"): PromptLayer | null {
+function buildCwdLayer(cwd: string | null, mode: ComposeContext["mode"], approvalPolicy?: "r_allow" | "rw_allow", repoName?: string): PromptLayer | null {
   if (!cwd) return null;
   // 写盘策略单行(详细话术见 SKILL.md 锚点):
   //   chat    → 只读,仅 Read/Grep/Glob/Bash(只读)
@@ -130,11 +134,17 @@ function buildCwdLayer(cwd: string | null, mode: ComposeContext["mode"], approva
       : effectivePolicy === "rw_allow"
         ? `模式: ${mode},可写(rw_allow)。Write/Edit/写 Bash 自动放行,无需 dashboard 确认;只写本任务相关产出。\n`
         : `模式: ${mode},可写(r_allow)。写盘类(Write/Edit/写 Bash)会被挂起等 dashboard Accept/Deny;只读 Bash(ls/cat/grep/git status/git diff/git log/rotom status 等)自动放行不打扰;要完全免审批用 --approval-policy rw_allow。\n`;
+  // chat 不走 worktree:agent cwd 在产物根,repo 作为 __repos/<repoName>/ 子目录
+  // 只读访问。提示一句让 agent 知道 repo 位置,不必 Glob 摸索。
+  const repoHint = mode === "chat" && repoName
+    ? `本群 repo 检出在 __repos/${repoName}/ 下(只读),查代码用相对路径 __repos/${repoName}/...。\n`
+    : "";
   return {
     layer: "cwd",
     content:
       `[artifacts目录] ${cwd}\n` +
       `相对路径基于此目录解析;Read/Grep/Glob 用相对路径即可,不要 \`cd\` 切到其他目录。\n` +
+      repoHint +
       writability,
     source: SOURCE_CWD,
   };
@@ -202,7 +212,7 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
   const guidance = buildGroupGuidanceLayer(ctx.group);
   if (guidance) layers.push(guidance);
 
-  const cwd = buildCwdLayer(ctx.cwd, ctx.mode, ctx.approvalPolicy);
+  const cwd = buildCwdLayer(ctx.cwd, ctx.mode, ctx.approvalPolicy, ctx.repoName);
   if (cwd) layers.push(cwd);
 
   // chat 模式下,发信人 fromName 注入到 task 层头部(只有 chat 才有 fromName 语义)。
