@@ -22,7 +22,7 @@ export interface Agent {
   status: 'online' | 'offline'
   hostname?: string
   endpoint?: string
-  /** 当前连接的 CLI 工具(claude/codex/hermes/openclaw/pi)。Offline 时为 null。
+  /** 当前连接的 CLI 工具(claude/codex/hermes/pi)。Offline 时为 null。
    *  由 master 从 hub.connections 查出,DB 不存(那是 worker 运行时属性)。 */
   cliTool?: string | null
   enabled: boolean
@@ -247,7 +247,7 @@ export interface Issue {
    *  视图里的 session 就是靠这个字段反查到对应 issue 的 usage。null 表示
    *  issue 还没开始执行 / 老数据 / 被 clear 掉。 */
   session_id?: string | null
-  /** 该 issue 执行用的 CLI 后端(claude | codex | hermes | openclaw,migration 013)。 */
+  /** 该 issue 执行用的 CLI 后端(claude | codex | hermes,migration 013)。 */
   cli_tool?: string | null
   /** 最新一次 TodoWrite 工具调用的 todos 快照(migration 028)。worker 解析
    *  Claude Code 的 TodoWrite tool_use 后通过 issue_todos_update WS 推送,

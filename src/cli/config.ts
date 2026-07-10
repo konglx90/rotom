@@ -37,12 +37,12 @@ export async function cmdConfig(rest: string[], _flags: Record<string, string | 
     cfg.defaultAgent = name; saveRotomConfig(cfg);
     process.stdout.write(`defaultAgent = ${name}\n`); return;
   }
-  if (sub === "add-openclaw" || sub === "add-executor") {
+  if (sub === "add-executor") {
     const name = rest[1]; const cfgPath = rest[2];
     if (!name || !cfgPath) usage(`config ${sub}`, "<name> <path>");
     const abs = path.resolve(expandHome(cfgPath));
     if (!fs.existsSync(abs)) fail(`config file not found: ${abs}`);
-    const kind = sub === "add-openclaw" ? "openclaw" : "executor";
+    const kind = "executor";
     cfg.agents[name] = { configPath: abs, kind };
     if (!cfg.defaultAgent) cfg.defaultAgent = name;
     saveRotomConfig(cfg);

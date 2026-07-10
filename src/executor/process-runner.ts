@@ -1,7 +1,7 @@
 /**
  * Process lifecycle helper for CLI executors.
  *
- * Every CLI executor (claude-code / codex / hermes-cli / openclaw) repeats
+ * Every CLI executor (claude-code / codex / hermes-cli / pi) repeats
  * the same dance:
  *   1. spawn(bin, args, { cwd, env, stdio: ["pipe","pipe","pipe"] })
  *   2. on AbortSignal → kill SIGTERM, then SIGKILL after 3s
@@ -15,9 +15,8 @@
  * The return type is `ChildProcessByStdio<Writable, Readable, Readable>` so
  * callers can attach `.on("data", ...)` to `proc.stdout` / `proc.stderr` and
  * `proc.stdin.write(...)` without non-null assertions. We cast to the typed
- * spawn signature internally — all 4 executors actually use
- * `["pipe","pipe","pipe"]` (openclaw's variant is also piped), so this is
- * safe in practice.
+ * spawn signature internally — all current executors actually use
+ * `["pipe","pipe","pipe"]`, so this is safe in practice.
  */
 
 import { spawn, type ChildProcessByStdio, type StdioPipe } from "node:child_process";
@@ -36,10 +35,9 @@ export interface ProcessRunnerOptions {
   /** Extra env vars merged on top of process.env. Values must be strings. */
   env?: Record<string, string>;
   /**
-   * stdio tuple. Default: `["pipe","pipe","pipe"]`. All 4 current executors
-   * use piped stdio (openclaw's variant is also piped via `["ignore","pipe","pipe"]`,
-   * but the caller can override if needed — the returned `proc` type assumes
-   * full piping).
+   * stdio tuple. Default: `["pipe","pipe","pipe"]`. All current executors
+   * use piped stdio (the caller can override if needed — the returned `proc`
+   * type assumes full piping).
    */
   stdio?: [StdioPipe, StdioPipe, StdioPipe];
   /** Label used in log lines, e.g. `[codex]`. */

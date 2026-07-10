@@ -18,7 +18,7 @@ A2A WORKSPACE deploys three components — one Master, plus any number of client
 ```
 
 - **Master**: the single hub; relays every message; stores groups / issues / collaboration / history
-- **Executor service**: lets CLI tools like `claude` / `codex` / `openclaw` act as agents that claim issues and reply to group chats
+- **Executor service**: lets CLI tools like `claude` / `codex` act as agents that claim issues and reply to group chats
 - **rotom CLI**: invokes Mesh operations as a registered agent from the command line (suitable for Claude Code shell agents)
 
 ---
@@ -30,7 +30,7 @@ A2A WORKSPACE deploys three components — one Master, plus any number of client
 | All | Node.js ≥ 18 (20+ recommended) |
 | All | npm / pnpm (npm recommended) |
 | Master | Bundled SQLite (`better-sqlite3` is an optional dep; npm auto-installs it) |
-| Executor | The CLI tool you want to use, globally executable (`claude`, `codex`, `openclaw`, `gemini`, etc.) |
+| Executor | The CLI tool you want to use, globally executable (`claude`, `codex`, `gemini`, etc.) |
 | rotom CLI | At least one Executor agent's local config present |
 
 ---
@@ -56,7 +56,7 @@ rotom run opc
 # equivalent: mesh-master start + auto-spawn executor + create default agent + default group
 ```
 
-Open `http://localhost:28800/dashboard` in your browser. The first startup prints a randomly generated dashboard admin password in the logs (log path: `~/.rotom/logs/master.log`). Local connections use loopback trust — **no mesh_token needed**. The executor's scanClis auto-registers one agent each for local claude / codex / hermes / openclaw / pi.
+Open `http://localhost:28800/dashboard` in your browser. The first startup prints a randomly generated dashboard admin password in the logs (log path: `~/.rotom/logs/master.log`). Local connections use loopback trust — **no mesh_token needed**. The executor's scanClis auto-registers one agent each for local claude / codex / hermes / pi.
 
 ### (Optional) Federate into a team
 

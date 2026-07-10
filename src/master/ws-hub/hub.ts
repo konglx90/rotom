@@ -49,7 +49,7 @@ export interface ConnectedAgent {
   name: string;
   domain?: string;
   /**
-   * CLI tool name the executor is bound to (claude | codex | hermes | openclaw).
+   * CLI tool name the executor is bound to (claude | codex | hermes).
    * Captured at auth time from ClientAuthMessage.cliTool and used by
    * routeToExecutor() to pick the right worker for /sessions endpoints.
    */

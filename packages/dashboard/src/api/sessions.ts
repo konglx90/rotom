@@ -27,7 +27,7 @@ export interface SessionEntry {
 }
 
 /** View content response. `error` is non-empty when the executor's CLI
- *  backend doesn't support introspection (codex/hermes/openclaw) or the
+ *  backend doesn't support introspection (codex/hermes) or the
  *  transcript is gone. `content` may be empty in that case. */
 export interface SessionView {
   cliTool: string

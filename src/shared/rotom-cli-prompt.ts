@@ -6,7 +6,7 @@
  * - 完整命令参考放在 `~/.rotom/SKILL.md`,由 rotom CLI 启动时把
  *   `skill/rotom-a2a-communicate/SKILL.md` 内联写入。Agent 需要时自行 Read。
  *   提示里只放一句"去看 SKILL.md"+ 锚点名,不重复列命令清单。
- * - 不同 provider (claude/codex/openclaw/hermes/generic) 各自的
+ * - 不同 provider (claude/codex/hermes/generic) 各自的
  *   "skill 机制位置" 不一致 —— 因此 rotom 自己做一份"自家文档"放在约定路径,
  *   不依赖任何 provider 的 skill 系统。
  */

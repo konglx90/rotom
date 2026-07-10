@@ -22,7 +22,7 @@ const log = createLogger("mesh-api-sessions");
 /** Hex / uuid / dash-only sessionId — keeps URL paths from being abused. */
 const SAFE_ID = /^[A-Za-z0-9_-]+$/;
 /** Known CLI backends; matches the switch in src/executor/index.ts. */
-const SAFE_CLI = /^(claude|codex|hermes|openclaw)$/;
+const SAFE_CLI = /^(claude|codex|hermes)$/;
 
 export function registerSessionRoutes(
   apiRouter: ExpressRouter,

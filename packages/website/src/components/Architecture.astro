@@ -35,7 +35,7 @@ const mermaid = `flowchart TB
     subgraph EX["⚙️  Executor process"]
         direction TB
         W["Worker N · 1 Worker = 1 Agent<br/>auto-registered via CLI scan, keeps WS to Master"]
-        A["CLI process (claude / codex / openclaw / hermes / ...)<br/>loads skill: rotom-a2a-communicate<br/>↓<br/>Bash → rotom &lt;subcmd&gt;"]
+        A["CLI process (claude / codex / hermes / ...)<br/>loads skill: rotom-a2a-communicate<br/>↓<br/>Bash → rotom &lt;subcmd&gt;"]
         W -. spawn .-> A
     end
 

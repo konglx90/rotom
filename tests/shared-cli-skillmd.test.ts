@@ -27,14 +27,14 @@ import {
 // cli-detect
 // ---------------------------------------------------------------------------
 
-test("ALL_KNOWN_CLIS: 含 claude/openclaw/codex/hermes/pi", () => {
-  for (const t of ["claude", "openclaw", "codex", "hermes", "pi"]) {
+test("ALL_KNOWN_CLIS: 含 claude/codex/hermes/pi", () => {
+  for (const t of ["claude", "codex", "hermes", "pi"]) {
     assert.ok(ALL_KNOWN_CLIS.includes(t), `应含 ${t}`);
   }
 });
 
-test("CLI_PRIORITY: 排序为 claude > openclaw > codex > pi(不含 hermes 兜底)", () => {
-  assert.deepEqual(CLI_PRIORITY, ["claude", "openclaw", "codex", "pi"]);
+test("CLI_PRIORITY: 排序为 claude > codex > pi(不含 hermes 兜底)", () => {
+  assert.deepEqual(CLI_PRIORITY, ["claude", "codex", "pi"]);
 });
 
 test("detectInstalledClis: 返回值是 ALL_KNOWN_CLIS 子集", () => {

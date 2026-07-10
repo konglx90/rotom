@@ -168,11 +168,6 @@ export function registerAgentRoutes(
           },
         },
       },
-      guide: [
-        "1. 复制上方 channels 配置到 openclaw.json",
-        "2. 启动 OpenClaw Gateway",
-        "3. 节点将自动连接 Master",
-      ],
     });
   });
 

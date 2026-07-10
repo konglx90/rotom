@@ -229,7 +229,7 @@ export function ensureLocalExecutor(opts: EnsureLocalExecutorOpts): LocalExecuto
 
   // 1. 选 config 路径:用户已配 executor.config.json → 用它;否则生成 .auto-executor.json
   //    .auto-executor.json 走 scanClis 模式 —— executor 启动时扫描本机已安装的
-  //    claude/codex/hermes/openclaw/pi,为每个 CLI 注册一个 agent(name 默认 = CLI 名)。
+  //    claude/codex/hermes/pi,为每个 CLI 注册一个 agent(name 默认 = CLI 名)。
   const userConfigPath = path.join(rotomHome, "executor.config.json");
   const autoConfigPath = path.join(rotomHome, ".auto-executor.json");
   let configPath: string;

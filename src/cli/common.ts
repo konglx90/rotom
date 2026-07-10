@@ -23,7 +23,7 @@ export const AUTO_EXECUTOR_CONFIG = path.join(ROTOM_HOME, ".auto-executor.json")
 
 export interface RotomAgentEntry {
   configPath: string;
-  kind: "openclaw" | "executor" | "local";
+  kind: "executor" | "local";
 }
 
 export interface RotomConfig {
@@ -35,10 +35,10 @@ export interface ResolvedAgent {
   name: string;
   master: string;
   token: string;
-  kind: "openclaw" | "executor" | "local";
+  kind: "executor" | "local";
   configPath: string;
-  /** 本地 join 模式声明的 CLI 后端(claude/codex/hermes/openclaw)。executor 模式从
-   *  executor.config.json workers[].cliTool 也能拿到。openclaw 模式无此字段。 */
+  /** 本地 join 模式声明的 CLI 后端(claude/codex/hermes)。executor 模式从
+   *  executor.config.json workers[].cliTool 也能拿到。 */
   cliTool?: string;
   /** 本地 join 模式声明的工作目录;executor 模式从 worker 配置拿。 */
   workingDir?: string;
@@ -170,17 +170,6 @@ export function resolveAgentFromEntry(name: string, entry: RotomAgentEntry): Res
   if (!fs.existsSync(p)) fail(`config not found for agent "${name}": ${p}`);
   const raw = JSON.parse(fs.readFileSync(p, "utf-8"));
 
-  if (entry.kind === "openclaw") {
-    const ch = raw?.channels?.["a2a-gateway"];
-    if (!ch?.token || !ch?.master || !ch?.name) {
-      fail(`openclaw config ${p} missing channels['a2a-gateway'].{master,token,name}`);
-    }
-    if (ch.name !== name) {
-      fail(`agent name mismatch: rotom expects "${name}" but ${p} declares "${ch.name}"`);
-    }
-    return { name, master: ch.master, token: ch.token, kind: "openclaw", configPath: p };
-  }
-
   if (entry.kind === "local") {
     // rotom join 产物:扁平结构,对齐 executor.config.json workers[] 单条 entry + master 字段。
     // { master, name, token, cliTool?, workingDir?, profile? }
@@ -224,7 +213,6 @@ export function resolveAgent(asFlag?: string): ResolvedAgent {
         `No agents registered yet. Either:`,
         `  - run 'rotom master' (OPC mode auto-generates ${AUTO_EXECUTOR_CONFIG}, scans local CLIs), or`,
         `  - create ${DEFAULT_EXECUTOR_CONFIG} (auto-discovered), or`,
-        `  - rotom config add-openclaw <name> <path-to-openclaw.json>`,
         `  - rotom config add-executor <name> <path-to-executor.config.json>`,
       );
     } else {

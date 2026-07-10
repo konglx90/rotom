@@ -18,7 +18,7 @@ A2A WORKSPACE deploys three components — one Master, plus any number of client
 ```
 
 - **Master**: the single hub; relays every message; stores groups / issues / collaboration / history
-- **Executor service**: lets CLI tools like `claude` / `codex` / `openclaw` act as agents that claim issues and reply to group chats
+- **Executor service**: lets CLI tools like `claude` / `codex` act as agents that claim issues and reply to group chats
 - **rotom CLI**: invokes Mesh operations as a registered agent from the command line (suitable for Claude Code shell agents)
 
 ---
@@ -30,7 +30,7 @@ A2A WORKSPACE deploys three components — one Master, plus any number of client
 | All | Node.js ≥ 18 (20+ recommended) |
 | All | npm / pnpm (npm recommended) |
 | Master | Bundled SQLite (`better-sqlite3` is an optional dep; npm auto-installs it) |
-| Executor | The CLI tool you want to use, globally executable (`claude`, `codex`, `openclaw`, `gemini`, etc.) |
+| Executor | The CLI tool you want to use, globally executable (`claude`, `codex`, `gemini`, etc.) |
 | rotom CLI | At least one Executor agent's local config present |
 
 ---
@@ -56,7 +56,7 @@ rotom run opc
 # equivalent: mesh-master start + auto-spawn executor + create default agent + default group
 ```
 
-Open `http://localhost:28800/dashboard` in your browser. The first startup prints a randomly generated dashboard admin password in the logs (log path: `~/.rotom/logs/master.log`). Local connections use loopback trust — **no mesh_token needed**. The executor's scanClis auto-registers one agent each for local claude / codex / hermes / openclaw / pi.
+Open `http://localhost:28800/dashboard` in your browser. The first startup prints a randomly generated dashboard admin password in the logs (log path: `~/.rotom/logs/master.log`). Local connections use loopback trust — **no mesh_token needed**. The executor's scanClis auto-registers one agent each for local claude / codex / hermes / pi.
 
 ### (Optional) Federate into a team
 
@@ -156,7 +156,7 @@ A JSON array in return means OK.
 
 > For global-npm users: **OPC mode auto-spawns the local executor subprocess from master — you don't need to run this section.** Only read this if you're deploying executor cross-machine (local master + remote executor) or want manual control over the executor lifecycle.
 
-Executor is the agent runtime — it starts N workers, each using a CLI backend (`claude` / `codex` / `openclaw` / ...) to claim Issues and reply to group @-mentions.
+Executor is the agent runtime — it starts N workers, each using a CLI backend (`claude` / `codex` / ...) to claim Issues and reply to group @-mentions.
 
 ### 1. Register worker agents on the Master Dashboard
 
@@ -198,7 +198,7 @@ You can register multiple workers at once (one executor process runs many worker
 ```
 
 Field notes:
-- `cliTool`: `claude` / `codex` / `openclaw` / `hermes` / any implementation registered under `src/executor/executors/`; auto-detected when omitted
+- `cliTool`: `claude` / `codex` / `hermes` / any implementation registered under `src/executor/executors/`; auto-detected when omitted
 - `workingDir`: **required**, locally-readable base dir. The agent's actual spawn cwd is derived as `<workingDir>/<groupId>` (groupId from the WS message; mkdir -p on first dispatch). The agent only has **read** access in the derived dir (Read / Grep / Glob / read-only Bash) — no Write / Edit. **For cross-machine deployments, each executor configures its own machine's base path; no shared FS needed** — groupId is a logical label, each machine's `<base>/<groupId>` is physically isolated. The master's `working_dir` from WS is ignored by the executor. On startup, the base path is checked for existence / readability; missing or invalid → fail-fast. Recommended base: `~/.rotom/artifacts`.
 - `workingDirMap`: optional per-group override, format `{ "group-xxx": "/local/abs/path" }`. When matched, skips derivation and uses the path directly — useful when one executor serves multiple projects.
 - `maxConcurrent`: max concurrent tasks for this worker, default 2

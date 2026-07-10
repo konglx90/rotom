@@ -10,7 +10,6 @@
  * use the wrong agent's token on a multi-agent box).
  *
  * The agent's master URL + mesh token come from one of:
- *   - "openclaw":  channels['a2a-gateway'].{master,token,name}  in openclaw.json
  *   - "executor":  matching `workers[].name` in executor.config.json
  *   - Auto-discovery (OPC): ~/.rotom/.auto-executor.json (master 在 OPC 模式下自动
  *     生成,scanClis 模式为本机每个已装 CLI 注册一个 agent)。
@@ -74,7 +73,6 @@ Config:
   config show
   config init
   config use <name>                            set default agent
-  config add-openclaw <name> <openclaw.json>   register an OpenClaw-hosted agent
   config add-executor <name> <executor.json>   register an executor worker
   config remove <name>
 
@@ -91,7 +89,7 @@ Bootstrap (first-time setup):
       --yes / -y             accept all defaults, do not overwrite without confirm
       --force                overwrite existing executor.config.json without prompt
 
-  join <masterHost:port> --name <n> --domain <d> --cli-tool <claude|codex|hermes|openclaw>
+  join <masterHost:port> --name <n> --domain <d> --cli-tool <claude|codex|hermes>
                                                [--working-dir PATH] [--profile-position P]
                                                [--profile-bio B] [--force]
                                                首次申请 token 落盘到 ~/.rotom/(本地

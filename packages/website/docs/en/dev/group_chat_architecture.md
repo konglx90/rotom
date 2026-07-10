@@ -113,7 +113,7 @@ operation goes through Bash → rotom.
 Agents are the unified "employee" concept, hosted by the `executor` process (`src/executor/`). One Executor manages multiple Workers; each Worker has:
 - Independent identity (name / token / profile)
 - Independent WebSocket connection (to Master's `/ws`)
-- Independent CLI backend (auto-detects `claude` / `codex` / `openclaw` / `aider`)
+- Independent CLI backend (auto-detects `claude` / `codex` / `aider`)
 - Independent task queue (configurable max concurrency)
 
 `AgentProfile.category` (`src/shared/protocol.ts`) currently has one special value:
@@ -157,7 +157,7 @@ flowchart TB
 
   subgraph Executor["Executor (src/executor) — Agent"]
     EW["worker.ts<br/>ExecutorWorker<br/>WS conn / issue claim / CLI exec / group @-reply"]
-    CLI["Claude Code / Codex / OpenClaw / Aider<br/>CLI backend"]
+    CLI["Claude Code / Codex / Aider<br/>CLI backend"]
     ECFG["executor.config.json<br/>worker list config"]
     EW --> CLI
   end
@@ -307,7 +307,7 @@ sequenceDiagram
   participant H as Master ws-hub
   participant ROT as rotom CLI
   participant EW as ExecutorWorker
-  participant CLI as CLI (claude/codex/openclaw)
+  participant CLI as CLI (claude/codex)
 
   alt Dashboard creates
     D->>M: POST /groups/G/issues<br/>{title, description, priority, assignedTo?}

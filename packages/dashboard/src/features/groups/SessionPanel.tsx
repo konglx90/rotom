@@ -21,7 +21,7 @@ type LoadState =
   | { kind: 'error'; message: string }
 
 /**
- * Per-group session list. For each backend (claude/codex/hermes/openclaw) that
+ * Per-group session list. For each backend (claude/codex/hermes) that
  * has an active SessionStore entry for this group, surface its sessionId and
  * give the user two affordances:
  *   - 查看: opens a modal with the tail of the session transcript
@@ -98,7 +98,7 @@ export function SessionPanel({ groupId, onChange }: SessionPanelProps) {
       <div className={styles.hint}>
         暂无 session
         <div className={styles.hintSub}>
-          触发一次对话后,各后端(claude / codex / hermes / openclaw)会自动登记 sessionId。
+          触发一次对话后,各后端(claude / codex / hermes)会自动登记 sessionId。
         </div>
       </div>
     )

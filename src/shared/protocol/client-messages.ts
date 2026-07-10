@@ -54,7 +54,7 @@ export interface ClientAuthMessage {
   instance?: InstanceInfo;
   profile?: AgentProfile;
   /**
-   * CLI tool name this executor is bound to (claude | codex | hermes | openclaw).
+   * CLI tool name this executor is bound to (claude | codex | hermes).
    * Master caches it on the WS connection so /sessions endpoints can route
    * session list/view/delete requests to the right worker.
    */
@@ -248,7 +248,7 @@ export interface ClientSessionViewResponse {
   /** "jsonl" for claude-code style line-delimited JSON, "text" or "raw" otherwise. */
   format: "jsonl" | "text" | "raw";
   /** Tail of the session content. Empty string if the executor's CLI backend
-   *  cannot introspect its own session (codex/hermes/openclaw — see plan §3). */
+   *  cannot introspect its own session (codex/hermes — see plan §3). */
   content: string;
   /** Set when the executor failed to read (file missing, etc.). */
   error?: string;

@@ -126,7 +126,7 @@ export interface TokenUsage {
 
 /** One session entry as reported by a single worker. */
 export interface SessionEntry {
-  /** CLI tool name (claude | codex | hermes | openclaw). */
+  /** CLI tool name (claude | codex | hermes). */
   cliTool: string;
   /** Group / DM id the session is bound to. */
   groupId: string;

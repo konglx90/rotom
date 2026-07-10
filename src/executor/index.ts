@@ -4,7 +4,7 @@
  * 一个 executor 进程管理多个数字员工（worker），每个 worker 拥有：
  * - 独立身份（name/token/profile）
  * - 独立 WebSocket 连接
- * - 独立 CLI 后端（claude/codex/openclaw/...）
+ * - 独立 CLI 后端（claude/codex/...）
  * - 独立任务队列
  *
  * 配置向后兼容：单 worker 格式仍然可用。
@@ -20,7 +20,6 @@ import path from "node:path";
 import { ClaudeCodeExecutor } from "./executors/claude-code.js";
 import { CodexExecutor } from "./executors/codex.js";
 import { HermesCliExecutor } from "./executors/hermes-cli.js";
-import { OpenclawExecutor } from "./executors/openclaw.js";
 import { PiExecutor } from "./executors/pi.js";
 import type { CliExecutor } from "./cli-executor.js";
 import { ExecutorWorker, type WorkerConfig } from "./worker.js";
@@ -58,7 +57,7 @@ interface MultiWorkerConfig {
  *
  * 两种形态:
  *   1. defaultAgent 显式指定 → 单 worker(向后兼容旧 .auto-executor.json)
- *   2. scanClis=true → executor 扫描本机已安装的 claude/codex/hermes/openclaw/pi,
+ *   2. scanClis=true → executor 扫描本机已安装的 claude/codex/hermes/pi,
  *      为每个 CLI 注册一个 agent(name 默认 = CLI 名;用户可在 executor.config.json
  *      里给 agent 起别名覆盖)。这是"每台机器 = 一个真人 + 多个 CLI agent"语义。
  */
@@ -105,7 +104,7 @@ function loadConfig(): ExecutorConfig {
       // CLI 扫描模式:为每个本机已安装的 CLI 起一个 worker。
       const installed = detectInstalledClis();
       if (installed.length === 0) {
-        log.error("scanClis=true but no known CLI (claude/openclaw/codex/hermes/pi) found in PATH");
+        log.error("scanClis=true but no known CLI (claude/codex/hermes/pi) found in PATH");
         process.exit(1);
       }
       return {
@@ -156,15 +155,13 @@ function createExecutor(tool: string): CliExecutor {
       return new ClaudeCodeExecutor();
     case "hermes":
       return new HermesCliExecutor();
-    case "openclaw":
-      return new OpenclawExecutor();
     case "codex":
       return new CodexExecutor();
     case "pi":
       return new PiExecutor();
     default:
       throw new Error(
-        `Unknown cliTool "${tool}". Valid values: claude | codex | hermes | openclaw | pi. ` +
+        `Unknown cliTool "${tool}". Valid values: claude | codex | hermes | pi. ` +
           `Configure one of these explicitly in executor.config.json (the previous generic passthrough has been removed — set a known tool to avoid silent misconfiguration).`,
       );
   }
@@ -182,7 +179,7 @@ function normalizeWorkers(config: ExecutorConfig): { master: string; workers: Wo
     const auto = maybeAuto as AutoExecutorConfig;
     const installed = detectInstalledClis();
     if (installed.length === 0) {
-      log.error("scanClis=true but no known CLI (claude/openclaw/codex/hermes/pi) found in PATH");
+      log.error("scanClis=true but no known CLI (claude/codex/hermes/pi) found in PATH");
       process.exit(1);
     }
     return {

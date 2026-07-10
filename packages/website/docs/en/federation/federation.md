@@ -42,7 +42,7 @@ pnpm start
 1. Generate `masterId` (8-char base36, persisted at `~/.rotom/master.json`)
 2. Create a default agent (using `os.userInfo().username`) and a default group "Local"
 3. Spawn the local executor subprocess (`src/master/opc-bootstrap.ts:ensureLocalExecutor`)
-4. Executor scanClis scans local claude/codex/hermes/openclaw/pi and registers one agent each
+4. Executor scanClis scans local claude/codex/hermes/pi and registers one agent each
 
 ### 2.3 Key constraints
 
@@ -194,7 +194,7 @@ In OPC mode, master auto-generates `.auto-executor.json` (scanClis mode); manual
 | `workers[]` | `array` | Worker list (single-worker simplified form also supported) |
 | `workers[].name` | `string` | Agent name (OPC mode trusts local, no DB pre-registration needed) |
 | `workers[].token` | `string?` | **Optional in OPC mode** (local trust); required for cross-machine remote master |
-| `workers[].cliTool` | `string?` | `claude` / `codex` / `openclaw` / `hermes` / `pi`; auto-detected when omitted |
+| `workers[].cliTool` | `string?` | `claude` / `codex` / `hermes` / `pi`; auto-detected when omitted |
 | `workers[].workingDir` | `string?` | Task execution dir, default `~/.rotom/workspace` |
 | `workers[].maxConcurrent` | `number?` | Concurrency cap, default 2 |
 | `workers[].profile` | `object?` | Agent profile; `category: "真人"` excludes from claiming |

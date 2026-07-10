@@ -104,7 +104,7 @@ Client 通过 rotom CLI 与 Mesh 交互 (LLM 用 Bash 调用):
 Agent 是统一的「员工」概念，由 `executor` 进程承载（`src/executor/`）。一个 Executor 进程管理多个 Worker，每个 Worker 拥有：
 - 独立身份（name / token / profile）
 - 独立 WebSocket 连接（连接 Master 的 `/ws`）
-- 独立 CLI 后端（自动检测 `claude` / `codex` / `openclaw` / `aider` 等工具）
+- 独立 CLI 后端（自动检测 `claude` / `codex` / `aider` 等工具）
 - 独立任务队列（最大并发数可配置）
 
 `AgentProfile.category` 字段（`src/shared/protocol.ts`）目前只有一个有特殊含义的取值：
@@ -148,7 +148,7 @@ flowchart TB
 
   subgraph Executor["Executor (src/executor) — Agent"]
     EW["worker.ts<br/>ExecutorWorker<br/>WS 连接 / issue 认领 / CLI 执行 / 群聊 @ 回复"]
-    CLI["Claude Code / Codex / OpenClaw / Aider<br/>CLI 后端"]
+    CLI["Claude Code / Codex / Aider<br/>CLI 后端"]
     ECFG["executor.config.json<br/>配置 worker 列表"]
     EW --> CLI
   end
@@ -294,7 +294,7 @@ sequenceDiagram
   participant H as Master ws-hub
   participant ROT as rotom CLI
   participant EW as ExecutorWorker
-  participant CLI as CLI (claude/codex/openclaw)
+  participant CLI as CLI (claude/codex)
 
   alt Dashboard 创建
     D->>M: POST /groups/G/issues<br/>{title, description, priority, assignedTo?}

@@ -17,7 +17,7 @@ import { masterFetch, masterHttpBase, masterWsBase } from "./routes.js";
 
 // ── Bootstrap helpers ─────────────────────────────────────────────────────
 
-const INIT_KNOWN_TOOLS = ["claude", "codex", "hermes", "openclaw", "pi"] as const;
+const INIT_KNOWN_TOOLS = ["claude", "codex", "hermes", "pi"] as const;
 
 function detectCliTools(wanted: readonly string[]): { tool: string; path: string }[] {
   const out: { tool: string; path: string }[] = [];

@@ -6,10 +6,10 @@
 import { execSync } from "node:child_process";
 
 /** 已知 CLI 集合;scanClis 模式按此列表探测。 */
-export const ALL_KNOWN_CLIS = ["claude", "openclaw", "codex", "hermes", "pi"];
+export const ALL_KNOWN_CLIS = ["claude", "codex", "hermes", "pi"];
 
 /** detectCliTool 的默认优先级(单 worker 兜底用)。 */
-export const CLI_PRIORITY = ["claude", "openclaw", "codex", "pi"];
+export const CLI_PRIORITY = ["claude", "codex", "pi"];
 
 /**
  * 扫描本机已安装的 CLI,返回数组。OPC 模式下若无 executor.config.json,

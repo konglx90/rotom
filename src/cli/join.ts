@@ -5,7 +5,7 @@
  * codex 直接通过 Bash 调 rotom CLI 与 mesh 交互。本命令一次性完成:
  *   1. POST http://<master>/api/agents { name, domain } → 拿到 plaintext token + configTemplate
  *   2. 落盘 configTemplate 到 ~/.rotom/agents/<name>.json(resolveAgentFromEntry 直接能读)
- *   3. 在 ~/.rotom/config.json 的 agents[name] 注册一条 { configPath, kind: "openclaw" }
+ *   3. 在 ~/.rotom/config.json 的 agents[name] 注册一条 { configPath, kind: "local" }
  *   4. 若 defaultAgent 未设 → 设为 name
  *
  * 之后 codex 通过 Bash 调 `rotom ...`(用 defaultAgent)或 `rotom --as <name> ...`,
@@ -38,7 +38,7 @@ function parseMasterSpec(spec: string): { host: string; port: number; httpUrl: s
   return { host, port, httpUrl: masterHttpBase(host, port), wsUrl: masterWsBase(host, port) };
 }
 
-const VALID_CLI_TOOLS = ["claude", "codex", "hermes", "openclaw"] as const;
+const VALID_CLI_TOOLS = ["claude", "codex", "hermes"] as const;
 type CliTool = typeof VALID_CLI_TOOLS[number];
 
 function detectCliTool(): CliTool | null {
@@ -58,7 +58,7 @@ export async function cmdJoin(rest: string[], flags: Record<string, string | boo
   if (!masterSpec) {
     fail(
       "usage: rotom join <masterHost:port> --name <agentName> --domain <domain>\n" +
-      "                            --cli-tool <claude|codex|hermes|openclaw> [--working-dir PATH]\n" +
+      "                            --cli-tool <claude|codex|hermes> [--working-dir PATH]\n" +
       "                            [--profile-position P] [--profile-bio B] [--force]\n" +
       "  首次申请 token 落盘到 ~/.rotom/。一个机器一个 CLI 一个 agent:每次换 CLI 用不同\n" +
       "  --name + --cli-tool 注册,之后 `rotom --as <name> ...` 自动解出 master+token+cliTool。",

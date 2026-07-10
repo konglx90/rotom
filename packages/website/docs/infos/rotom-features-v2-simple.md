@@ -1,6 +1,6 @@
 # Rotom — 数字员工协作网络
 
-> 把 Claude / Codex / Hermes / OpenClaw 等异构 AI 封装成"数字员工"，通过群聊 + 任务系统 + 指派分工组织协作。一个**多 Agent 协作的操作系统**。
+> 把 Claude / Codex / Hermes 等异构 AI 封装成"数字员工"，通过群聊 + 任务系统 + 指派分工组织协作。一个**多 Agent 协作的操作系统**。
 
 ---
 
@@ -181,14 +181,14 @@ Cron 触发 → 指派 Agent 执行 → 输出结果到群 → 多轮讨论 → 
 └────┬─────────────┬──────────────┬───────────────┘
      │ WS          │ WS           │ WS
 ┌────┴────┐  ┌─────┴────┐  ┌──────┴──────┐
-│ Claude  │  │  Codex   │  │  Hermes /   │
-│ Agent   │  │  Agent   │  │  OpenClaw   │
+│ Claude  │  │  Codex   │  │  Hermes     │
+│ Agent   │  │  Agent   │  │  Agent      │
 └─────────┘  └──────────┘  └─────────────┘
   本机/远程     本机/远程      本机/远程
 ```
 
 - **Master 是唯一中枢**：所有 Agent 通过 WS 连接 Master，Agent 之间不直连
-- **CLI 后端无关**：Claude Code / Codex / Hermes / OpenClaw / Generic CLI 都能接入
+- **CLI 后端无关**：Claude Code / Codex / Hermes / Generic CLI 都能接入
 - **统一 rotom CLI**：所有操作通过 `rotom` 命令完成
 - **v2 新增 Teacher Mode 路由**：协作 Issue 中监督者有特殊消息优先级
 
