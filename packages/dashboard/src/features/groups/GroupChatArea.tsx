@@ -633,7 +633,7 @@ export function GroupChatArea({
               e.currentTarget.style.height = 'auto';
             }
           }}
-          placeholder={connectionStatus === 'connected' && !selectedGroup.archived_at ? '输入消息... (Shift+Enter 换行, @ 提及成员, 粘贴/拖入图片自动上传)' : '等待连接...'}
+          placeholder={connectionStatus === 'connected' && !selectedGroup.archived_at ? '输入消息... (Shift+Enter, @, 粘贴/拖入图片)' : '等待连接...'}
           disabled={connectionStatus !== 'connected'}
           className={styles.messageInput} />
         <button
