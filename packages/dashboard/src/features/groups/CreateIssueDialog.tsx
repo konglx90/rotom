@@ -64,6 +64,7 @@ export function CreateIssueDialog({
     <Modal
       open={open}
       title="创建 Issue"
+      onClose={handleClose}
       scrollable={true}
       footer={
         <div className={styles.modalActions}>

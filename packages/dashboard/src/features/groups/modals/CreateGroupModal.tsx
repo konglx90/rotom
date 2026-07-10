@@ -175,6 +175,7 @@ export function CreateGroupModal({ open, agents, myAgentName, onClose, onCreate 
     <Modal
       open={open}
       title={isDirect ? '发起单聊' : '创建对话'}
+      onClose={handleClose}
       footer={
         <div className={styles.modalActions}>
           <Button variant="secondary" size="md" onClick={handleClose} disabled={submitting}>取消</Button>

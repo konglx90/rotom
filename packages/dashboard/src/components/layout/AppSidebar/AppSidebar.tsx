@@ -5,7 +5,6 @@ import { Avatar } from '../../ui/Avatar'
 import { useChatContext } from '../../../context/ChatContext'
 import { useZenMode } from '../../../context/ZenModeContext'
 import { getAvatarColor } from '../../../utils/avatar'
-import { GroupSettingsModal } from '../../../features/groups/modals/GroupSettingsModal'
 import styles from './AppSidebar.module.css'
 const NAV_TABS = [
   { id: 'agents', label: '员工管理', icon: '👥', path: '/dashboard/agents' },
@@ -75,10 +74,6 @@ export function AppSidebar({ width, onWidthChange, variant = 'rail' }: AppSideba
     selectGroup,
     openCreateGroupModal,
     openConfigModal,
-    updateGroupName,
-    updateGroupGuidancePrompt,
-    updateGroupRepo,
-    updateGroupWorkingDir,
     toggleGroupPinned,
     toggleGroupArchived,
     toggleGroupStarred,
@@ -106,7 +101,6 @@ export function AppSidebar({ width, onWidthChange, variant = 'rail' }: AppSideba
   const [moreMenuPos, setMoreMenuPos] = useState<{ top: number; left: number } | null>(null)
   const moreBtnRectRef = useRef<{ top: number; bottom: number; right: number } | null>(null)
   const moreDropdownRef = useRef<HTMLDivElement | null>(null)
-  const [settingsGroupId, setSettingsGroupId] = useState<string | null>(null)
   const startStateRef = useRef<{ x: number; w: number } | null>(null)
   const [activeTab, setActiveTab] = useState<GroupTab>('normal')
   // 跟踪 tabBar 横向滚动,当右侧还有内容没露出时给容器打 data 属性,CSS 渲染右边阴影。
@@ -485,18 +479,6 @@ export function AppSidebar({ width, onWidthChange, variant = 'rail' }: AppSideba
                                 className={styles.moreItem}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  setMoreMenuGroup(null)
-                                  setMoreMenuPos(null)
-                                  setSettingsGroupId(group.id)
-                                }}
-                              >
-                                ⚙️ 设置
-                              </button>
-                              <button
-                                type="button"
-                                className={styles.moreItem}
-                                onClick={(e) => {
-                                  e.stopPropagation()
                                   toggleGroupPinned(group.id, !isPinned)
                                   setMoreMenuGroup(null)
                                   setMoreMenuPos(null)
@@ -554,29 +536,6 @@ export function AppSidebar({ width, onWidthChange, variant = 'rail' }: AppSideba
           </>
         )}
       </aside>
-      {settingsGroupId && (() => {
-        const g = groups.find(grp => grp.id === settingsGroupId)
-        if (!g) return null
-        return (
-          <GroupSettingsModal
-            open={true}
-            groupId={g.id}
-            groupName={g.name}
-            groupWorkingDir={g.working_dir}
-            groupGuidancePrompt={g.guidance_prompt}
-            groupRepoUrl={g.repo_url}
-            groupRepoDefaultBranch={g.repo_default_branch}
-            groupExtraRepos={g.extra_repos}
-            groupWorktreeMode={g.worktree_mode}
-            memberAgentNames={(g.members ?? []).map(m => m.agent_name)}
-            onClose={() => setSettingsGroupId(null)}
-            onSaveName={(name) => updateGroupName(g.id, name)}
-            onSaveWorkingDir={(dir) => updateGroupWorkingDir(g.id, dir)}
-            onSaveGuidancePrompt={(prompt) => updateGroupGuidancePrompt(g.id, prompt)}
-            onSaveRepo={(data) => updateGroupRepo(g.id, data)}
-          />
-        )
-      })()}
       {!isDrawer && (
         <div
           className={`${styles.resizer} ${dragging ? styles.resizerActive : ''}`}

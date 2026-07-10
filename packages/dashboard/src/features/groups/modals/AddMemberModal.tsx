@@ -34,6 +34,7 @@ export function AddMemberModal({ open, groupMemberNames, agents, onClose, onAdd 
     <Modal
       open={open}
       title="添加成员"
+      onClose={handleClose}
       footer={
         <div className={styles.modalActions}>
           <Button variant="secondary" size="md" onClick={handleClose}>取消</Button>

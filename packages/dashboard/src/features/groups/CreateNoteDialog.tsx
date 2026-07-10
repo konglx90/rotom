@@ -33,6 +33,7 @@ export function CreateNoteDialog({ open, onClose, onCreate }: CreateNoteDialogPr
     <Modal
       open={open}
       title="创建 Note"
+      onClose={handleClose}
       scrollable={true}
       footer={
         <div className={styles.modalActions}>

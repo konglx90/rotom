@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Issue, TokenUsage } from '../../../api/types'
 import { useIssueElapsed } from '../../../hooks/useIssueElapsed'
 import { formatDurationCompact } from '../../../utils/formatDuration'
+import { parseServerTime } from '../../../utils/parseServerTime'
 import type { IssueActivity } from './IssueDetail'
 import styles from './IssueStatusBar.module.css'
 
@@ -190,6 +191,10 @@ export function IssueStatusBar({ issue, liveUsage, activity, pendingStart = fals
 // 每秒 tick 算 now - lastAt 的毫秒数。lastAt 为 null 时返回 null(不显示)。
 // 跟 useIssueElapsed 同样的模式,但不区分 completed(活动指示只关心「距上次
 // 输出多久」,不关心总耗时)。组件卸载自动 clearInterval。
+//
+// lastAt 来自 issue_events.created_at,master 写成不带时区后缀的北京时间
+// 字符串;直接 `new Date(lastAt)` 会被当本地时区解析,跨时区机器上「Xs 前」
+// 偏 8h。统一走 parseServerTime 归一为 epoch 再算差值。
 function useActivityElapsed(lastAt: string | null | undefined): number | null {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -198,7 +203,9 @@ function useActivityElapsed(lastAt: string | null | undefined): number | null {
     return () => clearInterval(id)
   }, [lastAt])
   if (!lastAt) return null
-  return Math.max(0, now - new Date(lastAt).getTime())
+  const ts = parseServerTime(lastAt)
+  if (ts == null) return null
+  return Math.max(0, now - ts)
 }
 
 /** 1247 -> "1.2k", 1254000 -> "1.3M" */

@@ -40,6 +40,7 @@ export function ConfigModal({ open, onConfigured, onClose }: Props) {
     <Modal
       open={open}
       title="选择我的身份"
+      onClose={onClose}
       footer={
         <div className={styles.modalActions}>
           <Button variant="secondary" size="md" onClick={onClose}>取消</Button>

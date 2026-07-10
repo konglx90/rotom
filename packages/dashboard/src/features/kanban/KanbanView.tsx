@@ -9,6 +9,7 @@ import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
 import { useIssueElapsed } from '../../hooks/useIssueElapsed'
 import { formatDuration } from '../../utils/formatDuration'
+import { parseServerTime } from '../../utils/parseServerTime'
 import { IssueDetail } from '../groups/IssueDetail'
 import { resolveAssigneeName, UNCLAIMED_LABEL } from '../groups/agentDisplayName'
 import styles from './KanbanView.module.css'
@@ -26,9 +27,13 @@ const COLUMNS: { status: IssueStatus; label: string }[] = [
 ]
 
 function formatRelative(iso: string): string {
+  // master 把 created_at 写成不带时区后缀的北京时间字符串;旧实现 append 'Z'
+  // 把它当 UTC 解析,导致 1 小时前创建的 issue 在前 8 小时内一直显「刚刚」,
+  // 之后才进入「N 分钟前」(N 比真实值少 8 小时)。parseServerTime 统一按
+  // +08:00 解析,差值算准。
   if (!iso) return ''
-  const ts = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z').getTime()
-  if (Number.isNaN(ts)) return ''
+  const ts = parseServerTime(iso)
+  if (ts == null) return ''
   const diff = Date.now() - ts
   const sec = Math.floor(diff / 1000)
   if (sec < 60) return '刚刚'
@@ -39,8 +44,14 @@ function formatRelative(iso: string): string {
   const day = Math.floor(hr / 24)
   if (day === 1) return '昨天'
   if (day < 7) return `${day} 天前`
-  const d = new Date(ts)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  // 超过一周显完整日期。用 Asia/Shanghai 时区格式化,与列表 / 详情页一致,
+  // 不再依赖浏览器时区(避免 UTC 机器上日期错位)。
+  return new Date(ts).toLocaleDateString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
 }
 
 // 单卡抽成子组件:每张卡自己调 useIssueElapsed,避免 1s tick 扇出到整

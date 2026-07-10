@@ -3,6 +3,7 @@ import type { IssueEvent, TodoItem } from '../../../api/types'
 import type { ComposedPrompt } from '../../../api/groups'
 import { MarkdownContent } from '../../../components/ui/MarkdownContent'
 import { StreamingStatus } from '../../../components/ui/StreamingStatus'
+import { parseServerTime } from '../../../utils/parseServerTime'
 import { ComposedPromptModal } from '../modals/ComposedPromptModal'
 import shared from './_shared.module.css'
 import styles from './IssueEventsTimeline.module.css'
@@ -166,8 +167,14 @@ function parseTodosMetadata(metadataStr: string): TodoItem[] | null {
 }
 
 function formatTime(raw: string): string {
-  const iso = raw + (raw.includes('Z') || raw.includes('+') ? '' : 'Z')
-  return new Date(iso).toLocaleTimeString('zh-CN', {
+  // master 把 event.created_at 写成不带时区后缀的北京时间字符串
+  // (见 src/shared/time.ts nowBeijing)。parseServerTime 把它当作 +08:00
+  // 解析成 epoch,再用 toLocaleTimeString({ timeZone: 'Asia/Shanghai' })
+  // 显示成北京时间 HH:MM。旧实现 append 'Z' 后又转 Asia/Shanghai,会把
+  // 北京 18:02 显示成次日 02:02 —— 时间差 8 小时(issue #c3727578)。
+  const ts = parseServerTime(raw)
+  if (ts == null) return ''
+  return new Date(ts).toLocaleTimeString('zh-CN', {
     timeZone: 'Asia/Shanghai',
     hour: '2-digit',
     minute: '2-digit',

@@ -25,6 +25,7 @@ import { AddMemberModal } from './modals/AddMemberModal'
 import { MemberListModal } from './modals/MemberListModal'
 import { ShareLinkModal } from './ShareLinkModal'
 import { GroupMessageStreamModal } from './modals/GroupMessageStreamModal'
+import { GroupSettingsModal } from './modals/GroupSettingsModal'
 import { MemoryPanel } from './MemoryPanel'
 import { ModeSidebarClock } from './ModeSidebarClock'
 import { SessionPanel } from './SessionPanel'
@@ -95,11 +96,13 @@ export function GroupChatView() {
     myAgentName,
     directTarget,
     setDirectTarget,
-    openConfigModal,
     loadGroups,
     setGroupMemberWorkingDir,
     clearGroupMemberWorkingDir,
     updateGroupGuidancePrompt,
+    updateGroupName,
+    updateGroupWorkingDir,
+    updateGroupRepo,
   } = useChatContext()
   const { status: connectionStatus, send, lastIssueChange } = useSocket()
   const { isVisitor, error: visitorError, validate: validateVisitor, token: visitorToken, groupId: visitorResolvedGroupId } = useVisitorMode()
@@ -123,6 +126,7 @@ export function GroupChatView() {
   const [showShareModal, setShowShareModal] = useState(false)
   const [showDebugModal, setShowDebugModal] = useState(false)
   const [showGroupMessagesModal, setShowGroupMessagesModal] = useState(false)
+  const [showGroupSettings, setShowGroupSettings] = useState(false)
   const [selfJoinError, setSelfJoinError] = useState<{ groupId: string; message: string } | null>(null)
   // 创建对话框状态从 IssuePanel/NotePanel 上移到 process panel 顶部 tabs 行,
   // 让 tabs 行与 chat header 等高对齐。kind 区分走 Issue/协作 还是 Note 流程。
@@ -593,17 +597,19 @@ export function GroupChatView() {
           >
             🗑️
           </button>
-          <button
-            type="button"
-            className={styles.padToolBtn}
-            onClick={openConfigModal}
-            title="设置"
-          >
-            ⚙️
-          </button>
         </>
       ) : selectedGroup ? (
         <>
+          {!isVisitor && (
+            <button
+              type="button"
+              className={styles.padToolBtn}
+              onClick={() => setShowGroupSettings(true)}
+              title="群设置(名称/目录/指导/repo)"
+            >
+              🛠️
+            </button>
+          )}
           <button
             type="button"
             className={styles.padToolBtn}
@@ -646,16 +652,6 @@ export function GroupChatView() {
           >
             💬
           </button>
-          {!isVisitor && (
-            <button
-              type="button"
-              className={styles.padToolBtn}
-              onClick={openConfigModal}
-              title="设置"
-            >
-              ⚙️
-            </button>
-          )}
         </>
       ) : null}
     </div>
@@ -733,6 +729,29 @@ export function GroupChatView() {
           )}
 
           {/* Sessions 调试 modal:从 ArtifactPanel 底部搬过来,腾出垂直空间。 */}
+          {/* 群设置 modal:群聊界面内的群配置入口(名称/工作目录/指导 prompt/内置 repo worktree/技能绑定)。
+              复用侧边栏同一组件;update* 回调内部 loadGroups,保存后自动刷新群数据。 */}
+          {showGroupSettings && selectedGroup && !isDirectMode && (
+            <GroupSettingsModal
+              key={selectedGroup.id}
+              open
+              groupId={selectedGroup.id}
+              groupName={selectedGroup.name}
+              groupWorkingDir={selectedGroup.working_dir ?? null}
+              groupGuidancePrompt={selectedGroup.guidance_prompt ?? null}
+              groupRepoUrl={selectedGroup.repo_url ?? null}
+              groupRepoDefaultBranch={selectedGroup.repo_default_branch ?? null}
+              groupExtraRepos={selectedGroup.extra_repos ?? null}
+              groupWorktreeMode={selectedGroup.worktree_mode ?? null}
+              memberAgentNames={(selectedGroup.members ?? []).map((m) => m.agent_name)}
+              onClose={() => setShowGroupSettings(false)}
+              onSaveName={(name) => updateGroupName(selectedGroup.id, name)}
+              onSaveWorkingDir={(dir) => updateGroupWorkingDir(selectedGroup.id, dir)}
+              onSaveGuidancePrompt={(prompt) => updateGroupGuidancePrompt(selectedGroup.id, prompt)}
+              onSaveRepo={(data) => updateGroupRepo(selectedGroup.id, data)}
+            />
+          )}
+
           {showDebugModal && selectedGroup && (
             <Modal
               open
@@ -869,17 +888,19 @@ export function GroupChatView() {
                 >
                   <span className={styles.modeBtnIcons}>🗑️</span>
                 </button>
-                <button
-                  type="button"
-                  className={styles.modeBtn}
-                  onClick={openConfigModal}
-                  title="设置"
-                >
-                  <span className={styles.modeBtnIcons}>⚙️</span>
-                </button>
               </>
             ) : selectedGroup && (
               <>
+                {!isVisitor && (
+                  <button
+                    type="button"
+                    className={styles.modeBtn}
+                    onClick={() => setShowGroupSettings(true)}
+                    title="群设置(名称/目录/指导/repo)"
+                  >
+                    <span className={styles.modeBtnIcons}>🛠️</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   className={styles.modeBtn}
@@ -906,16 +927,6 @@ export function GroupChatView() {
                 >
                   <span className={styles.modeBtnIcons}>🔗</span>
                 </button>
-                {!isVisitor && (
-                  <button
-                    type="button"
-                    className={styles.modeBtn}
-                    onClick={openConfigModal}
-                    title="设置"
-                  >
-                    <span className={styles.modeBtnIcons}>⚙️</span>
-                  </button>
-                )}
               </>
             )}
 

@@ -13,6 +13,7 @@ export function ConflictModal({ open, onCancel, onTakeover }: Props) {
     <Modal
       open={open}
       title="连接冲突"
+      onClose={onCancel}
       footer={
         <div className={styles.modalActions}>
           <Button variant="secondary" size="md" onClick={onCancel}>取消</Button>

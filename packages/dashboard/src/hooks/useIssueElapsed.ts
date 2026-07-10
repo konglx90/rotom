@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { parseServerTime } from '../utils/parseServerTime'
 
 // 单一事实源:给出 issue 的当前耗时(ms)。
 // - 未开始(started_at 为空):返回 null(由调用方渲染「—」)
@@ -10,6 +11,10 @@ import { useEffect, useState } from 'react'
 // return 会导致 IssueDetailHeader 的 hook 序列在跨状态时变形,触发 React
 // "Rendered fewer hooks than expected" 报错。timer 的启停收到 effect 内部按
 // startedAt/completedAt 判断,effect 依赖这两个值即可正确启停。
+//
+// 时间解析走 parseServerTime:master 把 started_at / completed_at 写成不带
+// 时区后缀的北京时间字符串,直接 `new Date(str)` 会被当本地时区解析,在非
+// UTC+8 机器上耗时算错(跨时区机器差 8h)。统一在这里归一。
 export function useIssueElapsed(
   startedAt: string | null,
   completedAt: string | null,
@@ -21,12 +26,12 @@ export function useIssueElapsed(
     return () => clearInterval(id)
   }, [startedAt, completedAt])
 
-  if (!startedAt) return null
+  const startedTs = parseServerTime(startedAt)
+  if (startedTs == null) return null
   if (completedAt) {
-    return Math.max(
-      0,
-      new Date(completedAt).getTime() - new Date(startedAt).getTime(),
-    )
+    const completedTs = parseServerTime(completedAt)
+    if (completedTs == null) return null
+    return Math.max(0, completedTs - startedTs)
   }
-  return Math.max(0, now - new Date(startedAt).getTime())
+  return Math.max(0, now - startedTs)
 }
