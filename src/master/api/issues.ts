@@ -9,12 +9,37 @@ import { safeJsonParse } from "../../shared/parse.js";
 import { validateWorkingDir } from "../util/paths.js";
 import { buildMemoryExtractPrompt } from "../services/memory-extract-prompt.js";
 import { resolveGroupAgentWorkingDir } from "../group-paths.js";
+import { resolveGroupWorktreeInfo } from "../repo-scan.js";
 import { createLogger } from "../../shared/logger.js";
 import type { IssueRow } from "../db/types.js";
 import type { TodoItem } from "../../shared/protocol.js";
 import { nowBeijing } from "../../shared/time.js";
 
 const log = createLogger("mesh-api");
+
+/**
+ * 解析 issue 应记录的 working_dir(展示/审计/artifacts 兜底用)。
+ *
+ * group 配了 repo_url 时,agent 真实 cwd 是 executor 在本机起的 worktree
+ * (~/.rotom/artifacts/<groupId>/__repos/primary),这里记该计算路径(不依赖 FS
+ * 是否已创建——issue 创建时 worktree 可能还没起),让 issue.working_dir 与 agent
+ * 实际跑的目录一致,而非占位的产物目录。
+ *
+ * 无 repo 的 group 走老逻辑:per-(group, agent) override → group.working_dir → 默认。
+ * executor 在 repoCtx 存在时本就忽略 workingDir override,故此值仅影响展示/兜底。
+ */
+function resolveIssueWorkingDirForDisplay(
+  db: MeshDb,
+  groupId: string,
+  agentName: string,
+): string {
+  const wtInfo = resolveGroupWorktreeInfo(db, groupId);
+  if (wtInfo) {
+    // 用计算出的 primaryPath(过渡期可能指向旧路径,均可被 artifacts API 解析)
+    return wtInfo.primaryPath;
+  }
+  return resolveGroupAgentWorkingDir(db, groupId, agentName);
+}
 
 /**
  * 在 DB 行上附 latest_todos 字段(解析后的 TodoItem[])。dashboard 直接消费
@@ -112,10 +137,10 @@ export function registerIssueRoutes(
       normalizedApprovalPolicy = approvalPolicy;
     }
     let issueWorkDir: string | undefined;
-    // group 配了 repo_url 时,issue 真正 cwd 由 executor 在本机起 worktree 后产生,
-    // 此时 workingDir 字段不再由用户填(master 不该知道本机 worktree 路径)。
-    // 我们仍写一个派生路径到 issues.working_dir 作为兜底/审计(老路径,executor
-    // 在 worktree 模式下会忽略它,因为 repoCtx 优先级高于 workingDir override)。
+    // group 配了 repo_url 时,issue 真正 cwd 由 executor 在本机起 worktree 后产生
+    // (~/.rotom/artifacts/<groupId>/__repos/primary)。workingDir 字段不再由用户填,
+    // 这里记 worktree 计算路径到 issues.working_dir(展示/审计/artifacts 兜底用);
+    // executor 在 repoCtx 存在时本就忽略 workingDir override。
     const groupRepoUrl = group.repo_url?.trim();
     if (typeof workingDir === "string" && workingDir.trim() && !groupRepoUrl) {
       const v = validateWorkingDir(workingDir);
@@ -124,14 +149,12 @@ export function registerIssueRoutes(
         return;
       }
       issueWorkDir = v.path;
-    } else if (!groupRepoUrl) {
+    } else if (groupRepoUrl) {
+      // group 配了 repo:记真实 worktree 路径(与 agent 实际 cwd 一致)
+      issueWorkDir = resolveIssueWorkingDirForDisplay(db, req.params.groupId, createdBy);
+    } else {
       // No explicit workingDir 且 group 无 repo:走现状 per-(group, createdBy) override →
       // group.working_dir → default。
-      issueWorkDir = resolveGroupAgentWorkingDir(db, req.params.groupId, createdBy);
-    }
-    // groupRepoUrl 非空时 issueWorkDir 保持 undefined;worktree 路径由 executor 解析。
-    // 仍写一个占位:用 group 工作目录,让 issues.working_dir 不空(artifacts API 兜底)。
-    if (groupRepoUrl) {
       issueWorkDir = resolveGroupAgentWorkingDir(db, req.params.groupId, createdBy);
     }
     let slashCommand: string | undefined;
@@ -184,9 +207,9 @@ export function registerIssueRoutes(
         // 走 system chip 渲染,不再伪装成 agent 自己说"Assigned to me"。
         agentName: normalized || "system",
       });
-      // Re-resolve working_dir from per-(group, agent) override → group.working_dir → default.
+      // Re-resolve working_dir from worktree(repo 配置时)或 per-(group, agent) override。
       if (normalized && (issue.status === "open" || issue.status === "in_progress")) {
-        const resolved = resolveGroupAgentWorkingDir(db, issue.group_id, normalized);
+        const resolved = resolveIssueWorkingDirForDisplay(db, issue.group_id, normalized);
         if (resolved !== issue.working_dir) {
           db.updateIssueWorkingDir(req.params.id, resolved);
           db.addIssueEvent({
@@ -647,7 +670,7 @@ export function registerIssueRoutes(
     const extractIssueId = randomUUID();
     const extractPrompt = buildMemoryExtractPrompt(sourceIssue, sourceShortId);
 
-    const workingDir = resolveGroupAgentWorkingDir(db, sourceIssue.group_id, targetAgent);
+    const workingDir = resolveIssueWorkingDirForDisplay(db, sourceIssue.group_id, targetAgent);
     db.createIssue({
       id: extractIssueId,
       groupId: sourceIssue.group_id,

@@ -21,6 +21,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { MeshDb } from "./db.js";
+import { primaryWorktreePath, extraWorktreePath, PRIMARY_API_ID } from "../shared/paths.js";
 
 const REPOS_ROOT = path.join(os.homedir(), ".rotom", "repos");
 
@@ -168,9 +169,16 @@ export function scanAllRepos(): RepoScanEntry[] {
  *
  * 返回:
  *  - 若 group 没配 repo_url → null
- *  - 若配了 → { url, branch, mode, primaryPath, extraRepos[], exists }
- *    primaryPath 是推算路径(group 模式 slot = group-<groupId8>);
- *    exists 表示该路径在本机 FS 是否已存在(executor 是否已创建)。
+ *  - 若配了 → { url, branch, mode, primaryDirName, primaryPath, extraRepos[], exists }
+ *
+ * primary 目录名用仓库名(primaryDirName = repoNameFor(url)),对人可读
+ * (`__repos/wario`)。过渡期三级 fallback:
+ *   1. 新路径 ~/.rotom/artifacts/<groupId>/__repos/<repoName>/(已迁到仓库名)
+ *   2. 中间路径 __repos/primary/(迁过一次但还没改名为仓库名)
+ *   3. 旧路径 ~/.rotom/repos/<repo>-<id8>-wt/group-<groupId8>/(尚未迁移)
+ * primaryPath 取第一个存在的;都不在则用新路径占位、exists=false。
+ *
+ * issue 模式:per-issue worktree,面板无法展示单一 primary → primaryExists=false。
  */
 export function resolveGroupWorktreeInfo(
   db: MeshDb,
@@ -179,6 +187,7 @@ export function resolveGroupWorktreeInfo(
   url: string;
   branch: string | null;
   mode: "group" | "issue";
+  primaryDirName: string;
   primaryPath: string;
   primaryExists: boolean;
   extras: { id: string; url: string; branch: string | null; mountPath: string; path: string; exists: boolean }[];
@@ -189,9 +198,26 @@ export function resolveGroupWorktreeInfo(
   if (!url) return null;
   const branch = group.repo_default_branch?.trim() || null;
   const mode = group.worktree_mode === "issue" ? "issue" : "group";
-  const slot = mode === "group" ? `group-${groupId.slice(0, 8)}` : "issue-mode";
-  const primaryPath = worktreePathForUrl(url, slot);
-  const primaryExists = fs.existsSync(primaryPath);
+  const oldSlot = `group-${groupId.slice(0, 8)}`;
+  const primaryDirName = repoNameFor(url);
+
+  let primaryPath: string;
+  let primaryExists: boolean;
+  if (mode === "group") {
+    const newPath = primaryWorktreePath(groupId, "group", primaryDirName);
+    const intPath = primaryWorktreePath(groupId, "group", PRIMARY_API_ID); // 中间态 __repos/primary
+    const oldPath = worktreePathForUrl(url, oldSlot);
+    const newExists = fs.existsSync(newPath);
+    const intExists = fs.existsSync(intPath);
+    const oldExists = fs.existsSync(oldPath);
+    // 三级 fallback:新(仓库名) → 中间(primary) → 旧(-wt) → 新(占位)
+    primaryPath = newExists ? newPath : (intExists ? intPath : (oldExists ? oldPath : newPath));
+    primaryExists = newExists || intExists || oldExists;
+  } else {
+    // issue 模式:per-issue,面板不展示单一 primary
+    primaryPath = primaryWorktreePath(groupId, "issue", primaryDirName, "issue-mode");
+    primaryExists = false;
+  }
 
   let extras: { id: string; url: string; branch: string | null; mountPath: string; path: string; exists: boolean }[] = [];
   if (group.extra_repos) {
@@ -202,20 +228,33 @@ export function resolveGroupWorktreeInfo(
           .filter((e): e is { id: string; url: string; branch?: string; mountPath: string } =>
             !!e && typeof e === "object" && typeof (e as any).id === "string" && typeof (e as any).url === "string" && typeof (e as any).mountPath === "string")
           .map(e => {
-            const extraSlot = mode === "group" ? `group-${groupId.slice(0, 8)}` : "issue-mode";
-            const p = worktreePathForUrl(e.url, extraSlot);
+            if (mode === "group") {
+              const newPath = extraWorktreePath(groupId, e.id, "group");
+              const oldPath = worktreePathForUrl(e.url, oldSlot);
+              const newExists = fs.existsSync(newPath);
+              const oldExists = fs.existsSync(oldPath);
+              return {
+                id: e.id,
+                url: e.url,
+                branch: typeof e.branch === "string" && e.branch ? e.branch : null,
+                mountPath: e.mountPath,
+                path: newExists ? newPath : (oldExists ? oldPath : newPath),
+                exists: newExists || oldExists,
+              };
+            }
+            // issue 模式:per-issue,不展示
             return {
               id: e.id,
               url: e.url,
               branch: typeof e.branch === "string" && e.branch ? e.branch : null,
               mountPath: e.mountPath,
-              path: p,
-              exists: fs.existsSync(p),
+              path: extraWorktreePath(groupId, e.id, "issue", "issue-mode"),
+              exists: false,
             };
           });
       }
     } catch { /* malformed */ }
   }
 
-  return { url, branch, mode, primaryPath, primaryExists, extras };
+  return { url, branch, mode, primaryDirName, primaryPath, primaryExists, extras };
 }

@@ -8,6 +8,44 @@ import { resolveGroupArtifactRoot, ARTIFACTS_ROOT } from "../group-paths.js";
 import { resolveGroupWorktreeInfo } from "../repo-scan.js";
 import { readFileSafely, walkDir, type FileEntry } from "../util/fs.js";
 import { toBeijing } from "../../shared/time.js";
+import { REPOS_DIR_NAME } from "../../shared/paths.js";
+
+/**
+ * 把 `__repos/<seg>/<rest>` 形式的虚拟路径解析成 (worktree base, relPath)。
+ *
+ * 新布局下产物树里 repo 文件路径为 `__repos/<repoName>/<rest>`(primary,目录名=仓库名)
+ * 或 `__repos/<extraId>/<rest>`(extras)。这里按第一段路由到对应 worktree:
+ *   - `<repoName>`(= wtInfo.primaryDirName)→ primaryPath
+ *   - `<extraId>` → 对应 extra worktree 路径
+ *   - 旧中间态 `__repos/primary/<rest>` 或拍平 `__repos/<file>` → 兼容回落 primary
+ *   - 非 `__repos/` 开头 → groupDir(沙箱产物)
+ *
+ * wtInfo 为 null(群未配 repo)或路径不匹配 → base=groupDir。
+ */
+function resolveArtifactBase(
+  wtInfo: ReturnType<typeof resolveGroupWorktreeInfo>,
+  groupDir: string,
+  filePath: string,
+): { baseDir: string; relPath: string } {
+  if (wtInfo && filePath.startsWith(`${REPOS_DIR_NAME}/`)) {
+    const rest = filePath.slice(`${REPOS_DIR_NAME}/`.length);
+    const slash = rest.indexOf("/");
+    const firstSeg = slash >= 0 ? rest.slice(0, slash) : rest;
+    const tail = slash >= 0 ? rest.slice(slash + 1) : "";
+    if (firstSeg === wtInfo.primaryDirName && wtInfo.primaryExists) {
+      return { baseDir: wtInfo.primaryPath, relPath: tail };
+    }
+    const extra = wtInfo.extras.find(e => e.id === firstSeg && e.exists);
+    if (extra) {
+      return { baseDir: extra.path, relPath: tail };
+    }
+    // 旧中间态/拍平路径兼容:__repos/primary/<rest> 或 __repos/<file> → primary
+    if (wtInfo.primaryExists) {
+      return { baseDir: wtInfo.primaryPath, relPath: rest };
+    }
+  }
+  return { baseDir: groupDir, relPath: filePath };
+}
 
 /** Walk up from `startPath` looking for a `.git` directory. Returns the repo
  *  root or null if we hit the filesystem root without finding one. Shared
@@ -90,40 +128,67 @@ export function registerArtifactRoutes(
 ): void {
   apiRouter.get("/artifacts/:groupId", (req, res) => {
     const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
-    if (!fs.existsSync(groupDir)) {
-      res.json([]);
-      return;
-    }
+    // groupDir 不存在(新群,从未写过产物)也要注入 __repos,否则面板空、看不到 worktree。
+    let files: FileEntry[] = fs.existsSync(groupDir) ? walkDir(groupDir, groupDir) : [];
+    // walkDir 已跳过 __repos(真实容器,避免双重 walk),这里再保险过滤一次。
+    files = files.filter(f => f.name !== REPOS_DIR_NAME);
 
-    let files = walkDir(groupDir, groupDir);
-    // 配了 repo 的群:注入 `__repos` 虚拟节点(指向 primary worktree),
-    // 让 Dashboard 能浏览 worktree 代码 + group 产物。worktree 在
-    // ~/.rotom/repos/<repoName>-<id8>-wt/group-<groupId8>/,不在 groupDir 下。
-    // 用 `__repos` 避免和仓库里真实的 repos/ 目录冲突,`__` 前缀标记虚拟节点。
+    // 配了 repo 的群:注入 `__repos` 虚拟节点,children = [primary, ...extras],
+    // 各自展开对应 worktree。反映真实物理布局(groupDir/__repos/primary + extras),
+    // extra repo 也能在树里浏览。wtInfo.primaryPath/extras.path 含旧路径 fallback,
+    // 未迁移的 worktree 仍可显示。
     const wtInfo = resolveGroupWorktreeInfo(db, req.params.groupId);
-    if (wtInfo && wtInfo.primaryExists) {
-      try {
-        const wtFiles = walkDir(wtInfo.primaryPath, wtInfo.primaryPath);
-        // 给所有 path 加 `__repos/` 前缀,让 content/original/diff API 能识别
-        // (path 以 `__repos/` 开头时 base 换成 worktree)
-        const prefixed = addPathPrefix(wtFiles, "__repos/");
-        const filtered = files.filter(f => f.name !== "__repos");
-        filtered.push({
-          name: "__repos",
-          path: "__repos",
-          absPath: wtInfo.primaryPath,
+    if (wtInfo) {
+      const reposChildren: FileEntry[] = [];
+      if (wtInfo.primaryExists) {
+        try {
+          const wtFiles = walkDir(wtInfo.primaryPath, wtInfo.primaryPath);
+          // primary 节点名用仓库名(对人可读:__repos/wario),path 前缀同。
+          const primName = wtInfo.primaryDirName;
+          reposChildren.push({
+            name: primName,
+            path: `${REPOS_DIR_NAME}/${primName}`,
+            absPath: wtInfo.primaryPath,
+            size: 0,
+            modifiedTime: toBeijing(fs.statSync(wtInfo.primaryPath).mtime),
+            type: "directory" as const,
+            children: addPathPrefix(wtFiles, `${REPOS_DIR_NAME}/${primName}/`),
+          });
+        } catch { /* primary 读取失败,跳过 */ }
+      }
+      for (const extra of wtInfo.extras) {
+        if (!extra.exists) continue;
+        try {
+          const extraFiles = walkDir(extra.path, extra.path);
+          reposChildren.push({
+            name: extra.id,
+            path: `${REPOS_DIR_NAME}/${extra.id}`,
+            absPath: extra.path,
+            size: 0,
+            modifiedTime: toBeijing(fs.statSync(extra.path).mtime),
+            type: "directory" as const,
+            children: addPathPrefix(extraFiles, `${REPOS_DIR_NAME}/${extra.id}/`),
+          });
+        } catch { /* extra 读取失败,跳过 */ }
+      }
+      if (reposChildren.length > 0) {
+        const containerPath = path.join(groupDir, REPOS_DIR_NAME);
+        const reposAbs = fs.existsSync(containerPath) ? containerPath : reposChildren[0].absPath;
+        let reposMtime = Date.now();
+        try { reposMtime = fs.statSync(reposChildren[0].absPath).mtimeMs; } catch { /* keep now */ }
+        files.push({
+          name: REPOS_DIR_NAME,
+          path: REPOS_DIR_NAME,
+          absPath: reposAbs,
           size: 0,
-          modifiedTime: toBeijing(fs.statSync(wtInfo.primaryPath).mtime),
+          modifiedTime: toBeijing(new Date(reposMtime)),
           type: "directory" as const,
-          children: prefixed,
+          children: reposChildren,
         });
-        filtered.sort((a, b) => {
+        files.sort((a, b) => {
           if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
           return a.name.localeCompare(b.name);
         });
-        files = filtered;
-      } catch {
-        // worktree 读取失败,保留原 files
       }
     }
 
@@ -140,15 +205,10 @@ export function registerArtifactRoutes(
       return;
     }
     const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
-    // `__repos/...` 是虚拟注入节点(指向 primary worktree),不在 groupDir 下。
-    // 真实路径在 worktree 里,这里把 base 换成 worktree 路径,并剥掉 `__repos/` 前缀。
+    // `__repos/primary/...` / `__repos/<extraId>/...` 是注入的 worktree 节点,
+    // 解析到对应 worktree base 并剥掉前缀;其余按 groupDir 解析(沙箱产物)。
     const wtInfo = resolveGroupWorktreeInfo(db, req.params.groupId);
-    let baseDir = groupDir;
-    let relPath = filePath;
-    if (wtInfo && wtInfo.primaryExists && filePath.startsWith("__repos/")) {
-      baseDir = wtInfo.primaryPath;
-      relPath = filePath.slice("__repos/".length);
-    }
+    const { baseDir, relPath } = resolveArtifactBase(wtInfo, groupDir, filePath);
     const result = readFileSafely(baseDir, relPath);
     if (result.kind === "outside-base") {
       res.status(403).json({ error: "Invalid path" });
@@ -561,20 +621,23 @@ export function registerArtifactRoutes(
 
     const groupDir = resolveGroupArtifactRoot(db, req.params.groupId);
 
-    // 选 base:repo 参数优先,落到对应 worktree;否则用 groupDir。
-    // path 以 `__repos/` 开头时,和 /content 接口一致 —— 自动切到 primary
-    // worktree 作 base,并剥掉前缀。这样前端直接传 selectedFile.path 即可,
-    // 不用自己识别虚拟节点。
+    // 选 base:repo 参数优先,落到对应 worktree;否则 path 以 `__repos/` 开头时,
+    // 和 /content 一致按 `__repos/primary/` 或 `__repos/<extraId>/` 路由到对应 worktree。
+    // 前端直接传 selectedFile.path 即可,不用自己识别虚拟节点。
     let baseDir = groupDir;
     let normalizedPath = rawPath;
-    if (normalizedPath.startsWith("__repos/")) {
+    if (normalizedPath.startsWith(`${REPOS_DIR_NAME}/`)) {
       const wtInfo = resolveGroupWorktreeInfo(db, req.params.groupId);
-      if (!wtInfo || !wtInfo.primaryExists) {
+      const resolved = resolveArtifactBase(wtInfo, groupDir, normalizedPath);
+      // 路径没命中任何 worktree(primary 未创建 / 未知 extra)→ base 仍是 groupDir,
+      // 但 `__repos/` 前缀剥不掉,下面会因路径不存在 404,符合预期。
+      if (resolved.baseDir !== groupDir) {
+        baseDir = resolved.baseDir;
+        normalizedPath = resolved.relPath;
+      } else if (!wtInfo?.primaryExists) {
         res.status(400).json({ error: "primary worktree 未创建,无法定位 __repos 下文件。" });
         return;
       }
-      baseDir = wtInfo.primaryPath;
-      normalizedPath = normalizedPath.slice("__repos/".length);
     }
     if (repoParam && repoParam.trim()) {
       const resolved = resolveRepoWorktree(db, req.params.groupId, repoParam);

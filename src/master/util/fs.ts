@@ -48,6 +48,13 @@ export function walkDir(dir: string, base: string): FileEntry[] {
   for (const item of items) {
     if (item.name.startsWith(".")) continue;
     if (item.name === "node_modules") continue;
+    // __repos 是 worktree 容器(新布局下物理在 groupDir 下)。artifacts 面板会把它
+    // 当虚拟节点单独注入(指向 primary/extras),这里跳过避免递归走整棵仓库代码
+    // (默认铺开会污染产物视图 + 双重 walk)。
+    if (item.name === "__repos") continue;
+    // 跳过符号链接:primary 内挂载 extra repo 的 symlink(primary/repos/<id> -> ../../<id>)
+    // 不跳过会把 extra 文件在 primary 子树里重复一份,且可能与 __repos/<extraId> 节点重复。
+    if (item.isSymbolicLink()) continue;
     const fullPath = path.join(dir, item.name);
     const relPath = path.relative(base, fullPath);
     let stat: fs.Stats;

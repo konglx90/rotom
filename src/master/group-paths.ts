@@ -13,21 +13,20 @@ import path from "node:path";
 import type { MeshDb } from "./db.js";
 import type { IssueRow, AgentRow } from "./db/types.js";
 
-/** Root directory under which per-group working dirs (artifacts) live. */
-export const ARTIFACTS_ROOT = path.join(os.homedir(), ".rotom", "artifacts");
-
-/**
- * Legacy root from before the `results → artifacts` rename. Kept as a
- * read-only fallback so a group's pre-rename data still resolves correctly
- * if the one-shot data migration missed it (or was run on an older DB
- * whose `working_dir` column was back-filled to the legacy path).
- */
-const LEGACY_RESULTS_ROOT = path.join(os.homedir(), ".rotom", "results");
-
-/** Absolute default working dir for a group — used as cwd when no override. */
-export function defaultGroupWorkingDir(groupId: string): string {
-  return path.join(ARTIFACTS_ROOT, groupId);
-}
+// 路径常量 / 默认目录统一来自 shared/paths.ts(master 与 executor 共用同一真相源)。
+// 这里 re-export 保留旧导入路径(`import { ARTIFACTS_ROOT } from "../group-paths.js"`)。
+export {
+  ARTIFACTS_ROOT,
+  LEGACY_RESULTS_ROOT,
+  REPOS_ROOT,
+  defaultGroupWorkingDir,
+  groupArtifactsDir,
+  primaryWorktreePath,
+  extraWorktreePath,
+  groupReposContainer,
+  extraSymlinkTarget,
+} from "../shared/paths.js";
+import { LEGACY_RESULTS_ROOT, defaultGroupWorkingDir } from "../shared/paths.js";
 
 /**
  * Resolve the directory the artifacts panel / terminal should use for a group.

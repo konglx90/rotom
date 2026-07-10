@@ -135,19 +135,52 @@ export function getBarePathForUrl(url: string): string {
 }
 
 /**
- * 算出 worktree 的全局路径(不创建,只算路径)。
+ * 算出 worktree 的【旧】全局路径(不创建,只算路径)。仅迁移用。
  *
- * 布局:~/.rotom/repos/<repo-id>-wt/<slot>/
- *   - group 模式:slot = `group-<groupId8>`(每 group 一个 worktree,跨群不共享)
- *   - issue 模式:slot = `<issueId8>`(per-issue)
+ * 旧布局:~/.rotom/repos/<repo-id>-wt/<slot>/
+ *   - group 模式:slot = `group-<groupId8>`
+ *   - issue 模式:slot = `<issueId8>`
  *
- * 全局放,不跟 group 走(用户需求:worktree 是机器级资源,不属于某个 group)。
- * bare clone 对象库仍全局共享,worktree 只占 checkout 文件空间。
+ * 新布局下 worktree 挂在 group 产物目录下(~/.rotom/artifacts/<groupId>/__repos/...,
+ * 见 shared/paths.ts),本函数仅用于在迁移时算出旧路径,把旧 worktree `git worktree
+ * move` 到新位置。新代码不要用本函数算 worktree 路径。
  */
 export function getWorktreePathForUrl(url: string, slot: string): string {
   const repoId = repoIdFor(url);
   const repoName = repoNameFor(url);
   return path.join(REPOS_ROOT, `${repoName}-${repoId.slice(0, 8)}-wt`, slot);
+}
+
+/**
+ * 把旧路径的 worktree 迁移到新路径(复用 checkout,不重新 clone)。
+ *
+ * 迁移时机:`resolveRepoCwd` 创建新 worktree 前,若旧路径存在且新路径不存在,
+ * 调本函数 `git worktree move`。失败(worktree 正被占用 / 路径锁定 / git 拒绝)
+ * 返回 false,调用方回落到 `addWorktreeAsync` 在新路径重新 checkout。
+ *
+ * 幂等:旧路径不存在或新路径已存在 → 直接返回 true(无需迁移)。
+ */
+export async function migrateWorktree(
+  barePath: string,
+  oldPath: string,
+  newPath: string,
+): Promise<boolean> {
+  if (!fs.existsSync(oldPath)) return true; // 无旧 worktree,无需迁移
+  if (fs.existsSync(newPath)) return true; // 新路径已存在(可能已迁过)
+  fs.mkdirSync(path.dirname(newPath), { recursive: true });
+  const r = await runGitAsync(["worktree", "move", "--force", oldPath, newPath], { cwd: barePath });
+  if (!r.ok) {
+    log.warn(`migrate worktree move failed ${oldPath} → ${newPath}: ${r.stderr || r.stdout || "(no stderr)"} — will recreate at new path`);
+    return false;
+  }
+  // 旧 -wt 父目录可能空了,顺手清掉(只在确实为空时,避免误删同 slot 兄弟)
+  try {
+    const parent = path.dirname(oldPath);
+    if (fs.existsSync(parent) && fs.readdirSync(parent).length === 0) {
+      fs.rmSync(parent, { recursive: true, force: true });
+    }
+  } catch { /* 清理失败无所谓 */ }
+  return true;
 }
 
 /**
