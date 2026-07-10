@@ -228,6 +228,16 @@
   opacity: 0.85;
 }
 
+.thinkingCount {
+  margin-left: 5px;
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 15px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-gray, #9ca3af);
+}
+
 .toolBlock {
   margin: 3px 0 5px;
   border-left: 3px solid rgba(0, 0, 0, 0.07);

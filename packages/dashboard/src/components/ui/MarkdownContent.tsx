@@ -144,7 +144,7 @@ type RawPart =
 
 type Part =
   | { type: 'text'; content: string }
-  | { type: 'thinking'; content: string }
+  | { type: 'thinking'; content: string; count?: number }
   | { type: 'tool-call'; command: string; result?: string; streaming?: boolean }
   | { type: 'tool-call-group'; calls: ToolCall[]; streaming?: boolean }
   | { type: 'tool-patch'; content: string }
@@ -391,6 +391,45 @@ function hoistAllToolCallsToTop(parts: Part[]): Part[] {
   return out
 }
 
+// 把连续出现的多个「思考」折叠块合并成一个,summary 显示「思考×N」,而不是
+// 每个 thinking 各占一个 <details> 框。agent 一个 turn 里常常 think → tool →
+// think → tool,流式结束后 hoistAllToolCallsToTop 把所有工具调用提到顶部,
+// 留在底部的 N 段思考就紧挨着排成一列,把后面的正文挤到很下面看不清。这里把
+// 这一批相邻的思考合成一个可展开块,展开后用空行分隔各段内容。单个思考仍维持
+// 原样(显示「思考」,不画蛇添足加 ×1)。
+//
+// 必须排在 hoistAllToolCallsToTop / groupConsecutiveToolCalls 之后跑——因为
+// 「相邻」是在工具调用各就各位之后才成立的(参见上面 hoist 的注释)。
+//
+// 与 groupConsecutiveToolCalls 同理:相邻 thinking 之间只夹着空白(执行器在
+// 每个结构化标签后 emit 的单个 \n)的 text part 不算「被打断」,会被吞掉;
+// 一旦夹着有实质内容的 text / tool / ask / patch,这批就断开。
+function groupConsecutiveThinking(parts: Part[]): Part[] {
+  const out: Part[] = []
+  let buffer: string[] = []
+  const flush = () => {
+    if (buffer.length === 0) return
+    if (buffer.length === 1) {
+      out.push({ type: 'thinking', content: buffer[0] })
+    } else {
+      out.push({ type: 'thinking', content: buffer.join('\n\n'), count: buffer.length })
+    }
+    buffer = []
+  }
+  for (const p of parts) {
+    if (p.type === 'thinking') {
+      buffer.push(p.content)
+    } else if (p.type === 'text' && p.content.trim() === '' && buffer.length > 0) {
+      // 仅吞掉「思考与思考之间」的空白分隔;其它位置的空白(如正文前)原样保留
+    } else {
+      flush()
+      out.push(p)
+    }
+  }
+  flush()
+  return out
+}
+
 export const MarkdownContent = memo(function MarkdownContent({
   content,
   streaming,
@@ -406,11 +445,12 @@ export const MarkdownContent = memo(function MarkdownContent({
     const parts = pairExecCalls(parseStructuredBlocks(content))
     const { status, rest: hoisted } = hoistStatus(parts)
     const collapsed = mergeAdjacentTextParts(hoisted)
+    const arranged = streaming
+      ? groupConsecutiveToolCalls(collapsed)
+      : hoistAllToolCallsToTop(collapsed)
     return {
       status,
-      rest: streaming
-        ? groupConsecutiveToolCalls(collapsed)
-        : hoistAllToolCallsToTop(collapsed),
+      rest: groupConsecutiveThinking(arranged),
     }
   }, [content, streaming])
   const mentionComponents = useMemo<Components | undefined>(() => {
@@ -485,7 +525,7 @@ export const MarkdownContent = memo(function MarkdownContent({
               </ReactMarkdown>
             )
           case 'thinking':
-            return <ThinkingBlock key={i} content={part.content} streaming={streaming} />
+            return <ThinkingBlock key={i} content={part.content} count={part.count} streaming={streaming} />
           case 'tool-call':
             return (
               <ToolCallBlock
@@ -524,7 +564,15 @@ export const MarkdownContent = memo(function MarkdownContent({
   )
 })
 
-function ThinkingBlock({ content, streaming }: { content: string; streaming?: boolean }) {
+function ThinkingBlock({
+  content,
+  count,
+  streaming,
+}: {
+  content: string
+  count?: number
+  streaming?: boolean
+}) {
   const [open, setOpen] = useState(false)
   // 流式结束后强制折叠,让用户回到"看汇总"的视角;用户后续主动展开仍生效。
   useEffect(() => {
@@ -537,7 +585,9 @@ function ThinkingBlock({ content, streaming }: { content: string; streaming?: bo
       onClick={stopBubble}
       onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
     >
-      <summary className={styles.thinkingSummary} onClick={stopBubble}>思考</summary>
+      <summary className={styles.thinkingSummary} onClick={stopBubble}>
+        思考{count && count > 1 ? <span className={styles.thinkingCount}>×{count}</span> : null}
+      </summary>
       {open && <div className={styles.thinkingContent}>{content}</div>}
     </details>
   )

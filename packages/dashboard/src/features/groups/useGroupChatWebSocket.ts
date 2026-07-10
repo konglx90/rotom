@@ -24,6 +24,11 @@ export function useGroupChatWebSocket({
   const [messages, setMessages] = useState<ChatMessage[]>([])
 
   const streamContentRef = useRef<Map<string, { from: string; content: string }>>(new Map())
+  // 每个 agent 每次「开始回复」(首 chunk 到达)的时刻,供 deriveAgentQueues 判定
+  // processing / queued。用 ref 而非 state:它不参与渲染,且不随流式气泡被持久化
+  // 消息水合而丢失 —— 持久化消息的 created_at 偏晚(≈ turn 结束),只有这里记的
+  // 首 chunk 时刻才是真正的 turn 起点(见 agentQueue.ts 的算法注释)。
+  const turnStartsRef = useRef<Map<string, number[]>>(new Map())
   const selectedGroupIdRef = useRef(selectedGroupId)
   const directTargetRef = useRef(directTarget)
   const myAgentNameRef = useRef(myAgentName)
@@ -156,7 +161,13 @@ export function useGroupChatWebSocket({
           if (existing) {
             existing.content += delta
           } else {
-            streamContentRef.current.set(rid, { from: msg.from?.name || 'unknown', content: delta })
+            const fromName = msg.from?.name || 'unknown'
+            streamContentRef.current.set(rid, { from: fromName, content: delta })
+            // 首 chunk = 一轮新 turn 的起点,记时刻供 deriveAgentQueues 用。
+            const arr = turnStartsRef.current.get(fromName) ?? []
+            arr.push(Date.now())
+            if (arr.length > 50) arr.splice(0, arr.length - 50) // cap,防长会话无限增长
+            turnStartsRef.current.set(fromName, arr)
           }
           const pending = pendingDeltasRef.current.get(rid)
           if (pending) {
@@ -289,6 +300,9 @@ export function useGroupChatWebSocket({
 
   // Load history when switching groups.
   useEffect(() => {
+    // 切群清掉上一群的 live turn 起点记录 —— 否则旧群的 turnStarts 会泄漏进新群,
+    // 让新群里已被回复的旧消息(无对应 live turn)被误判成排队。
+    turnStartsRef.current = new Map()
     if (!selectedGroupId) {
       setMessages([])
       return
@@ -335,5 +349,6 @@ export function useGroupChatWebSocket({
     messages,
     setMessages,
     cancelStream,
+    turnStartsByAgent: turnStartsRef,
   }
 }

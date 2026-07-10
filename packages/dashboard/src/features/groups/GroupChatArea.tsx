@@ -8,6 +8,8 @@ import { MessageRow } from './MessageRow'
 import { MessageContextMenu } from './MessageContextMenu'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import { useImageUpload } from './useImageUpload'
+import { MessageQueuePanel } from './MessageQueuePanel'
+import type { AgentQueue } from './agentQueue'
 import {
   SLASH_COMMANDS,
   filterSlashCommands,
@@ -37,6 +39,9 @@ interface GroupChatAreaProps {
   /** pad 模式下渲染在输入框上方的图标工具条(豆包风:开抽屉 / 动作入口)。
    *  宽屏不传 → 不渲染,PC 0 影响。 */
   inputToolbar?: ReactNode
+  /** 每个被 @ 的 agent 的待处理队列(前端推断),渲染在输入框上方。
+   *  空数组时面板自身返回 null,不占位。 */
+  agentQueues: AgentQueue[]
 }
 
 export function GroupChatArea({
@@ -48,6 +53,7 @@ export function GroupChatArea({
   onSendMessage,
   onCancelStream,
   inputToolbar,
+  agentQueues,
 }: GroupChatAreaProps) {
   const messagesAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -532,6 +538,8 @@ export function GroupChatArea({
       {inputToolbar && (
         <div className={styles.inputToolbar}>{inputToolbar}</div>
       )}
+
+      <MessageQueuePanel queues={agentQueues} myAgentName={myAgentName} />
 
       {!isVisitor && (
         <div className={styles.inputArea}>

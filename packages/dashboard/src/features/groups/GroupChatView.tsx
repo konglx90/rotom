@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState, lazy, Suspense, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { groupsApi } from '../../api/groups'
 import { issuesApi } from '../../api/issues'
@@ -8,6 +8,7 @@ import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
 import { useVisitorMode } from '../../context/VisitorContext'
 import { extractMentions } from './types'
+import { deriveAgentQueues } from './agentQueue'
 import { useGroupChatWebSocket } from './useGroupChatWebSocket'
 import { useResizablePanels } from './_hooks/useResizablePanels'
 import type { PanelConfig } from './_hooks/useResizablePanels'
@@ -263,11 +264,20 @@ export function GroupChatView() {
     messages,
     setMessages,
     cancelStream,
+    turnStartsByAgent,
   } = useGroupChatWebSocket({
     myAgentName,
     selectedGroupId,
     directTarget: directTargetResolved,
   })
+
+  // 推断每个被 @ 的 agent 的待处理队列(processing/queued + 位次),供输入框上方的
+  // 队列面板展示。turnStartsByAgent 是 ref,与 messages 变更同步,故以 messages 为依赖
+  // 触发重算即可读到最新 turn 起点时刻。DM 模式下传 directTarget(一对一无 @ 标记)。
+  const agentQueues = useMemo(
+    () => deriveAgentQueues(messages, turnStartsByAgent.current, myAgentName, isDirectMode ? directTargetResolved : undefined),
+    [messages, turnStartsByAgent, myAgentName, isDirectMode, directTargetResolved],
+  )
 
   // React to global socket pushes.
   useEffect(() => {
@@ -501,6 +511,7 @@ export function GroupChatView() {
           onSendMessage={handleSendMessage}
           onCancelStream={cancelStream}
           inputToolbar={inputToolbar}
+          agentQueues={agentQueues}
         />
       ) : selectedGroup ? (
         <>
@@ -528,6 +539,7 @@ export function GroupChatView() {
             onSendMessage={handleSendMessage}
             onCancelStream={cancelStream}
             inputToolbar={inputToolbar}
+            agentQueues={agentQueues}
           />
         </>
       ) : (

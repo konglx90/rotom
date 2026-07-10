@@ -1,0 +1,183 @@
+/* 消息队列面板 —— 输入框上方,展示每个被 @ 的 agent 的待处理消息。
+   视觉对齐 ChatArea.module.css 的 statusDot / mention / pill 语言,Wise token。 */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-canvas);
+  border-top: 1px solid var(--border-color-light);
+  padding: 4px 12px 2px;
+  /* max-height 兜底:条数很多时内部滚动,不把输入框顶出视口。 */
+  max-height: 240px;
+  overflow: hidden;
+}
+
+/* 整条头部可点击折叠。button 重置掉默认样式,铺满一行。 */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  width: 100%;
+  padding: 4px 6px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-warm-dark);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.header:hover {
+  background: var(--color-soft-surface);
+}
+
+.headerIcon {
+  font-size: var(--font-sm);
+  line-height: 1;
+}
+
+.headerTitle {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--color-warm-dark);
+}
+
+.headerCount {
+  color: var(--color-gray);
+  font-weight: 500;
+}
+
+.chevron {
+  margin-left: auto;
+  font-size: var(--font-xs);
+  color: var(--color-gray);
+}
+
+/* 折叠时只剩头部,body 不渲染。 */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 6px 6px;
+  overflow-y: auto;
+}
+
+/* ── 单个 agent 区块 ──────────────────────────────────────── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dotActive {
+  background: var(--color-wise-green);
+  box-shadow: 0 0 0 2px rgba(159, 232, 112, 0.35);
+  animation: mqPulse 1.5s infinite;
+}
+.dotIdle {
+  background: var(--color-gray);
+  opacity: 0.6;
+}
+
+.agentName {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.sectionStatus {
+  font-size: var(--font-xs);
+  color: var(--color-gray);
+  font-weight: 500;
+}
+
+/* ── 队列行 ──────────────────────────────────────────────── */
+.itemList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-elevated);
+  box-shadow: var(--shadow-ring);
+  /* 内容超长时行内截断,不换行撑高面板。 */
+  min-width: 0;
+}
+
+.rowProcessing {
+  background: var(--color-mint);
+  box-shadow: rgba(22, 51, 0, 0.10) 0px 0px 0px 1px;
+}
+
+/* 自己发的消息加粗 + 左侧绿色色条,让用户一眼定位"我排第几"。 */
+.rowMine {
+  font-weight: 600;
+  border-left: 3px solid var(--color-wise-green);
+  padding-left: 5px;
+}
+
+.rowBadge {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--color-gray);
+  min-width: 20px;
+  text-align: center;
+}
+.rowProcessing .rowBadge {
+  color: var(--color-positive);
+}
+
+.rowSender {
+  flex-shrink: 0;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--color-dark-green);
+}
+
+.rowContent {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-xs);
+  color: var(--color-warm-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.processingTag {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-wise-green);
+  color: var(--color-dark-green);
+}
+
+@keyframes mqPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}

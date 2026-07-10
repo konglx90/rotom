@@ -8,6 +8,8 @@ import type { ChatMessage } from './types'
 import type { ConnectionStatus } from './useGroupChatWebSocket'
 import { useMessageHistoryNav } from './useMessageHistoryNav'
 import { ComposedPromptModal } from './modals/ComposedPromptModal'
+import { MessageQueuePanel } from './MessageQueuePanel'
+import type { AgentQueue } from './agentQueue'
 import styles from './ChatArea.module.css'
 
 interface DirectChatAreaProps {
@@ -23,6 +25,8 @@ interface DirectChatAreaProps {
   /** pad 模式下渲染在输入框上方的图标工具条(豆包风:开抽屉 / 动作入口)。
    *  宽屏不传 → 不渲染,PC 0 影响。 */
   inputToolbar?: ReactNode
+  /** 待处理消息队列(前端推断),渲染在输入框上方。空时面板返回 null。 */
+  agentQueues?: AgentQueue[]
 }
 // content. Mirrors MessageRow.extractMessageStatus — kept local rather than
 // shared because the only other call site is MessageRow, and extracting a
@@ -47,6 +51,7 @@ export function DirectChatArea({
   onSendMessage,
   onCancelStream,
   inputToolbar,
+  agentQueues,
 }: DirectChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -240,6 +245,8 @@ export function DirectChatArea({
       {inputToolbar && (
         <div className={styles.inputToolbar}>{inputToolbar}</div>
       )}
+
+      <MessageQueuePanel queues={agentQueues ?? []} myAgentName={myAgentName} />
 
       <div className={styles.inputArea}>
         <textarea ref={textareaRef} rows={1} value={message}
