@@ -2,7 +2,8 @@
  * Unit test — Prompt 组合器
  *
  * Covers:
- *   - 5 layer order: rotom-cli → agent-role → group-basic → cwd → task
+ *   - layer order: rotom-cli → agent-role → group-basic → active-issues → cwd → task
+ *   - system / user slot 拆分:静态层进 systemPrompt,动态层进 userMessage
  *   - 无 group: group-basic 折叠
  *   - 无 cwd: cwd 折叠
  *   - 无 profile / profile 全空: role 层折叠(null),不再占位
@@ -60,6 +61,7 @@ describe("composePrompt", () => {
       "rotom-cli",
       "agent-role",
       "group-basic",
+      "active-issues",
       "cwd",
       "task",
     ]);
@@ -179,7 +181,7 @@ describe("composePrompt", () => {
       },
     });
     const out = composePrompt(ctx);
-    const g = out.layers.find((l) => l.layer === "group-basic")!;
+    const g = out.layers.find((l) => l.layer === "active-issues")!;
     assert.ok(g.content.includes("[当前群活跃 issue] 2 个进行中"));
     // 不再渲染单条 issue 详情(ID / title / owner / priority 都不出现)
     assert.ok(!g.content.includes("#12345678"));
@@ -199,7 +201,7 @@ describe("composePrompt", () => {
       },
     });
     const out = composePrompt(ctx);
-    const g = out.layers.find((l) => l.layer === "group-basic")!;
+    const g = out.layers.find((l) => l.layer === "active-issues")!;
     assert.ok(g.content.includes("1 个进行中"));
   });
 
@@ -208,7 +210,7 @@ describe("composePrompt", () => {
       group: { id: "g", name: "G", activeIssues: [] },
     });
     const out = composePrompt(ctx);
-    const g = out.layers.find((l) => l.layer === "group-basic")!;
+    const g = out.layers.find((l) => l.layer === "active-issues")!;
     assert.ok(g.content.includes("[当前群活跃 issue] 无"));
   });
 
@@ -343,6 +345,74 @@ describe("composePrompt", () => {
     const out = composePrompt(baseCtx({ body: "实际任务内容" }));
     const t = out.layers.find((l) => l.layer === "task")!;
     assert.strictEqual(t.content, "实际任务内容");
+  });
+
+  // ── system / user 拆分(slot → systemPrompt / userMessage)─────────────
+  it("systemPrompt 含静态层(rotom-cli/角色/群身份头/cwd),不含 task 原文", () => {
+    const ctx = baseCtx({
+      agentProfile: { category: "AI", position: "FE" },
+      group: { id: "g1", name: "G1", activeIssues: [] },
+      cwd: "/tmp/w",
+      body: "XYZZY_TASK_BODY",
+    });
+    const out = composePrompt(ctx);
+    assert.ok(out.systemPrompt.includes("[rotom CLI]"), "systemPrompt 应含 rotom-cli");
+    assert.ok(out.systemPrompt.includes("[Agent 角色]"), "systemPrompt 应含 agent-role");
+    assert.ok(out.systemPrompt.includes("groupId=g1"), "systemPrompt 应含群身份头");
+    assert.ok(out.systemPrompt.includes("/tmp/w"), "systemPrompt 应含 cwd");
+    assert.ok(!out.systemPrompt.includes("XYZZY_TASK_BODY"), "systemPrompt 不应含 task 原文");
+  });
+
+  it("userMessage 含 task 原文 + 动态指针,不含 rotom-cli/角色/cwd", () => {
+    const ctx = baseCtx({
+      agentProfile: { category: "AI" },
+      group: { id: "g1", name: "G1", activeIssues: [], memoryCounts: { group: 1, global: 0 }, skillCount: 2 },
+      cwd: "/tmp/w",
+      fromName: "老王",
+      body: "XYZZY_TASK_BODY",
+    });
+    const out = composePrompt(ctx);
+    assert.ok(out.userMessage.includes("XYZZY_TASK_BODY"), "userMessage 应含 task 原文");
+    assert.ok(out.userMessage.includes("[from=老王]"), "userMessage 应含 fromName");
+    assert.ok(out.userMessage.includes("[当前群活跃 issue]"), "userMessage 应含活跃 issue 计数");
+    assert.ok(out.userMessage.includes("[可用记忆]"), "userMessage 应含 memory 指针");
+    assert.ok(out.userMessage.includes("[可用技能]"), "userMessage 应含 skill 指针");
+    assert.ok(!out.userMessage.includes("[rotom CLI]"), "userMessage 不应含 rotom-cli");
+    assert.ok(!out.userMessage.includes("[Agent 角色]"), "userMessage 不应含 agent-role");
+    assert.ok(!out.userMessage.includes("/tmp/w"), "userMessage 不应含 cwd");
+  });
+
+  it("systemPrompt/userMessage = 各自 slot 层拼接;所有层都有合法 slot", () => {
+    const ctx = baseCtx({
+      agentProfile: { category: "AI" },
+      group: { id: "g1", name: "G1", activeIssues: [] },
+      cwd: "/tmp/w",
+      body: "hi",
+    });
+    const out = composePrompt(ctx);
+    for (const l of out.layers) {
+      assert.ok(l.slot === "system" || l.slot === "user", `层 ${l.layer} 应有合法 slot`);
+    }
+    const sysLayers = out.layers.filter((l) => l.slot === "system").map((l) => l.content).join("\n");
+    const userLayers = out.layers.filter((l) => l.slot === "user").map((l) => l.content).join("\n");
+    assert.strictEqual(out.systemPrompt, sysLayers);
+    assert.strictEqual(out.userMessage, userLayers);
+    // final 仍是所有层自然顺序的合并视图(非 system+user 简单拼接)
+    assert.strictEqual(out.final, out.layers.map((l) => l.content).join("\n"));
+  });
+
+  it("issue 模式:systemPrompt 不含 rotom-cli(被跳过),含角色+cwd;userMessage=body", () => {
+    const ctx = baseCtx({
+      mode: "issue",
+      agentProfile: { category: "AI" },
+      cwd: "/tmp/w",
+      body: "任务体",
+    });
+    const out = composePrompt(ctx);
+    assert.ok(!out.systemPrompt.includes("[rotom CLI]"), "issue 模式 systemPrompt 不含 rotom-cli");
+    assert.ok(out.systemPrompt.includes("[Agent 角色]"));
+    assert.ok(out.systemPrompt.includes("/tmp/w"));
+    assert.strictEqual(out.userMessage, "任务体");
   });
 });
 

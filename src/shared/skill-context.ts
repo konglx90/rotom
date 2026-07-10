@@ -19,6 +19,7 @@ export function buildSkillPointerLayer(p: SkillPointer): PromptLayer | null {
   const groupIdHint = p.groupId ? ` <groupId>` : ""
   return {
     layer: "skill-pointer",
+    slot: "user",
     content:
       `[可用技能] ${p.count} 个。用 \`rotom skill mine${groupIdHint}\` 查列表,` +
       `\`rotom skill get <name>\` 看详情;无关技能忽略,不要硬套。\n`,

@@ -137,8 +137,11 @@ export class ChatHandler {
         signal: controller.signal,
         env: this.worker.agentEnv(),
         kind: "chat",
+        // 静态系统层(rotom-cli/角色/群身份/cwd)走 system-prompt 通道,每轮重传同一段;
+        // 正文只发动态层 + 用户原话。executor 据 systemPrompt 选各家通道。
+        systemPrompt: composed.systemPrompt,
         // 2-minute hard wall-clock cap on chat replies. Without this a
-        // hanging openclaw subprocess can tie up the worker's
+        // hanging CLI subprocess can tie up the worker's
         // activeTasks slot until the user gives up and the daemon
         // restarts. Executors pass this through to `--timeout` AND set
         // a defensive SIGKILL after a small grace.
@@ -146,7 +149,7 @@ export class ChatHandler {
       };
       if (sessionId) execOptions.sessionId = sessionId;
       // cwd 按 groupId 派生
-      const result = await this.worker.executor.execute(composed.final, cwd, (chunk) => {
+      const result = await this.worker.executor.execute(composed.userMessage, cwd, (chunk) => {
         if (task.aborted) return;
         fullContent += chunk;
         this.worker.sendChatChunk(requestId, chunk);

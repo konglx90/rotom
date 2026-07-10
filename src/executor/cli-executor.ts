@@ -66,12 +66,21 @@ export type ApprovalDecision =
 export interface ExecuteOptions {
   /** Resume a previous conversation by sessionId (empty = new session). */
   sessionId?: string;
+  /**
+   * 会话内基本不变的"静态"系统提示(rotom-cli 规则 / agent 角色 / 群身份头 /
+   * cwd / 群指导),由 composePrompt() 的 system slot 拼出。executor 经自家
+   * system-prompt 通道(claude --append-system-prompt / codex developerInstructions /
+   * pi --append-system-prompt)注入,每轮幂等重传。内容会话内不变 → 上下文里只存一份,
+   * 不再每轮 user 消息重复(省上下文 + 命中缓存)。无可用通道的 backend(hermes ACP
+   * session/new 忽略 systemPrompt)退化为拼回 prompt 正文。
+   */
+  systemPrompt?: string;
   /** Abort signal — when triggered, the spawned CLI process should be killed. */
   signal?: AbortSignal;
   /**
    * Hard wall-clock timeout for the spawned CLI process, in milliseconds.
    * Executors should pass this through to the underlying CLI when supported
-   * (e.g. `openclaw agent --timeout N`) AND set a defensive timer that
+   * (e.g. a `--timeout` flag) AND set a defensive timer that
    * SIGKILLs the process after `timeoutMs + graceMs` if the CLI ignores it.
    * Without this a single hanging subprocess can stall the worker's
    * maxConcurrent slot indefinitely.
@@ -119,7 +128,7 @@ export interface ExecuteOptions {
    * 等价工具,executor 解析出完整 todos 数组后通过本回调上报。worker 转发
    * 给 master 落 latest_todos_json + 一条 kind="todos" 时间线事件。
    *
-   * 仅 claude-code backend 实现该回调;其他 backend(codex / hermes / openclaw /
+   * 仅 claude-code backend 实现该回调;其他 backend(codex / hermes /
    * generic) 不调用,worker 端不传该字段即可。
    */
   onTodos?: (todos: TodoItem[]) => void;
@@ -133,7 +142,7 @@ export interface ExecuteOptions {
    * result.usage 给的是**终态累积值**(claude 的 result 事件汇总)。worker
    * 在 issue 翻终态时用 result.usage 覆盖内存累积,保证 reload 前后一致。
    *
-   * 当前仅 claude-code backend 实现;codex / hermes / openclaw 暂不调用,
+   * 当前仅 claude-code backend 实现;codex / hermes 暂不调用,
    * 前端降级到终态值。
    */
   onUsage?: (increment: TokenUsage) => void;
@@ -184,7 +193,7 @@ export interface CliExecutor {
   ): Promise<ExecuteResult>;
   /**
    * Read the tail of a session's transcript from the CLI tool's local storage.
-   * Optional — backends without direct file access (codex / hermes / openclaw)
+   * Optional — backends without direct file access (codex / hermes)
    * can omit this; the worker will surface a "not introspectable" response
    * to the dashboard instead of an error.
    *

@@ -798,10 +798,14 @@ export class HermesCliExecutor implements CliExecutor {
           }
 
           // 3. Send prompt
-          // prompt 已经由 worker 用 composePrompt() 拼好,executor 不再二次包装。
+          // hermes ACP server 的 session/new 会忽略 systemPrompt 字段(落到 **kwargs
+          // 不消费,见 hermes acp_adapter/server.py: new_session 只用 cwd/mcp_servers),
+          // 没有可用的 system-prompt 通道 → 退化为把静态系统层拼回 prompt 正文 = 现状
+          // 行为(不优化,但不回归)。claude/codex/pi 走真正的 system-prompt 通道。
+          const fullPrompt = options?.systemPrompt ? `${options.systemPrompt}\n${prompt}` : prompt;
           await request("session/prompt", {
             sessionId,
-            prompt: [{ type: "text", text: prompt }],
+            prompt: [{ type: "text", text: fullPrompt }],
           });
         } catch (err) {
           console.error(`[hermes-cli] ACP lifecycle error: ${(err as Error).message}`);

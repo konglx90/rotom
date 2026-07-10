@@ -64,7 +64,7 @@ export class IssueHandler {
       body: bodyWithContext,
       approvalPolicy,
     });
-    this.runIssueExecution(issueId, composed.final, cwd, undefined, slashCommand, approvalPolicy, composed, repoCtx);
+    this.runIssueExecution(issueId, composed.userMessage, cwd, undefined, slashCommand, approvalPolicy, composed, repoCtx);
   }
 
   /**
@@ -147,6 +147,7 @@ export class IssueHandler {
         signal: controller.signal,
         env: this.worker.agentEnv(),
         kind: "issue",
+        systemPrompt: composedPrompt?.systemPrompt,
         sessionId: resumeSessionId,
         slashCommand,
         approvalPolicy: effectivePolicy,
@@ -160,7 +161,7 @@ export class IssueHandler {
         onUsage: (increment) => {
           if (task.aborted) return;
           // executor 给单轮增量,worker 内部 sum 成累积值并 1s 节流推送。
-          // 不调 onUsage 的 backend(codex/hermes/openclaw)→ 本回调不被触发,
+          // 不调 onUsage 的 backend(codex/hermes)→ 本回调不被触发,
           // IssueStatusBar 自然降级到终态 issue.usage。
           this.worker.reportIssueUsage(issueId, increment);
         },
@@ -241,7 +242,19 @@ export class IssueHandler {
         // 队列里被吃掉，没机会再传策略，沿用本轮是正确做法（用户切换策略后
         // 新的 issue_append 会重新走 ws → effectivePolicy 才会刷新）。
         setImmediate(() => {
-          this.runIssueExecution(issueId, merged, cwd, lastSessionId, slashCommand, effectivePolicy);
+          // append 续跑也走 system-prompt 通道:重 compose 出静态层(role+cwd)随
+          // systemPrompt 重传,merged 作为 userMessage。否则 claude/codex/pi 这类
+          // 每轮重算 system prompt 的 backend 在 resume 时会丢静态上下文。
+          const appendComposed = composePrompt({
+            mode: "issue",
+            agentName: this.worker.config.name,
+            agentProfile: this.worker.agentProfile,
+            group: null,
+            cwd,
+            body: merged,
+            approvalPolicy: effectivePolicy,
+          });
+          this.runIssueExecution(issueId, appendComposed.userMessage, cwd, lastSessionId, slashCommand, effectivePolicy, appendComposed);
         });
       } else if (task.aborted && task.interrupted) {
         // 中断 + 队列空:issue 没有新一轮要跑,转 paused(待继续)状态。

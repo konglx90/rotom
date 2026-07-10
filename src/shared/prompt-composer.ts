@@ -1,27 +1,45 @@
 /**
- * Prompt 组合器 —— 把"喂给 CLI agent 的 prompt"分层组装,每层标数据源。
+ * Prompt 组合器 —— 把"喂给 CLI agent 的 prompt"分层组装,每层标数据源 + slot。
  *
- * 拼接顺序:rotom-cli → agent-role → group-basic → cwd → task
- *  - rotom-cli: rotom CLI 使用规则(`ROTOM_CLI_PROMPT`),所有 agent 一致
- *  - agent-role: 来自 `agents.profile` JSON,per-agent
- *  - group-basic: 群上下文 + 活跃 issue 列表,群内所有 agent 一致
- *  - cwd: 工作目录只读头(如有 cwd)
- *  - task: chat 模式 = 用户原消息;issue 模式 = title + description
+ * 拼接顺序:rotom-cli → agent-role → group-basic → active-issues → cwd → task
+ *  - rotom-cli: rotom CLI 使用规则(`ROTOM_CLI_PROMPT`),所有 agent 一致 [system]
+ *  - agent-role: 来自 `agents.profile` JSON,per-agent [system]
+ *  - group-basic: 群身份头(groupId/groupName/selfName),群内所有 agent 一致 [system]
+ *  - group-guidance: 群级指导 prompt(可选) [system]
+ *  - active-issues: 当前群活跃 issue 计数(会变,每轮注入) [user]
+ *  - cwd: 工作目录只读头(如有 cwd) [system]
+ *  - task: chat 模式 = 用户原消息;issue 模式 = title + description [user]
+ *  - memory-pointer / skill-pointer: 极简指针,会变 [user]
+ *
+ * slot 语义:
+ *  - "system" → 进 systemPrompt,经 executor 的 system-prompt 通道(建会话时设一次,
+ *    每轮幂等重传)。这些层在一整个会话里基本不变,放进 system prompt 后上下文里
+ *    只存一份,不再每轮 user 消息重复一份(省上下文、命中缓存)。
+ *  - "user" → 进 userMessage,作为每轮 user 消息正文喂给 CLI。这些层每轮会变
+ *    (issue 计数 / 记忆 / 技能指针 / 用户原话),必须每轮重发。
  *
  * 设计:这是**纯函数**,无 IO。worker 调它,拿到 ComposedPrompt 后:
- *  1. `prompt = composed.final` 喂给 executor
- *  2. `composed.layers` 经由 `a2a_reply_end` / `issue_update` 透传给 master 入库
- *  3. 前端点击消息 → 直接读库渲染,无需重算
+ *  1. `systemPrompt` 经 ExecuteOptions.systemPrompt 喂给 executor 的 system-prompt 通道
+ *  2. `userMessage` 作为 prompt 正文喂给 executor
+ *  3. `composed.layers` 经由 `a2a_reply_end` / `issue_update` 透传给 master 入库
+ *  4. 前端点击消息 → 直接读库渲染,无需重算
+ *  `final` 是所有层自然顺序的合并视图(供"查看 prompt"/DB 兼容),不等于
+ *  systemPrompt + userMessage 的拼接(layer 是按语义交错的)。
  */
 
 import { ROTOM_CLI_PROMPT, ROTOM_CLI_PROMPT_VERSION } from "./rotom-cli-prompt.js";
 import type { AgentProfile } from "./agent-profile.js";
 import type { ActiveIssueRef } from "./group-context.js";
 
-export type PromptLayerKind = "rotom-cli" | "group-basic" | "group-guidance" | "agent-role" | "cwd" | "task" | "memory-pointer" | "skill-pointer";
+export type PromptLayerKind = "rotom-cli" | "group-basic" | "group-guidance" | "agent-role" | "active-issues" | "cwd" | "task" | "memory-pointer" | "skill-pointer";
+
+/** 该层进 systemPrompt("system") 还是 userMessage("user")。 */
+export type PromptLayerSlot = "system" | "user";
 
 export interface PromptLayer {
   layer: PromptLayerKind;
+  /** system → 建会话时注入一次;user → 每轮 user 消息正文。 */
+  slot: PromptLayerSlot;
   content: string;
   /** 数据源标注,如 "src/shared/rotom-cli-prompt.ts (constant)" */
   source: string;
@@ -29,6 +47,11 @@ export interface PromptLayer {
 
 export interface ComposedPrompt {
   layers: PromptLayer[];
+  /** system slot 各层拼接 → 喂 executor 的 system-prompt 通道(会话内基本不变)。 */
+  systemPrompt: string;
+  /** user slot 各层拼接 → 每轮 user 消息正文(动态 + task)。 */
+  userMessage: string;
+  /** 所有层自然顺序的合并视图,供"查看 prompt"/DB 兼容,非 system+user 简单拼接。 */
   final: string;
   generatedAt: string;
   promptVersion: string;
@@ -63,11 +86,12 @@ export interface ComposeContext {
 const SOURCE_ROTOM_CLI = "src/shared/rotom-cli-prompt.ts (constant)";
 const SOURCE_AGENT_PROFILE = "agents.profile JSON (edit via Dashboard 员工介绍)";
 const SOURCE_GROUP_BASIC = "groups + active_issues (runtime, from master enrichGroupConversation)";
+const SOURCE_ACTIVE_ISSUES = "active_issues (runtime, from master enrichGroupConversation)";
 const SOURCE_GROUP_GUIDANCE = "groups.guidance_prompt (edit via Dashboard 群设置 / PATCH /groups/:id)";
 const SOURCE_CWD = "<worker.executor>.resolveIssueCwd(groupId)";
 
 function buildRotomCliLayer(): PromptLayer {
-  return { layer: "rotom-cli", content: ROTOM_CLI_PROMPT, source: SOURCE_ROTOM_CLI };
+  return { layer: "rotom-cli", slot: "system", content: ROTOM_CLI_PROMPT, source: SOURCE_ROTOM_CLI };
 }
 
 function buildAgentRoleLayer(profile: AgentProfile | null): PromptLayer | null {
@@ -80,24 +104,32 @@ function buildAgentRoleLayer(profile: AgentProfile | null): PromptLayer | null {
   const present = fields.filter(([, v]) => typeof v === "string" && v.length > 0);
   if (present.length === 0) return null;
   const lines = ["[Agent 角色]", ...present.map(([k, v]) => `${k}: ${v}`)];
-  return { layer: "agent-role", content: lines.join("\n") + "\n", source: SOURCE_AGENT_PROFILE };
+  return { layer: "agent-role", slot: "system", content: lines.join("\n") + "\n", source: SOURCE_AGENT_PROFILE };
 }
 
-function buildGroupBasicLayer(
-  group: { id: string; name: string; activeIssues: ActiveIssueRef[]; guidancePrompt?: string | null } | null | undefined,
+/** 群身份头(groupId/groupName/selfName)—— 会话内不变,进 system slot。 */
+function buildGroupHeaderLayer(
+  group: { id: string; name: string } | null | undefined,
   selfName: string,
 ): PromptLayer | null {
   if (!group) return null;
-
   const header =
     `[群消息 context: groupId=${group.id}, groupName="${group.name}", 你自己是="${selfName}"]\n`;
-
-  const issuesBlock = renderActiveIssues(group.activeIssues);
-
   return {
     layer: "group-basic",
-    content: header + issuesBlock,
+    slot: "system",
+    content: header,
     source: SOURCE_GROUP_BASIC,
+  };
+}
+
+/** 当前群活跃 issue 计数 —— 每轮会变(issue 被创建/关闭),进 user slot 每轮重发。 */
+function buildActiveIssuesLayer(issues: ActiveIssueRef[] | undefined): PromptLayer | null {
+  return {
+    layer: "active-issues",
+    slot: "user",
+    content: renderActiveIssues(issues),
+    source: SOURCE_ACTIVE_ISSUES,
   };
 }
 
@@ -110,6 +142,7 @@ function buildGroupGuidanceLayer(
   if (!prompt || !prompt.trim()) return null;
   return {
     layer: "group-guidance",
+    slot: "system",
     content: `[群指导] ${prompt.trim()}\n`,
     source: SOURCE_GROUP_GUIDANCE,
   };
@@ -141,6 +174,7 @@ function buildCwdLayer(cwd: string | null, mode: ComposeContext["mode"], approva
     : "";
   return {
     layer: "cwd",
+    slot: "system",
     content:
       `[artifacts目录] ${cwd}\n` +
       `相对路径基于此目录解析;Read/Grep/Glob 用相对路径即可,不要 \`cd\` 切到其他目录。\n` +
@@ -163,7 +197,7 @@ function buildTaskLayer(body: string, mode: ComposeContext["mode"], fromName?: s
       content = body;
       break;
   }
-  return { layer: "task", content, source };
+  return { layer: "task", slot: "user", content, source };
 }
 
 /** 记忆极简指针层:只一行,告诉 agent 有多少记忆可查 + 怎么查。不展开索引,不干扰核心任务。 */
@@ -172,6 +206,7 @@ function buildMemoryPointerLayer(counts: { group: number; global: number }): Pro
   if (total === 0) return null;
   return {
     layer: "memory-pointer",
+    slot: "user",
     content:
       `[可用记忆] 群 ${counts.group} 条 / 全局 ${counts.global} 条。` +
       `需要时用 \`rotom memory search <关键词>\` 查询(支持 key/value/summary/tags),` +
@@ -186,6 +221,7 @@ function buildSkillPointerLayer(count: number, groupId?: string): PromptLayer | 
   const gidHint = groupId ? ` ${groupId}` : "";
   return {
     layer: "skill-pointer",
+    slot: "user",
     content:
       `[可用技能] ${count} 个。用 \`rotom skill mine${gidHint}\` 查列表,` +
       `\`rotom skill get <name>\` 看详情;无关技能忽略,不要硬套。\n`,
@@ -206,8 +242,14 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
   const role = buildAgentRoleLayer(ctx.agentProfile);
   if (role) layers.push(role);
 
-  const group = buildGroupBasicLayer(ctx.group, ctx.agentName);
-  if (group) layers.push(group);
+  const groupHeader = buildGroupHeaderLayer(ctx.group, ctx.agentName);
+  if (groupHeader) layers.push(groupHeader);
+
+  // 活跃 issue 计数会变,放 user slot;只在有群上下文时注入(DM/单 issue 无群)。
+  if (ctx.group) {
+    const issues = buildActiveIssuesLayer(ctx.group.activeIssues);
+    if (issues) layers.push(issues);
+  }
 
   const guidance = buildGroupGuidanceLayer(ctx.group);
   if (guidance) layers.push(guidance);
@@ -230,8 +272,13 @@ export function composePrompt(ctx: ComposeContext): ComposedPrompt {
     if (ptr) layers.push(ptr);
   }
 
+  const systemPrompt = layers.filter((l) => l.slot === "system").map((l) => l.content).join("\n");
+  const userMessage = layers.filter((l) => l.slot === "user").map((l) => l.content).join("\n");
+
   return {
     layers,
+    systemPrompt,
+    userMessage,
     final: layers.map((l) => l.content).join("\n"),
     generatedAt: new Date().toISOString(),
     promptVersion: ROTOM_CLI_PROMPT_VERSION,

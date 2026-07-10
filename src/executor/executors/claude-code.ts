@@ -123,6 +123,13 @@ export class ClaudeCodeExecutor implements CliExecutor {
         }
       }
 
+      // 静态系统层(rotom-cli/角色/群身份/cwd)进 system-prompt 通道:每轮(new +
+      // resume)都幂等重传同一段。会话内不变 → 上下文只存一份,不再每轮 user 消息
+      // 重复。/plan 不走这里(用独立的 --permission-mode plan),无冲突。
+      if (options?.systemPrompt) {
+        args.push("--append-system-prompt", options.systemPrompt);
+      }
+
       const spawnEnv: NodeJS.ProcessEnv = { ...process.env, ...options?.env };
       if (approvalGate) {
         spawnEnv.ROTOM_APPROVAL_SOCKET = approvalGate.socketPath;

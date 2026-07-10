@@ -536,7 +536,7 @@ export class CodexExecutor implements CliExecutor {
           });
           notify("initialized");
 
-          threadId = await startOrResumeThread(request, resumeSessionId, workingDir, options?.slashCommand);
+          threadId = await startOrResumeThread(request, resumeSessionId, workingDir, options?.slashCommand, options?.systemPrompt);
 
           await request("turn/start", {
             threadId,
@@ -638,10 +638,13 @@ async function startOrResumeThread(
   resumeSessionId: string,
   cwd: string,
   slashCommand?: string,
+  systemPrompt?: string,
 ): Promise<string> {
-  // /plan → codex 没有原生 plan 模式，靠 developerInstructions 注入开发者级
-  // 系统提示，引导其"先方案后落盘"。注册表见 src/shared/slash-commands.ts。
-  const developerInstructions = slashCommand === "/plan" ? buildPlanModeInstruction() : null;
+  // developerInstructions 通道同时承载"静态系统层"(rotom-cli/角色/群身份/cwd,
+  // 来自 worker 的 systemPrompt)和 /plan 指令:两者都进 system 级提示。
+  // 会话内静态层不变,thread/start 与 thread/resume 每轮幂等重传同一段。
+  const planInstr = slashCommand === "/plan" ? buildPlanModeInstruction() : null;
+  const developerInstructions = [systemPrompt, planInstr].filter(Boolean).join("\n") || null;
   if (resumeSessionId) {
     try {
       const res = (await request("thread/resume", {

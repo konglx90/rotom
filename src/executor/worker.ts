@@ -731,7 +731,7 @@ export class ExecutorWorker {
         body,
         approvalPolicy,
       });
-      this.issues.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed, { issueId, groupId, repoUrl, repoBranch, extraRepos, worktreeMode });
+      this.issues.runIssueExecution(issueId, composed.userMessage, cwd, sessionId, slashCommand, approvalPolicy, composed, { issueId, groupId, repoUrl, repoBranch, extraRepos, worktreeMode });
       return;
     }
 
@@ -774,7 +774,7 @@ export class ExecutorWorker {
           body,
           approvalPolicy,
         });
-        this.issues.runIssueExecution(issueId, composed.final, cwd, sessionId, slashCommand, approvalPolicy, composed, { issueId, groupId, repoUrl, repoBranch, extraRepos, worktreeMode });
+        this.issues.runIssueExecution(issueId, composed.userMessage, cwd, sessionId, slashCommand, approvalPolicy, composed, { issueId, groupId, repoUrl, repoBranch, extraRepos, worktreeMode });
       }
     }
   }
@@ -900,7 +900,7 @@ export class ExecutorWorker {
    *   - trailing:否则排一个 setTimeout 在窗口尾再推一次(只在 dirty 时推,
    *     避免和 leading 重叠推同一份数据)
    *
-   * 不调 onUsage 的 backend(codex/hermes/openclaw)→ 本方法不被调,前端
+   * 不调 onUsage 的 backend(codex/hermes)→ 本方法不被调,前端
    * 自然降级到终态 issue.usage,无副作用。
    */
   reportIssueUsage(issueId: string, increment: TokenUsage): void {

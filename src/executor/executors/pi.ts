@@ -2,7 +2,7 @@
  * Pi CLI Executor — port of multica/server/pkg/agent/pi.go.
  *
  * Spawns `pi -p --mode json --session <path> <prompt>` per turn
- * (spawn-and-exit, mirrors the openclaw template structurally).
+ * (spawn-and-exit executor).
  *
  *   - -p / --print        non-interactive mode; prompt is positional
  *   - --mode json         emit one JSON event per line on stdout, then exit
@@ -282,10 +282,13 @@ export class PiExecutor implements CliExecutor {
       // prompt 已由 worker 用 composePrompt() 拼好,executor 不再二次包装。
 
       const args = ["-p", "--mode", "json", "--session", sessionPath];
-      // /plan → pi 没有原生 plan 模式,通过 --append-system-prompt 注入开发者级
-      // 系统指令,引导其"先方案后落盘"。注册表见 src/shared/slash-commands.ts。
-      if (options?.slashCommand === "/plan") {
-        args.push("--append-system-prompt", buildPlanModeInstruction());
+      // --append-system-prompt 同时承载静态系统层(rotom-cli/角色/群身份/cwd,
+      // 来自 worker 的 systemPrompt)和 /plan 指令(pi 无原生 plan 模式)。
+      // 会话内静态层不变,每轮幂等重传同一段。注册表见 src/shared/slash-commands.ts。
+      const planInstr = options?.slashCommand === "/plan" ? buildPlanModeInstruction() : null;
+      const appendSystem = [options?.systemPrompt, planInstr].filter(Boolean).join("\n");
+      if (appendSystem) {
+        args.push("--append-system-prompt", appendSystem);
       }
       args.push(prompt);
 
