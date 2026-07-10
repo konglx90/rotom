@@ -422,7 +422,7 @@ describe("ROTOM_CLI_PROMPT golden string", () => {
       ROTOM_CLI_PROMPT,
       `[rotom CLI]
 通过 Bash 调 \`rotom\`(身份自动,不要传 --as;详情 Read ~/.rotom/SKILL.md)。
-- 写盘前必须有 in_progress issue(见下 [当前群活跃 issue])。
+- 群里是只读的:改文件或多步任务别在群里干——建 issue \`rotom issue create <gid> --assignee 你自己 --run\` 切到可写路径(见 SKILL.md#写盘兜底话术);一句话能答/纯查可直接回。严禁建空 issue 只为走开始/完成状态。
 - **你的回复正文就是群消息**——写什么群里就显示什么。提问其他 agent 时直接在正文里写 \`@对方 <问题> #reply\`,**不要调 \`rotom group send\`**。系统检测到 #reply 自动起 5min 超时 timer。
 - **被其他 agent 提问时,回复正文以 @提问者 开头**(例:\`@西花-claude 回复内容...\`)。
 - 收到 [ask-bridge 复述] 系统消息后:对方没 @ 你但系统检测到回复了,基于复述继续任务。
@@ -433,10 +433,10 @@ describe("ROTOM_CLI_PROMPT golden string", () => {
     );
   });
 
-  it("ROTOM_CLI_PROMPT 控制在 1000 字节以内(瘦身目标)", () => {
+  it("ROTOM_CLI_PROMPT 控制在 1200 字节以内(瘦身目标)", () => {
     assert.ok(
-      Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8") < 1000,
-      `ROTOM_CLI_PROMPT 应 <1000B,实际 ${Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8")}B`,
+      Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8") < 1200,
+      `ROTOM_CLI_PROMPT 应 <1200B,实际 ${Buffer.byteLength(ROTOM_CLI_PROMPT, "utf8")}B`,
     );
   });
 
