@@ -1,25 +1,15 @@
 .terminalPane {
   display: flex;
   flex-direction: column;
-  /* Compete with siblings (fileTree, previewSection) for vertical space.
-     basis = preferred height; shrink:1 keeps the bottom from being pushed
-     below the visible panel when the file preview is also open on shorter
-     screens; min-height keeps the terminal at least a few rows tall. */
-  flex: 0 1 240px;
-  min-height: 120px;
+  /* When展开, share the panel evenly with the file tree / preview above:
+     grow:1 basis:0 makes it split the available height 50/50 with
+     .splitLayout (also grow:1 basis:0). min-height keeps it a few rows
+     tall on short screens. */
+  flex: 1 1 0;
+  min-height: 160px;
   border-top: 1px solid var(--border-color-light);
   background: #1e1e1e;
   overflow: hidden;
-  transition: flex-basis 0.15s ease;
-}
-
-.terminalPane.expanded {
-  /* Override the base `flex: 0 1 240px` — grow:1 lets the terminal claim
-     vertical space beyond its basis when the panel has room, instead of
-     being capped at 420px. 70vh basis + min-height 320px keeps it usable
-     on short screens while giving enough rows for real work on tall ones. */
-  flex: 1 1 70vh;
-  min-height: 320px;
 }
 
 .terminalPane.collapsed {

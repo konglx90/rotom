@@ -6,6 +6,7 @@ import { useVisitorMode } from '../../../context/VisitorContext'
 import { useIsPad } from '../../../hooks/useIsPad'
 import { AppSidebar } from '../AppSidebar/AppSidebar'
 import { VisitorBanner } from '../VisitorBanner'
+import { TerminalDeck } from '../../../features/terminal/TerminalDeck'
 import styles from './AppShell.module.css'
 
 const ZEN_DEFAULT = 56
@@ -93,6 +94,9 @@ export function AppShell({ children }: AppShellProps) {
           {children}
         </main>
       </div>
+      {/* Global multi-terminal overlay. Mounted at the shell root so it
+          survives route/group changes; renders null when closed. */}
+      <TerminalDeck />
     </div>
   )
 }

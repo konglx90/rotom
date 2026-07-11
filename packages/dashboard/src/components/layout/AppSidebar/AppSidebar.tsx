@@ -4,6 +4,7 @@ import { NavLink, useMatch } from 'react-router-dom'
 import { Avatar } from '../../ui/Avatar'
 import { useChatContext } from '../../../context/ChatContext'
 import { useZenMode } from '../../../context/ZenModeContext'
+import { useTerminalDeck } from '../../../features/terminal/TerminalDeckContext'
 import { getAvatarColor } from '../../../utils/avatar'
 import styles from './AppSidebar.module.css'
 const NAV_TABS = [
@@ -62,6 +63,7 @@ const TAB_EMPTY_HINT: Record<GroupTab, string> = {
 }
 export function AppSidebar({ width, onWidthChange, variant = 'rail' }: AppSidebarProps) {
   const { zenMode, toggleZenMode } = useZenMode()
+  const { open: deckOpen, toggle: toggleDeck } = useTerminalDeck()
   const isDrawer = variant === 'drawer'
   // AppSidebar is rendered above <Routes>, so useParams() can't see the route
   // params. Match the URL directly to discover the active group id.
@@ -273,6 +275,16 @@ export function AppSidebar({ width, onWidthChange, variant = 'rail' }: AppSideba
               <img src="/dashboard/rotom-avatar.png" alt="Rotom" className={styles.logoImg} />
               {!isZen && <span className={styles.logoText}>Rotom</span>}
             </div>
+          )}
+          {!isDrawer && (
+            <button
+              className={styles.zenBtn}
+              onClick={toggleDeck}
+              title="全局终端面板"
+              style={deckOpen ? { background: 'var(--color-paper, #eef2f7)' } : undefined}
+            >
+              ⌨
+            </button>
           )}
           {!isDrawer && (
             <button

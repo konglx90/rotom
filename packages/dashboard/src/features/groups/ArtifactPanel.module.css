@@ -341,7 +341,9 @@
    JSX 仍保持 tree→resizer→preview 的书写顺序(参考 codex,产物树放右侧)。
    两端各自独立滚动,互不挤占垂直空间。 */
 .splitLayout {
-  flex: 1 1 auto;
+  /* grow:1 basis:0 so the terminal pane (also grow:1 basis:0) splits the
+     panel 50/50 when展开; otherwise fills all available height. */
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: row;

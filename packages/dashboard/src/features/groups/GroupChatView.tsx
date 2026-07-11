@@ -7,6 +7,7 @@ import type { Issue } from '../../api/types'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
 import { useVisitorMode } from '../../context/VisitorContext'
+import { useTerminalDeck } from '../terminal/TerminalDeckContext'
 import { extractMentions } from './types'
 import { deriveAgentQueues } from './agentQueue'
 import { useGroupChatWebSocket } from './useGroupChatWebSocket'
@@ -142,6 +143,7 @@ export function GroupChatView() {
   // activeDrawer 互斥:同时只能开一个抽屉。开左关右、开右关左。
   // rightDrawerPanel 决定右抽屉显示 process 还是 artifact。
   const isPad = useIsPad()
+  const { open: deckOpen, toggle: toggleDeck } = useTerminalDeck()
   const [activeDrawer, setActiveDrawer] = useState<'none' | 'left' | 'right'>('none')
   const [rightDrawerPanel, setRightDrawerPanel] = useState<'process' | 'artifact'>('process')
 
@@ -612,6 +614,15 @@ export function GroupChatView() {
         title="产物 Artifacts"
       >
         📦
+      </button>
+      {/* 全局终端面板(常驻浮层,切群不断连) */}
+      <button
+        type="button"
+        className={`${styles.padToolBtn} ${deckOpen ? styles.padToolBtnActive : ''}`}
+        onClick={toggleDeck}
+        title="全局终端面板"
+      >
+        ⌨
       </button>
       <span className={styles.padToolDivider} />
       {/* 对话动作:沿用 modeSidebar 的 isDirectMode 分支 */}

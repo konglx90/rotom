@@ -13,6 +13,7 @@ import { IssuesListPage } from './features/groups/IssuesListPage'
 import { KanbanView } from './features/kanban/KanbanView'
 import { MessagesView } from './features/messages/MessagesView'
 import { TerminalPage } from './features/terminal/TerminalPage'
+import { TerminalDeckProvider } from './features/terminal/TerminalDeckContext'
 import { ToolboxView } from './features/toolbox/ToolboxView'
 import { PromptsManagementTab } from './features/toolbox/PromptsManagementTab'
 import { SchedulePatternsTab } from './features/toolbox/SchedulePatternsTab'
@@ -73,6 +74,7 @@ function App() {
           <SocketProvider>
             <NotificationProvider>
             <WorkSessionProvider>
+              <TerminalDeckProvider>
               <AppShell>
               <Routes>
                 <Route path="/dashboard/agents" element={<div className="container-full"><AgentsView /></div>} />
@@ -103,6 +105,7 @@ function App() {
               </Routes>
               </AppShell>
               <ChatModalsHost />
+              </TerminalDeckProvider>
             </WorkSessionProvider>
             <NotificationHost />
             </NotificationProvider>

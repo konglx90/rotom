@@ -5,12 +5,18 @@
  * a reconnect. Used by both the group-bound TerminalPane and the standalone
  * TerminalPage.
  *
- * No auto-reconnect: a stale ws drag would silently leave pty processes
- * lingering. Reconnect is exposed via the connectToken prop so callers can
- * gate it behind an explicit user action.
+ * The server keys PTYs by a stable tid, so reconnecting (or remounting) to the
+ * same url reattaches to the still-alive shell and replays its scrollback. The
+ * server's buffer is the single source of truth: on open we reset the term so
+ * the replay fills a clean buffer instead of stacking on stale local output.
+ *
+ * Auto-reconnect: PTYs persist server-side, so a dropped WS is safe to retry —
+ * reattaching is idempotent. On close we back off (1s → 15s cap) and reconnect
+ * automatically, so no manual "重连" button is needed. `connectToken` remains
+ * for callers that want to force a fresh connection (e.g. picking a new cwd).
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -33,6 +39,14 @@ export function XTermView({ url, connectToken, onStatusChange, className, style 
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  // Auto-reconnect bookkeeping. autoToken bumps to retrigger the connect
+  // effect; attemptRef drives exponential backoff and resets on a successful
+  // open; reconnectTimerRef is cleared on cleanup. Per-effect `cancelled`
+  // (declared inside the effect) suppresses a reconnect scheduled by the
+  // async close of a WS that was already torn down.
+  const [autoToken, setAutoToken] = useState(0)
+  const attemptRef = useRef(0)
+  const reconnectTimerRef = useRef<number | null>(null)
 
   // Initialize xterm once per mount. Re-creating it across reconnects
   // would lose the scrollback the user just looked at.
@@ -69,14 +83,24 @@ export function XTermView({ url, connectToken, onStatusChange, className, style 
   useEffect(() => {
     const term = termRef.current
     if (!term) return
+    let cancelled = false
     onStatusChange?.('connecting')
-    term.writeln('\x1b[90m[正在连接终端…]\x1b[0m')
+    term.writeln(
+      attemptRef.current === 0
+        ? '\x1b[90m[正在连接终端…]\x1b[0m'
+        : '\x1b[90m[重连中…]\x1b[0m',
+    )
 
     const ws = new WebSocket(url)
     wsRef.current = ws
 
     ws.onopen = () => {
+      attemptRef.current = 0
       onStatusChange?.('open')
+      // The server replays the PTY's scrollback to a reattaching viewer, and
+      // that buffer is the source of truth. Reset the term so the replay
+      // lands on a clean slate instead of doubling up on local output.
+      term.reset()
       // Send initial size before any input — server pty starts at 80×24
       // otherwise.
       const fit = fitRef.current
@@ -103,7 +127,15 @@ export function XTermView({ url, connectToken, onStatusChange, className, style 
 
     ws.onclose = () => {
       onStatusChange?.('closed')
-      term.writeln('\r\n\x1b[90m[连接已断开 — 点「重连」恢复]\x1b[0m')
+      // PTYs persist server-side, so reconnecting is safe (reattach is
+      // idempotent). Back off so a down server doesn't hammer. Suppress when
+      // this WS was torn down by cleanup (re-run or unmount) — its async close
+      // must not trigger a duplicate reconnect.
+      if (cancelled) return
+      const delay = Math.min(1000 * 2 ** attemptRef.current, 15000)
+      attemptRef.current += 1
+      term.writeln(`\r\n\x1b[90m[连接已断开 — ${(delay / 1000).toFixed(0)}s 后自动重连]\x1b[0m`)
+      reconnectTimerRef.current = window.setTimeout(() => setAutoToken((n) => n + 1), delay)
     }
     ws.onerror = () => {
       // onclose will fire too; avoid double-logging
@@ -115,11 +147,16 @@ export function XTermView({ url, connectToken, onStatusChange, className, style 
     })
 
     return () => {
+      cancelled = true
+      if (reconnectTimerRef.current) {
+        window.clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
       inputSub.dispose()
       try { ws.close() } catch { /* ignore */ }
       wsRef.current = null
     }
-  }, [url, connectToken, onStatusChange])
+  }, [url, connectToken, autoToken, onStatusChange])
 
   // Refit on container size changes and broadcast new dimensions to the pty.
   useEffect(() => {
