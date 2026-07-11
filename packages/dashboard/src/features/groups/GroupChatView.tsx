@@ -10,6 +10,7 @@ import { useVisitorMode } from '../../context/VisitorContext'
 import { extractMentions } from './types'
 import { deriveAgentQueues } from './agentQueue'
 import { useGroupChatWebSocket } from './useGroupChatWebSocket'
+import { useSpeechBroadcast } from './useSpeechBroadcast'
 import { useResizablePanels } from './_hooks/useResizablePanels'
 import type { PanelConfig } from './_hooks/useResizablePanels'
 import { pushHistory } from './messageHistory'
@@ -269,6 +270,12 @@ export function GroupChatView() {
     myAgentName,
     selectedGroupId,
     directTarget: directTargetResolved,
+  })
+
+  // 语音播报:把当前对话里 agent 返回的正文念出来(像豆包),默认关。
+  const { enabled: speechEnabled, toggle: toggleSpeech } = useSpeechBroadcast({
+    myAgentName,
+    selectedGroupId,
   })
 
   // 推断每个被 @ 的 agent 的待处理队列(processing/queued + 位次),供输入框上方的
@@ -570,6 +577,15 @@ export function GroupChatView() {
           '未连接'
         }
       />
+      {/* 语音播报开关(豆包风):把当前对话里 agent 的回复念出来。 */}
+      <button
+        type="button"
+        className={`${styles.padToolBtn} ${speechEnabled ? styles.padToolBtnActive : ''}`}
+        onClick={toggleSpeech}
+        title={speechEnabled ? '语音播报：开（点击关闭）' : '语音播报：关（点击开启）'}
+      >
+        {speechEnabled ? '🔊' : '🔈'}
+      </button>
       {/* 左抽屉:群列表 / 导航 */}
       <button
         type="button"
@@ -860,6 +876,17 @@ export function GroupChatView() {
               title="过程 + Artifacts"
             >
               <span className={styles.modeBtnIcons}>📋<br/>📦</span>
+            </button>
+
+            {/* 语音播报开关(豆包风):把当前对话里 agent 的回复念出来。默认关,
+                点击开启 = 用户手势,顺带解锁浏览器语音权限。 */}
+            <button
+              type="button"
+              className={`${styles.modeBtn} ${speechEnabled ? styles.modeBtnActive : ''}`}
+              onClick={toggleSpeech}
+              title={speechEnabled ? '语音播报：开（点击关闭）' : '语音播报：关（点击开启）'}
+            >
+              <span className={styles.modeBtnIcons}>{speechEnabled ? '🔊' : '🔈'}</span>
             </button>
 
             {/* 分隔线:布局切换 与 对话动作 两组按钮之间。 */}

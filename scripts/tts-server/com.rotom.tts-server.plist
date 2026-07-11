@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS 开机自启(launchd)模板 —— 复制到 ~/Library/LaunchAgents/com.rotom.tts-server.plist
+  然后把下面 3 处 <YOU> 占位改成你的实际值,再执行:
+    launchctl load ~/Library/LaunchAgents/com.rotom.tts-server.plist
+  查看日志:tail -f /tmp/rotom-tts.log /tmp/rotom-tts.err.log
+  停止/卸载:launchctl unload ~/Library/LaunchAgents/com.rotom.tts-server.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.rotom.tts-server</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <!-- ① 改成你的 conda 环境里的 python 绝对路径(执行 `which python` 拿到) -->
+    <string>/Users/<YOU>/miniconda3/envs/qwen3-tts/bin/python</string>
+    <!-- ② 改成 server.py 的绝对路径 -->
+    <string>/Users/<YOU>/scripts/tts-server/server.py</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PORT</key><string>9321</string>
+    <key>QWEN_TTS_SPEAKER</key><string>Vivian</string>
+    <!-- ③ 建议设一个 token,主力机 dashboard 里填同一个 -->
+    <key>QWEN_TTS_TOKEN</key><string>换成一段随机字符串</string>
+    <!-- M1 芯片若报 dtype 错误,取消下面注释改 float16 -->
+    <!-- <key>QWEN_TTS_DTYPE</key><string>float16</string> -->
+  </dict>
+
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/rotom-tts.log</string>
+  <key>StandardErrorPath</key><string>/tmp/rotom-tts.err.log</string>
+</dict>
+</plist>
