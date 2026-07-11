@@ -275,7 +275,14 @@ export function GroupChatView() {
   })
 
   // 语音播报:把当前对话里 agent 返回的正文念出来(像豆包),默认关。
-  const { enabled: speechEnabled, toggle: toggleSpeech } = useSpeechBroadcast({
+  // speakMessage / speakingId 供每条气泡上的 🔊 手动播放按钮:点哪条念哪条,
+  // 与右上角全局开关(自动念每条回复)互相独立。
+  const {
+    enabled: speechEnabled,
+    toggle: toggleSpeech,
+    speakMessage,
+    speakingId,
+  } = useSpeechBroadcast({
     myAgentName,
     selectedGroupId,
   })
@@ -547,6 +554,8 @@ export function GroupChatView() {
             connectionStatus={connectionStatus}
             onSendMessage={handleSendMessage}
             onCancelStream={cancelStream}
+            onSpeak={speakMessage}
+            speakingId={speakingId}
             inputToolbar={inputToolbar}
             agentQueues={agentQueues}
           />

@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Reply, Search, Square } from 'lucide-react'
+import { ChevronDown, ChevronUp, Reply, Search, Square, Volume2 } from 'lucide-react'
 import type { Agent } from '../../api/types'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
@@ -7,6 +7,7 @@ import { StreamingStatus } from '../../components/ui/StreamingStatus'
 import { MarkdownContent } from '../../components/ui/MarkdownContent'
 import type { ChatMessage } from './types'
 import { extractMentions } from './types'
+import { toSpeakableText } from './useSpeechBroadcast'
 import styles from './ChatArea.module.css'
 
 // 长度阈值:超过任一阈值的气泡默认折叠,「查看更多」展开。
@@ -46,6 +47,13 @@ interface MessageRowProps {
   onShowPrompt: (msg: ChatMessage) => void
   /** 引用消息到输入框。GroupChatArea 传入则显示 💬 按钮,DirectChatArea 不传则不显示。 */
   onQuote?: (msg: ChatMessage) => void
+  /** 朗读这条消息(🔊 按钮)。父组件传入则显示按钮,点击调用 TTS 播放。
+   *  与群聊右上角的全局播报开关互相独立:全局开关是「自动念每条回复」,
+   *  这个按钮是「手动念这一条」。 */
+  onSpeak?: (msg: ChatMessage) => void
+  /** 这条消息当前是否正在朗读(由父组件用 speakingId === msg.id 计算)。
+   *  传 boolean 而非 speakingId 字符串,让 memo 在切播放气泡时只重渲染受影响的那一行。 */
+  isSpeaking?: boolean
   /** 中断某个 agent 的在飞 chat 流。仅在 streaming && isIncoming 的气泡上渲染 ⏹ 按钮。 */
   onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
   /** 右键气泡时触发,父组件负责弹自定义菜单。isLoading 消息父组件应自行过滤。 */
@@ -78,6 +86,8 @@ export const MessageRow = memo(function MessageRow({
   groupMembers,
   onShowPrompt,
   onQuote,
+  onSpeak,
+  isSpeaking,
   onCancelStream,
   onContextMenu,
   isContinuation,
@@ -101,6 +111,15 @@ export const MessageRow = memo(function MessageRow({
     const rid = msg.id.startsWith('stream_') ? msg.id.slice('stream_'.length) : msg.id
     onCancelStream(rid, msg.from)
   }
+
+  // 🔊 朗读按钮可见性:只在有可念正文(剔除工具/思考块后非空)且已完成的消息上
+  // 渲染。流式中的半截消息、加载占位、纯工具/思考日志不显示。复用 useSpeechBroadcast
+  // 的 toSpeakableText,保证「能显示按钮」和「点下去真有内容可念」口径一致。
+  const speakableText = useMemo(
+    () => (!msg.isLoading && msg.content ? toSpeakableText(msg.content) : ''),
+    [msg.content, msg.isLoading],
+  )
+  const canSpeak = Boolean(onSpeak) && !msg.streaming && !msg.isLoading && speakableText.length > 0
 
   // 长消息折叠逻辑。
   //  - 流式期间强制展开(用户需要看到 agent 实时写的每行)
@@ -173,6 +192,18 @@ export const MessageRow = memo(function MessageRow({
           </div>
           <div className={styles.senderMeta}>
             <span className={styles.senderActions}>
+              {canSpeak && (
+                <button
+                  type="button"
+                  className={`${styles.messageActionBtn} ${isSpeaking ? styles.speakBtnActive : ''}`}
+                  onClick={() => onSpeak?.(msg)}
+                  title={isSpeaking ? '正在播放' : '朗读'}
+                  aria-label={isSpeaking ? '正在播放' : '朗读'}
+                  aria-pressed={isSpeaking ? 'true' : 'false'}
+                >
+                  <Volume2 size={14} />
+                </button>
+              )}
               {onQuote && (
                 <button
                   type="button"

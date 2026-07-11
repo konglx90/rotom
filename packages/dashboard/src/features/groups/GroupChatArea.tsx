@@ -36,6 +36,11 @@ interface GroupChatAreaProps {
   onSendMessage: (text: string) => void
   /** 中断某个 agent 的在飞 chat 流。透传给 MessageRow 的 ⏹ 按钮。 */
   onCancelStream?: (requestId: string, agentName: string) => void | Promise<void>
+  /** 朗读单条消息(🔊 按钮)。透传给 MessageRow,与群聊右上角全局播报开关独立。 */
+  onSpeak?: (msg: ChatMessage) => void
+  /** 当前正在朗读的消息 id(来自 useSpeechBroadcast)。父组件在这里折算成
+   *  每行的 isSpeaking 布尔,让 memo 在切换播放气泡时只重渲染受影响那一行。 */
+  speakingId?: string | null
   /** pad 模式下渲染在输入框上方的图标工具条(豆包风:开抽屉 / 动作入口)。
    *  宽屏不传 → 不渲染,PC 0 影响。 */
   inputToolbar?: ReactNode
@@ -52,6 +57,8 @@ export function GroupChatArea({
   connectionStatus,
   onSendMessage,
   onCancelStream,
+  onSpeak,
+  speakingId,
   inputToolbar,
   agentQueues,
 }: GroupChatAreaProps) {
@@ -521,6 +528,8 @@ export function GroupChatArea({
                 groupMembers={groupMembers}
                 onShowPrompt={handleShowPrompt}
                 onQuote={handleQuote}
+                onSpeak={onSpeak}
+                isSpeaking={Boolean(speakingId) && speakingId === msg.id}
                 onCancelStream={onCancelStream}
                 onContextMenu={handleMessageContextMenu}
                 isContinuation={isContinuation}

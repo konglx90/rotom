@@ -198,6 +198,17 @@
   opacity: 0.7;
 }
 
+/* 🔊 朗读按钮「正在播放」态:点开后常驻高亮(不再 hover 才浮现),让用户一眼
+   看到哪条正在念。primary 聚色在 incoming(浅)和 outgoing(绿)气泡上都醒目。 */
+.messageActionBtn.speakBtnActive {
+  opacity: 1;
+  color: var(--color-primary);
+}
+.messageActionBtn.speakBtnActive:hover,
+.messageActionBtn.speakBtnActive:focus-visible {
+  opacity: 1;
+}
+
 /* ⏹ 中断按钮:挂在 incoming bubble 的 sender 行(只在 streaming 时渲染)。
  * 风格与 .messagePromptButton 对齐,但用红色调高视觉优先级 —— 用户主动
  * 想停的时候要一眼能看到。 */

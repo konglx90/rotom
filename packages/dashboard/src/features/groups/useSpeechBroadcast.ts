@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSocket } from '../../context/SocketContext'
-import type { ServerMessage } from './types'
+import type { ChatMessage, ServerMessage } from './types'
 
 /**
  * 群聊语音播报:像豆包那样把 agent 的回复读出来。
@@ -116,15 +116,11 @@ export function useSpeechBroadcast({ myAgentName, selectedGroupId }: UseSpeechBr
   // 的去重),用 requestId 去重,只念第一遍,避免「说两遍」。
   const spokenReqRef = useRef<Set<string>>(new Set())
 
-  const speak = useCallback((from: string, content: string) => {
-    if (from === myAgentNameRef.current) return // 不念自己
-    if (!from || from === 'system') return // 不念系统消息(多为工具/状态日志)
+  // 把「from + 清洗后正文」组装成一条 utterance。剔除后无正文(纯推导/工具
+  // 消息)返回 null,调用方据此跳过。auto 播报和手动播放共用,保证朗读口径一致。
+  const buildUtterance = useCallback((from: string, content: string): SpeechSynthesisUtterance | null => {
     const text = toSpeakableText(content)
-    if (!text) return // 剔除后无正文(纯推导/工具消息)
-
-    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined
-    if (!synth) return
-
+    if (!text) return null
     const body = text.length > MAX_LEN ? `${text.slice(0, MAX_LEN)}。后续内容较长，已省略。` : text
     // 「X 说，正文」:群里有多个 agent,带上说话人更易区分。
     const utter = new SpeechSynthesisUtterance(`${from} 说，${body}`)
@@ -132,8 +128,41 @@ export function useSpeechBroadcast({ myAgentName, selectedGroupId }: UseSpeechBr
     utter.rate = 1
     utter.pitch = 1
     if (zhVoiceRef.current) utter.voice = zhVoiceRef.current
-    synth.speak(utter) // 引擎自带队列,多条顺序念
+    return utter
   }, [])
+
+  const speak = useCallback((from: string, content: string) => {
+    if (from === myAgentNameRef.current) return // 不念自己
+    if (!from || from === 'system') return // 不念系统消息(多为工具/状态日志)
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined
+    if (!synth) return
+    const utter = buildUtterance(from, content)
+    if (!utter) return // 剔除后无正文(纯推导/工具消息)
+    synth.speak(utter) // 引擎自带队列,多条顺序念
+  }, [buildUtterance])
+
+  // 当前正在手动朗读的消息 id。只由 speakMessage 维护(auto 播报不更新它,
+  // 避免 ws 自动念一大串时把某条历史气泡钉成「播放中」)。onstart/onend 把它
+  // 钉到对应消息,引擎队列里下一条开始时会自然切到新的 id。
+  const [speakingId, setSpeakingId] = useState<string | null>(null)
+
+  // 手动播放单条消息:点气泡上的 🔊 按钮触发。与 auto 播报的区别:
+  //  - 不依赖 enabled 开关:显式点击即用户意图,开关没开也能播。
+  //  - 不跳过自己的消息:自己发的也能回放。
+  //  - 点击本身就是用户手势,天然满足浏览器语音解锁要求。
+  const speakMessage = useCallback((msg: ChatMessage) => {
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined
+    if (!synth) return
+    const utter = buildUtterance(msg.from || '', msg.content || '')
+    if (!utter) return
+    const id = msg.id
+    if (id) {
+      utter.onstart = () => setSpeakingId(id)
+      utter.onend = () => setSpeakingId(prev => (prev === id ? null : prev))
+      utter.onerror = () => setSpeakingId(prev => (prev === id ? null : prev))
+    }
+    synth.speak(utter)
+  }, [buildUtterance])
 
   // 标记某 requestId 已念过。返回 true=首次(应念),false=重复(跳过)。
   // 集合上限 200,超了只保留最近 100,防长会话无限增长。
@@ -193,12 +222,14 @@ export function useSpeechBroadcast({ myAgentName, selectedGroupId }: UseSpeechBr
         /* ignore */
       }
       // 关闭时立刻停掉正在念的,避免关了开关还在念完一长串。
+      // cancel() 也会打断手动播放(speakMessage)的队列,顺手清掉高亮。
       if (!next && typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel()
+        setSpeakingId(null)
       }
       return next
     })
   }, [])
 
-  return { enabled, toggle }
+  return { enabled, toggle, speakMessage, speakingId }
 }
