@@ -161,6 +161,13 @@ export async function cmdSkill(
     return;
   }
 
+  // ── reconcile(文件 ↔ DB 双向收敛;boot 时已自动跑一次,这里手动触发)─
+  if (sub === "reconcile") {
+    const data = await api(agent, "POST", route("/skills/reconcile"));
+    printJson(data);
+    return;
+  }
+
   // ── mine(当前 agent 在该群绑定的 skill)────────────────────────────
   if (sub === "mine") {
     const groupId = rest[1];
@@ -185,6 +192,7 @@ usage:
   skill create --name <n> --description <d> --content <c|@file> [--category <c>]
   skill update <name> [--description <d>] [--content <c|@file>] [--category <c>]
   skill remove <name>
+  skill reconcile                     # 文件 ↔ DB 双向收敛(手动触发)
   skill bind <groupId> <agentName> <skillName>
   skill unbind <groupId> <agentName> <skillName>
   skill bindings [groupId] [agentName]

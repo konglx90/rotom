@@ -92,6 +92,17 @@ async function main(): Promise<void> {
   // Database
   const db = new MeshDb(path.join(config.dataDir, "mesh.db"));
 
+  // Skill 文件 ↔ DB 双向收敛(文件 = 真相源)。boot 时跑一次:文件→DB upsert、
+  // DB active 行无文件则 backfill。失败不阻断启动。
+  try {
+    const r = db.reconcileSkills();
+    if (r.added || r.updated || r.backfilled) {
+      log.info(`Skill reconcile: +${r.added} added, ~${r.updated} updated, ↻${r.backfilled} backfilled`);
+    }
+  } catch (e) {
+    log.warn(`Skill reconcile failed (non-fatal): ${(e as Error).message}`);
+  }
+
   // OPC bootstrap — 解析本机 master 身份 + 首次启动建默认 agent / group。
   // 失败(hostname 校验等)直接终止启动 —— OPC 是底层身份,不能没有。
   const identity = getMasterIdentity({ rotomHome: config.dataDir });

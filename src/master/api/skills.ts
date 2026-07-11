@@ -52,6 +52,13 @@ export function registerSkillRoutes(
     res.json(db.searchSkills(q));
   });
 
+  // ── 文件 ↔ DB 双向收敛(手动触发;boot 时已自动跑一次)──────────────────
+  apiRouter.post("/skills/reconcile", (_req, res) => {
+    const result = db.reconcileSkills();
+    log.info(`Skill reconcile: +${result.added} added, ~${result.updated} updated, ↻${result.backfilled} backfilled`);
+    res.json({ ok: true, ...result });
+  });
+
   apiRouter.get("/skills/:name", (req, res) => {
     const row = db.getSkillByName(req.params.name);
     if (!row) { res.status(404).json({ error: "Skill not found" }); return; }

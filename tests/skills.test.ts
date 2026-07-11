@@ -14,6 +14,8 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { MeshDb } from "../src/master/db.js";
 
@@ -22,9 +24,16 @@ const GROUP_A = "grp-sk-a-" + randomUUID().slice(0, 8);
 const GROUP_B = "grp-sk-b-" + randomUUID().slice(0, 8);
 
 let db: MeshDb;
+let tmpHome: string;
+let prevHome: string | undefined;
 
 describe("Skills (agent_skills + bindings)", () => {
   before(() => {
+    // skill 现以文件落盘(ROTOM_HOME/skills),隔离到临时目录避免污染真实 ~/.rotom。
+    // skillsRoot() 按需读 env,故 before() 里设即可生效。
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "rotom-skills-test-"));
+    prevHome = process.env.ROTOM_HOME;
+    process.env.ROTOM_HOME = tmpHome;
     db = new MeshDb(TEST_DB);
     db.createGroup(GROUP_A, "GroupA", "system");
     db.createGroup(GROUP_B, "GroupB", "system");
@@ -32,6 +41,9 @@ describe("Skills (agent_skills + bindings)", () => {
 
   after(() => {
     db.close();
+    if (prevHome === undefined) delete process.env.ROTOM_HOME;
+    else process.env.ROTOM_HOME = prevHome;
+    try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch {}
     try { fs.unlinkSync(TEST_DB); } catch {}
     try { fs.unlinkSync(TEST_DB + "-wal"); } catch {}
     try { fs.unlinkSync(TEST_DB + "-shm"); } catch {}
@@ -162,5 +174,56 @@ describe("Skills (agent_skills + bindings)", () => {
     // 原 memory 仍 active
     const mem = db.getMemory(memId);
     assert.equal(mem!.active, 1);
+  });
+
+  // ── 文件 = 真相源(Hybrid)──────────────────────────────────────────────
+  it("createSkill 落盘文件:getSkill 读回 == 文件内容", () => {
+    const id = randomUUID();
+    db.createSkill({ id, name: "file-truth", description: "文件真相源", content: "正文A", createdBy: "A" });
+    const file = path.join(tmpHome, "skills", "file-truth", "SKILL.md");
+    assert.ok(fs.existsSync(file), "应落盘 SKILL.md");
+    const raw = fs.readFileSync(file, "utf-8");
+    assert.match(raw, /name: file-truth/);
+    assert.match(raw, /正文A/);
+    const row = db.getSkill(id);
+    assert.equal(row!.content, "正文A");
+  });
+
+  it("手改文件:getSkill 即时反映(文件优先于 DB cache)", () => {
+    const id = randomUUID();
+    db.createSkill({ id, name: "hand-edit", description: "d", content: "旧正文", createdBy: "A" });
+    const file = path.join(tmpHome, "skills", "hand-edit", "SKILL.md");
+    fs.writeFileSync(file, "---\nname: hand-edit\ndescription: 手改描述\n---\n新正文\n", "utf-8");
+    const row = db.getSkill(id);
+    assert.equal(row!.content, "新正文");
+    assert.equal(row!.description, "手改描述");
+  });
+
+  it("reconcile:孤儿文件→新增 DB 行;DB 无文件→backfill;幂等;不 deactivate", () => {
+    // 孤儿文件:直接丢一个 SKILL.md 进文件根
+    const orphanDir = path.join(tmpHome, "skills", "orphan-skill");
+    fs.mkdirSync(orphanDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(orphanDir, "SKILL.md"),
+      "---\nname: orphan-skill\ndescription: 孤儿\n---\n孤儿正文\n",
+      "utf-8",
+    );
+    const r = db.reconcileSkills();
+    assert.ok(r.added >= 1, `应新增 orphan-skill,added=${r.added}`);
+    assert.ok(r.backfilled >= 2, `应 backfill 2 个 seed skill,backfilled=${r.backfilled}`);
+    // 孤儿进 DB
+    const orphan = db.getSkillByName("orphan-skill");
+    assert.ok(orphan);
+    assert.equal(orphan!.content, "孤儿正文");
+    // seed skill(issue-patrol-rules)被 backfill 出文件,且仍 active
+    const patrolFile = path.join(tmpHome, "skills", "issue-patrol-rules", "SKILL.md");
+    assert.ok(fs.existsSync(patrolFile), "seed skill 应被 backfill 出文件");
+    const patrol = db.getSkillByName("issue-patrol-rules");
+    assert.ok(patrol && patrol.active === 1, "seed skill 不应被 deactivate");
+    // 幂等:再跑一次应全 0
+    const r2 = db.reconcileSkills();
+    assert.equal(r2.added, 0);
+    assert.equal(r2.updated, 0);
+    assert.equal(r2.backfilled, 0);
   });
 });

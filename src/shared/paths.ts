@@ -122,3 +122,42 @@ export function extraWorktreePath(
 export function extraSymlinkTarget(extraId: string): string {
   return path.join("..", "..", extraId);
 }
+
+// ─── Skill 文件存储(文件 = 真相源)─────────────────────────────────────────
+//
+// skill 文档以 `~/.rotom/skills/<name>/SKILL.md` 落盘(frontmatter 元数据 +
+// markdown 正文)。DB `agent_skills` 表降级为可重建索引(供 dashboard 列表 /
+// 搜索 / view_count 统计),真相源始终是文件 —— `db.reconcileSkills()` 扫描
+// 目录即可重建索引。
+//
+// 根目录按需计算(lazy):每次 FS 操作时读 `ROTOM_HOME`,故测试可在 before()
+// 里设 process.env.ROTOM_HOME 隔离,无需子进程(与 skill-md.ts 的 eager 常量
+// 不同)。env 覆盖 > 默认 ~/.rotom,与 skill-md.ts 对齐避免两个根漂移。
+
+/** ROTOM_HOME:env 覆盖优先,默认 ~/.rotom。与 skill-md.ts 对齐。 */
+export function rotomHome(): string {
+  return process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom");
+}
+
+/** skill 文档根目录:`~/.rotom/skills`(每次调用现算,响应 ROTOM_HOME 变更)。 */
+export function skillsRoot(): string {
+  return path.join(rotomHome(), "skills");
+}
+
+/** skill 软删暂存目录(deactivateSkill 把整个 skill 目录移到这里,可恢复)。 */
+export function skillsTrash(): string {
+  return path.join(skillsRoot(), ".trash");
+}
+
+/** skill 文件名(对齐 Claude Code SKILL.md 规范)。 */
+export const SKILL_FILE_NAME = "SKILL.md";
+
+/** 单个 skill 的目录:`~/.rotom/skills/<name>`。 */
+export function skillDir(name: string): string {
+  return path.join(skillsRoot(), name);
+}
+
+/** 单个 skill 的 SKILL.md 路径:`~/.rotom/skills/<name>/SKILL.md`。 */
+export function skillFilePath(name: string): string {
+  return path.join(skillDir(name), SKILL_FILE_NAME);
+}

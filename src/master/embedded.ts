@@ -77,6 +77,16 @@ export async function startEmbeddedMaster(
   // Database
   const db = new MeshDb(path.join(dataDir, "mesh.db"));
 
+  // Skill 文件 ↔ DB 双向收敛(文件 = 真相源)。boot 时跑一次;失败不阻断启动。
+  try {
+    const r = db.reconcileSkills();
+    if (r.added || r.updated || r.backfilled) {
+      logger.info(`[mesh-master] Skill reconcile: +${r.added} added, ~${r.updated} updated, ↻${r.backfilled} backfilled`);
+    }
+  } catch (e) {
+    logger.warn(`[mesh-master] Skill reconcile failed (non-fatal): ${(e as Error).message}`);
+  }
+
   // OPC bootstrap — 与命令行入口一致:解析 master 身份 + 首次启动建默认 agent/group。
   // 嵌入式场景失败(hostname 校验等)也直接抛错 —— 身份不能没有。
   const identity = getMasterIdentity({ rotomHome: dataDir });
