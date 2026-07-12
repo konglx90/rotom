@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { groupsApi } from '../../api/groups'
-import { issuesApi } from '../../api/issues'
 import type { Issue } from '../../api/types'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
@@ -10,6 +8,7 @@ import { useTerminalDeck } from '../terminal/TerminalDeckContext'
 import { deriveAgentQueues } from './agentQueue'
 import { useGroupChatWebSocket } from './useGroupChatWebSocket'
 import { useGroupMessageSender } from './useGroupMessageSender'
+import { useGroupActions } from './useGroupActions'
 import { GroupChatModals } from './GroupChatModals'
 import { WideLayout } from './WideLayout'
 import { PadLayout } from './PadLayout'
@@ -164,25 +163,6 @@ export function GroupChatView() {
     }
   }
 
-  const loadIssues = useCallback(async () => {
-    if (!selectedGroupId) return
-    try {
-      const data = await issuesApi.listByGroup(selectedGroupId)
-      setIssues(data)
-    } catch (error) {
-      console.error('Failed to load issues:', error)
-    }
-  }, [selectedGroupId])
-
-  useEffect(() => {
-    if (!selectedGroupId) {
-      setIssues([])
-      setSelectedIssueId('')
-      return
-    }
-    loadIssues()
-  }, [selectedGroupId, loadIssues])
-
   // Redirect: bare /dashboard/groups → restore saved group
   useEffect(() => {
     if (urlGroupId) return
@@ -236,16 +216,6 @@ export function GroupChatView() {
     [messages, turnStartsByAgent, myAgentName, isDirectMode, directTargetResolved],
   )
 
-  // React to global socket pushes.
-  useEffect(() => {
-    if (!lastIssueChange) return
-    if (lastIssueChange.groupId !== selectedGroupId) return
-    loadIssues()
-    if (lastIssueChange.issueId === selectedIssueId) {
-      setSelectedIssueVersion(v => v + 1)
-    }
-  }, [lastIssueChange, selectedGroupId, selectedIssueId, loadIssues])
-
   // --- Derived state ---
   // (selectedGroup / isDirectMode / groupMembers / directTargetResolved
   //  已提到 useGroupChatWebSocket 调用之前,见上方注释。)
@@ -266,6 +236,32 @@ export function GroupChatView() {
     loadGroups,
   })
 
+  // --- Handlers (loadIssues + 群动作 + 两个用到 loadIssues 的 effect) ---
+  const {
+    handleAddMembers,
+    retrySelfJoin,
+    handleDeleteDm,
+    handleCreateIssue,
+    handleArtifactClick,
+  } = useGroupActions({
+    selectedGroupId,
+    myAgentName,
+    directTargetResolved,
+    selfJoinError,
+    setSelfJoinError,
+    setDirectTarget,
+    setArtifactSelectedPath,
+    setMode,
+    setShowAddMemberModal,
+    setIssues,
+    setSelectedIssueId,
+    setSelectedIssueVersion,
+    loadGroups,
+    navigate,
+    lastIssueChange,
+    selectedIssueId,
+  })
+
   // Reset messages on conversation change.
   // key 只用 selectedGroupId:directTargetResolved 会因 groups 异步加载从 ''
   // 派生为非空,若放进 key 会清掉刚拉到的历史(history effect 依赖不含它,不会重拉)。
@@ -277,70 +273,6 @@ export function GroupChatView() {
     lastConvKeyRef.current = selectedGroupId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroupId])
-
-  const handleAddMembers = async (memberNames: string[]) => {
-    if (!selectedGroupId) return
-    try {
-      await groupsApi.addMembers(selectedGroupId, memberNames)
-      setShowAddMemberModal(false)
-      loadGroups()
-    } catch (error) {
-      console.error('Failed to add members:', error)
-    }
-  }
-
-  const retrySelfJoin = useCallback(async () => {
-    if (!selfJoinError) return
-    const gid = selfJoinError.groupId
-    setSelfJoinError(null)
-    try {
-      await groupsApi.addMembers(gid, [myAgentName])
-      await loadGroups()
-    } catch {
-      setSelfJoinError({ groupId: gid, message: '入群仍然失败，请刷新页面' })
-    }
-  }, [selfJoinError, myAgentName, loadGroups])
-
-  const handleDeleteDm = async () => {
-    const dmGroupId = localStorage.getItem('dm_active_group')
-    if (!dmGroupId) return
-    if (!confirm(`确定删除与 ${directTargetResolved} 的对话吗？该对话的所有消息会被清除。`)) return
-    try {
-      await groupsApi.delete(dmGroupId)
-      localStorage.removeItem('dm_active_group')
-      localStorage.removeItem('dm_active_target')
-      localStorage.removeItem('group_selected_id')
-      setDirectTarget('')
-      navigate('/dashboard/groups')
-      loadGroups()
-    } catch (error) {
-      console.error('Failed to delete DM:', error)
-      window.alert(`删除失败：${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  const handleCreateIssue = async (data: {
-    description: string
-    title?: string
-    priority?: string
-    assignedTo?: string
-  }) => {
-    if (!selectedGroupId) return
-    try {
-      const result = await issuesApi.create(selectedGroupId, {
-        description: data.description,
-        title: data.title,
-        priority: data.priority as any,
-        createdBy: myAgentName,
-      })
-      if (data.assignedTo && result.id) {
-        await issuesApi.update(result.id, { assignedTo: data.assignedTo })
-      }
-      loadIssues()
-    } catch (error) {
-      console.error('Failed to create issue:', error)
-    }
-  }
 
   // activePanels / processTab 持久化。widths 由 useResizablePanels 单独管。
   useEffect(() => {
@@ -358,17 +290,6 @@ export function GroupChatView() {
       /* ignore */
     }
   }, [processTab])
-
-  // Issue 详情点击 artifact 路径 → 切到含 artifact 的模式(优先保留 process)。
-  // 当前是 chat-process → 切到 process-artifact;当前是 chat-artifact 不变;
-  // 当前是 process-artifact 不变。
-  const handleArtifactClick = useCallback((path: string) => {
-    setArtifactSelectedPath(path)
-    setMode(prev => {
-      if (prev === 'chat-artifact' || prev === 'process-artifact') return prev
-      return 'process-artifact'
-    })
-  }, [])
 
   // 对话区渲染:wide 模式(无工具条)与 pad 模式(带输入框上方工具条)共用。
   // 抽出函数避免两处分支各写一份 chat JSX 导致逻辑漂移。
