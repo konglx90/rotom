@@ -13,7 +13,18 @@ import { deriveAgentQueues } from './agentQueue'
 import { useGroupChatWebSocket } from './useGroupChatWebSocket'
 import { useSpeechBroadcast } from './useSpeechBroadcast'
 import { useResizablePanels } from './_hooks/useResizablePanels'
-import type { PanelConfig } from './_hooks/useResizablePanels'
+import {
+  PANEL_ORDER,
+  MODE_PANELS,
+  PANEL_CONFIGS,
+  PANEL_MIN_BY_ID,
+  PANEL_MODE_KEY,
+  PROCESS_TAB_KEY,
+  loadPanelMode,
+  loadProcessTab,
+  type PanelMode,
+  type ProcessTab,
+} from './panelMode'
 import { pushHistory } from './messageHistory'
 import { DirectChatArea } from './DirectChatArea'
 import { GroupChatArea } from './GroupChatArea'
@@ -36,56 +47,6 @@ import { Modal } from '../../components/ui/Modal/Modal'
 import { Button } from '../../components/ui/Button'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
-
-// 主面板布局:三类顶级 panel —— chat / process / artifact。
-//   - chat: 对话区
-//   - process: 过程区,内部 sub-tab 切 Issues/Notes/定时任务(Issues 为主)
-//   - artifact: 产物区
-//
-// 显示规则:固定 3 种组合模式,toolbar 切换,确保主区始终 2 个 panel 同屏。
-//   - chat+process(默认):对话 + 过程
-//   - chat+artifact:对话 + 产物
-//   - process+artifact:过程 + 产物
-type PanelId = 'chat' | 'process' | 'artifact'
-type PanelMode = 'chat-process' | 'chat-artifact' | 'process-artifact'
-type ProcessTab = 'issues' | 'notes' | 'schedules'
-
-const PANEL_ORDER: PanelId[] = ['chat', 'process', 'artifact']
-const MODE_PANELS: Record<PanelMode, PanelId[]> = {
-  'chat-process': ['chat', 'process'],
-  'chat-artifact': ['chat', 'artifact'],
-  'process-artifact': ['process', 'artifact'],
-}
-const PANEL_CONFIGS: PanelConfig[] = [
-  { id: 'chat', width: 720, min: 360 },
-  { id: 'process', width: 480, min: 320 },
-  { id: 'artifact', width: 560, min: 360 },
-]
-const PANEL_MIN_BY_ID: Record<string, number> = Object.fromEntries(
-  PANEL_CONFIGS.map((c) => [c.id, c.min]),
-)
-const PANEL_MODE_KEY = 'rotom-panel-mode'
-const PROCESS_TAB_KEY = 'rotom-process-tab'
-
-function loadPanelMode(): PanelMode {
-  try {
-    const raw = localStorage.getItem(PANEL_MODE_KEY)
-    if (raw === 'chat-process' || raw === 'chat-artifact' || raw === 'process-artifact') return raw
-    return 'chat-process'
-  } catch {
-    return 'chat-process'
-  }
-}
-
-function loadProcessTab(): ProcessTab {
-  try {
-    const raw = localStorage.getItem(PROCESS_TAB_KEY)
-    if (raw === 'issues' || raw === 'notes' || raw === 'schedules') return raw
-    return 'issues'
-  } catch {
-    return 'issues'
-  }
-}
 
 export function GroupChatView() {
   const navigate = useNavigate()
