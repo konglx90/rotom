@@ -129,6 +129,11 @@ export interface WSHubSelf {
   handleConnection(ws: WebSocket, req: IncomingMessage): void;
   /** Generation-aware disconnect — keeps stale events from kicking new connections. */
   handleDisconnect(agentId: string, generation: number, reason: string): void;
+  /** a2a chat/reply 处理器(实现住在 connection-chat.ts,handleConnection 按消息类型分发)。 */
+  handleA2aSend(ws: WebSocket, agentId: string, msg: import("../../shared/protocol.js").ClientMessage): void;
+  handleA2aReply(agentId: string, msg: import("../../shared/protocol.js").ClientMessage): void;
+  handleA2aReplyChunk(agentId: string, msg: import("../../shared/protocol.js").ClientMessage): void;
+  handleA2aReplyEnd(agentId: string, msg: import("../../shared/protocol.js").ClientMessage): void;
 
   // ─── Cross-module message helpers ──────────────────────────────────────
   /** Attach workingDir/activeIssues/memoryCounts/skillCount/guidancePrompt metadata to a conversation payload. */

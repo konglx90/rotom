@@ -19,6 +19,7 @@
 import type { Server } from "node:http";
 import { WSHubCore } from "./hub.js";
 import { connectionMethods } from "./connection.js";
+import { connectionChatMethods } from "./connection-chat.js";
 import { routingMethods } from "./routing.js";
 import { directoryMethods } from "./directory.js";
 import { sessionsMethods } from "./sessions.js";
@@ -33,6 +34,10 @@ export class WSHub extends WSHubCore {
   // ─── connection ──────────────────────────────────────────────────────────
   declare handleConnection: typeof connectionMethods.handleConnection;
   declare handleDisconnect: typeof connectionMethods.handleDisconnect;
+  declare handleA2aSend: typeof connectionChatMethods.handleA2aSend;
+  declare handleA2aReply: typeof connectionChatMethods.handleA2aReply;
+  declare handleA2aReplyChunk: typeof connectionChatMethods.handleA2aReplyChunk;
+  declare handleA2aReplyEnd: typeof connectionChatMethods.handleA2aReplyEnd;
 
   // ─── routing ──────────────────────────────────────────────────────────────
   declare send: typeof routingMethods.send;
@@ -82,6 +87,7 @@ export class WSHub extends WSHubCore {
     // Each method bag's `this` resolves to this instance at call time.
     // The `declare` lines above ensure TypeScript sees these as members.
     Object.assign(this, connectionMethods);
+    Object.assign(this, connectionChatMethods);
     Object.assign(this, routingMethods);
     Object.assign(this, directoryMethods);
     Object.assign(this, sessionsMethods);
