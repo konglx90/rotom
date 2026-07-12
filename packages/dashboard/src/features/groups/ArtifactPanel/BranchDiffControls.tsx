@@ -1,8 +1,8 @@
 // ArtifactPanel 分支对比相关的展示原语:repo 名解析、文件状态徽标映射、
 // 以及可输入下拉的 ref 选择器。从 ArtifactPanel.tsx 抽出。
 import { useMemo } from 'react'
-import type { ArtifactRefs } from '../../api/artifacts'
-import { Input } from '../../components/ui/Input'
+import type { ArtifactRefs } from '../../../api/artifacts'
+import { Input } from '../../../components/ui/Input'
 import styles from './ArtifactPanel.module.css'
 
 /** 从 repo url 提取展示名(`https://gitlab.xxx/GroupName/kael-trade-h5.git` →

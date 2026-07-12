@@ -1,6 +1,6 @@
 // ArtifactPanel 的文件类型/语言探测工具:后缀→语言、图片路径识别、base64→data URL。
 // 纯函数,无 React 依赖,从 ArtifactPanel.tsx 抽出。
-import type { ArtifactContent } from '../../api/types'
+import type { ArtifactContent } from '../../../api/types'
 
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`

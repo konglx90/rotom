@@ -1,7 +1,7 @@
 // ArtifactPanel 的文件树渲染:FileTreeNode 递归组件 + 按路径查找节点。
 // 从 ArtifactPanel.tsx 抽出。FileTreeNode 只有本地 expanded 状态。
 import { useState } from 'react'
-import type { ArtifactFile } from '../../api/types'
+import type { ArtifactFile } from '../../../api/types'
 import styles from './ArtifactPanel.module.css'
 import { formatSize } from './artifactFileUtils'
 
