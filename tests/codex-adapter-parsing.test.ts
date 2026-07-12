@@ -38,15 +38,17 @@ describe("codex parseCodexTokenUsage", () => {
     assert.equal(u.totalCostUsd, undefined);
   });
 
-  it("字符串 / null 字段归一化为 undefined;NaN 因 typeof===number 会被采信(记录现状)", () => {
+  it("字符串 / null / NaN / Infinity 字段都归一化为 undefined(Number.isFinite 收紧)", () => {
     const u = parseCodexTokenUsage({
       tokenUsage: { total: { inputTokens: "1234", outputTokens: null, cachedInputTokens: NaN } },
     });
-    assert.equal(u.inputTokens, undefined, "string should not be accepted");
-    assert.equal(u.outputTokens, undefined, "null should not be accepted");
-    // 现状:typeof NaN === 'number' 为 true,实现只校验 typeof,故 NaN 会漏网。
-    // 这是已知的校验宽松点;若未来收紧(加 Number.isFinite),同步改本断言。
-    assert.ok(Number.isNaN(u.cacheReadTokens), "NaN currently passes typeof check — documented laxness");
+    assert.equal(u.inputTokens, undefined, "string rejected");
+    assert.equal(u.outputTokens, undefined, "null rejected");
+    assert.equal(u.cacheReadTokens, undefined, "NaN rejected by Number.isFinite");
+    const u2 = parseCodexTokenUsage({
+      tokenUsage: { total: { inputTokens: Infinity } },
+    });
+    assert.equal(u2.inputTokens, undefined, "Infinity rejected");
   });
 
   it("total / tokenUsage 缺失时返回全 undefined 的 TokenUsage(与原内联实现等价)", () => {

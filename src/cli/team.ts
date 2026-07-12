@@ -18,6 +18,7 @@ import {
   fail,
   flagStr,
   printJson,
+  extractApiError,
 } from "./common.js";
 import { masterFetch, route } from "./routes.js";
 import { resolveLocalMasterUrl } from "./identity.js";
@@ -88,7 +89,7 @@ async function cmdTeamJoin(httpBase: string, args: string[], flags: Record<strin
     body: JSON.stringify(body),
   });
   if (resp.status < 200 || resp.status >= 300) {
-    const err = (resp.data as any)?.error ?? JSON.stringify(resp.data);
+    const err = extractApiError(resp.data);
     fail(`team join failed (HTTP ${resp.status}): ${err}`);
   }
   printJson(resp.data);
@@ -97,7 +98,7 @@ async function cmdTeamJoin(httpBase: string, args: string[], flags: Record<strin
 async function cmdTeamLeave(httpBase: string): Promise<void> {
   const resp = await masterFetch(`${httpBase}/api/teams/leave`, { method: "POST" });
   if (resp.status < 200 || resp.status >= 300) {
-    const err = (resp.data as any)?.error ?? JSON.stringify(resp.data);
+    const err = extractApiError(resp.data);
     fail(`team leave failed (HTTP ${resp.status}): ${err}`);
   }
   printJson(resp.data);
@@ -106,7 +107,7 @@ async function cmdTeamLeave(httpBase: string): Promise<void> {
 async function cmdTeamList(httpBase: string): Promise<void> {
   const resp = await masterFetch(`${httpBase}/api/teams`, { method: "GET" });
   if (resp.status < 200 || resp.status >= 300) {
-    const err = (resp.data as any)?.error ?? JSON.stringify(resp.data);
+    const err = extractApiError(resp.data);
     fail(`team list failed (HTTP ${resp.status}): ${err}`);
   }
   printJson(resp.data);
@@ -118,7 +119,7 @@ async function cmdTeamMembers(httpBase: string, args: string[], flags: Record<st
   const url = `${httpBase}${route("/api/teams/:id/members", teamId)}`;
   const resp = await masterFetch(url, { method: "GET" });
   if (resp.status < 200 || resp.status >= 300) {
-    const err = (resp.data as any)?.error ?? JSON.stringify(resp.data);
+    const err = extractApiError(resp.data);
     fail(`team members failed (HTTP ${resp.status}): ${err}`);
   }
   printJson(resp.data);

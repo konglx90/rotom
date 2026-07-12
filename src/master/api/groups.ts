@@ -237,15 +237,16 @@ export function registerGroupRoutes(
       res.status(404).json({ error: "Group not found" });
       return;
     }
-    const members = db.getGroupMembers(req.params.id).map((m) => {
-      const agent = db.getAgentByName(m.agent_name);
-      const base = agent?.profile ? parseAgentProfile(agent.profile) : null;
+    const members = db.getGroupMembersWithAgentState(req.params.id).map((m) => {
+      // 一次 JOIN 已拿到 agent_status(已 COALESCE 成 offline)+ agent_profile,
+      // 不再逐成员 getAgentByName(N+1)。base 用 agent 全局 profile,override 用群级覆盖。
+      const base = m.agent_profile ? parseAgentProfile(m.agent_profile) : null;
       const override = parseAgentProfile(m.profile);
       const effective = mergeGroupProfile(base, override);
       return {
         agent_name: m.agent_name,
         joined_at: m.joined_at,
-        status: agent?.status ?? "offline",
+        status: m.agent_status,
         profile: effective,
       };
     });

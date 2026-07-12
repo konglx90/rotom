@@ -9,7 +9,7 @@
  * 走本机 link daemon 的 http://127.0.0.1:28900。
  */
 
-import { fail, flagStr, printJson } from "./common.js";
+import { fail, flagStr, printJson, extractApiError } from "./common.js";
 import { masterFetch } from "./routes.js";
 
 const DEFAULT_LINK_PORT = 28900;
@@ -51,7 +51,7 @@ export async function cmdFed(rest: string[], flags: Record<string, string | bool
 async function cmdFedMembers(httpBase: string): Promise<void> {
   const resp = await masterFetch(`${httpBase}/fed/directory`, { method: "GET" });
   if (resp.status < 200 || resp.status >= 300) {
-    const err = (resp.data as any)?.error ?? JSON.stringify(resp.data);
+    const err = extractApiError(resp.data);
     fail(`fed members failed (HTTP ${resp.status}): ${err}`);
   }
   printJson(resp.data);

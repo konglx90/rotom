@@ -82,6 +82,40 @@ describe("API: groups 消息 + asks + issues 生命周期", () => {
     }
   });
 
+  // ── GET /groups/:id 成员列表(N+1 修复 + LEFT JOIN 行为) ─────────────────
+  it("GET /groups/:id 成员列表带 status,不再逐个 getAgentByName;未注册成员仍返回 offline", async () => {
+    const g = "grp-detail-" + randomUUID().slice(0, 8);
+    db.createGroup(g, "DetailTest", "system");
+    db.addGroupMembers(g, [AGENT_A, "GhostMember"]); // GhostMember 无 agent 行
+
+    // spy:detail 路径不应再触发 getAgentByName
+    let nameLookups = 0;
+    const orig = db.getAgentByName;
+    db.getAgentByName = ((name: string) => {
+      nameLookups++;
+      return orig.call(db, name);
+    }) as typeof db.getAgentByName;
+
+    let json: any;
+    try {
+      const r = await req("GET", `/api/groups/${g}`);
+      json = r.json;
+      assert.equal(r.status, 200);
+    } finally {
+      db.getAgentByName = orig;
+    }
+
+    assert.equal(nameLookups, 0, "detail must not call getAgentByName per member (N+1)");
+    const members = json.members as any[];
+    const a = members.find((m: any) => m.agent_name === AGENT_A);
+    const ghost = members.find((m: any) => m.agent_name === "GhostMember");
+    assert.ok(a, "registered member present");
+    assert.equal(a.status, "offline", "registered-but-never-connected agent → offline");
+    assert.ok(ghost, "unregistered member still listed (LEFT JOIN preserves it)");
+    assert.equal(ghost.status, "offline", "no agent row → COALESCE(status,'offline')");
+    assert.ok(!ghost.profile, "no agent row → no effective profile");
+  });
+
   // ── GET /groups/:id/messages/:msgId (群消息回查) ──────────────────────────
   it("消息回查: 入库后 GET 单条返回完整行", async () => {
     const msgId = db.addGroupMessage(GROUP, AGENT_A, "回查这条 @bob", [AGENT_A]);

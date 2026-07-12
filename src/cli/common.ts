@@ -292,6 +292,18 @@ export async function api(agent: ResolvedAgent, method: string, route: string, b
   throw new Error("rotom: api() loop fell through");
 }
 
+/**
+ * 从 API 错误响应里抽出一行可读 message:优先 `{ error: "..." }`,否则 JSON 兜底。
+ * 用于替代散落在各命令里的 `(resp.data as any)?.error ?? JSON.stringify(resp.data)`。
+ * data 来自 api()(运行时是 any),这里按 unknown 安全收窄。
+ */
+export function extractApiError(data: unknown): string {
+  if (data && typeof data === "object" && typeof (data as { error?: unknown }).error === "string") {
+    return (data as { error: string }).error;
+  }
+  try { return JSON.stringify(data); } catch { return String(data); }
+}
+
 // ── Output helpers ────────────────────────────────────────────────────────
 
 export let pretty = false;

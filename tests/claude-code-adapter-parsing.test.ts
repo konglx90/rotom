@@ -39,9 +39,12 @@ describe("claude-code parseClaudeResultUsage", () => {
     assert.equal(parseClaudeResultUsage({}), undefined);
     assert.equal(parseClaudeResultUsage({ usage: null }), undefined);
   });
-  it("字段非 number → undefined(不误采信字符串)", () => {
+  it("字段非有限数 → undefined(不误采信字符串/NaN/Infinity)", () => {
     const u = parseClaudeResultUsage({ usage: { input_tokens: "10" } });
     assert.equal(u.inputTokens, undefined);
+    const u2 = parseClaudeResultUsage({ usage: { input_tokens: NaN }, total_cost_usd: Infinity });
+    assert.equal(u2.inputTokens, undefined, "NaN rejected");
+    assert.equal(u2.totalCostUsd, undefined, "Infinity rejected");
   });
 });
 

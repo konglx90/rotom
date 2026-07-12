@@ -701,12 +701,13 @@ export function parseClaudeResultUsage(parsed: Record<string, unknown>): TokenUs
   const usageRaw = parsed.usage;
   if (!usageRaw || typeof usageRaw !== "object") return undefined;
   const u = usageRaw as Record<string, unknown>;
+  // Number.isFinite 拒绝 NaN/Infinity,与 parseCodexTokenUsage 口径一致。
   return {
-    inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
-    outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
-    cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
-    cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
-    totalCostUsd: typeof parsed.total_cost_usd === "number" ? parsed.total_cost_usd : undefined,
+    inputTokens: Number.isFinite(u.input_tokens) ? u.input_tokens as number : undefined,
+    outputTokens: Number.isFinite(u.output_tokens) ? u.output_tokens as number : undefined,
+    cacheReadTokens: Number.isFinite(u.cache_read_input_tokens) ? u.cache_read_input_tokens as number : undefined,
+    cacheCreationTokens: Number.isFinite(u.cache_creation_input_tokens) ? u.cache_creation_input_tokens as number : undefined,
+    totalCostUsd: Number.isFinite(parsed.total_cost_usd) ? parsed.total_cost_usd as number : undefined,
   };
 }
 

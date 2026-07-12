@@ -711,10 +711,12 @@ export function prettyCommand(raw: string): string {
 export function parseCodexTokenUsage(params: Record<string, unknown>): TokenUsage {
   const tokenUsage = (params.tokenUsage ?? {}) as Record<string, unknown>;
   const total = (tokenUsage.total ?? {}) as Record<string, unknown>;
+  // Number.isFinite 而非 typeof === "number":拒绝 NaN/Infinity(协议异常时可能
+  // 出现),避免把无意义的 NaN 累积进 usage 累加器污染总量。
   return {
-    inputTokens: typeof total.inputTokens === "number" ? total.inputTokens : undefined,
-    outputTokens: typeof total.outputTokens === "number" ? total.outputTokens : undefined,
-    cacheReadTokens: typeof total.cachedInputTokens === "number" ? total.cachedInputTokens : undefined,
+    inputTokens: Number.isFinite(total.inputTokens) ? total.inputTokens as number : undefined,
+    outputTokens: Number.isFinite(total.outputTokens) ? total.outputTokens as number : undefined,
+    cacheReadTokens: Number.isFinite(total.cachedInputTokens) ? total.cachedInputTokens as number : undefined,
     cacheCreationTokens: undefined,
     totalCostUsd: undefined,
   };

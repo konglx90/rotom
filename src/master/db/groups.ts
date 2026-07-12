@@ -58,6 +58,22 @@ export interface GroupMemberWithAgentRow extends GroupMemberRow {
   agent_id: string;
 }
 
+/**
+ * 群成员 + agent 在线状态 / 全局 profile 的 JOIN 行。供 dashboard 群详情成员
+ * 列表用,替代「getGroupMembers 后逐个 getAgentByName」的 N+1。
+ *
+ * 注意 agent_profile 别名:agents.profile 与 GroupMemberRow.profile(群级覆盖)
+ * 列名冲突,必须别名。LEFT JOIN + COALESCE(status,'offline') 保证未注册 agent
+ * 的成员仍返回(状态 offline、agent_profile null),与原 api handler 的
+ * `agent?.status ?? "offline"` / `agent?.profile ? ... : null` 完全等价。
+ */
+export interface GroupMemberWithAgentStateRow extends GroupMemberRow {
+  /** agents.status,COALESCE 成 'offline'(成员无 agent 行时)。 */
+  agent_status: string;
+  /** agents.profile(全局 agent 档案 JSON),无 agent 行时为 null。 */
+  agent_profile: string | null;
+}
+
 export interface GroupMessageRow {
   id: number;
   sender: string;
@@ -367,6 +383,28 @@ export const groupMethods = {
       WHERE gm.group_id = ?
       ORDER BY gm.joined_at
     `).all(groupId) as GroupMemberWithAgentRow[];
+  },
+
+  /**
+   * 群成员 + agent 在线状态 + 全局 profile,一次 JOIN 返回。供 dashboard 群详情
+   * GET /groups/:id 成员列表用,替代「getGroupMembers 后逐个 getAgentByName」的 N+1。
+   *
+   * LEFT JOIN agents + COALESCE(status,'offline'):未注册 agent 的成员仍返回
+   * (status=offline、agent_profile=null),等价于原 handler 的
+   * `agent?.status ?? "offline"` / `agent?.profile ? parseAgentProfile : null`。
+   */
+  getGroupMembersWithAgentState(this: MeshDbSelf, groupId: string): GroupMemberWithAgentStateRow[] {
+    return this.db.prepare(`
+      SELECT gm.agent_name, gm.joined_at, gms.working_dir, gms.profile,
+             COALESCE(a.status, 'offline') AS agent_status,
+             a.profile AS agent_profile
+      FROM group_members gm
+      LEFT JOIN agents a ON a.name = gm.agent_name
+      LEFT JOIN group_member_settings gms
+        ON gms.group_id = gm.group_id AND gms.agent_name = gm.agent_name
+      WHERE gm.group_id = ?
+      ORDER BY gm.joined_at
+    `).all(groupId) as GroupMemberWithAgentStateRow[];
   },
 
   getGroupMemberSetting(this: MeshDbSelf, groupId: string, agentName: string): string | null {
