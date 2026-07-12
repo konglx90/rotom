@@ -46,13 +46,12 @@ export const routingMethods = {
     msg: ServerMessage,
     excludeAgentIds: string[] = [],
   ): void {
-    const members = this.db.getGroupMembers(groupId);
+    // 一次 JOIN 拿到 member + agent_id,避免逐个 getAgentByName 的 N+1。
+    const members = this.db.getGroupMembersWithAgents(groupId);
     const delivered: { name: string; sent: boolean }[] = [];
     for (const member of members) {
-      const memberAgent = this.db.getAgentByName(member.agent_name);
-      if (!memberAgent) continue;
-      if (excludeAgentIds.includes(memberAgent.id)) continue;
-      const ok = this.sendToAgent(memberAgent.id, msg);
+      if (excludeAgentIds.includes(member.agent_id)) continue;
+      const ok = this.sendToAgent(member.agent_id, msg);
       delivered.push({ name: member.agent_name, sent: ok });
     }
     // 流式 chunk 广播会每 chunk 调一次,记日志只会刷屏,跳过;其他类型

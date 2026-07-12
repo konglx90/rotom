@@ -46,6 +46,18 @@ export interface GroupMemberRow {
   profile: string | null;
 }
 
+/**
+ * 群成员 + 其 agent 主键的 JOIN 行。供 ws-hub 广播用 —— 一次性拿到每个成员的
+ * agent_id,避免 broadcastToGroup 里对每个成员再单独 getAgentByName(N+1)。
+ *
+ * 用 INNER JOIN agents:未注册 agent 的成员不会被返回 —— 与旧逻辑里
+ * `getAgentByName` 返回 undefined 后 `continue` 跳过 等价。
+ */
+export interface GroupMemberWithAgentRow extends GroupMemberRow {
+  /** agents.id。INNER JOIN 保证非空。 */
+  agent_id: string;
+}
+
 export interface GroupMessageRow {
   id: number;
   sender: string;
@@ -334,6 +346,27 @@ export const groupMethods = {
       WHERE gm.group_id = ?
       ORDER BY gm.joined_at
     `).all(groupId) as GroupMemberRow[];
+  },
+
+  /**
+   * 群成员 + agent 主键,一次 JOIN 返回。供 ws-hub 广播路径用,替代
+   * 「getGroupMembers 后逐个 getAgentByName」的 N+1 写法。
+   *
+   * 行为与 getGroupMembers + 逐个 getAgentByName 等价:
+   *  - 仍 LEFT JOIN group_member_settings 拿 working_dir / profile;
+   *  - INNER JOIN agents,故未注册 agent 的成员被排除(等价于旧逻辑的 continue);
+   *  - 按 gm.joined_at 排序,与 getGroupMembers 一致。
+   */
+  getGroupMembersWithAgents(this: MeshDbSelf, groupId: string): GroupMemberWithAgentRow[] {
+    return this.db.prepare(`
+      SELECT gm.agent_name, gm.joined_at, gms.working_dir, gms.profile, a.id AS agent_id
+      FROM group_members gm
+      JOIN agents a ON a.name = gm.agent_name
+      LEFT JOIN group_member_settings gms
+        ON gms.group_id = gm.group_id AND gms.agent_name = gm.agent_name
+      WHERE gm.group_id = ?
+      ORDER BY gm.joined_at
+    `).all(groupId) as GroupMemberWithAgentRow[];
   },
 
   getGroupMemberSetting(this: MeshDbSelf, groupId: string, agentName: string): string | null {

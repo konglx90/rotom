@@ -91,6 +91,38 @@ after(() => {
 });
 
 describe("WSHub group broadcast (真人发群消息)", () => {
+  it("A.0 broadcastToGroup 不再对每个成员调 getAgentByName (N+1 已消除)", () => {
+    // broadcastToGroup 现在走 getGroupMembersWithAgents 一次 JOIN 拿 member+agent_id,
+    // 不应再触发逐成员 getAgentByName(原 N+1)。用 spy 计数验证。
+    let nameLookups = 0;
+    const origByName = db.getAgentByName;
+    db.getAgentByName = ((name: string) => {
+      nameLookups++;
+      return origByName.call(db, name);
+    }) as typeof db.getAgentByName;
+
+    let joinedFetches = 0;
+    const origJoined = db.getGroupMembersWithAgents.bind(db);
+    db.getGroupMembersWithAgents = ((gid: string) => {
+      joinedFetches++;
+      return origJoined(gid);
+    }) as typeof db.getGroupMembersWithAgents;
+
+    try {
+      hub.broadcastToGroupPublic(
+        groupId,
+        { type: "issue_changed", issueId: "n1", groupId, kind: "updated" },
+        [],
+      );
+      // 群里有 Alice/Bob/Carol 3 个成员 —— 旧实现会查 3 次 getAgentByName。
+      assert.equal(joinedFetches, 1, "broadcast should fetch members+agents once via JOIN");
+      assert.equal(nameLookups, 0, "broadcast must not call getAgentByName per member (N+1 eliminated)");
+    } finally {
+      db.getAgentByName = origByName;
+      db.getGroupMembersWithAgents = origJoined;
+    }
+  });
+
   it("A.1 真人 a2a_send 群消息广播给所有其他成员", async () => {
     const alice = await rawConnect("Alice", ALICE_TOKEN);
     const bob = await rawConnect("Bob", BOB_TOKEN);
