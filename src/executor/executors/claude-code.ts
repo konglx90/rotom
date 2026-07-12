@@ -30,6 +30,7 @@ import type { ApprovalDecision, ApprovalRequestInput, AskUserQuestionItem, CliEx
 import type { TodoItem } from "../../shared/protocol.js";
 import { safeJsonParse } from "../../shared/parse.js";
 import { emitStatus } from "../reasoning-status.js";
+import { resolveSessionId, sliceTail } from "../adapter-helpers.js";
 
 // Resolve the bundled hook script. After `tsc` the .cjs file is copied next
 // to the compiled module (see package.json `build` script). In `tsx` dev
@@ -57,7 +58,7 @@ const HOOK_TOOL_MATCHER = "Bash|Edit|Write|MultiEdit|NotebookEdit|ExitPlanMode|A
  *   /Users/kong/ai-work/rotom  → -Users-kong-ai-work-rotom
  *   /Users/kong/.rotom/artifacts → -Users-kong--rotom-artifacts
  */
-function claudeProjectDir(cwd: string): string {
+export function claudeProjectDir(cwd: string): string {
   const resolved = path.resolve(cwd);
   const encoded = resolved.replace(/[/.]/g, "-");
   return path.join(os.homedir(), ".claude", "projects", encoded);
@@ -330,17 +331,7 @@ export class ClaudeCodeExecutor implements CliExecutor {
               if (typeof parsed.model === "string" && parsed.model) {
                 capturedModel = parsed.model;
               }
-              const usageRaw = parsed.usage;
-              if (usageRaw && typeof usageRaw === "object") {
-                const u = usageRaw as Record<string, unknown>;
-                capturedUsage = {
-                  inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
-                  outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
-                  cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
-                  cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
-                  totalCostUsd: typeof parsed.total_cost_usd === "number" ? parsed.total_cost_usd : undefined,
-                };
-              }
+              capturedUsage = parseClaudeResultUsage(parsed) ?? capturedUsage;
               const text = parsed.result || "";
               if (text) {
                 fullOutput = text;
@@ -424,29 +415,11 @@ export class ClaudeCodeExecutor implements CliExecutor {
       return { format: "jsonl", content: "" };
     }
     const text = fs.readFileSync(file, "utf-8");
-    const lines = text.split("\n");
-    const tail = args.tailLines ?? 200;
-    const sliced = lines.length > tail ? lines.slice(-tail).join("\n") : text;
-    return { format: "jsonl", content: sliced };
+    return { format: "jsonl", content: sliceTail(text, args.tailLines ?? 200) };
   }
 }
 
-/**
- * Decide which session id to report. When resume was requested but claude
- * emitted a fresh, different session id AND the run failed, the resume did
- * not land (claude printed "No conversation found..." to stderr, generated a
- * fresh session, and exited). Return "" so the caller can retry fresh.
- */
-function resolveSessionId(
-  requestedResume: string,
-  emitted: string,
-  failed: boolean,
-): string {
-  if (failed && requestedResume && emitted && emitted !== requestedResume) {
-    return "";
-  }
-  return emitted;
-}
+// resolveSessionId 已抽到 ../adapter-helpers.ts(codex 与 claude-code 共用)。
 
 // ── Approval gate (PreToolUse hook bridge) ──────────────────────────────
 
@@ -589,7 +562,7 @@ const PATCH_LOG_MAX_BYTES = 50_000;
  *  the timeline's PatchBlock can render add/remove lines instead of just a
  *  file path. Not a real unified diff (no line numbers / no context), but
  *  the +/- markers + filename headers are enough for visual review. */
-function buildPatchLogBody(name: string, input: Record<string, unknown>): string {
+export function buildPatchLogBody(name: string, input: Record<string, unknown>): string {
   const filePath =
     (typeof input.file_path === "string" && input.file_path) ||
     (typeof input.notebook_path === "string" && input.notebook_path) ||
@@ -635,7 +608,7 @@ function buildPatchLogBody(name: string, input: Record<string, unknown>): string
   return body;
 }
 
-function describeToolUseForLog(
+export function describeToolUseForLog(
   name: string,
   input: Record<string, unknown>,
 ): { kind: "exec" | "patch" | "ask"; label: string } {
@@ -662,7 +635,7 @@ function describeToolUseForLog(
   return { kind: "exec", label: name };
 }
 
-function flattenToolResultContent(content: unknown): string {
+export function flattenToolResultContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   const parts: string[] = [];
@@ -685,7 +658,7 @@ function flattenToolResultContent(content: unknown): string {
  * 返回 null 表示这次输入还没凑齐(或者格式完全错乱),调用方应忽略不要触发回调。
  * 这样能容忍流式过程中的"半成品" input,只在拿到完整 tool_use 时上报。
  */
-function normalizeTodos(raw: unknown): TodoItem[] | null {
+export function normalizeTodos(raw: unknown): TodoItem[] | null {
   if (!Array.isArray(raw)) return null;
   const out: TodoItem[] = [];
   for (const item of raw) {
@@ -707,7 +680,7 @@ function normalizeTodos(raw: unknown): TodoItem[] | null {
 
 const MAX_DIFF_CONTENT_BYTES = 50_000;
 
-function truncateForDiff(str: string, maxBytes: number): { text: string; truncated: boolean } {
+export function truncateForDiff(str: string, maxBytes: number): { text: string; truncated: boolean } {
   const bytes = Buffer.byteLength(str, "utf8");
   if (bytes <= maxBytes) return { text: str, truncated: false };
   const truncated = str.slice(0, Math.floor(str.length * maxBytes / bytes));
@@ -719,7 +692,25 @@ function truncateForDiff(str: string, maxBytes: number): { text: string; truncat
  * input shape (the same one codex produces). Bash → exec; the edit/write
  * family → file_change.
  */
-function describeToolCall(
+/**
+ * 把 claude result 事件的 usage(snake_case 字段 input_tokens / output_tokens /
+ * cache_read_input_tokens / cache_creation_input_tokens)+ 顶层 total_cost_usd
+ * 映射成 TokenUsage。抽成纯函数便于离线测试。无 usage 对象时返回 undefined。
+ */
+export function parseClaudeResultUsage(parsed: Record<string, unknown>): TokenUsage | undefined {
+  const usageRaw = parsed.usage;
+  if (!usageRaw || typeof usageRaw !== "object") return undefined;
+  const u = usageRaw as Record<string, unknown>;
+  return {
+    inputTokens: typeof u.input_tokens === "number" ? u.input_tokens : undefined,
+    outputTokens: typeof u.output_tokens === "number" ? u.output_tokens : undefined,
+    cacheReadTokens: typeof u.cache_read_input_tokens === "number" ? u.cache_read_input_tokens : undefined,
+    cacheCreationTokens: typeof u.cache_creation_input_tokens === "number" ? u.cache_creation_input_tokens : undefined,
+    totalCostUsd: typeof parsed.total_cost_usd === "number" ? parsed.total_cost_usd : undefined,
+  };
+}
+
+export function describeToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
 ): ApprovalRequestInput {

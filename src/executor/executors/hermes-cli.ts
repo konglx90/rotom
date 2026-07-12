@@ -63,7 +63,7 @@ const PROVIDER_ERROR_PATTERNS: RegExp[] = [
   /\bHTTP\s+[45]\d{2}\b.*(?:error|fail|denied|forbidden|unauthor)/i,
 ];
 
-function matchProviderError(text: string): RegExpMatchArray | null {
+export function matchProviderError(text: string): RegExpMatchArray | null {
   for (const re of PROVIDER_ERROR_PATTERNS) {
     const m = text.match(re);
     if (m) return m;
@@ -94,7 +94,7 @@ const CLEAN_ERROR_PATTERNS: RegExp[] = [
   /API\s+call\s+failed\s+after\s+\d+\s+retries?\.?\s*([^|.]*?)\s*\.?\s*$/,
 ];
 
-function extractCleanErrorReason(text: string): string {
+export function extractCleanErrorReason(text: string): string {
   for (const re of CLEAN_ERROR_PATTERNS) {
     const m = text.match(re);
     if (m && m[1]) {
@@ -132,7 +132,7 @@ function extractCleanErrorReason(text: string): string {
  *
  * We strip the leaky vars here and let hermes read its own config.
  */
-function buildHermesEnv(
+export function buildHermesEnv(
   parentEnv: NodeJS.ProcessEnv,
   optionsEnv: Record<string, string> | undefined,
   mergedPath: string | undefined,
@@ -438,34 +438,9 @@ export class HermesCliExecutor implements CliExecutor {
 
       // ── ACP notification handling ──
 
-      function normalizeUpdateType(raw: unknown): string {
-        if (typeof raw === "object" && raw !== null) {
-          const obj = raw as Record<string, unknown>;
-          const key =
-            (obj.sessionUpdate as string) ??
-            (obj.type as string);
-          if (key) return normalizeTypeKey(key);
+      // normalizeUpdateType / normalizeTypeKey 已上提到模块级(便于离线测试),
+      // 这里的调用直接解析到模块级函数。
 
-          // Externally tagged: { agentMessageChunk: { ... } }
-          const keys = Object.keys(obj);
-          if (keys.length === 1) return normalizeTypeKey(keys[0]);
-        }
-        return "";
-      }
-
-      function normalizeTypeKey(t: string): string {
-        const k = t.replace(/[-_]/g, "").toLowerCase().trim();
-        switch (k) {
-          case "agentmessagechunk": return "agent_message_chunk";
-          case "agentthoughtchunk": return "agent_thought_chunk";
-          case "toolcall": return "tool_call";
-          case "toolcallupdate": return "tool_call_update";
-          case "usageupdate": return "usage_update";
-          case "turnend":
-          case "endturn": return "turn_end";
-          default: return "";
-        }
-      }
 
       // hermes 给的 `title` 通常是 `terminal: $ rotom ...`,直接塞进
       // [tool:exec] 会被前端 ToolCallBlock 渲染成 `$ $ rotom ...`(block
@@ -883,7 +858,41 @@ export class HermesCliExecutor implements CliExecutor {
  * a printable single string. We keep this conservative — anything we don't
  * recognise falls back to JSON.stringify so nothing is silently dropped.
  */
-function stringifyContent(content: unknown): string {
+// ── ACP update-type normalization ───────────────────────────────────────
+// 原本内联在 execute() 闭包里;上提到模块级以便离线夹具测试。hermes 各版本对
+// session/update 的 payload key 命名不一(camelCase / snake_case / kebab /
+// 外层 tag),这里是「静默丢消息」的高危点,值得锁测试。
+
+export function normalizeTypeKey(t: string): string {
+  const k = t.replace(/[-_]/g, "").toLowerCase().trim();
+  switch (k) {
+    case "agentmessagechunk": return "agent_message_chunk";
+    case "agentthoughtchunk": return "agent_thought_chunk";
+    case "toolcall": return "tool_call";
+    case "toolcallupdate": return "tool_call_update";
+    case "usageupdate": return "usage_update";
+    case "turnend":
+    case "endturn": return "turn_end";
+    default: return "";
+  }
+}
+
+export function normalizeUpdateType(raw: unknown): string {
+  if (typeof raw === "object" && raw !== null) {
+    const obj = raw as Record<string, unknown>;
+    const key =
+      (obj.sessionUpdate as string) ??
+      (obj.type as string);
+    if (key) return normalizeTypeKey(key);
+
+    // Externally tagged: { agentMessageChunk: { ... } }
+    const keys = Object.keys(obj);
+    if (keys.length === 1) return normalizeTypeKey(keys[0]);
+  }
+  return "";
+}
+
+export function stringifyContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content

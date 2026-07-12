@@ -35,6 +35,7 @@ import path from "node:path";
 import type { ApprovalDecision, ApprovalRequestInput, CliExecutor, ExecuteOptions, ExecuteResult, TokenUsage } from "../cli-executor.js";
 import { buildPlanModeInstruction } from "../../shared/slash-commands.js";
 import { emitStatus } from "../reasoning-status.js";
+import { resolveSessionId, sliceTail } from "../adapter-helpers.js";
 
 // ── Executor ────────────────────────────────────────────────────────────
 
@@ -296,17 +297,7 @@ export class CodexExecutor implements CliExecutor {
             // codex v2 真正的 usage 通知。params.tokenUsage.total 是该 thread
             // 累计用量(input + 历史 turns),last 是本轮。我们存 total —— 一个
             // issue 可能多次 turn,最终值就是整个 issue 执行的总量。
-            // 字段是 camelCase: inputTokens / outputTokens / cachedInputTokens /
-            // reasoningOutputTokens(注意不是 cache_read_input_tokens)。
-            const tokenUsage = (params.tokenUsage ?? {}) as Record<string, unknown>;
-            const total = (tokenUsage.total ?? {}) as Record<string, unknown>;
-            capturedUsage = {
-              inputTokens: typeof total.inputTokens === "number" ? total.inputTokens : undefined,
-              outputTokens: typeof total.outputTokens === "number" ? total.outputTokens : undefined,
-              cacheReadTokens: typeof total.cachedInputTokens === "number" ? total.cachedInputTokens : undefined,
-              cacheCreationTokens: undefined,
-              totalCostUsd: undefined,
-            };
+            capturedUsage = parseCodexTokenUsage(params);
             return;
           }
 
@@ -590,10 +581,7 @@ export class CodexExecutor implements CliExecutor {
       };
     }
     const text = fs.readFileSync(file, "utf-8");
-    const lines = text.split("\n");
-    const tail = args.tailLines ?? 200;
-    const sliced = lines.length > tail ? lines.slice(-tail).join("\n") : text;
-    return { format: "jsonl", content: sliced };
+    return { format: "jsonl", content: sliceTail(text, args.tailLines ?? 200) };
   }
 }
 
@@ -691,7 +679,7 @@ async function startOrResumeThread(
   return id;
 }
 
-function extractThreadId(result: unknown): string {
+export function extractThreadId(result: unknown): string {
   if (!result || typeof result !== "object") return "";
   const r = result as Record<string, unknown>;
   const thread = r.thread as Record<string, unknown> | undefined;
@@ -699,30 +687,37 @@ function extractThreadId(result: unknown): string {
   return "";
 }
 
-/**
- * Decide which session id to report. When resume was requested but codex emitted
- * a fresh, different thread id AND the run failed, the resume did not land —
- * return "" so the caller can retry fresh.
- */
-function resolveSessionId(
-  requestedResume: string,
-  emitted: string,
-  failed: boolean,
-): string {
-  if (failed && requestedResume && emitted && emitted !== requestedResume) {
-    return "";
-  }
-  return emitted;
-}
+// resolveSessionId 已抽到 ../adapter-helpers.ts(codex 与 claude-code 共用)。
 
 // Strip common shell wrappers so the dashboard renders the user-meaningful
 // command instead of `/bin/bash -lc '<actual>'`.
-function prettyCommand(raw: string): string {
+export function prettyCommand(raw: string): string {
   let s = raw.trim();
   const wrapper = /^(?:\/bin\/)?(?:ba|z)?sh\s+-lc\s+(['"])([\s\S]+)\1$/;
   const m = s.match(wrapper);
   if (m) s = m[2].trim();
   return s;
+}
+
+/**
+ * 把 codex `thread/tokenUsage/updated` 通知的 params 映射成 TokenUsage。
+ * codex v2 字段是 camelCase(inputTokens / outputTokens / cachedInputTokens),
+ * 注意不是 cache_read_input_tokens。total 缺失或字段非 number 时对应位置留
+ * undefined —— 与原内联实现完全等价。
+ *
+ * 抽成纯函数便于离线夹具测试(codex 各版本字段序列化在变,这里是静默
+ * 出错的高危点)。
+ */
+export function parseCodexTokenUsage(params: Record<string, unknown>): TokenUsage {
+  const tokenUsage = (params.tokenUsage ?? {}) as Record<string, unknown>;
+  const total = (tokenUsage.total ?? {}) as Record<string, unknown>;
+  return {
+    inputTokens: typeof total.inputTokens === "number" ? total.inputTokens : undefined,
+    outputTokens: typeof total.outputTokens === "number" ? total.outputTokens : undefined,
+    cacheReadTokens: typeof total.cachedInputTokens === "number" ? total.cachedInputTokens : undefined,
+    cacheCreationTokens: undefined,
+    totalCostUsd: undefined,
+  };
 }
 
 // ── Approval payload extraction ─────────────────────────────────────────
@@ -733,7 +728,7 @@ function prettyCommand(raw: string): string {
 // ApprovalRequestInput. When fields are missing we still build a usable
 // summary so the human reviewer is never left with a blank card.
 
-function extractExecApprovalInput(params: Record<string, unknown>): ApprovalRequestInput {
+export function extractExecApprovalInput(params: Record<string, unknown>): ApprovalRequestInput {
   const source = (params.item as Record<string, unknown> | undefined) ?? params;
   const rawCmd = source.command;
   let command = "";
@@ -750,7 +745,7 @@ function extractExecApprovalInput(params: Record<string, unknown>): ApprovalRequ
   return { kind: "exec", summary, command: command || undefined, cwd };
 }
 
-function extractFileApprovalInput(params: Record<string, unknown>): ApprovalRequestInput {
+export function extractFileApprovalInput(params: Record<string, unknown>): ApprovalRequestInput {
   const source = (params.item as Record<string, unknown> | undefined) ?? params;
   const files: string[] = [];
   const collect = (changes: unknown): void => {

@@ -41,13 +41,14 @@ import path from "node:path";
 import type { CliExecutor, ExecuteOptions, ExecuteResult, TokenUsage } from "../cli-executor.js";
 import { buildPlanModeInstruction } from "../../shared/slash-commands.js";
 import { emitStatus } from "../reasoning-status.js";
+import { sliceTail } from "../adapter-helpers.js";
 
 // ── Pi tool-call markup sanitization ───────────────────────────────────
 // Ported from multica/server/pkg/agent/pi.go (stripPiToolCallMarkup et al.).
 
 const PI_CONTROL_TOKEN_RE = /<\|[A-Za-z0-9_-]+>[A-Za-z0-9_-]*|<[A-Za-z0-9_-]+\|>/g;
 
-function stripPiControlTokens(s: string): string {
+export function stripPiControlTokens(s: string): string {
   return s.replace(PI_CONTROL_TOKEN_RE, "");
 }
 
@@ -104,7 +105,7 @@ function scanPiToolMarkupEnd(s: string, i: number): [number, boolean] {
   return [0, false];
 }
 
-function stripPiStructuredToolMarkup(s: string): string {
+export function stripPiStructuredToolMarkup(s: string): string {
   let out = "";
   let i = 0;
   while (i < s.length) {
@@ -124,13 +125,13 @@ function stripPiStructuredToolMarkup(s: string): string {
   return out;
 }
 
-function stripPiToolCallMarkup(s: string): string {
+export function stripPiToolCallMarkup(s: string): string {
   return stripPiControlTokens(stripPiStructuredToolMarkup(s));
 }
 
 /** Detect a partial control-token prefix at end of buffer (`<|foo` without
  *  closing `|>`), so we can hold it back until we see more deltas. */
-function looksLikePiControlTokenPrefix(s: string): boolean {
+export function looksLikePiControlTokenPrefix(s: string): boolean {
   if (s.length === 0 || s[0] !== "<" || s.length > 64) return false;
   for (let i = 1; i < s.length; i++) {
     if (!/[A-Za-z0-9_|>-]/.test(s[i])) return false;
@@ -141,7 +142,7 @@ function looksLikePiControlTokenPrefix(s: string): boolean {
 /** How much of the tail we can safely emit now without cutting a markup
  *  prefix in half. Holds back any suffix that looks like the start of
  *  `call:` / `response:` or a partial control token. */
-function safePiTextEmitLen(s: string): number {
+export function safePiTextEmitLen(s: string): number {
   let hold = 0;
   for (const prefix of ["call:", "response:"]) {
     for (let n = 1; n < prefix.length && n <= s.length; n++) {
@@ -157,7 +158,7 @@ function safePiTextEmitLen(s: string): number {
 
 /** Core drain: emit sanitized text, return `[emit, pending]`. `pending` is
  *  the un-emittable tail (partial markup prefix or unterminated block). */
-function drainPiSanitizedText(s: string): [string, string] {
+export function drainPiSanitizedText(s: string): [string, string] {
   let out = "";
   let i = 0;
   while (i < s.length) {
@@ -182,7 +183,7 @@ function drainPiSanitizedText(s: string): [string, string] {
  * prose, holding back partial markup prefixes so we don't emit `<|call:bash`
  * then realize on the next delta it was the start of a tool-call block.
  */
-class PiTextBuffer {
+export class PiTextBuffer {
   private buf = "";
   append(delta: string): string {
     this.buf += delta;
@@ -200,7 +201,7 @@ class PiTextBuffer {
 
 // ── Pi event shapes (loose — tolerate future minor-version field additions) ──
 
-interface PiUsage {
+export interface PiUsage {
   input: number;
   output: number;
   cacheRead: number;
@@ -208,7 +209,7 @@ interface PiUsage {
   totalTokens: number;
 }
 
-interface PiMessage {
+export interface PiMessage {
   role?: string;
   model?: string;
   usage?: PiUsage;
@@ -387,17 +388,8 @@ export class PiExecutor implements CliExecutor {
           case "turn_end": {
             sawTurnEnd = true;
             const msg = event.message as PiMessage | undefined;
-            if (msg && typeof msg === "object" && msg.usage) {
-              const u = msg.usage;
-              capturedUsage = {
-                inputTokens: (capturedUsage?.inputTokens ?? 0) + u.input,
-                outputTokens: (capturedUsage?.outputTokens ?? 0) + u.output,
-                cacheReadTokens: (capturedUsage?.cacheReadTokens ?? 0) + u.cacheRead,
-                cacheCreationTokens: (capturedUsage?.cacheCreationTokens ?? 0) + u.cacheWrite,
-                totalCostUsd: capturedUsage?.totalCostUsd,
-              };
-              if (msg.model && !capturedModel) capturedModel = msg.model;
-            }
+            capturedUsage = accumulatePiUsage(capturedUsage, msg);
+            if (msg && typeof msg === "object" && msg.model && !capturedModel) capturedModel = msg.model;
             // Flush any buffered text in case the turn ended without a final
             // text_delta closing the buffer.
             const flushed = textBuffer.flush();
@@ -540,16 +532,13 @@ export class PiExecutor implements CliExecutor {
       };
     }
     const text = fs.readFileSync(file, "utf-8");
-    const lines = text.split("\n");
-    const tail = args.tailLines ?? 200;
-    const sliced = lines.length > tail ? lines.slice(-tail).join("\n") : text;
-    return { format: "jsonl", content: sliced };
+    return { format: "jsonl", content: sliceTail(text, args.tailLines ?? 200) };
   }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-function toolStatusFor(name?: string): string {
+export function toolStatusFor(name?: string): string {
   switch (name) {
     case "edit":
     case "write":
@@ -566,7 +555,24 @@ function toolStatusFor(name?: string): string {
   }
 }
 
-function extractToolResultText(result: unknown): string | undefined {
+/**
+ * 把 pi turn_end 的 message.usage 累加进已累积的 TokenUsage。pi 一次执行可能
+ * 发多次 turn_end,各次 usage 相加 = 整个 issue 的总量。msg 无 usage 时原样
+ * 返回 prev(不变)。抽成纯函数便于离线测试。
+ */
+export function accumulatePiUsage(prev: TokenUsage | undefined, msg: PiMessage | undefined): TokenUsage | undefined {
+  if (!msg || typeof msg !== "object" || !msg.usage) return prev;
+  const u = msg.usage;
+  return {
+    inputTokens: (prev?.inputTokens ?? 0) + u.input,
+    outputTokens: (prev?.outputTokens ?? 0) + u.output,
+    cacheReadTokens: (prev?.cacheReadTokens ?? 0) + u.cacheRead,
+    cacheCreationTokens: (prev?.cacheCreationTokens ?? 0) + u.cacheWrite,
+    totalCostUsd: prev?.totalCostUsd,
+  };
+}
+
+export function extractToolResultText(result: unknown): string | undefined {
   if (result == null) return undefined;
   if (typeof result === "string") return result;
   if (typeof result === "object") {
