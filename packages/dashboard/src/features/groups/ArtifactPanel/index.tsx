@@ -12,6 +12,7 @@ import { formatSize, detectLanguage, isMarkdownPath, isImagePath, buildImageData
 import { ImagePreview } from './ImagePreview'
 import { FileTreeNode, findFileByPath } from './FileTree'
 import { repoDisplayName, STATUS_LABEL, STATUS_COLOR, RefSelector } from './BranchDiffControls'
+import { VscodeMenu } from './VscodeMenu'
 import { useMonaco } from '../../../hooks/useMonaco'
 import { useVisitorMode } from '../../../context/VisitorContext'
 import styles from './ArtifactPanel.module.css'
@@ -91,28 +92,6 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
   const { isVisitor } = useVisitorMode()
   const [vscodeLoading, setVscodeLoading] = useState(false)
   const [vscodeError, setVscodeError] = useState<string | null>(null)
-  // header「VSCode」按钮的下拉菜单:让用户选开产物目录还是某个仓库 worktree。
-  // 仓库目录往往比产物目录更重要(agent 改代码改的是仓库),所以做成下拉让用户挑。
-  const [vscodeMenuOpen, setVscodeMenuOpen] = useState(false)
-  const vscodeMenuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!vscodeMenuOpen) return
-    const onDown = (e: MouseEvent) => {
-      if (vscodeMenuRef.current && !vscodeMenuRef.current.contains(e.target as Node)) {
-        setVscodeMenuOpen(false)
-      }
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setVscodeMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [vscodeMenuOpen])
 
   // ─── 分支对比模式 state ───────────────────────────────────────────────
   // 独立于单文件 diff(mode='diff')的单文件 → DiffEditor 流程,这里走的是
@@ -462,75 +441,12 @@ export function ArtifactPanel({ groupId, selectedPath, onSelectedPathChange }: A
                 分支对比
               </Button>
               {!isVisitor && (
-                <div className={styles.vscodeDropdown} ref={vscodeMenuRef}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setVscodeMenuOpen((v) => !v)}
-                    disabled={vscodeLoading}
-                    title="在 master 本机用 VSCode 打开:产物目录或某个仓库 worktree"
-                    aria-haspopup="menu"
-                    aria-expanded={vscodeMenuOpen}
-                  >
-                    {vscodeLoading ? 'VSCode…' : 'VSCode'}{'\u{25BE}'}
-                  </Button>
-                  {vscodeMenuOpen && (
-                    <div className={styles.vscodeMenu} role="menu">
-                      <button
-                        type="button"
-                        className={styles.vscodeMenuItem}
-                        onClick={() => {
-                          setVscodeMenuOpen(false)
-                          void handleOpenVscode()
-                        }}
-                        title={`产物目录 · ${root || ''}`}
-                      >
-                        <span className={styles.vscodeMenuIcon}>{'\u{1F4E6}'}</span>
-                        <span className={styles.vscodeMenuLabel}>产物目录</span>
-                      </button>
-                      {groupWorktree && (
-                        <>
-                          <div className={styles.vscodeMenuSeparator} />
-                          <button
-                            type="button"
-                            className={styles.vscodeMenuItem}
-                            disabled={!groupWorktree.primaryExists}
-                            onClick={() => {
-                              setVscodeMenuOpen(false)
-                              void handleOpenVscode(undefined, 'primary')
-                            }}
-                            title={groupWorktree.primaryPath}
-                          >
-                            <span className={styles.vscodeMenuIcon}>{'\u{1F4C1}'}</span>
-                            <span className={styles.vscodeMenuLabel}>
-                              primary · {repoDisplayName(groupWorktree.url)}
-                              {!groupWorktree.primaryExists && ' (未创建)'}
-                            </span>
-                          </button>
-                          {groupWorktree.extras.map((e) => (
-                            <button
-                              key={e.id}
-                              type="button"
-                              className={styles.vscodeMenuItem}
-                              disabled={!e.exists}
-                              onClick={() => {
-                                setVscodeMenuOpen(false)
-                                void handleOpenVscode(undefined, e.id)
-                              }}
-                              title={e.path}
-                            >
-                              <span className={styles.vscodeMenuIcon}>{'\u{1F4C1}'}</span>
-                              <span className={styles.vscodeMenuLabel}>
-                                {e.id} · {repoDisplayName(e.url)}
-                                {!e.exists && ' (未创建)'}
-                              </span>
-                            </button>
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <VscodeMenu
+                  groupWorktree={groupWorktree}
+                  vscodeLoading={vscodeLoading}
+                  root={root}
+                  onOpenVscode={handleOpenVscode}
+                />
               )}
               <Button variant="ghost" size="sm" onClick={loadFiles}>
                 刷新
