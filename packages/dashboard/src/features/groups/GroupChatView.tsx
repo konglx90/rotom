@@ -2,7 +2,6 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, lazy, Susp
 import { useNavigate, useParams } from 'react-router-dom'
 import { groupsApi } from '../../api/groups'
 import { issuesApi } from '../../api/issues'
-import { notesApi } from '../../api/notes'
 import type { Issue } from '../../api/types'
 import { useChatContext } from '../../context/ChatContext'
 import { useSocket } from '../../context/SocketContext'
@@ -11,6 +10,7 @@ import { useTerminalDeck } from '../terminal/TerminalDeckContext'
 import { deriveAgentQueues } from './agentQueue'
 import { useGroupChatWebSocket } from './useGroupChatWebSocket'
 import { useGroupMessageSender } from './useGroupMessageSender'
+import { GroupChatModals } from './GroupChatModals'
 import { useSpeechBroadcast } from './useSpeechBroadcast'
 import { useResizablePanels } from './_hooks/useResizablePanels'
 import {
@@ -32,17 +32,8 @@ import { useIsPad } from '../../hooks/useIsPad'
 import { IssuePanel } from './IssuePanel'
 const LazyArtifactPanel = lazy(() => import('./ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })))
 import { SchedulePanel } from './SchedulePanel'
-import { CreateIssueDialog } from './CreateIssueDialog'
-import { CreateNoteDialog } from './CreateNoteDialog'
-import { AddMemberModal } from './modals/AddMemberModal'
-import { MemberListModal } from './modals/MemberListModal'
-import { ShareLinkModal } from './ShareLinkModal'
-import { GroupMessageStreamModal } from './modals/GroupMessageStreamModal'
-import { GroupSettingsModal } from './modals/GroupSettingsModal'
 import { MemoryPanel } from './MemoryPanel'
 import { ModeSidebarClock } from './ModeSidebarClock'
-import { SessionPanel } from './SessionPanel'
-import { Modal } from '../../components/ui/Modal/Modal'
 import { Button } from '../../components/ui/Button'
 import styles from './GroupChatView.module.css'
 import chatStyles from './ChatArea.module.css'
@@ -608,129 +599,38 @@ export function GroupChatView() {
 
       {(!visitorToken || isVisitor) && (
         <div className={styles.workspace}>
-          <AddMemberModal
-            key={selectedGroup?.id ?? 'no-group'}
-            open={showAddMemberModal}
-            groupMemberNames={groupMembers}
+          <GroupChatModals
+            selectedGroup={selectedGroup}
+            selectedGroupId={selectedGroupId}
+            isDirectMode={isDirectMode}
+            groupMembers={groupMembers}
             agents={agents}
-            onClose={() => setShowAddMemberModal(false)}
-            onAdd={handleAddMembers}
+            groups={groups}
+            myAgentName={myAgentName}
+            showAddMemberModal={showAddMemberModal}
+            setShowAddMemberModal={setShowAddMemberModal}
+            showMemberList={showMemberList}
+            setShowMemberList={setShowMemberList}
+            showShareModal={showShareModal}
+            setShowShareModal={setShowShareModal}
+            showGroupSettings={showGroupSettings}
+            setShowGroupSettings={setShowGroupSettings}
+            showDebugModal={showDebugModal}
+            setShowDebugModal={setShowDebugModal}
+            showGroupMessagesModal={showGroupMessagesModal}
+            setShowGroupMessagesModal={setShowGroupMessagesModal}
+            createDialog={createDialog}
+            setCreateDialog={setCreateDialog}
+            handleAddMembers={handleAddMembers}
+            handleCreateIssue={handleCreateIssue}
+            updateGroupGuidancePrompt={updateGroupGuidancePrompt}
+            updateGroupName={updateGroupName}
+            updateGroupWorkingDir={updateGroupWorkingDir}
+            updateGroupRepo={updateGroupRepo}
+            setGroupMemberWorkingDir={setGroupMemberWorkingDir}
+            clearGroupMemberWorkingDir={clearGroupMemberWorkingDir}
+            loadGroups={loadGroups}
           />
-
-          {/* 群模式:成员列表 modal(从原 chatHeader 上移)。
-              key=groupId:切群时强制 remount,清空内部 group-scoped state(guidanceValue/editingDir 等),
-              否则切群后残留上一群的编辑态。 */}
-          {selectedGroup && !isDirectMode && (
-            <MemberListModal
-              key={selectedGroup.id}
-              open={showMemberList}
-              members={selectedGroup.members || []}
-              agents={agents}
-              groupId={selectedGroup.id}
-              groupName={selectedGroup.name}
-              groupWorkingDir={selectedGroup.working_dir ?? null}
-              groupGuidancePrompt={selectedGroup.guidance_prompt ?? null}
-              onUpdateGuidancePrompt={updateGroupGuidancePrompt}
-              onClose={() => setShowMemberList(false)}
-              onUpdateMemberWorkingDir={async (gid, agentName, dir) => {
-                if (dir === null) {
-                  await clearGroupMemberWorkingDir(gid, agentName)
-                } else {
-                  await setGroupMemberWorkingDir(gid, agentName, dir)
-                }
-              }}
-              onProfilesChanged={loadGroups}
-            />
-          )}
-
-          {/* 群模式:分享链接 modal(从原 chatHeader 上移)。 */}
-          {showShareModal && selectedGroup && !isDirectMode && (
-            <ShareLinkModal
-              key={selectedGroup.id}
-              open
-              groupId={selectedGroup.id}
-              groupName={selectedGroup.name}
-              onClose={() => setShowShareModal(false)}
-            />
-          )}
-
-          {/* Sessions 调试 modal:从 ArtifactPanel 底部搬过来,腾出垂直空间。 */}
-          {/* 群设置 modal:群聊界面内的群配置入口(名称/工作目录/指导 prompt/内置 repo worktree/技能绑定)。
-              复用侧边栏同一组件;update* 回调内部 loadGroups,保存后自动刷新群数据。 */}
-          {showGroupSettings && selectedGroup && !isDirectMode && (
-            <GroupSettingsModal
-              key={selectedGroup.id}
-              open
-              groupId={selectedGroup.id}
-              groupName={selectedGroup.name}
-              groupWorkingDir={selectedGroup.working_dir ?? null}
-              groupGuidancePrompt={selectedGroup.guidance_prompt ?? null}
-              groupRepoUrl={selectedGroup.repo_url ?? null}
-              groupRepoDefaultBranch={selectedGroup.repo_default_branch ?? null}
-              groupExtraRepos={selectedGroup.extra_repos ?? null}
-              groupWorktreeMode={selectedGroup.worktree_mode ?? null}
-              memberAgentNames={(selectedGroup.members ?? []).map((m) => m.agent_name)}
-              onClose={() => setShowGroupSettings(false)}
-              onSaveName={(name) => updateGroupName(selectedGroup.id, name)}
-              onSaveWorkingDir={(dir) => updateGroupWorkingDir(selectedGroup.id, dir)}
-              onSaveGuidancePrompt={(prompt) => updateGroupGuidancePrompt(selectedGroup.id, prompt)}
-              onSaveRepo={(data) => updateGroupRepo(selectedGroup.id, data)}
-            />
-          )}
-
-          {showDebugModal && selectedGroup && (
-            <Modal
-              open
-              title={`🔧 Sessions · ${selectedGroup.name}`}
-              onClose={() => setShowDebugModal(false)}
-              size="lg"
-            >
-              <SessionPanel groupId={selectedGroup.id} />
-            </Modal>
-          )}
-
-          {/* 当前群消息流 modal:锁定当前群,群不可切换。 */}
-          {showGroupMessagesModal && selectedGroup && !isDirectMode && (
-            <GroupMessageStreamModal
-              open
-              groupId={selectedGroup.id}
-              groupName={selectedGroup.name}
-              groups={groups}
-              onClose={() => setShowGroupMessagesModal(false)}
-            />
-          )}
-
-          {createDialog?.kind === 'issue' && selectedGroupId && (
-            <CreateIssueDialog
-              open
-              agents={agents}
-              onClose={() => setCreateDialog(null)}
-              onCreateIssue={(data) => {
-                handleCreateIssue(data)
-                setCreateDialog(null)
-              }}
-            />
-          )}
-
-          {createDialog?.kind === 'note' && selectedGroupId && (
-            <CreateNoteDialog
-              open
-              onClose={() => setCreateDialog(null)}
-              onCreate={async (data) => {
-                try {
-                  await notesApi.create(selectedGroupId, {
-                    title: data.title,
-                    description: data.description,
-                    createdBy: myAgentName,
-                  })
-                  setCreateDialog(null)
-                } catch (err) {
-                  console.error('Failed to create note:', err)
-                  window.alert(`创建失败：${err instanceof Error ? err.message : String(err)}`)
-                }
-              }}
-            />
-          )}
 
           {/* ── wide 模式(>pad 断点):原 modeSidebar + 双 panel 布局,PC 0 改动 ── */}
           {!isPad && (
