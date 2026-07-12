@@ -8,6 +8,7 @@ import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import { defaultGroupWorkingDir } from "../group-paths.js";
 import { scanAllRepos, resolveGroupWorktreeInfo } from "../repo-scan.js";
+import { generateGroupId } from "../../shared/group-id.js";
 import { createLogger } from "../../shared/logger.js";
 import { isLoopback } from "../../shared/network.js";
 import { parseAgentProfile, mergeGroupProfile } from "../../shared/agent-profile.js";
@@ -100,7 +101,7 @@ export function registerGroupRoutes(
       }
     }
 
-    const id = randomUUID();
+    const id = generateGroupId();
     let workDir: string;
     if (typeof workingDir === "string" && workingDir.trim()) {
       const v = validateWorkingDir(workingDir);
