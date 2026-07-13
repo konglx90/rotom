@@ -24,7 +24,7 @@ import { toBeijing } from "../shared/time.js";
  *  - Dashboard UI / WS 协议变更 / 跨 Master 协调 / cron 表达式 / file lock
  */
 
-import { randomUUID } from "node:crypto";
+import { generateShortId } from "../shared/short-id.js";
 import type { MeshDb, ScheduledTaskRow } from "./db.js";
 import { resolveGroupAgentWorkingDir } from "./group-paths.js";
 import { createLogger } from "../shared/logger.js";
@@ -171,7 +171,7 @@ export class Scheduler {
           return;
         }
 
-        const issueId = randomUUID();
+        const issueId = generateShortId();
         this.db.createIssue({
           id: issueId,
           groupId: task.group_id,

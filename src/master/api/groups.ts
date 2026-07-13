@@ -8,7 +8,7 @@ import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import { defaultGroupWorkingDir } from "../group-paths.js";
 import { scanAllRepos, resolveGroupWorktreeInfo } from "../repo-scan.js";
-import { generateGroupId } from "../../shared/group-id.js";
+import { generateShortId } from "../../shared/short-id.js";
 import { createLogger } from "../../shared/logger.js";
 import { isLoopback } from "../../shared/network.js";
 import { parseAgentProfile, mergeGroupProfile } from "../../shared/agent-profile.js";
@@ -101,7 +101,7 @@ export function registerGroupRoutes(
       }
     }
 
-    const id = generateGroupId();
+    const id = generateShortId();
     let workDir: string;
     if (typeof workingDir === "string" && workingDir.trim()) {
       const v = validateWorkingDir(workingDir);
@@ -474,7 +474,7 @@ export function registerGroupRoutes(
 
     const issueMatch = content.match(/\[ISSUE\]\s*(.+?)(?:\n([\s\S]*))?$/);
     if (issueMatch) {
-      const issueId = randomUUID();
+      const issueId = generateShortId();
       const issueTitle = issueMatch[1].trim();
       const issueDesc = issueMatch[2]?.trim() || "";
       db.createIssue({

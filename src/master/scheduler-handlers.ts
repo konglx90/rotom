@@ -18,7 +18,7 @@ import { extractMentions } from "../shared/mention.js";
  *   - agent-offline-alert:agent 离线超阈值通知真人
  */
 
-import { randomUUID } from "node:crypto";
+import { generateShortId } from "../shared/short-id.js";
 import type { MeshDb } from "./db.js";
 import type { SchedulerHub } from "./scheduler.js";
 import { resolveGroupAgentWorkingDir } from "./group-paths.js";
@@ -119,7 +119,7 @@ registerSchedulerHandler("ask-bridge-check", async (payload, ctx) => {
       log.info(`bridge #${bridge.id} timed_out (sync mode, no escalation)`);
       return { status: "ok" };
     }
-    const issueId = randomUUID();
+    const issueId = generateShortId();
     const questionContent = ctx.db.getGroupMessageContent(bridge.question_msg_id) || "(原问题已删除)";
     const qSnippet = questionContent.slice(0, 200);
     const createdIso = toBeijing(bridge.created_at);
@@ -218,7 +218,7 @@ registerSchedulerHandler("issue-patrol", async (payload, ctx) => {
     return { status: "error", error: "missing patrolGroupId/patrolAgentName in handler_payload" };
   }
 
-  const runId = randomUUID();
+  const runId = generateShortId();
   const startedAt = nowBeijing();
 
   // 1. 防 overlap:查该 patrol 群最近一次 run,若 patrol_issue 仍 in_progress 则跳过
@@ -361,7 +361,7 @@ registerSchedulerHandler("issue-patrol", async (payload, ctx) => {
   ].join("\n");
 
   // 7. 派 issue + 写 run
-  const issueId = randomUUID();
+  const issueId = generateShortId();
   ctx.db.createIssue({
     id: issueId,
     groupId: patrolGroupId,
@@ -425,7 +425,7 @@ registerSchedulerHandler("link-patrol", async (payload, ctx) => {
     return { status: "error", error: "missing patrolGroupId/patrolAgentName in handler_payload" };
   }
 
-  const runId = randomUUID();
+  const runId = generateShortId();
   const startedAt = nowBeijing();
 
   // 1. 防 overlap:查该 patrol-link 群最近一次 run,patrol_issue 仍 in_progress 跳过
@@ -536,7 +536,7 @@ registerSchedulerHandler("link-patrol", async (payload, ctx) => {
   ].join("\n");
 
   // 7. 派 issue
-  const issueId = randomUUID();
+  const issueId = generateShortId();
   ctx.db.createIssue({
     id: issueId,
     groupId: patrolGroupId,

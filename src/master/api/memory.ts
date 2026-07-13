@@ -6,7 +6,7 @@
  */
 
 import { type Router as ExpressRouter } from "express";
-import { randomUUID } from "node:crypto";
+import { generateShortId } from "../../shared/short-id.js";
 import type { MeshDb } from "../db.js";
 import { createLogger } from "../../shared/logger.js";
 
@@ -104,7 +104,7 @@ export function registerMemoryRoutes(
     if (!isCategory(category)) {
       res.status(400).json({ error: `category must be one of: ${CATEGORIES.join(",")}` }); return;
     }
-    const id = randomUUID();
+    const id = generateShortId();
     db.addMemory({
       id, scope: "group", groupId: req.params.groupId,
       category, key: String(key).trim(), value: String(value),
@@ -131,7 +131,7 @@ export function registerMemoryRoutes(
     // 全局 memory 强制走审核:agent_visible=0 + pending_review=1,等人工 approve。
     // 已有 memory 想升级到 global,走 PATCH /memory/:id body { visibility: "global" }(走 promoteMemoryVisibility 路径)。
     // 原因:全局 memory 直接对所有 agent 可见影响面大,必须有真人拍板。
-    const id = randomUUID();
+    const id = generateShortId();
     db.addMemory({
       id, scope: "global", groupId: null,
       category, key: String(key).trim(), value: String(value),

@@ -1,17 +1,17 @@
 /**
- * generateGroupId 短 ID 生成器测试。
+ * generateShortId 短 ID 生成器测试。
  */
 
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { generateGroupId } from "../src/shared/group-id.js";
+import { generateShortId } from "../src/shared/short-id.js";
 
 const B62 = /^[0-9A-Za-z]+$/;
 
-describe("generateGroupId", () => {
+describe("generateShortId", () => {
   it("默认长度 12,字符集为 base62", () => {
     for (let i = 0; i < 200; i++) {
-      const id = generateGroupId();
+      const id = generateShortId();
       assert.equal(id.length, 12, `len: ${id}`);
       assert.match(id, B62, `charset: ${id}`);
       // 硬约束:不含冒号(sessions.json key 分隔符)、不含 / . 等
@@ -21,13 +21,13 @@ describe("generateGroupId", () => {
   });
 
   it("自定义长度", () => {
-    assert.equal(generateGroupId(8).length, 8);
-    assert.equal(generateGroupId(21).length, 21);
-    assert.equal(generateGroupId(1).length, 1);
+    assert.equal(generateShortId(8).length, 8);
+    assert.equal(generateShortId(21).length, 21);
+    assert.equal(generateShortId(1).length, 1);
   });
 
   it("slice(0,8) 稳定且仍为 base62(git 派生分支后缀用)", () => {
-    const id = generateGroupId();
+    const id = generateShortId();
     const g8 = id.slice(0, 8);
     assert.equal(g8.length, 8);
     assert.match(g8, B62);
@@ -37,7 +37,7 @@ describe("generateGroupId", () => {
   it("批量生成无碰撞(熵充足)", () => {
     const set = new Set<string>();
     const N = 100_000;
-    for (let i = 0; i < N; i++) set.add(generateGroupId());
+    for (let i = 0; i < N; i++) set.add(generateShortId());
     assert.equal(set.size, N, "出现重复 ID");
   });
 
@@ -45,7 +45,7 @@ describe("generateGroupId", () => {
     const counts = new Map<string, number>();
     let total = 0;
     for (let i = 0; i < 50_000; i++) {
-      for (const ch of generateGroupId()) {
+      for (const ch of generateShortId()) {
         counts.set(ch, (counts.get(ch) ?? 0) + 1);
         total++;
       }

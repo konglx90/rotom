@@ -1,5 +1,5 @@
 import { type Router as ExpressRouter } from "express";
-import { randomUUID } from "node:crypto";
+import { generateShortId } from "../../shared/short-id.js";
 import type { MeshDb } from "../db.js";
 import type { WSHub } from "../ws-hub.js";
 import { parseSlashCommand } from "../../shared/slash-commands.js";
@@ -166,7 +166,7 @@ export function registerIssueRoutes(
       }
       slashCommand = parsed.command;
     }
-    const id = randomUUID();
+    const id = generateShortId();
     db.createIssue({
       id, groupId: req.params.groupId, title: finalTitle, description: desc,
       priority, createdBy, workingDir: issueWorkDir, slashCommand,
@@ -667,7 +667,7 @@ export function registerIssueRoutes(
     }
 
     const sourceShortId = req.params.id.slice(0, 8);
-    const extractIssueId = randomUUID();
+    const extractIssueId = generateShortId();
     const extractPrompt = buildMemoryExtractPrompt(sourceIssue, sourceShortId);
 
     const workingDir = resolveIssueWorkingDirForDisplay(db, sourceIssue.group_id, targetAgent);

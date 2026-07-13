@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
-import { generateGroupId } from "../shared/group-id.js";
+import { generateShortId } from "../shared/short-id.js";
 import { spawn, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { MeshDb } from "./db.js";
@@ -95,7 +95,7 @@ export function ensureDefaultGroup(
   const groups = db.listGroups();
   if (groups.length > 0) return null;
 
-  const id = generateGroupId();
+  const id = generateShortId();
   const name = "Local";
   db.createGroup(id, name, defaultAgentName);
   if (defaultAgentName) {

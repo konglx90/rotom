@@ -1,5 +1,5 @@
 import { nowBeijing, shiftBeijing } from "../../shared/time.js";
-import { generateGroupId } from "../../shared/group-id.js";
+import { generateShortId } from "../../shared/short-id.js";
 /**
  * Groups — group CRUD, member management, per-member working_dir overrides,
  * and the chat log (group_messages + composed_prompt snapshots).
@@ -619,7 +619,7 @@ export const groupMethods = {
   /** 建 a2a_direct pair 群(2 成员)。复用 createGroupTyped + addGroupMembers。
    *  群名形如 "A↔B",由 asker 与 target 名拼接而成。 */
   createPairGroup(this: MeshDbSelf, asker: string, target: string): GroupRow {
-    const id = generateGroupId();
+    const id = generateShortId();
     const name = `${asker}↔${target}`;
     this.db.prepare(
       "INSERT INTO groups (id, name, created_by, type, metadata, last_activity_at) VALUES (?, ?, ?, 'a2a_direct', '{}', ?)",

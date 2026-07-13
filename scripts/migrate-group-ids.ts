@@ -26,7 +26,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
-import { generateGroupId } from "../src/shared/group-id.js";
+import { generateShortId } from "../src/shared/short-id.js";
 
 // ─── 配置 ──────────────────────────────────────────────────────────────────
 const ROTOM_HOME = process.env.ROTOM_HOME || path.join(os.homedir(), ".rotom");
@@ -136,7 +136,7 @@ function buildMapping(db: any, groups: { id: string }[]): Map<string, string> {
   const mapping = new Map<string, string>();
   for (const g of groups) {
     let newId: string;
-    do { newId = generateGroupId(); } while (existingIds.has(newId) || mapping.has(newId) || [...mapping.values()].includes(newId));
+    do { newId = generateShortId(); } while (existingIds.has(newId) || mapping.has(newId) || [...mapping.values()].includes(newId));
     existingIds.add(newId);
     mapping.set(g.id, newId);
   }
